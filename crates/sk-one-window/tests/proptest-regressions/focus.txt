@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc cac38d15ceabad3114826200bd8011acd14b6bb283fd3ab31acb21f485c7108c # shrinks to arrivals = [Quiet, Answer([])]
+cc a5d11d07c51ee3e7265adf955d9782dc175c33c9344d16372adb8eb0b1a2a56c # shrinks to arrivals = [Names([(0, 50)]), Names([]), Quiet]

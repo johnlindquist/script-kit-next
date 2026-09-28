@@ -79,6 +79,7 @@ const SAYS_THIS: &str = r"(?i)\b(?:this|it|here)\b";
 const COPIED: &str = r"(?i)\bwhat i (?:just )?copied\b|\b(?:the|my) clipboard\b|\bcopied\b";
 const SELECTED: &str = r"(?i)\bthe selection\b|\b(?:the )?selected \w+";
 const PAGE: &str = r"(?i)\b(?:this|the) (?:page|article|site|tab)\b";
+const NEW_TAB: &str = r"(?i)\b(?:in\s+|to\s+)?(?:a\s+)?new\s+tab\b";
 const OWNER: &str = r"(?i)\b(?:have|get|ask|let)\s+(?:an?|the|my)\s+agent(?:\s+to)?\b|\b(?:have|ask|get|let)\s+claude(?:\s+to)?\b|\bagent\b";
 const PLACEMENT: &str = r"(?i)\b(?:to|on|onto|into)\s+(?:the\s+|my\s+)?(?:(?:left|right|top|bottom|upper|lower|other|next|center|middle)(?:\s+(?:two|left|right|top|bottom))?\s+(?:half|third|thirds|quarter|corner|side|monitor|screen|display)|center)\b";
 /// Verbs any sentence may lead with, for when its reading's own verbs aren't said.
@@ -631,6 +632,9 @@ fn target(
     top: &Reading,
     taken: &[Range<usize>],
 ) -> Found {
+    if let Some(Step::OpenUrl { app, .. }) = top.steps.first() {
+        return browser(request, app.as_deref(), top, taken);
+    }
     let found = where_it_goes(request, ctx, answers, top, taken);
     let names_someone = matches!(
         top.pathway,
@@ -645,6 +649,21 @@ fn target(
             ..Found::said(capitalized(&name), range, request, None)
         },
         None => found,
+    }
+}
+
+/// Where a web address opens: the browser the words name, else the new tab they ask for.
+fn browser(request: &str, app: Option<&str>, top: &Reading, taken: &[Range<usize>]) -> Found {
+    let value = app.unwrap_or("Your default browser").to_string();
+    let said = app
+        .and_then(|app| said_name(app, request, taken))
+        .or_else(|| find_free(NEW_TAB, request, taken));
+    match said {
+        Some(range) => Found::said(value, range, request, Some(top.probability)),
+        None if app.is_some() => {
+            Found::unsaid(value, "The browser in front", Some(top.probability))
+        }
+        None => Found::unsaid(value, "No browser named or in front", Some(top.probability)),
     }
 }
 
@@ -745,6 +764,14 @@ fn subject(
 ) -> Found {
     let probability = choice_probability(answers, "subject");
     let says = |pattern: &str| find_free(pattern, request, taken);
+    if let (Some(Step::OpenUrl { .. }), Some(web)) = (top.steps.first(), &b.web) {
+        return Found::said(
+            web.said.clone(),
+            web.range.clone(),
+            request,
+            Some(top.probability),
+        );
+    }
     let named_step = top.steps.iter().find_map(|step| match step {
         Step::Window { app, .. } => Some(app.clone()),
         Step::Command { command } if top.pathway == Pathway::Run => Some(command.name.clone()),
@@ -832,6 +859,9 @@ pub(super) fn read_words(
     keep(&action, &mut taken);
     let details = details(request, b, answers, &taken);
     keep(&details, &mut taken);
+    if let (Some(Step::OpenUrl { .. }), Some(web)) = (top.steps.first(), &b.web) {
+        taken.push(web.range.clone());
+    }
     let target = target(request, ctx, answers, top, &taken);
     keep(&target, &mut taken);
     let subject = subject(request, ctx, b, answers, top, &taken);

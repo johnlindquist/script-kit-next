@@ -128,7 +128,7 @@ impl Typist {
             let settled_reading = matches!(list.current(), Some(Item::Slot(_)))
                 && list.jev.settled_for(self.win.text())
                 && self.now >= self.last_key + READING_SETTLE_MS
-                && list.current_row(self.now).is_some_and(|r| r.title == label);
+                && list.current_row().is_some_and(|r| r.title == label);
             assert!(
                 self.labels.is_empty() || owner != self.owner || settled_reading,
                 "↵ went from {:?} to {label:?} at {} without a stronger name or a settled reading",
@@ -200,7 +200,7 @@ proptest! {
         t.feed(Event::Jev { text: sentence.to_string(), rows: rows.clone() });
         t.look();
         t.until(t.now + 2_000);
-        if let Some(row) = t.win.list().current_row(t.now).filter(|_| t.owner.as_deref() == Some("jev")) {
+        if let Some(row) = t.win.list().current_row().filter(|_| t.owner.as_deref() == Some("jev")) {
             prop_assert_eq!(
                 t.labels.last(),
                 Some(&row.title),

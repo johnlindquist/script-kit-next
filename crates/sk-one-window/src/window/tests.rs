@@ -168,6 +168,30 @@ fn an_enter_that_waited_for_jev_asks_once_when_the_readings_are_close() {
 }
 
 #[test]
+fn a_jev_answer_with_nothing_worth_a_row_leaves_no_blank_place() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("open".into()));
+    win.handle(
+        10,
+        Event::Jev {
+            text: "open".into(),
+            rows: Vec::new(),
+        },
+    );
+    let list = win.list();
+    let jev: Vec<&str> = (0..list.jev.len())
+        .filter_map(|i| list.jev.get(i)?.row.as_ref())
+        .map(|row| row.key.as_str())
+        .collect();
+    assert_eq!(jev, ["down:model", "down:note"]);
+    let out = win.handle(1_000, Event::Key(Key::Enter));
+    assert_eq!(
+        out.picked.map(|(r, _)| r.key).as_deref(),
+        Some("down:model")
+    );
+}
+
+#[test]
 fn going_elsewhere_hides_the_window_and_records_nothing() {
     let mut win = OneWindow::default();
     win.handle(0, Event::Dismissed);
@@ -286,10 +310,7 @@ fn selecting_past_the_end_lands_on_the_last_row() {
     let mut win = OneWindow::default();
     typed(&mut win, "a");
     win.handle(10, Event::Select(99));
-    assert_eq!(
-        win.list().current(),
-        Some(Item::Slot(crate::contract::JEV_ROWS - 1))
-    );
+    assert_eq!(win.list().current(), Some(Item::Slot(0)));
 }
 
 #[test]

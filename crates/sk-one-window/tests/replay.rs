@@ -294,15 +294,26 @@ fn key(out: &Out) -> String {
         Out::Ignored { key } => key.clone(),
         Out::Held { op, label } => format!("{op}|{label}"),
         Out::List { rows, sel } => {
-            let rows: Vec<String> = rows
-                .iter()
-                .map(|r| match (&r.key, r.jev) {
+            // The page keeps all three of Jev's places; the app draws the first and the ones
+            // holding a reading, so an empty later place is left out of both sides.
+            let mut first_place = true;
+            let mut at = *sel;
+            let mut shown = Vec::new();
+            for (i, r) in rows.iter().enumerate() {
+                let first = r.jev && std::mem::take(&mut first_place);
+                if r.jev && r.key.is_none() && !first {
+                    if i < *sel {
+                        at -= 1;
+                    }
+                    continue;
+                }
+                shown.push(match (&r.key, r.jev) {
                     (Some(k), _) => k.clone(),
                     (None, true) => "jev:·".into(),
                     (None, false) => r.title.clone(),
-                })
-                .collect();
-            format!("{}@{sel}", rows.join(","))
+                });
+            }
+            format!("{}@{at}", shown.join(","))
         }
         Out::Other => String::new(),
     }
@@ -461,6 +472,30 @@ const KNOWN: &[(&str, &str, &str)] = &[
         "height",
         "the page's window follows a shorter strip or list through CSS auto height without \
          calling resize(), so that instant shrink leaves no line; the reducer animates it",
+    ),
+    (
+        "keys-s18-steady",
+        "enter",
+        "the page keeps Jev's empty places, so ↓ can land on one before Jev fills it; the app \
+         draws only places that hold a reading, so the highlight stays on the last row drawn",
+    ),
+    (
+        "keys-s18-steady",
+        "list",
+        "the page keeps Jev's empty places, so ↓ can land on one before Jev fills it; the app \
+         draws only places that hold a reading, so the highlight stays on the last row drawn",
+    ),
+    (
+        "keys-s19-fast-hands",
+        "enter",
+        "the page keeps Jev's empty places, so ↓ can land on one before Jev fills it; the app \
+         draws only places that hold a reading, so the highlight stays on the last row drawn",
+    ),
+    (
+        "keys-s19-fast-hands",
+        "list",
+        "the page keeps Jev's empty places, so ↓ can land on one before Jev fills it; the app \
+         draws only places that hold a reading, so the highlight stays on the last row drawn",
     ),
 ];
 

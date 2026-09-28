@@ -11,7 +11,7 @@ use std::time::Duration;
 use super::intent_live as live;
 use crate::intent::{
     self as intent_engine, CommandKind, EngineOptions, JevClient, JevConfig, JevError, LastAction,
-    LastStep, Oracle, OracleSlot, Plan, ScriptOptions, Step,
+    LastStep, Oracle, OracleSlot, Plan, ScriptOptions, Step, WindowAction,
 };
 
 /// Window and menu steps wait for apps opened earlier in the same plan.
@@ -166,7 +166,19 @@ impl ScriptListApp {
         text: &str,
         cx: &mut Context<Self>,
     ) -> Option<Result<(), &'static str>> {
-        if let Some(plan) = self.intent_launcher.plan(text, key) {
+        let screen = self.intent_screen_key();
+        let plan = self
+            .intent_launcher
+            .plan(text, key)
+            .or_else(|| {
+                self.intent_launcher
+                    .recalled(text, screen)?
+                    .into_iter()
+                    .find(|reading| reading.key == key)
+                    .map(|reading| reading.plan)
+            })
+            .or_else(|| self.intent_launcher.plan_for_row(key, screen));
+        if let Some(plan) = plan {
             if self.one_window_open_plan(&plan, cx) {
                 return Some(Ok(()));
             }
@@ -247,6 +259,12 @@ impl ScriptListApp {
             }
         }
 
+        if plan.steps.iter().any(needs_accessibility)
+            && !crate::platform::accessibility::permissions::has_accessibility_permission()
+        {
+            self.ask_for_accessibility(&plan.steps, cx);
+            return Err("intent_needs_accessibility");
+        }
         let mut later = Vec::new();
         for step in &plan.steps {
             match step {
@@ -258,7 +276,9 @@ impl ScriptListApp {
                     target, body, when, ..
                 } => append_capture_to_day(target, body, when.as_deref())?,
                 Step::Remember { text, .. } => append_memory_to_day(text)?,
-                Step::Menu { .. } | Step::Window { .. } => later.push(step.clone()),
+                Step::Menu { .. } | Step::Window { .. } | Step::OpenUrl { .. } => {
+                    later.push(step.clone())
+                }
                 Step::Recall { .. }
                 | Step::Ask { .. }
                 | Step::Delegate { .. }
@@ -275,21 +295,63 @@ impl ScriptListApp {
         {
             self.close_and_reset_window(cx);
         }
-        cx.background_executor()
-            .spawn(async move {
-                for step in later {
-                    if let Err(error) = run_desktop_step_with_retries(&step) {
+        cx.spawn(async move |this, cx| {
+            let failed = cx
+                .background_executor()
+                .spawn(async move {
+                    later.iter().find_map(|step| {
+                        let error = run_desktop_step_with_retries(step).err()?;
                         tracing::warn!(
                             target: "script_kit::intent",
                             event = "intent_step_failed",
                             error = %error,
                         );
-                        break;
-                    }
+                        Some(desktop_step_failure(step, &error))
+                    })
+                })
+                .await;
+            let Some(words) = failed else {
+                return;
+            };
+            let _ = this.update(cx, |app, cx| {
+                app.one_window_notice(crate::line_notice::FAILED, words, cx);
+                if !script_kit_gpui::is_main_window_visible() {
+                    script_kit_gpui::request_show_main_window();
                 }
-            })
-            .detach();
+            });
+        })
+        .detach();
         Ok(())
+    }
+
+    /// Menu and window steps drive other apps through Accessibility; without it they can't run,
+    /// so the window stays and says how to turn it on.
+    fn ask_for_accessibility(&mut self, steps: &[Step], cx: &mut Context<Self>) {
+        let title = match steps.iter().find_map(|step| match step {
+            Step::Menu { app, .. } => Some(app.as_str()),
+            _ => None,
+        }) {
+            Some(app) => format!("Script Kit needs Accessibility access to use {app}'s menus"),
+            None => "Script Kit needs Accessibility access to move windows".to_string(),
+        };
+        let open: crate::one_window::ledger_view::LedgerRun = Box::new(|app, cx| {
+            if let Err(error) = crate::platform::accessibility::permissions::open_accessibility_settings()
+            {
+                app.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!("Couldn't open System Settings: {error}"),
+                    cx,
+                );
+            }
+        });
+        self.one_window_ask(
+            crate::line_notice::FAILED,
+            title,
+            "System Settings › Privacy & Security › Accessibility",
+            vec![("Open Accessibility Settings".to_string(), open)],
+            None,
+            cx,
+        );
     }
 
     fn run_intent_command(
@@ -497,6 +559,10 @@ fn last_action_for(plan: &Plan) -> Option<LastAction> {
                 bundle_id: bundle_id.clone(),
                 path: path.clone(),
             }),
+            Step::OpenUrl { url, app } => Some(LastStep::OpenUrl {
+                url: url.clone(),
+                app: app.clone(),
+            }),
             _ => None,
         })
         .collect();
@@ -537,7 +603,61 @@ pub(crate) fn append_capture_to_day(
         .map_err(|_| "intent_brain_write_failed")
 }
 
+/// Whether a step drives another app through Accessibility. Quitting goes through AppleScript.
+fn needs_accessibility(step: &Step) -> bool {
+    match step {
+        Step::Menu { .. } => true,
+        Step::Window { op, .. } => op.action() != Some(WindowAction::Quit),
+        _ => false,
+    }
+}
+
+/// What the line says when a menu or window step didn't happen.
+fn desktop_step_failure(step: &Step, error: &anyhow::Error) -> String {
+    match step {
+        Step::Menu { app, path, .. } => {
+            let item = path.join(" › ");
+            #[cfg(target_os = "macos")]
+            {
+                use script_kit_gpui::menu_executor::MenuExecutorError;
+                match error.downcast_ref::<MenuExecutorError>() {
+                    Some(MenuExecutorError::AccessibilityPermissionDenied) => {
+                        return format!(
+                            "Script Kit needs Accessibility access to use {app}'s menus"
+                        );
+                    }
+                    Some(MenuExecutorError::AppNotFrontmost { .. }) => {
+                        return format!("{app} wasn't in front, so “{item}” didn't run");
+                    }
+                    Some(MenuExecutorError::MenuItemDisabled { .. }) => {
+                        return format!("“{item}” is turned off in {app} right now");
+                    }
+                    Some(
+                        MenuExecutorError::MenuItemNotFound { .. }
+                        | MenuExecutorError::MenuStructureChanged { .. },
+                    ) => {
+                        return format!("{app} has no “{item}” menu item");
+                    }
+                    Some(MenuExecutorError::ActionFailed(_)) => {
+                        return format!("{app} didn't respond to “{item}”");
+                    }
+                    None => {}
+                }
+            }
+            format!("Couldn't use “{item}” in {app}: {error}")
+        }
+        Step::Window { op, app } => format!("{} didn't work on {app}: {error}", op.label),
+        Step::OpenUrl { url, app: Some(app) } => format!("Couldn't open {url} in {app}: {error}"),
+        Step::OpenUrl { url, app: None } => format!("Couldn't open {url}: {error}"),
+        _ => error.to_string(),
+    }
+}
+
 fn run_desktop_step_with_retries(step: &Step) -> anyhow::Result<()> {
+    // A second attempt would open a second tab.
+    if let Step::OpenUrl { url, app } = step {
+        return live::open_url(url, app.as_deref());
+    }
     let mut last_error = None;
     for _ in 0..WINDOW_STEP_ATTEMPTS {
         let attempt = match step {

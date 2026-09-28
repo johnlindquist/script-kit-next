@@ -67,6 +67,10 @@ pub enum LastStep {
         bundle_id: String,
         path: Vec<String>,
     },
+    OpenUrl {
+        url: String,
+        app: Option<String>,
+    },
 }
 
 /// What the user just did through Script Kit, kept so "save that as a script" can replay it.

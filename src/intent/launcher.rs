@@ -184,6 +184,20 @@ impl IntentLauncher {
         self.shown.get(key).cloned()
     }
 
+    /// The plan behind a row Jev showed under `key` on this screen, for whatever words it read.
+    /// A row's key names what it does, so a row still on screen after the words moved on runs
+    /// what it says.
+    pub fn plan_for_row(&self, key: &str, context_key: u64) -> Option<Arc<Plan>> {
+        self.shown_plan(key).or_else(|| {
+            self.recent
+                .iter()
+                .filter(|(_, screen, _)| *screen == context_key)
+                .flat_map(|(_, _, readings)| readings)
+                .find(|reading| reading.key == key)
+                .map(|reading| reading.plan.clone())
+        })
+    }
+
     pub fn record(&mut self, action: LastAction) {
         self.last_action = Some(action);
     }

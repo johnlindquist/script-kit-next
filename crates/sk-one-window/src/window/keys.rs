@@ -87,7 +87,7 @@ impl OneWindow {
                 let row = if self.text.trim().is_empty() {
                     None
                 } else {
-                    self.list.current_row(now)
+                    self.list.current_row()
                 };
                 let subject = row
                     .as_ref()
@@ -105,7 +105,8 @@ impl OneWindow {
                 let i = (*d as usize).saturating_sub(1);
                 if let Some(pos) = self.list.slot_position(i) {
                     self.list.sel = pos;
-                    self.activate(now, fx);
+                    let row = self.list.effective(i, now).cloned();
+                    self.run_slot(now, i, row, fx);
                 }
                 return true;
             }
@@ -149,18 +150,26 @@ impl OneWindow {
             return;
         };
         match item {
-            Item::Slot(i) => match self.list.effective(i, now).cloned() {
-                Some(row) => {
-                    self.list.asking = false;
-                    self.run(now, row, RunHow::Slot, fx);
-                }
-                None => self.list.held = Some(i),
-            },
+            Item::Slot(i) => {
+                let row = self.list.slot_row(i).cloned();
+                self.run_slot(now, i, row, fx);
+            }
             item => {
                 if let Some(row) = self.list.row(&item).cloned() {
                     self.run(now, row, RunHow::Match, fx);
                 }
             }
+        }
+    }
+
+    /// Runs `row` from Jev's place `i`, or waits for Jev to read the words when there is none.
+    fn run_slot(&mut self, now: Ms, i: usize, row: Option<Row>, fx: &mut Vec<Effect>) {
+        match row {
+            Some(row) => {
+                self.list.asking = false;
+                self.run(now, row, RunHow::Slot, fx);
+            }
+            None => self.list.held = Some(i),
         }
     }
 

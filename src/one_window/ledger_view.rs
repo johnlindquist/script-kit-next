@@ -47,6 +47,8 @@ pub(crate) struct LedgerHost {
     /// What each title ran, so "Run it again" can run it.
     reruns: HashMap<String, SearchResult>,
     ask: Option<Ask>,
+    /// Bumped whenever the line says something, so a run that failed can tell whether it said why.
+    pub(super) said: u64,
 }
 
 const ASK_PREFIX: &str = "ask:";
@@ -96,6 +98,7 @@ impl ScriptListApp {
         text: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
+        self.one_window_host.ledger.said += 1;
         self.one_window_handle(Event::Notice(Notice::new(icon, text.into())), cx);
     }
 
@@ -140,6 +143,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.one_window_let_go_of_ask(cx);
+        self.one_window_host.ledger.said += 1;
         let title = title.into();
         let mut rows = Vec::with_capacity(choices.len());
         let mut runs = HashMap::with_capacity(choices.len());

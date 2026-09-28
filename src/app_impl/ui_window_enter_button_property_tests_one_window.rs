@@ -42,10 +42,7 @@ fn typing_a_sentence_keeps_the_enter_capsule_steady() {
         wait(cx, 1_000);
         labels.push(("(keys paused)".to_string(), enter_capsule(&app, cx)));
         let reading = app.update(cx, |app, _| {
-            app.one_window
-                .list()
-                .current_row(app.one_window_clock())
-                .map(|row| row.title)
+            app.one_window.list().current_row().map(|row| row.title)
         });
         (labels, reading)
     });

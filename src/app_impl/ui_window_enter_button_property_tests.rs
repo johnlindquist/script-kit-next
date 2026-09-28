@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use gpui::proptest::prelude::*;
 use gpui::proptest::test_runner::{TestCaseError, TestCaseResult};
-use sk_one_window::contract::{words, ENTER_GUARD_MS};
+use sk_one_window::contract::{words, ENTER_GUARD_MS, JEV_ROWS};
 use sk_one_window::{Item, Key};
 
 use super::{footer_frontmost_app_name, main_window_result_action_label};
@@ -768,28 +768,47 @@ fn jev_row_key(
     })
 }
 
+fn jev_titles(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext) -> Vec<String> {
+    app.update(cx, |app, _| {
+        let (grouped, flat) = app.main_menu_result_caches.clone_grouped_results();
+        grouped
+            .iter()
+            .filter_map(|item| match item {
+                GroupedListItem::Item(ix) => match flat.get(*ix) {
+                    Some(crate::scripts::SearchResult::Intent(m)) => Some(m.title.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    })
+}
+
 #[test]
-fn three_jev_rows_are_listed_from_the_first_key() {
-    let slots = in_launcher("jev_rows_first_key", 0, |cx| {
+fn jevs_first_place_is_listed_from_the_first_key_and_empty_places_take_no_row() {
+    let (reading, answered) = in_launcher("jev_rows_first_key", 0, |cx| {
         let (app, window) = launcher(cx, Jev::Reading);
         type_into_launcher(cx, window, &app, "p");
         wait(cx, 20);
-        app.update(cx, |app, _| {
-            let (grouped, flat) = app.main_menu_result_caches.clone_grouped_results();
-            grouped
-                .iter()
-                .filter_map(|item| match item {
-                    GroupedListItem::Item(ix) => match flat.get(*ix) {
-                        Some(crate::scripts::SearchResult::Intent(m)) => Some(m.title.clone()),
-                        _ => None,
-                    },
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        })
+        let reading = jev_titles(&app, cx);
+        wait(cx, 400);
+        (reading, jev_titles(&app, cx))
     });
-    assert_eq!(slots.len(), 3, "Jev's rows: {slots:?}");
-    assert_eq!(slots[0], "Understanding…");
+    assert_eq!(
+        reading,
+        ["Understanding…"],
+        "only the place that owns ↵ is listed while Jev reads"
+    );
+    assert!(
+        (1..=JEV_ROWS).contains(&answered.len()),
+        "Jev's rows: {answered:?}"
+    );
+    assert!(
+        answered
+            .iter()
+            .all(|title| !title.trim().is_empty() && title != "Understanding…"),
+        "every listed place holds Jev's answer: {answered:?}"
+    );
 }
 
 #[test]
@@ -893,6 +912,47 @@ fn cmd_2_on_a_failed_reading_asks_jev_again() {
         asked.1,
         asked.0 + 1,
         "row 2 of a failed reading asks Jev again"
+    );
+}
+
+#[test]
+fn running_a_jev_row_whose_plan_is_gone_says_so_and_runs_once_jev_reads_again() {
+    let (row, first, line, second) = in_launcher("jev_plan_gone", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Reading);
+        type_into_launcher(cx, window, &app, "play next track please");
+        wait(cx, 400);
+        let row = jev_row_key(&app, cx, 0);
+        app.update(cx, |app, _| {
+            app.intent_launcher =
+                crate::intent::IntentLauncher::with_oracle(Arc::new(SentenceReader {
+                    alternative: false,
+                }));
+        });
+        let run = |app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext| {
+            app.update(cx, |app, cx| {
+                app.one_window_key(Key::CmdDigit(1), cx)
+                    .run_error
+                    .map(|error| error.to_string())
+            })
+        };
+        let first = run(&app, cx);
+        let line = app.update(cx, |app, _| {
+            app.one_window.slot_line(app.one_window_clock()).title
+        });
+        wait(cx, ENTER_GUARD_MS + 400);
+        (row, first, line, run(&app, cx))
+    });
+    let (row, _) = row.expect("Jev filled its first row");
+    assert!(row.starts_with("jev:run:"), "{row}");
+    assert_eq!(first.as_deref(), Some("intent_plan_missing"));
+    assert!(
+        line.starts_with("Jev is reading"),
+        "the line says why nothing ran: {line:?}"
+    );
+    assert_ne!(
+        second.as_deref(),
+        Some("intent_plan_missing"),
+        "once Jev read the words again the row runs"
     );
 }
 

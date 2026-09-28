@@ -11,9 +11,11 @@ pub fn plan_verb(plan: &Plan) -> &'static str {
     match plan.pathway {
         Pathway::Run => {
             let all_apps = !plan.steps.is_empty()
-                && plan.steps.iter().all(
-                    |step| matches!(step, Step::Command { command } if command.kind == CommandKind::App),
-                );
+                && plan.steps.iter().all(|step| match step {
+                    Step::Command { command } => command.kind == CommandKind::App,
+                    Step::OpenUrl { .. } => true,
+                    _ => false,
+                });
             if all_apps {
                 "Open"
             } else {
@@ -52,7 +54,11 @@ pub fn plan_subtitle(plan: &Plan) -> String {
         format!("{} steps", plan.clauses.len())
     } else {
         match plan.pathway {
-            Pathway::Run => "Runs a command".to_string(),
+            Pathway::Run => match plan.steps.first() {
+                Some(Step::OpenUrl { app: Some(app), .. }) => format!("Opens in {app}"),
+                Some(Step::OpenUrl { app: None, .. }) => "Opens in your browser".to_string(),
+                _ => "Runs a command".to_string(),
+            },
             Pathway::AppCommand => match plan.steps.first() {
                 Some(Step::Menu { app, .. }) => format!("{app} menu"),
                 _ => "App menu".to_string(),

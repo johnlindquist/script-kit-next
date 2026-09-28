@@ -1,6 +1,7 @@
 //! Turns a request and what's on screen into Jev questions, and Jev's answers into a plan.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::LazyLock;
 use std::time::Instant;
 
@@ -249,6 +250,11 @@ pub enum Step {
         op: WindowOp,
         app: String,
     },
+    OpenUrl {
+        url: String,
+        /// The default browser when none.
+        app: Option<String>,
+    },
     Capture {
         target: String,
         body: String,
@@ -285,6 +291,7 @@ impl Step {
         match self {
             Step::Command { command } if command.kind == CommandKind::App => Some(&command.name),
             Step::Window { app, .. } => Some(app),
+            Step::OpenUrl { app, .. } => app.as_deref(),
             _ => None,
         }
     }
@@ -448,6 +455,7 @@ pub struct Built {
     pub questions: Questions,
     pub words: Vec<Word>,
     pub spans: Vec<Span>,
+    pub web: Option<WebAddress>,
     span_labels: HashSet<String>,
     pub builtin: Labeled<Command>,
     pub script: Labeled<Command>,
@@ -811,6 +819,7 @@ pub fn build_questions(
         questions,
         words,
         spans,
+        web: web_address(request),
         span_labels,
         builtin,
         script,
@@ -931,6 +940,7 @@ fn not_none(answers: &Answers, name: &str) -> f64 {
 /// target list score 1.
 pub fn target_fit(pathway: Pathway, b: &Built, answers: &Answers) -> f64 {
     match pathway {
+        Pathway::Run if b.web.is_some() => 1.0,
         Pathway::Run => rank_commands(b, answers)
             .first()
             .map(|(_, p)| *p)
@@ -1007,6 +1017,10 @@ pub fn resolve_last_steps(last: &LastAction, catalog: &Catalog) -> Vec<Step> {
                 bundle_id: bundle_id.clone(),
                 path: path.clone(),
                 shortcut: None,
+            }),
+            LastStep::OpenUrl { url, app } => Some(Step::OpenUrl {
+                url: url.clone(),
+                app: app.clone(),
             }),
         })
         .collect()
@@ -1155,6 +1169,162 @@ fn with_what_its_about(request: &str, b: &Built, body: &str) -> String {
         Some(start) if start < span.from => widen(request, b, start, span.to),
         _ => body.to_string(),
     }
+}
+
+/// A web address in the user's words: a full URL, or a bare domain like "johnlindquist.com".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebAddress {
+    /// As typed.
+    pub said: String,
+    /// Byte offsets into the request.
+    pub range: Range<usize>,
+    /// What the browser is handed.
+    pub url: String,
+}
+
+/// Top-level domains only, so "deploy.sh", "Notes.app" and "index.ts" stay file names.
+static WEB_ADDRESS: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\bhttps?://[^\s<>]+|\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|org|net|io|dev|ai|co|me|gg|tv|fm|ly|xyz|info|biz|edu|gov|us|uk|ca|de|fr|jp|au|nl)\b(?::\d+)?(?:/[^\s<>]*)?",
+    )
+    .ok()
+});
+
+pub fn web_address(request: &str) -> Option<WebAddress> {
+    let regex = WEB_ADDRESS.as_ref()?;
+    regex.find_iter(request).find_map(|found| {
+        if matches!(request[..found.start()].chars().last(), Some('@' | '/')) {
+            return None;
+        }
+        let said = found
+            .as_str()
+            .trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '}', '"', '\'']);
+        let lower = said.to_ascii_lowercase();
+        let has_scheme = lower.starts_with("http://") || lower.starts_with("https://");
+        Some(WebAddress {
+            said: said.to_string(),
+            range: found.start()..found.start() + said.len(),
+            url: if has_scheme {
+                said.to_string()
+            } else {
+                format!("https://{said}")
+            },
+        })
+    })
+}
+
+/// Browsers that open a web address handed to them in a new tab, by name and bundle id.
+const BROWSERS: &[(&str, &str)] = &[
+    ("Safari", "com.apple.Safari"),
+    (
+        "Safari Technology Preview",
+        "com.apple.SafariTechnologyPreview",
+    ),
+    ("Google Chrome", "com.google.Chrome"),
+    ("Google Chrome Canary", "com.google.Chrome.canary"),
+    ("Arc", "company.thebrowser.Browser"),
+    ("Dia", "company.thebrowser.dia"),
+    ("Brave Browser", "com.brave.Browser"),
+    ("Microsoft Edge", "com.microsoft.edgemac"),
+    ("Chromium", "org.chromium.Chromium"),
+    ("Vivaldi", "com.vivaldi.Vivaldi"),
+    ("Opera", "com.operasoftware.Opera"),
+    ("Firefox", "org.mozilla.firefox"),
+    (
+        "Firefox Developer Edition",
+        "org.mozilla.firefoxdeveloperedition",
+    ),
+    ("Zen", "app.zen-browser.zen"),
+    ("Orion", "com.kagi.kagimacOS"),
+];
+
+pub fn is_browser(name: &str, bundle_id: &str) -> bool {
+    BROWSERS
+        .iter()
+        .any(|(n, id)| n.eq_ignore_ascii_case(name) || (!bundle_id.is_empty() && *id == bundle_id))
+}
+
+/// Words that say "open it" without naming what, so they name no command or menu item.
+const LAUNCH_WORDS: &[&str] = &[
+    "open", "go", "to", "visit", "load", "launch", "show", "pull", "up", "bring", "navigate",
+    "browse", "new", "tab", "window", "in", "the", "a", "an", "please", "website", "site", "page",
+    "url", "link", "location",
+];
+
+pub(super) fn web_title(said: &str, app: Option<&str>) -> String {
+    match app {
+        Some(app) => format!("Open {said} in {app}"),
+        None => format!("Open {said}"),
+    }
+}
+
+/// Neither the catalog nor the front app's menus can say "go to this address", so Jev reads
+/// "open a new tab to johnlindquist.com" as opening Chrome or its Open Location menu item. The
+/// address is what to open, unless the user named the command or menu item they meant.
+fn opens_web_address(
+    reading: Reading,
+    ctx: &ScreenContext,
+    catalog: &Catalog,
+    b: &Built,
+) -> Reading {
+    let Some(web) = &b.web else {
+        return reading;
+    };
+    let said: HashSet<String> = b
+        .words
+        .iter()
+        .filter(|w| w.end <= web.range.start || w.start >= web.range.end)
+        .map(|w| w.text.to_lowercase())
+        .collect();
+    let said_of = |name: &str| {
+        name_words(name)
+            .filter(|word| {
+                word.len() > 2 && !LAUNCH_WORDS.contains(&word.as_str()) && said.contains(word)
+            })
+            .count()
+    };
+    let takes_over = match (reading.pathway, reading.steps.first()) {
+        (Pathway::Run, Some(Step::Command { command })) => {
+            is_browser(&command.name, "") || said_of(&command.name) == 0
+        }
+        (Pathway::AppCommand, Some(Step::Menu { path, .. })) => {
+            path.last().is_none_or(|leaf| said_of(leaf) == 0)
+        }
+        (Pathway::Run | Pathway::AppCommand, _) => true,
+        (Pathway::None, _) => said
+            .iter()
+            .all(|word| LAUNCH_WORDS.contains(&word.as_str())),
+        _ => false,
+    };
+    if !takes_over {
+        return reading;
+    }
+    let front = &ctx.front_app;
+    let front_is_browser = is_browser(&front.name, &front.bundle_id)
+        || ctx.url.as_deref().is_some_and(|url| !url.is_empty());
+    let app = catalog
+        .commands
+        .iter()
+        .filter(|c| c.kind == CommandKind::App && is_browser(&c.name, ""))
+        .filter(|c| said_of(&c.name) > 0)
+        .max_by_key(|c| {
+            (
+                said_of(&c.name),
+                std::cmp::Reverse(name_words(&c.name).count()),
+            )
+        })
+        .map(|c| c.name.clone())
+        .or_else(|| (front_is_browser && !front.name.is_empty()).then(|| front.name.clone()));
+    let mut open = Reading::new(
+        Pathway::Run,
+        reading.probability,
+        web_title(&web.said, app.as_deref()),
+    );
+    open.steps = vec![Step::OpenUrl {
+        url: web.url.clone(),
+        app,
+    }];
+    open
 }
 
 pub fn reading_for(
@@ -1510,10 +1680,23 @@ pub fn compose_plan(
         .map(|(pathway, p)| (pathway, p / total))
         .collect();
     order.sort_by(|x, y| y.1.total_cmp(&x.1));
-    let mut readings: Vec<Reading> = order
-        .into_iter()
-        .map(|(pathway, p)| reading_for(pathway, p, request, ctx, catalog, b, answers))
-        .collect();
+    let mut readings: Vec<Reading> = Vec::with_capacity(order.len());
+    for (pathway, p) in order {
+        let reading = opens_web_address(
+            reading_for(pathway, p, request, ctx, catalog, b, answers),
+            ctx,
+            catalog,
+            b,
+        );
+        match readings
+            .iter_mut()
+            .find(|r| r.pathway == reading.pathway && r.title == reading.title)
+        {
+            Some(same) => same.probability += reading.probability,
+            None => readings.push(reading),
+        }
+    }
+    readings.sort_by(|x, y| y.probability.total_cmp(&x.probability));
     let top = if readings.is_empty() {
         reading_for(Pathway::None, 0.0, request, ctx, catalog, b, answers)
     } else {
@@ -1578,6 +1761,21 @@ pub fn link_pronouns(clauses: &mut [Plan], ctx: &ScreenContext) {
             continue;
         };
         let clause = &mut clauses[i];
+        if opened && is_browser(&previous, "") {
+            let spoken = format!(" {} ", clause.request.to_lowercase());
+            let said = web_address(&clause.request).map(|web| web.said);
+            if let (Some(Step::OpenUrl { app, .. }), Some(said)) =
+                (clause.reading.steps.first_mut(), said)
+            {
+                let named = app.as_deref().is_some_and(|app| {
+                    name_words(app).any(|word| spoken.contains(&format!(" {word} ")))
+                });
+                if !named {
+                    *app = Some(previous.clone());
+                    clause.reading.title = web_title(&said, Some(&previous));
+                }
+            }
+        }
         if opened && clause.pathway == Pathway::AppCommand {
             let window = clause
                 .alternatives

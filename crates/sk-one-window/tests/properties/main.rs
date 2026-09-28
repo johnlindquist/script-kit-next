@@ -1,5 +1,6 @@
 //! Rules that hold for any sequence of keys, words, answers and time.
 
+mod focus;
 mod held;
 mod learning;
 mod typing;
@@ -15,7 +16,7 @@ use sk_one_window::contract::{ENTER_GUARD_MS, SHRINK_HOLD_MS};
 use sk_one_window::list::Item;
 use sk_one_window::notice::{Irreversible, Notice};
 use sk_one_window::window::{
-    Done, Effect, Event, HeldOp, Key, OneWindow, RunHow, ViewOp, ViewSpec,
+    Done, Effect, Event, HeldOp, Key, OneWindow, Outcome, RunHow, ViewOp, ViewSpec,
 };
 use sk_one_window::{EnterTarget, HeightMode, Row, SlotKind};
 
@@ -105,6 +106,18 @@ struct Run {
     unsent: HashSet<u64>,
     undone: HashSet<u64>,
     wake: Option<u64>,
+    /// When the user last typed, pressed a key or clicked: what arrives in that same turn is
+    /// part of what they did.
+    user_at: Option<u64>,
+}
+
+/// The highlighted row the user may be about to run, with the list it's in: its words and
+/// whether something was staged.
+#[derive(Clone, Debug)]
+struct Highlight {
+    text: String,
+    staged: bool,
+    key: String,
 }
 
 impl Run {
@@ -126,14 +139,60 @@ impl Run {
             unsent: HashSet::new(),
             undone: HashSet::new(),
             wake: None,
+            user_at: None,
         }
+    }
+
+    fn highlight(&self) -> Option<Highlight> {
+        if self.win.in_view() || self.win.is_away() || self.user_at == Some(self.now) {
+            return None;
+        }
+        Some(Highlight {
+            text: self.win.text().to_string(),
+            staged: self.win.staged().is_some(),
+            key: self.win.list().focused()?.key.clone(),
+        })
+    }
+
+    /// Nothing the user didn't do takes the highlighted row away: in the same list it's still
+    /// highlighted and it's what Enter runs. Only a staged subject's own rows can go (its message
+    /// went out), and then Enter is guarded.
+    fn check_kept(&self, was: Option<Highlight>, out: &Outcome) {
+        let Some(was) = was else {
+            return;
+        };
+        if out.picked.is_some()
+            || self.win.in_view()
+            || self.win.text() != was.text
+            || self.win.staged().is_some() != was.staged
+        {
+            return;
+        }
+        let list = self.win.list();
+        let now = list.focused().map(|row| row.key.clone());
+        if now.as_deref() == Some(was.key.as_str()) {
+            assert_eq!(
+                list.current_row().map(|row| row.key),
+                Some(was.key),
+                "Enter runs the highlighted row"
+            );
+            return;
+        }
+        assert!(
+            was.staged && self.win.snapshot(self.now).armed,
+            "“{}” was highlighted and {:?} took its place",
+            was.key,
+            now
+        );
     }
 
     /// Delivers every wake the reducer asked for up to `until`, like the host's timer would.
     fn advance(&mut self, until: u64) {
         while let Some(at) = self.wake.filter(|at| *at <= until) {
             self.now = at;
+            let was = self.highlight();
             let out = self.win.handle(at, Event::Tick);
+            self.check_kept(was, &out);
             self.check(&out.effects, None);
             if self.wake == Some(at) {
                 self.wake = None;
@@ -149,7 +208,16 @@ impl Run {
         let staged_before = self.win.staged().is_some();
         let typed = matches!(ev, Event::Text(_));
         let command = matches!(&ev, Event::Key(k) if !matches!(k, Key::Up | Key::Down));
+        let user = matches!(
+            ev,
+            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
+        );
+        if user {
+            self.user_at = Some(self.now);
+        }
+        let was = self.highlight();
         let out = self.win.handle(self.now, ev);
+        self.check_kept(was, &out);
         let went = command
             || before.view.is_some() != self.win.in_view()
             || staged_before != self.win.staged().is_some()

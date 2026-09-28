@@ -8,7 +8,7 @@ Hard targets per step: the input never moves (inputDy 0), the line above the inp
 34 pt, never moves and nothing else is drawn above it (a view that draws no main input, like a terminal,
 still keeps the line in place), the main list always leads with a 28 pt header (a card drawn in
 its place fails) and one of its rows is highlighted, rows are 44 pt,
-the selected row has no fill (its color is the backdrop's, read from the strip above it), no left bar, no row keycaps, the focused tile is 24 pt, no popup
+every row draws words right of its tile (an empty place in the list fails), the selected row has no fill (its color is the backdrop's, read from the strip above it), no left bar, no row keycaps, the focused tile is 24 pt, no popup
 window opened, and the input draws all of its text (ink reaches at least 4.5 pt per character, up to
 the input's width). The ↵ label sequence is flagged when it returns to an earlier label while the text
 only grew (A → B → A).
@@ -166,6 +166,39 @@ def layout_slot(m):
     return b and {"name": "main-view-slot-line", "y": b["y"], "h": b["height"]}
 
 
+def drawn_rows(m):
+    """The main list's rows as laid out: (y, h) for each, top to bottom."""
+    path = os.path.join(m.get("_dir", ""), m.get("_file", "")[:-5] + ".capture.json")
+    if not os.path.exists(path):
+        return []
+    components = ((json.load(open(path)).get("layout") or {}).get("components")) or []
+    return sorted((c["bounds"]["y"], c["bounds"]["height"]) for c in components
+                  if str(c.get("name", "")).startswith("list-row:") and c.get("bounds"))
+
+
+def wordless_rows(im, m, rows):
+    """Rows whose title area, right of the 24 pt tile, draws nothing over the row's own color:
+    a place in the list that shows no words."""
+    if not im:
+        return []
+    k = m.get("scale") or 1
+    w = m.get("windowWidth") or im.size[0] / k
+    bottom = im.size[1] / k
+    out = []
+    for y, h in rows:
+        if y + h > bottom:
+            continue
+        back = row_band(im, m, y + 8, y + h - 8)
+        if not back:
+            continue
+        inked = any(sum(abs(a - b) for a, b in zip(im.getpixel((int(x * k), int(yy * k)))[:3], back[:3])) > 90
+                    for yy in range(int(y + 10), int(y + h - 10), 2)
+                    for x in range(56, int(min(w * 0.5, 360)), 2))
+        if not inked:
+            out.append(y)
+    return out
+
+
 def enter_label(m):
     for s in m.get("footerSemantics") or []:
         if s.startswith("footer-action:run="):
@@ -248,6 +281,12 @@ def main():
             fill = ((m.get("selectedRowFill") or {}).get("rgba") or [None] * 4)[3]
             if fill:
                 fails.append(f"fill a={fill}")
+        list_rows = drawn_rows(m) if on_main_list(m) and not view else []
+        blank = wordless_rows(im, m, list_rows)
+        if blank:
+            fails.append("rows without words at y " + ",".join(f"{y:g}" for y in blank))
+        wh = m.get("windowHeight")
+        tail = round(wh - max(y + h for y, h in list_rows), 1) if list_rows and wh else None
         if m.get("leftEdgeBar"):
             fails.append("left bar")
         if m.get("rowKeycaps"):
@@ -299,16 +338,16 @@ def main():
             "keycaps": m.get("rowKeycaps"), "tile": icon and f"{icon['w']:g}", "tileRgb": band,
             "tileYellow": bool(icon and near_tile(band, backdrop)), "backdrop": backdrop, "enter": label,
             "windowH": m.get("windowHeight"), "popups": len(m.get("popups") or []), "fails": fails,
-            "notes": notes, "line": line,
+            "notes": notes, "line": line, "tail": tail,
         })
-    print("| step | text | inputDy | slot | line | header | row | fill α | bar | keycaps | tile | ↵ | window h | result |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| step | text | inputDy | slot | line | header | row | fill α | bar | keycaps | tile | ↵ | window h | under rows | result |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         tile = f"{r['tile']} {'yellow' if r['tileYellow'] else r['tileRgb']}" if r["tile"] else "—"
         head = f"{r['header']:g} {r['headerText'] or ''}".strip() if r["header"] else "—"
         print(f"| {r['step']} | {r['text'][:28]} | {'—' if r['inputDy'] is None else format(r['inputDy'], 'g')} | {r['slot'] or '—'} | {(r['line'] or '—')[:32]} | {head[:34]} | {r['row'] or '—'} | "
               f"{r['fill'] if r['fill'] is not None else '—'} | {'yes' if r['bar'] else 'no'} | {r['keycaps']} | {tile} | "
-              f"{(r['enter'] or '—')[:40]} | {r['windowH']} | {'PASS' if not r['fails'] else 'FAIL: ' + '; '.join(r['fails'])}{' (' + '; '.join(r['notes']) + ')' if r['notes'] else ''} |")
+              f"{(r['enter'] or '—')[:40]} | {r['windowH']} | {'—' if r['tail'] is None else format(r['tail'], 'g')} | {'PASS' if not r['fails'] else 'FAIL: ' + '; '.join(r['fails'])}{' (' + '; '.join(r['notes']) + ')' if r['notes'] else ''} |")
     print(f"\n{len(rows) - hard} of {len(rows)} steps meet every target")
     if out_json:
         json.dump({"steps": rows, "pass": hard == 0}, open(out_json, "w"), indent=1, ensure_ascii=False)

@@ -1,0 +1,9 @@
+[{"name": "empty"},
+ {"name": "typed-new", "type": "new", "waitMs": 0},
+ {"name": "typed-new-tab", "type": "new tab", "waitMs": 0},
+ {"name": "new-tab-settled", "waitMs": 1500},
+ {"name": "down", "key": "down"},
+ {"name": "down-2", "key": "down"},
+ {"name": "up", "key": "up"},
+ {"name": "select-all", "key": "cmd-a"},
+ {"name": "cleared", "key": "backspace", "waitMs": 900}]

@@ -84,6 +84,7 @@ fn step_ref(step: &Step) -> String {
         Step::Command { command } => format!("command:{}", command.id),
         Step::Menu { path, .. } => format!("menu:{}", path.join(" › ")),
         Step::Window { op, app } => format!("window:{}:{app}", op.label),
+        Step::OpenUrl { url, app } => format!("url:{url}:{}", app.as_deref().unwrap_or_default()),
         Step::Capture {
             target, body, when, ..
         } => format!(

@@ -13,6 +13,7 @@ use super::jev::{
     decode_response, parse_env, Answer, Answers, Criteria, JevConfig, JevError, JevResult, Oracle,
     Probabilities, Question, Questions,
 };
+use super::launcher::{readings, IntentLauncher};
 use super::script::{normalize_shortcut, plan_to_script, slugify, ScriptOptions};
 use super::spans::{span_candidates, split_clauses, tokenize, SPAN_LIMIT};
 use super::wants_reading;
@@ -395,6 +396,42 @@ fn a_reminder_compiles_to_the_launchers_capture_line() {
     );
     assert!(
         matches!(&plan.steps[0], Step::Capture { handler: Some(h), .. } if h.name == "Create Reminder")
+    );
+}
+
+#[test]
+fn a_row_still_on_screen_after_the_words_moved_on_runs_what_it_says() {
+    let request = "remind me to call mom tomorrow at 5pm";
+    let (ctx, catalog) = (screen(), catalog());
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let rows = readings(compose_plan(
+        request,
+        &ctx,
+        &catalog,
+        &built,
+        &answers_for_reminder(),
+    ));
+    let key = rows[0].key.clone();
+    let mut launcher = IntentLauncher::default();
+    launcher.remember(request, 7, &rows);
+    launcher.show(request, &rows);
+    let typed = "remind me to call mom tomorrow at 5pm!";
+    launcher.show(typed, &[]);
+
+    assert!(
+        launcher.plan(typed, &key).is_none(),
+        "the list moved on to the new words"
+    );
+    assert_eq!(
+        launcher
+            .plan_for_row(&key, 7)
+            .map(|plan| plan.title.clone()),
+        Some(rows[0].plan.title.clone()),
+        "the row on screen still runs its plan"
+    );
+    assert!(
+        launcher.plan_for_row(&key, 8).is_none(),
+        "readings of another screen don't run here"
     );
 }
 
@@ -1140,4 +1177,158 @@ fn a_quit_plan_reads_and_saves_as_a_quit() {
         .source
         .contains(r#"await exec("osascript", ["-e", "tell application \"Slack\" to quit"]);"#));
     assert!(!script.source.contains("closeWindow"));
+}
+
+/// Jev as it read "open a new tab to johnlindquist.com" in Chrome: open Chrome, or its
+/// New Tab menu item, neither of which goes to the address.
+fn open_web_answers(app: &str) -> Answers {
+    let mut answers = Answers::new();
+    answers.insert(
+        "pathway".into(),
+        choice_answer(
+            "run",
+            &[("run", 0.55), ("app_command", 0.35), ("none", 0.1)],
+        ),
+    );
+    answers.insert("complete".into(), Answer::Noul { noul: 0.9 });
+    answers.insert("app".into(), choice_answer(app, &[(app, 0.9)]));
+    answers.insert(
+        "menu".into(),
+        choice_answer("File › New Tab", &[("File › New Tab", 0.8), ("none", 0.2)]),
+    );
+    answers
+}
+
+fn web_plan(request: &str, ctx: &ScreenContext, answers: &Answers) -> Plan {
+    let catalog = catalog();
+    let built = build_questions(request, ctx, &catalog, &EngineOptions::default());
+    compose_plan(request, ctx, &catalog, &built, answers)
+}
+
+#[test]
+fn only_web_addresses_the_user_typed_are_read_as_pages() {
+    let web = |request: &str| super::engine::web_address(request).map(|w| (w.said, w.url));
+    assert_eq!(
+        web("open a new tab to johnlindquist.com"),
+        Some((
+            "johnlindquist.com".into(),
+            "https://johnlindquist.com".into()
+        ))
+    );
+    assert_eq!(
+        web("go to https://github.com/johnlindquist/kit."),
+        Some((
+            "https://github.com/johnlindquist/kit".into(),
+            "https://github.com/johnlindquist/kit".into()
+        ))
+    );
+    assert_eq!(
+        web("pull up www.egghead.io/courses, please"),
+        Some((
+            "www.egghead.io/courses".into(),
+            "https://www.egghead.io/courses".into()
+        ))
+    );
+    for request in [
+        "email john@johnlindquist.com",
+        "run deploy.sh",
+        "open Notes.app",
+        "open johnlindquist.company",
+        "open ~/dev/site.io",
+        "open a new tab",
+    ] {
+        assert_eq!(web(request), None, "{request:?}");
+    }
+}
+
+#[test]
+fn a_new_tab_to_an_address_opens_the_address_in_the_front_browser() {
+    let request = "open a new tab to johnlindquist.com";
+    let plan = web_plan(request, &screen(), &open_web_answers("Google Chrome"));
+    assert!(plan.ready);
+    assert_eq!(plan.title, "Open johnlindquist.com in Google Chrome");
+    assert_eq!(
+        plan.steps,
+        [Step::OpenUrl {
+            url: "https://johnlindquist.com".into(),
+            app: Some("Google Chrome".into()),
+        }]
+    );
+    assert!(
+        plan.alternatives.iter().all(|a| a.title != plan.title),
+        "the menu reading is the same page, not a second row"
+    );
+    assert_eq!(super::present::plan_verb(&plan), "Open");
+    assert_eq!(
+        super::present::plan_subtitle(&plan),
+        "Opens in Google Chrome"
+    );
+    let word = |kind| plan.words.iter().find(|w| w.kind == kind).cloned().unwrap();
+    let subject = word(super::words::WordKind::Subject);
+    assert_eq!(subject.said.as_deref(), Some("johnlindquist.com"));
+    let target = word(super::words::WordKind::Target);
+    assert_eq!(target.value, "Google Chrome");
+    assert_eq!(target.said.as_deref(), Some("a new tab"));
+    let script = plan_to_script(&plan, &ScriptOptions::default());
+    assert!(script
+        .source
+        .contains(r#"await exec("open", ["-a", "Google Chrome", "https://johnlindquist.com"]);"#));
+}
+
+#[test]
+fn an_address_opens_in_the_browser_named_or_else_the_default_one() {
+    let ghostty = ScreenContext {
+        front_app: FrontApp {
+            name: "Ghostty".into(),
+            bundle_id: "com.mitchellh.ghostty".into(),
+        },
+        menus: Vec::new(),
+        ..screen()
+    };
+    let named = web_plan(
+        "open johnlindquist.com in chrome",
+        &ghostty,
+        &open_web_answers("Google Chrome"),
+    );
+    assert_eq!(named.title, "Open johnlindquist.com in Google Chrome");
+    let unnamed = web_plan(
+        "go to johnlindquist.com",
+        &ghostty,
+        &open_web_answers("Ghostty"),
+    );
+    assert_eq!(unnamed.title, "Open johnlindquist.com");
+    assert_eq!(
+        unnamed.steps,
+        [Step::OpenUrl {
+            url: "https://johnlindquist.com".into(),
+            app: None,
+        }]
+    );
+    assert_eq!(
+        super::present::plan_subtitle(&unnamed),
+        "Opens in your browser"
+    );
+}
+
+#[test]
+fn an_address_is_not_opened_when_the_words_name_what_to_do_with_it() {
+    let sent = web_plan(
+        "send johnlindquist.com to slack",
+        &screen(),
+        &open_web_answers("Slack"),
+    );
+    assert_eq!(sent.title, "Open Slack");
+
+    let mut saved = answers_for_reminder();
+    saved.insert(
+        "capture_target".into(),
+        choice_answer("link", &[("link", 0.9)]),
+    );
+    saved.insert(
+        "body".into(),
+        choice_answer("johnlindquist.com", &[("johnlindquist.com", 0.9)]),
+    );
+    saved.remove("when");
+    let plan = web_plan("save johnlindquist.com for later", &screen(), &saved);
+    assert_eq!(plan.pathway, Pathway::Capture);
 }

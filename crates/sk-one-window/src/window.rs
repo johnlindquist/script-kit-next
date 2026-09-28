@@ -338,6 +338,16 @@ pub struct Snapshot {
     pub text: String,
 }
 
+/// The row the highlight was on before something arrived, and the list it was in.
+#[derive(Clone, Debug)]
+struct Focus {
+    text: String,
+    staged: bool,
+    owned: bool,
+    item: Item,
+    row: Row,
+}
+
 #[derive(Clone, Debug)]
 struct PendingDismiss {
     at: Ms,
@@ -496,9 +506,37 @@ impl OneWindow {
         let row = if self.in_view() {
             None
         } else {
-            self.list.current_row(now).map(|r| r.key)
+            self.list.current_row().map(|r| r.key)
         };
         (self.enter_target(now), row)
+    }
+
+    fn focus(&self) -> Option<Focus> {
+        if self.in_view() || self.away {
+            return None;
+        }
+        Some(Focus {
+            text: self.list.text.clone(),
+            staged: self.staged.is_some(),
+            owned: self.list.owned,
+            item: self.list.current()?,
+            row: self.list.focused()?.clone(),
+        })
+    }
+
+    /// Something arrived that the user didn't do, after the turn they last acted in: in the same
+    /// list, the highlighted row is still there and still highlighted. Only a staged subject's
+    /// own rows can go (its message went out); then Enter waits a moment so a press meant for the
+    /// old row runs nothing.
+    fn keep_focus(&mut self, now: Ms, was: Focus) {
+        let same = !self.in_view()
+            && self.picked.is_none()
+            && self.list.text == was.text
+            && self.staged.is_some() == was.staged
+            && self.list.owned == was.owned;
+        if same && !self.list.keep(was.item, &was.row) {
+            self.guard.arm(now);
+        }
     }
 
     pub fn handle(&mut self, now: Ms, ev: Event) -> Outcome {
@@ -508,9 +546,17 @@ impl OneWindow {
         if ev.is_user() {
             self.user_at = Some(now);
         }
+        let focus = if ev.is_user() || self.user_turn(now) {
+            None
+        } else {
+            self.focus()
+        };
         self.tick(now, &mut fx);
         let redraws = ev.redraws_list();
         let consumed = self.apply(now, ev, &mut fx);
+        if let Some(focus) = focus {
+            self.keep_focus(now, focus);
+        }
         if consumed && redraws {
             self.list_redrawn(now, &mut fx);
         }
@@ -566,10 +612,15 @@ impl OneWindow {
                 if text != self.list.text {
                     return false;
                 }
-                let rows = crate::list::fresh_readings(self.with_needs(rows), &self.list.names);
-                self.list.jev.assign(now, &text, rows);
+                let mut rows = crate::list::fresh_readings(self.with_needs(rows), &self.list.names);
+                if rows.is_empty() {
+                    rows = crate::list::stand_in_rows(&text);
+                }
+                let on = self.list.current();
+                let keep = self.list.focused().map(|row| row.key.clone());
+                self.list.jev.assign(now, &text, rows, keep.as_deref());
                 self.redraws.push(now + ROW_ARM_MS);
-                self.list.move_sel(0);
+                self.list.reselect(on, keep.as_deref());
                 if let Some(i) = self.list.held.take() {
                     self.list.asking = false;
                     if let Some(row) = self.list.jev.get(i).and_then(|s| s.row.clone()) {
@@ -586,14 +637,24 @@ impl OneWindow {
                 true
             }
             Event::JevDown { text } => {
-                if text != self.list.text {
+                if text != self.list.text || self.list.jev.read(&text) {
                     return false;
                 }
                 let before = self.enter_runs(now);
-                self.list.jev.down(now, &text);
+                let on = self.list.current();
+                let focused = self.list.focused().cloned();
+                self.list
+                    .jev
+                    .down(now, &text, focused.as_ref().map(|row| row.key.as_str()));
                 self.list.held = None;
                 self.list.asking = false;
                 self.refresh_rows();
+                match (on, focused) {
+                    (Some(item), Some(row)) => {
+                        self.list.keep(item, &row);
+                    }
+                    (on, _) => self.list.reselect(on, None),
+                }
                 if self.enter_runs(now) != before {
                     let user = self.user_turn(now);
                     self.guard.arm_unless_user(now, user);

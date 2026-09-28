@@ -274,6 +274,30 @@ pub fn run_window_step(op: &WindowOp, app: &str) -> anyhow::Result<()> {
     }
 }
 
+/// Opens `url` in `app`, or in the default browser.
+#[cfg(target_os = "macos")]
+pub fn open_url(url: &str, app: Option<&str>) -> anyhow::Result<()> {
+    let mut command = std::process::Command::new("/usr/bin/open");
+    if let Some(app) = app {
+        command.arg("-a").arg(app);
+    }
+    let output = command.arg(url).output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    anyhow::bail!("{}", stderr.trim())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_url(url: &str, app: Option<&str>) -> anyhow::Result<()> {
+    match app {
+        Some(app) => open::with(url, app),
+        None => open::that(url),
+    }
+    .map_err(anyhow::Error::from)
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn run_window_step(_op: &WindowOp, _app: &str) -> anyhow::Result<()> {
     anyhow::bail!("window steps need macOS")

@@ -16,7 +16,8 @@ pub const SHRINK_ANIM_MS: u64 = 260;
 pub const SHRINK_CURVE: [f32; 4] = [0.4, 0.0, 0.2, 1.0];
 /// Enter is ignored this long after its target changed without a keypress.
 pub const ENTER_GUARD_MS: u64 = 400;
-/// After a Jev row replaces another under the highlight, Enter still runs the old row this long.
+/// After a Jev row replaces another in a place the highlight isn't on, that place's ⌘ digit still
+/// runs the old row this long. The highlighted row itself is never replaced.
 pub const ROW_ARM_MS: u64 = 300;
 /// What can't be taken back waits this long in the line above the input.
 pub const MESSAGE_HOLD_MS: u64 = 8_000;
@@ -33,7 +34,7 @@ pub const DISMISS_SETTLE_MS: u64 = 180;
 pub const SUMMON_FADE_MS: u64 = 160;
 /// How often the prototype redrew a waiting message's seconds (the app redraws on each second).
 pub const HOLD_TICK_MS: u64 = 200;
-/// Rows kept for Jev from the first key of a sentence.
+/// Most rows Jev's readings take under the input.
 pub const JEV_ROWS: usize = 3;
 /// Name rows shown above Jev's.
 pub const MAX_MATCHES: usize = 3;
@@ -138,9 +139,13 @@ pub mod words {
         format!("{title} — ↵ again")
     }
 
-    /// The note beside Jev's header: the keys that run its rows, "⌘1–3".
+    /// The note beside Jev's header: the keys that run its rows, "⌘1" or "⌘1–3".
     pub fn jev_keys(rows: usize) -> String {
-        format!("⌘1–{rows}")
+        if rows <= 1 {
+            "⌘1".to_string()
+        } else {
+            format!("⌘1–{rows}")
+        }
     }
 
     /// Jev's first reserved row while it reads the words.

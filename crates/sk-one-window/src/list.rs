@@ -1,8 +1,13 @@
 //! The list under the input.
 //!
-//! Names match instantly on top; three rows are kept for Jev from the first key and fill in
-//! place. Every list starts with a header, and typing changes the header's words, never whether
-//! it is there. A row read from older words never owns Enter, and a weak fuzzy name never does.
+//! Names match instantly on top; Jev's first place shows from the first key, and its readings
+//! fill in place, up to three. A later place with nothing in it takes no room, and when Jev has
+//! nothing worth a row its place offers what doesn't need it. Every list starts with a header,
+//! and typing changes the header's words, never whether it is there. A row read from older words never owns Enter, and a weak fuzzy name never does.
+//!
+//! The highlighted row is the user's. What arrives on its own (another answer from Jev, Jev going
+//! quiet, names searched again) lands around it: the row stays, the highlight stays on it, and
+//! Enter runs it until the user types, moves or runs something.
 
 use crate::Ms;
 use crate::contract::{ASK_LEAD_P, JEV_ROWS, MIN_READING_P, ROW_ARM_MS, words};
@@ -14,7 +19,7 @@ use crate::steady::Steady;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct JevSlot {
     pub row: Option<Row>,
-    /// The row this one replaced; Enter keeps running it for [`ROW_ARM_MS`].
+    /// The row this one replaced; the place's ⌘ digit keeps running it for [`ROW_ARM_MS`].
     pub prev: Option<Row>,
     pub shown_at: Ms,
     /// Read from older words than the input has now.
@@ -71,16 +76,24 @@ impl JevSlots {
         }
     }
 
-    /// Jev answered for the current words. A row that is still in the answer keeps its place;
-    /// new rows fill the empty places in order.
-    pub fn assign(&mut self, now: Ms, text: &str, rows: Vec<Row>) {
+    /// Jev answered for the current words. A row that is still in the answer keeps its place, and
+    /// the highlighted row (`keep`) stays as it was even when the answer leaves it out; new rows
+    /// fill the empty places in order, and the rows close up so no empty place sits between them.
+    pub fn assign(&mut self, now: Ms, text: &str, rows: Vec<Row>, keep: Option<&str>) {
         let mut incoming: Vec<Row> = rows;
         let mut next: Vec<Option<Row>> = vec![None; self.slots.len()];
         for (i, slot) in self.slots.iter().enumerate() {
-            if let Some(row) = &slot.row {
-                if let Some(ix) = incoming.iter().position(|r| r.key == row.key) {
-                    next[i] = Some(incoming.remove(ix));
+            let Some(row) = &slot.row else {
+                continue;
+            };
+            let again = incoming.iter().position(|r| r.key == row.key);
+            if keep == Some(row.key.as_str()) {
+                if let Some(ix) = again {
+                    incoming.remove(ix);
                 }
+                next[i] = Some(row.clone());
+            } else if let Some(ix) = again {
+                next[i] = Some(incoming.remove(ix));
             }
         }
         for place in next.iter_mut() {
@@ -88,6 +101,7 @@ impl JevSlots {
                 *place = Some(incoming.remove(0));
             }
         }
+        next.sort_by_key(Option::is_none);
         for (slot, row) in self.slots.iter_mut().zip(next) {
             let changed =
                 row.as_ref().map(|r| r.key.as_str()) != slot.row.as_ref().map(|r| r.key.as_str());
@@ -109,16 +123,23 @@ impl JevSlots {
         self.down_for = None;
     }
 
-    /// Jev didn't answer: its rows settle in place into rows that don't need it.
-    pub fn down(&mut self, now: Ms, text: &str) {
-        let rows = down_rows(text);
-        for (slot, row) in self
+    /// Jev didn't answer: its rows settle in place into rows that don't need it. The highlighted
+    /// row (`keep`) stays where it is.
+    pub fn down(&mut self, now: Ms, text: &str, keep: Option<&str>) {
+        let kept = self
             .slots
-            .iter_mut()
-            .zip(rows.into_iter().map(Some).chain(std::iter::repeat(None)))
-        {
+            .iter()
+            .position(|s| s.row.as_ref().is_some_and(|r| keep == Some(r.key.as_str())));
+        let mut rows = down_rows(text)
+            .into_iter()
+            .filter(|row| keep != Some(row.key.as_str()));
+        for (i, slot) in self.slots.iter_mut().enumerate() {
+            if kept == Some(i) {
+                slot.prev = None;
+                continue;
+            }
             *slot = JevSlot {
-                row,
+                row: rows.next(),
                 prev: None,
                 shown_at: now,
                 stale: false,
@@ -137,7 +158,12 @@ impl JevSlots {
         self.answered_for.as_deref() == Some(text)
     }
 
-    /// The row Enter runs in place `i`: none while stale; the replaced row while arming.
+    /// Jev read the current words itself: an answer, not stand-ins for one that never came.
+    pub fn read(&self, text: &str) -> bool {
+        self.settled_for(text) && !self.is_down_for(text)
+    }
+
+    /// The row place `i`'s ⌘ digit runs: none while stale; the replaced row while arming.
     pub fn effective(&self, i: usize, now: Ms) -> Option<&Row> {
         let slot = self.slots.get(i)?;
         let row = slot.row.as_ref()?;
@@ -150,7 +176,7 @@ impl JevSlots {
         }
     }
 
-    /// When a row's arming ends and Enter moves to it.
+    /// When a row's arming ends and its ⌘ digit moves to it.
     pub fn next_wake(&self, now: Ms) -> Option<Ms> {
         self.slots
             .iter()
@@ -219,6 +245,15 @@ pub fn down_rows(text: &str) -> Vec<Row> {
             .with_act(RowAct::AskJevAgain),
         Row::new("down:note", "Add it to today's note").with_icon("append"),
     ]
+}
+
+/// What Jev's places offer when it answered but had nothing worth a row: the rows that don't
+/// need it, without asking it again.
+pub fn stand_in_rows(text: &str) -> Vec<Row> {
+    down_rows(text)
+        .into_iter()
+        .filter(|row| row.act != RowAct::AskJevAgain)
+        .collect()
 }
 
 /// What the list starts with when its first row brings no header of its own.
@@ -315,7 +350,9 @@ impl ListState {
             return out;
         }
         let names = (0..self.names.len()).map(Item::Name);
-        let slots = (0..self.jev.len()).map(Item::Slot);
+        let slots = (0..self.jev.len())
+            .filter(|&i| self.slot_drawn(i))
+            .map(Item::Slot);
         if self.jev_first && !self.has_strong_name() {
             out.extend(slots);
             out.extend(names);
@@ -324,6 +361,17 @@ impl ListState {
             out.extend(slots);
         }
         out
+    }
+
+    /// Whether Jev's place `i` takes a row in the list: the first always does, so what owns ↵
+    /// never comes and goes while a sentence is typed; the others only while they hold a row.
+    fn slot_drawn(&self, i: usize) -> bool {
+        i == 0 || self.jev.get(i).is_some_and(|slot| slot.row.is_some())
+    }
+
+    /// How many of Jev's places the list draws.
+    pub fn drawn_slots(&self) -> usize {
+        (0..self.jev.len()).filter(|&i| self.slot_drawn(i)).count()
     }
 
     /// The list as drawn: headers in place. The first item is always a header.
@@ -386,20 +434,41 @@ impl ListState {
         self.visible().get(self.sel).cloned()
     }
 
-    /// The row Enter would run now, if any.
-    pub fn current_row(&self, now: Ms) -> Option<Row> {
+    /// The row Enter would run now, if any: the one the highlight is on.
+    pub fn current_row(&self) -> Option<Row> {
         match self.current()? {
-            Item::Slot(i) => self.effective(i, now).cloned(),
+            Item::Slot(i) => self.slot_row(i).cloned(),
             item => self.row(&item).cloned(),
         }
     }
 
-    pub fn effective(&self, i: usize, now: Ms) -> Option<&Row> {
+    /// The row the highlight is on, when it's one the user can act on: a name, a pinned row, or a
+    /// reading of the current words. Nothing that arrives on its own takes it away.
+    pub fn focused(&self) -> Option<&Row> {
+        match self.current()? {
+            Item::Slot(i) => self
+                .jev
+                .get(i)
+                .filter(|slot| !slot.stale)
+                .and_then(|slot| slot.row.as_ref()),
+            item => self.row(&item),
+        }
+    }
+
+    /// What Enter runs with the highlight on Jev's place `i`: the row drawn there, unless it was
+    /// read from older words.
+    pub fn slot_row(&self, i: usize) -> Option<&Row> {
         let slot = self.jev.get(i)?;
-        let row = slot.row.as_ref()?;
         if self.stale_holds && slot.stale {
             return None;
         }
+        slot.row.as_ref()
+    }
+
+    /// The row place `i`'s ⌘ digit runs: the one it replaced a moment ago, while arming.
+    pub fn effective(&self, i: usize, now: Ms) -> Option<&Row> {
+        let slot = self.jev.get(i)?;
+        let row = self.slot_row(i)?;
         match &slot.prev {
             Some(prev) if now.saturating_sub(slot.shown_at) < ROW_ARM_MS => Some(prev),
             _ => Some(row),
@@ -413,14 +482,11 @@ impl ListState {
         };
         match item {
             Item::Slot(i) => {
-                let slot = self.jev.get(i).expect("slot");
-                let eff = self.effective(i, now);
-                let id = if slot.prev.is_some() && (eff.is_some() || !self.stale_holds) {
-                    format!("slot{i}:{}", eff.map(|r| r.key.as_str()).unwrap_or(""))
-                } else {
-                    format!("slot{i}")
-                };
-                match eff.filter(|_| self.asking || self.steady.settled(now)) {
+                let id = format!("slot{i}");
+                match self
+                    .slot_row(i)
+                    .filter(|_| self.asking || self.steady.settled(now))
+                {
                     None => {
                         let label = if self.held.is_some() {
                             words::ENTER_WAITING
@@ -456,13 +522,58 @@ impl ListState {
     pub fn slot_position(&self, i: usize) -> Option<usize> {
         self.visible().iter().position(|v| *v == Item::Slot(i))
     }
+
+    /// Position of the row with `key` among the visible rows.
+    fn position_of(&self, key: &str) -> Option<usize> {
+        self.visible()
+            .iter()
+            .position(|v| self.row(v).is_some_and(|row| row.key == key))
+    }
+
+    /// Puts the highlight back after rows opened or closed around it: on the row with `key`
+    /// wherever it went, or else on `item`. A place that closed hands it to the last of Jev's
+    /// rows still drawn.
+    pub fn reselect(&mut self, item: Option<Item>, key: Option<&str>) {
+        if let Some(at) = key.and_then(|key| self.position_of(key)) {
+            self.sel = at;
+            return;
+        }
+        let visible = self.visible();
+        let at = item.and_then(|item| {
+            visible
+                .iter()
+                .position(|v| *v == item)
+                .or_else(|| match item {
+                    Item::Slot(_) => visible.iter().rposition(|v| matches!(v, Item::Slot(_))),
+                    _ => None,
+                })
+        });
+        match at {
+            Some(at) => self.sel = at,
+            None => self.move_sel(0),
+        }
+    }
+
+    /// Rows arrived for the same words while the highlight was on `row` at `item`: a name the new
+    /// ones left out goes back where it was, and the highlight goes back on it. Returns whether
+    /// the highlight is on `row` again.
+    pub fn keep(&mut self, item: Item, row: &Row) -> bool {
+        if self.position_of(&row.key).is_none() {
+            if let Item::Name(i) = item {
+                let at = i.min(self.names.len());
+                self.names.insert(at, row.clone());
+            }
+        }
+        self.reselect(Some(item), Some(&row.key));
+        self.focused().is_some_and(|now| now.key == row.key)
+    }
 }
 
 impl ListState {
     /// A header as the list draws it: Jev's carries the keys that run its rows.
     pub fn drawn_header(&self, head: &str) -> String {
         if head == words::JEV {
-            format!("{head} · {}", words::jev_keys(self.jev.len()))
+            format!("{head} · {}", words::jev_keys(self.drawn_slots()))
         } else {
             head.to_string()
         }
@@ -503,6 +614,16 @@ mod tests {
             .collect()
     }
 
+    fn keys(s: &JevSlots) -> Vec<Option<&str>> {
+        (0..s.len())
+            .map(|i| {
+                s.get(i)
+                    .and_then(|slot| slot.row.as_ref())
+                    .map(|r| r.key.as_str())
+            })
+            .collect()
+    }
+
     #[test]
     fn every_list_starts_with_a_header() {
         let mut l = ListState::new(true, true);
@@ -535,37 +656,175 @@ mod tests {
         }
     }
 
+    fn slots(l: &ListState) -> Vec<Item> {
+        l.visible()
+            .into_iter()
+            .filter(|i| matches!(i, Item::Slot(_)))
+            .collect()
+    }
+
     #[test]
-    fn three_places_are_kept_from_the_first_key() {
+    fn one_place_reads_from_the_first_key() {
         let mut l = ListState::new(false, true);
         l.on_text("w");
-        let slots = l
-            .visible()
-            .iter()
-            .filter(|i| matches!(i, Item::Slot(_)))
-            .count();
-        assert_eq!(slots, JEV_ROWS);
+        assert_eq!(slots(&l), [Item::Slot(0)]);
+    }
+
+    #[test]
+    fn places_jev_left_empty_take_no_room() {
+        let mut l = ListState::new(true, true);
+        l.on_text("open a new tab");
+        l.jev.assign(0, "open a new tab", jev(&["a"]), None);
+        assert_eq!(slots(&l), [Item::Slot(0)]);
+        assert_eq!(l.drawn_header(words::JEV), format!("{} · ⌘1", words::JEV));
+        l.jev
+            .assign(10, "open a new tab", jev(&["a", "b", "c"]), None);
+        assert_eq!(slots(&l).len(), JEV_ROWS);
+        l.jev.assign(20, "open a new tab", jev(&["b"]), None);
+        assert_eq!(slots(&l), [Item::Slot(0)]);
+    }
+
+    #[test]
+    fn readings_of_older_words_keep_their_places_while_typing() {
+        let mut l = ListState::new(true, true);
+        l.on_text("open a new");
+        l.jev.assign(0, "open a new", jev(&["a", "b"]), None);
+        l.on_text("open a new tab");
+        assert_eq!(slots(&l), [Item::Slot(0), Item::Slot(1)]);
+    }
+
+    #[test]
+    fn rows_close_up_when_an_earlier_one_leaves() {
+        let mut s = JevSlots::new(3);
+        s.assign(0, "t", jev(&["a", "b", "c"]), None);
+        s.assign(10, "t", jev(&["c"]), None);
+        assert_eq!(keys(&s), [Some("c"), None, None]);
+    }
+
+    #[test]
+    fn the_highlight_stays_on_its_row_when_places_close_above_it() {
+        let mut l = ListState::new(true, true);
+        l.on_text("zz");
+        l.names = names(&[("Zed", 10)]);
+        l.jev.assign(0, "zz", jev(&["a", "b", "c"]), None);
+        l.sel = 3;
+        assert_eq!(l.current(), Some(Item::Name(0)));
+        let before = l.current();
+        l.jev.assign(10, "zz", jev(&["a"]), None);
+        l.reselect(before, Some("name:Zed"));
+        assert_eq!(l.current(), Some(Item::Name(0)));
     }
 
     #[test]
     fn stale_rows_never_own_enter() {
         let mut l = ListState::new(true, true);
         l.on_text("when does");
-        l.jev.assign(0, "when does", jev(&["a"]));
-        assert!(l.current_row(1_000).is_some());
+        l.jev.assign(0, "when does", jev(&["a"]), None);
+        assert!(l.current_row().is_some());
         l.on_text("when does lebron");
-        assert!(l.current_row(1_000).is_none());
+        assert!(l.current_row().is_none());
+        assert!(
+            l.focused().is_none(),
+            "a stale row isn't the user's to keep"
+        );
         assert_eq!(l.target(1_000).label, words::ENTER_JEV_FIRST);
     }
 
     #[test]
-    fn a_replaced_row_keeps_enter_while_arming() {
+    fn another_answer_never_replaces_the_highlighted_reading() {
+        let mut l = ListState::new(true, true);
+        l.on_text("quit gmgui");
+        l.jev.assign(0, "quit gmgui", jev(&["a"]), None);
+        assert_eq!(l.focused().unwrap().key, "a");
+        let keep = l.focused().map(|r| r.key.clone());
+        l.jev
+            .assign(1_000, "quit gmgui", jev(&["b", "c"]), keep.as_deref());
+        l.reselect(Some(Item::Slot(0)), keep.as_deref());
+        assert_eq!(keys(&l.jev), [Some("a"), Some("b"), Some("c")]);
+        assert_eq!(l.current_row().unwrap().key, "a");
+        assert_eq!(l.target(5_000).label, "Jev a");
+    }
+
+    #[test]
+    fn the_highlighted_reading_keeps_its_words_when_jev_says_it_again() {
+        let mut s = JevSlots::new(3);
+        s.assign(0, "t", jev(&["a", "b"]), None);
+        s.assign(
+            10,
+            "t",
+            vec![Row::new("b", "Reworded b"), Row::new("a", "Reworded a")],
+            Some("a"),
+        );
+        assert_eq!(s.get(0).unwrap().row.as_ref().unwrap().title, "Jev a");
+        assert_eq!(s.get(1).unwrap().row.as_ref().unwrap().title, "Reworded b");
+    }
+
+    #[test]
+    fn a_highlighted_row_further_down_stays_when_the_rows_above_it_go() {
+        let mut l = ListState::new(true, true);
+        l.on_text("t");
+        l.jev.assign(0, "t", jev(&["a", "b", "c"]), None);
+        l.sel = 2;
+        let keep = l.focused().map(|r| r.key.clone());
+        assert_eq!(keep.as_deref(), Some("c"));
+        l.jev.assign(1_000, "t", jev(&["d"]), keep.as_deref());
+        l.reselect(Some(Item::Slot(2)), keep.as_deref());
+        assert_eq!(keys(&l.jev), [Some("d"), Some("c"), None]);
+        assert_eq!(l.current_row().unwrap().key, "c");
+        assert_eq!(
+            l.effective(1, 1_010).unwrap().key,
+            "b",
+            "⌘2 still runs what was just there"
+        );
+    }
+
+    #[test]
+    fn a_late_answer_leaves_the_highlighted_stand_in_alone() {
+        let mut l = ListState::new(true, true);
+        l.on_text("quit gmgui");
+        l.jev.down(0, "quit gmgui", None);
+        let keep = l.focused().map(|r| r.key.clone());
+        assert_eq!(keep.as_deref(), Some("down:model"));
+        l.jev
+            .assign(2_000, "quit gmgui", jev(&["jev:quit"]), keep.as_deref());
+        l.reselect(Some(Item::Slot(0)), keep.as_deref());
+        assert_eq!(keys(&l.jev), [Some("down:model"), Some("jev:quit"), None]);
+        assert_eq!(l.current_row().unwrap().key, "down:model");
+    }
+
+    #[test]
+    fn going_quiet_leaves_the_highlighted_reading_alone() {
+        let mut s = JevSlots::new(3);
+        s.assign(0, "t", jev(&["a", "b"]), None);
+        s.down(10, "t", Some("b"));
+        assert_eq!(
+            keys(&s),
+            [Some("down:model"), Some("b"), Some("down:retry")]
+        );
+    }
+
+    #[test]
+    fn a_name_searched_away_stays_while_highlighted() {
+        let mut l = ListState::new(false, true);
+        l.on_text("sl");
+        l.names = names(&[("Slack", 90), ("Slides", 80)]);
+        l.sel = 1;
+        let row = l.focused().cloned().unwrap();
+        l.names = names(&[("Slack", 90), ("Sleep", 85)]);
+        assert!(l.keep(Item::Name(1), &row));
+        assert_eq!(l.current_row().unwrap().key, "name:Slides");
+    }
+
+    #[test]
+    fn enter_runs_the_row_drawn_under_the_highlight() {
         let mut l = ListState::new(true, false);
         l.on_text("x");
-        l.jev.assign(0, "x", jev(&["a"]));
-        l.jev.assign(1_000, "x", jev(&["b"]));
-        assert_eq!(l.current_row(1_100).unwrap().key, "a");
-        assert_eq!(l.current_row(1_000 + ROW_ARM_MS).unwrap().key, "b");
+        l.jev.assign(0, "x", jev(&["a", "b"]), None);
+        l.jev.assign(1_000, "x", jev(&["a", "c"]), None);
+        l.sel = 1;
+        assert_eq!(l.current_row().unwrap().key, "c");
+        assert_eq!(l.effective(1, 1_100).unwrap().key, "b");
+        assert_eq!(l.effective(1, 1_000 + ROW_ARM_MS).unwrap().key, "c");
     }
 
     #[test]
@@ -573,18 +832,16 @@ mod tests {
         let mut l = ListState::new(true, true);
         l.on_text("x");
         let before = l.target(0).id;
-        l.jev.assign(10, "x", jev(&["a"]));
+        l.jev.assign(10, "x", jev(&["a"]), None);
         assert_eq!(l.target(10).id, before);
     }
 
     #[test]
     fn rows_that_stay_in_the_answer_keep_their_place() {
         let mut s = JevSlots::new(3);
-        s.assign(0, "t", jev(&["a", "b", "c"]));
-        s.assign(10, "t", jev(&["c", "d", "a"]));
-        assert_eq!(s.get(0).unwrap().row.as_ref().unwrap().key, "a");
-        assert_eq!(s.get(1).unwrap().row.as_ref().unwrap().key, "d");
-        assert_eq!(s.get(2).unwrap().row.as_ref().unwrap().key, "c");
+        s.assign(0, "t", jev(&["a", "b", "c"]), None);
+        s.assign(10, "t", jev(&["c", "d", "a"]), None);
+        assert_eq!(keys(&s), [Some("a"), Some("d"), Some("c")]);
     }
 
     #[test]
@@ -604,8 +861,9 @@ mod tests {
     fn down_rows_settle_in_place() {
         let mut l = ListState::new(true, true);
         l.on_text("book a table");
-        l.jev.down(0, "book a table");
+        l.jev.down(0, "book a table", None);
         assert!(l.jev.is_down_for("book a table"));
-        assert_eq!(l.current_row(0).unwrap().key, "down:model");
+        assert!(!l.jev.read("book a table"));
+        assert_eq!(l.current_row().unwrap().key, "down:model");
     }
 }

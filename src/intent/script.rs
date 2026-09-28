@@ -202,6 +202,12 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
             };
             out.lines.push(line);
         }
+        Step::OpenUrl { url, app } => {
+            out.lines.push(match app {
+                Some(app) => format!("await exec(\"open\", [\"-a\", {}, {}]);", js(app), js(url)),
+                None => format!("await exec(\"open\", [{}]);", js(url)),
+            });
+        }
         Step::Menu {
             bundle_id, path, ..
         } => {

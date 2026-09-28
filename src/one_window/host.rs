@@ -69,6 +69,9 @@ pub(crate) struct OneWindowHost {
     pub(super) view_scrolled_to: std::cell::Cell<Option<usize>>,
     /// What a view staged with ⌘K, while its actions are listed in its place.
     pub(super) view_stage: Option<super::view_staging::ViewStage>,
+    /// What each name the list last drew stands for, so a name the reducer keeps under the
+    /// highlight still draws and runs when a search for the same words leaves it out.
+    names_drawn: HashMap<String, SearchResult>,
 }
 
 /// What the reducer did with one event.
@@ -287,7 +290,18 @@ impl ScriptListApp {
         }
         for row in runs {
             handled.ran = true;
+            let said = self.one_window_host.ledger.said;
+            let title = row.title.clone();
             if let Err(error) = self.one_window_run(row, cx) {
+                tracing::warn!(
+                    target: "script_kit::one_window",
+                    event = "run_failed",
+                    error = %error,
+                );
+                if self.one_window_host.ledger.said == said {
+                    let words = run_failure_words(&title, &error);
+                    self.one_window_notice(crate::line_notice::FAILED, words, cx);
+                }
                 handled.run_error = Some(error);
             }
         }
@@ -478,8 +492,17 @@ impl ScriptListApp {
             results
         } else {
             let (rows, results) = self.one_window_names(&grouped, &flat, text);
-            let (rows, results) = self.one_window_more_names(text, rows, results, cx);
+            let (rows, mut results) = self.one_window_more_names(text, rows, results, cx);
             self.one_window_handle(Event::Names(rows), cx);
+            for row in &self.one_window.list().names {
+                if results.contains_key(&row.key) {
+                    continue;
+                }
+                if let Some(result) = self.one_window_host.names_drawn.get(&row.key) {
+                    results.insert(row.key.clone(), result.clone());
+                }
+            }
+            self.one_window_host.names_drawn = results.clone();
             results
         };
         let (mut laid_out, flat) = self.one_window_layout(&results, text);
@@ -668,15 +691,15 @@ impl ScriptListApp {
         }
     }
 
-    /// After every publication: the reducer follows the highlight, or the highlight takes the
-    /// reducer's row when the new rows left it on none, and the reducer hears how tall the list
-    /// wants the window.
+    /// After every publication: the highlight takes the reducer's row, which it kept through
+    /// whatever arrived, and the reducer hears how tall the list wants the window. The list
+    /// re-anchors by place (Jev's rows keep one key per place), so its own pick can name a
+    /// different reading than the one the user was on.
     pub(crate) fn one_window_published(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::ScriptList) {
             return;
         }
-        self.one_window_follow_host_selection(cx);
-        if self.one_window_owns_list() && self.one_window_host_position().is_none() {
+        if self.one_window_owns_list() {
             self.one_window_show_selection(cx);
         }
         let px = self.one_window_natural_height();
@@ -701,10 +724,7 @@ impl ScriptListApp {
         }
         if !crate::intent::wants_reading(&text) {
             queue.push_back(Event::Jev {
-                rows: sk_one_window::list::down_rows(&text)
-                    .into_iter()
-                    .filter(|row| row.act != sk_one_window::RowAct::AskJevAgain)
-                    .collect(),
+                rows: sk_one_window::list::stand_in_rows(&text),
                 text,
             });
             return;
@@ -718,6 +738,10 @@ impl ScriptListApp {
             });
             return;
         }
+        self.one_window_send_jev(text, screen, cx);
+    }
+
+    fn one_window_send_jev(&mut self, text: String, screen: u64, cx: &mut Context<Self>) {
         self.one_window_host.jev_asked += 1;
         let id = self.one_window_host.jev_asked;
         self.one_window_host.jev_pending = Some((id, text.clone()));
@@ -750,7 +774,9 @@ impl ScriptListApp {
             Ok(plan) => {
                 let readings = crate::intent::readings(plan);
                 self.intent_launcher.remember(&text, screen, &readings);
-                self.intent_launcher.show(&text, &readings);
+                if self.one_window.list().text == text {
+                    self.intent_launcher.show(&text, &readings);
+                }
                 self.one_window_talk_reading(&text, &readings, cx);
                 tracing::info!(
                     target: "script_kit::intent",
@@ -818,6 +844,16 @@ impl ScriptListApp {
         }
         if let Some(ran) = self.run_jev_row(&row.key, &text, cx) {
             return ran.map_err(anyhow::Error::msg);
+        }
+        if row.key.starts_with("jev:") {
+            let screen = self.intent_screen_key();
+            self.one_window_send_jev(text, screen, cx);
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                format!("Jev is reading “{}” again · ↵ in a moment", row.title),
+                cx,
+            );
+            anyhow::bail!("intent_plan_missing");
         }
         let list = self.one_window.list();
         let position = list
@@ -950,6 +986,25 @@ impl ScriptListApp {
     pub(crate) fn one_window_enter_arming(&self) -> bool {
         self.one_window.enter_armed_left(self.one_window_host.now) > 0
     }
+}
+
+/// What the line says when a row didn't run and nothing along the way said why.
+fn run_failure_words(title: &str, error: &anyhow::Error) -> String {
+    let why = match error.to_string().as_str() {
+        "intent_app_missing" => "the app isn't installed",
+        "intent_builtin_missing" | "intent_script_missing" | "intent_scriptlet_missing" => {
+            "that command is gone"
+        }
+        "intent_step_not_combinable" => "Jev's plan mixes steps that can't run together",
+        "intent_plan_has_no_launcher_line" => "Jev's plan has nothing to type",
+        "intent_brain_write_failed" => "today's note couldn't be written",
+        "intent_clipboard_empty" => "the clipboard is empty",
+        "intent_scripts_dir_unavailable"
+        | "intent_script_name_taken"
+        | "intent_script_write_failed" => "the script couldn't be saved",
+        _ => return format!("Couldn't run “{title}”"),
+    };
+    format!("Couldn't run “{title}”: {why}")
 }
 
 /// What one of Jev's rows says under its title.
