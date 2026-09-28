@@ -971,6 +971,7 @@ impl AppView {
             | AppView::ProcessManagerView { .. }
             | AppView::FlowUxView { .. }
             | AppView::FlowSessionView { .. }
+            | AppView::ChatPrompt { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
@@ -987,7 +988,6 @@ impl AppView {
             | AppView::EnvPrompt { .. }
             | AppView::DropPrompt { .. }
             | AppView::TemplatePrompt { .. }
-            | AppView::ChatPrompt { .. }
             | AppView::MicroPrompt { .. }
             | AppView::NamingPrompt { .. }
             | AppView::CreateAiPresetView { .. }

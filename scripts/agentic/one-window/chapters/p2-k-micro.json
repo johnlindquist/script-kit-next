@@ -1,0 +1,3 @@
+[{"name":"micro-open","waitMs":800},
+ {"name":"micro-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"micro-esc","key":"escape","waitMs":500}]

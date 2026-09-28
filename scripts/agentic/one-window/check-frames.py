@@ -5,7 +5,8 @@ Grades every step a one-window-frames.ts run wrote against the one-window target
 markdown table. Exit 1 when any hard target fails.
 
 Hard targets per step: the input never moves (inputDy 0), the line above the input is present and
-34 pt and nothing else is drawn above it, the main list always leads with a 28 pt header (a card drawn in
+34 pt, never moves and nothing else is drawn above it (a view that draws no main input, like a terminal,
+still keeps the line in place), the main list always leads with a 28 pt header (a card drawn in
 its place fails) and one of its rows is highlighted, rows are 44 pt,
 the selected row has no fill (its color is the backdrop's, read from the strip above it), no left bar, no row keycaps, the focused tile is 24 pt, no popup
 window opened, and the input draws all of its text (ink reaches at least 4.5 pt per character, up to
@@ -153,6 +154,18 @@ def slot_words(m):
     return words or None
 
 
+def layout_slot(m):
+    """The line above from the host's layout, for a view that draws no main input (a terminal, an
+    output panel): the line keeps its place whether or not the input is under it."""
+    path = os.path.join(m.get("_dir", ""), m.get("_file", "")[:-5] + ".capture.json")
+    if not os.path.exists(path):
+        return None
+    components = ((json.load(open(path)).get("layout") or {}).get("components")) or []
+    c = next((c for c in components if c.get("name") == "main-view-slot-line"), None)
+    b = c and c.get("bounds")
+    return b and {"name": "main-view-slot-line", "y": b["y"], "h": b["height"]}
+
+
 def enter_label(m):
     for s in m.get("footerSemantics") or []:
         if s.startswith("footer-action:run="):
@@ -179,22 +192,32 @@ def main():
     if not steps:
         print("no steps in", d)
         sys.exit(1)
-    y0 = steps[0]["input"]["y"]
+    anchored = [m for m in steps if m.get("input")]
+    y0 = anchored[0]["input"]["y"] if anchored else None
+    line_y0 = None
     rows, hard = [], 0
     labels, prev_text = [], ""
     for m in steps:
         name = m["step"]["name"]
         fails, notes = [], []
-        dy = round(m["input"]["y"] - y0, 2)
-        if dy != 0:
-            fails.append(f"inputDy {dy}")
-        above = m.get("aboveInputAll") or []
-        slot = next((a for a in above if a["name"] == "main-view-slot-line"), None)
-        others = [a["name"] for a in above if not a["name"].startswith("main-view-slot-line")]
+        if m.get("input"):
+            dy = round(m["input"]["y"] - y0, 2)
+            if dy != 0:
+                fails.append(f"inputDy {dy}")
+            above = m.get("aboveInputAll") or []
+            slot = next((a for a in above if a["name"] == "main-view-slot-line"), None)
+            others = [a["name"] for a in above if not a["name"].startswith("main-view-slot-line")]
+        else:
+            dy, slot, others = None, layout_slot(m), []
+            notes.append("no main input")
         if not slot:
             fails.append("no slot line")
         elif abs(slot["h"] - 34) > 0.5:
             fails.append(f"slot {slot['h']}")
+        if slot and slot.get("y") is not None:
+            line_y0 = slot["y"] if line_y0 is None else line_y0
+            if abs(slot["y"] - line_y0) > 0.5:
+                fails.append(f"line moved {slot['y'] - line_y0:g}")
         known_above = [n for n in others if n in known]
         others = [n for n in others if n not in known]
         if others:
@@ -241,12 +264,15 @@ def main():
             fails.append(f"popups {len(popups) - len(known_popups)}")
         if known_popups:
             notes.append("known popup: " + ",".join(str(p.get("target")) for p in known_popups))
-        issues = [i for i in m.get("issues") or [] if not (view and i == "selected_row_not_painted")]
+        issues = [i for i in m.get("issues") or []
+                  if not (view and i == "selected_row_not_painted")
+                  and not (dy is None and i == "input_paint_bounds_missing")]
         if issues:
             fails.append("issues: " + ";".join(map(str, issues))[:80])
         text = m.get("inputValue") or ""
-        reach = input_reach(d, m) if text.strip() else None
-        want = min(sum(1.5 if c in NARROW_GLYPHS else 4.5 for c in text), m["input"]["w"] - 40)
+        reach = input_reach(d, m) if text.strip() and m.get("input") else None
+        want = reach is not None and min(sum(1.5 if c in NARROW_GLYPHS else 4.5 for c in text),
+                                         m["input"]["w"] - 40)
         if reach is not None and reach < want:
             fails.append(f"input text cut at {reach:.0f} pt of {len(text)} chars")
         label = enter_label(m)
@@ -267,7 +293,7 @@ def main():
         prev_text = text
         hard += bool(fails)
         rows.append({
-            "step": name, "text": text, "inputY": m["input"]["y"], "inputDy": dy,
+            "step": name, "text": text, "inputY": (m.get("input") or {}).get("y"), "inputDy": dy,
             "slot": slot and slot["h"], "header": fh and fh["h"], "headerText": fh and fh.get("text"),
             "row": fr and fr["h"], "fill": fill, "bar": bool(m.get("leftEdgeBar")),
             "keycaps": m.get("rowKeycaps"), "tile": icon and f"{icon['w']:g}", "tileRgb": band,
@@ -280,7 +306,7 @@ def main():
     for r in rows:
         tile = f"{r['tile']} {'yellow' if r['tileYellow'] else r['tileRgb']}" if r["tile"] else "—"
         head = f"{r['header']:g} {r['headerText'] or ''}".strip() if r["header"] else "—"
-        print(f"| {r['step']} | {r['text'][:28]} | {r['inputDy']:g} | {r['slot'] or '—'} | {(r['line'] or '—')[:32]} | {head[:34]} | {r['row'] or '—'} | "
+        print(f"| {r['step']} | {r['text'][:28]} | {'—' if r['inputDy'] is None else format(r['inputDy'], 'g')} | {r['slot'] or '—'} | {(r['line'] or '—')[:32]} | {head[:34]} | {r['row'] or '—'} | "
               f"{r['fill'] if r['fill'] is not None else '—'} | {'yes' if r['bar'] else 'no'} | {r['keycaps']} | {tile} | "
               f"{(r['enter'] or '—')[:40]} | {r['windowH']} | {'PASS' if not r['fails'] else 'FAIL: ' + '; '.join(r['fails'])}{' (' + '; '.join(r['notes']) + ')' if r['notes'] else ''} |")
     print(f"\n{len(rows) - hard} of {len(rows)} steps meet every target")

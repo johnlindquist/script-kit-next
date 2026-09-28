@@ -432,7 +432,6 @@ export const coverageProfiles: CoverageProfile[] = [
       "src/platform/secondary_window_glass_lifecycle.rs",
       "src/platform/secondary_window_glass_style.rs",
       "src/platform/secondary_window_resize_policy.rs",
-      "src/platform/secondary_window_vibrancy_impl.rs",
     ],
     features: ["script list", "prompt state", "footer", "input", "preview", "surface contract", "source chips"],
     shortcuts: ["Cmd+K", "Escape", "Enter", "Tab", "ArrowUp", "ArrowDown"],

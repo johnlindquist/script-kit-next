@@ -1,0 +1,3 @@
+[{"name":"editor-open","waitMs":800},
+ {"name":"editor-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"editor-esc","key":"escape","waitMs":500}]

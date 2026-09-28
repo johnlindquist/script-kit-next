@@ -342,7 +342,9 @@ impl FlowCatalog {
         );
     }
 
+    // Only the binary's actions dialog tests prime the roster.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn prime_ready_for_test(&self, cwd: &str) {
         self.insert_for_test(cwd, RosterEntry::empty(RosterStatus::Ready));
     }

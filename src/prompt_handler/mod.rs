@@ -5587,7 +5587,7 @@ impl ScriptListApp {
                     active_work: crate::components::conversation_actions::ActiveWorkDismissal::RequiresExplicitStop,
                     callback: dismiss_callback,
                 })
-                .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+                .with_host_mode(crate::prompts::ChatPromptHostMode::MainInput);
 
                 // Apply model configuration from SDK
                 if !models.is_empty() {

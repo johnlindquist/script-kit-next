@@ -550,7 +550,7 @@ impl ScriptListApp {
                                 if let Some(host) = &dismiss_host { host(request); }
                             }
                         }),
-                    }).with_mini_mode(self.main_window_mode == crate::MainWindowMode::Mini);
+                    }).with_host_mode(crate::prompts::ChatPromptHostMode::MainInput);
                 if !seed.models.is_empty() {
                     prompt = prompt.with_model_names(seed.models);
                 }

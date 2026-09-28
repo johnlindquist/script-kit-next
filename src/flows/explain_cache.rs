@@ -292,9 +292,12 @@ pub(crate) struct MdExplainJson {
     #[serde(flatten)]
     pub(crate) info: ExplainInfo,
     #[serde(default)]
-    #[expect(
-        dead_code,
-        reason = "the mdflow wire schema retains complete template-variable metadata for compatibility"
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the mdflow wire schema retains complete template-variable metadata for compatibility"
+        )
     )]
     pub(crate) template_vars: Vec<String>,
     #[serde(default)]

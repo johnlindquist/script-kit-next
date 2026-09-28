@@ -83,3 +83,4 @@ pub use types::ChatRecoveryCallback;
 
 // Internal render-plan resolution (pure logic, unit-tested).
 pub(crate) use types::resolve_chat_render_plan;
+pub use types::ChatMainInputKey;

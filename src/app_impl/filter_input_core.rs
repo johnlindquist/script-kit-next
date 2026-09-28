@@ -54,6 +54,8 @@ impl ScriptListApp {
                 // a message draft, not a query, but the input plumbing (change
                 // events, actions-open preservation, resync) is the same.
                 | AppView::FlowSessionView { .. }
+                // So do an SDK chat and Ask AI.
+                | AppView::ChatPrompt { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
@@ -607,6 +609,7 @@ mod tests {
             // Flow sessions compose in the shared MAIN input; dropping this
             // arm makes the composer draft silently vanish (2026-07-10).
             "AppView::FlowSessionView",
+            "AppView::ChatPrompt",
         ];
 
         for view in required_views {

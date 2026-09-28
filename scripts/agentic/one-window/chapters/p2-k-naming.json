@@ -1,0 +1,3 @@
+[{"name":"naming-open","waitMs":800},
+ {"name":"naming-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"naming-esc","key":"escape","waitMs":500}]

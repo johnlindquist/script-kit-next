@@ -19,7 +19,6 @@ export const LOCKED_GLASS_SOURCE_PATHS = [
   "src/platform/secondary_window_glass_lifecycle.rs",
   "src/platform/secondary_window_glass_style.rs",
   "src/platform/secondary_window_resize_policy.rs",
-  "src/platform/secondary_window_vibrancy_impl.rs",
   "src/footer_popup.rs",
   "src/footer_popup_fidelity.rs",
   "src/footer_popup_glass_geometry.rs",

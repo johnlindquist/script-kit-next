@@ -1,0 +1,3 @@
+[{"name":"template-open","waitMs":800},
+ {"name":"template-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"template-esc","key":"escape","waitMs":500}]

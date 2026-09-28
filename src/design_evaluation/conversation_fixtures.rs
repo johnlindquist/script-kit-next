@@ -236,6 +236,7 @@ pub(crate) fn create_sdk_chat_fixture(
                 ))
             })
         }))
+        .with_host_mode(crate::prompts::ChatPromptHostMode::MainInput)
     });
     let mut control = SdkChatFixtureControl {
         requests,

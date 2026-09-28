@@ -35,6 +35,12 @@ pub enum ChatPromptHostMode {
     /// no footer, no Enter/Escape handlers, and no escape callback. The host
     /// is the single lifecycle/key owner.
     TranscriptOnly { alignment: ChatTranscriptAlignment },
+    /// The main window's input is the composer (an SDK `chat()`, Ask AI):
+    /// this surface draws the transcript only, while its conversation grammar
+    /// (send, stop, retry, copy, dismissal), auto-submit and initial response
+    /// stay here. The host mirrors the main input's text into the chat's input
+    /// and forwards keys through [`ChatPrompt::handle_main_input_key`].
+    MainInput,
 }
 
 impl ChatPromptHostMode {
@@ -48,6 +54,26 @@ impl ChatPromptHostMode {
     pub fn mini(self) -> bool {
         matches!(self, ChatPromptHostMode::Standalone { mini: true })
     }
+
+    /// Whether the main window's input is this chat's composer.
+    pub fn composes_in_main_input(self) -> bool {
+        matches!(self, ChatPromptHostMode::MainInput)
+    }
+}
+
+/// What the main window does with a key its chat didn't consume.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChatMainInputKey {
+    /// The chat ran it (a command, dismissal, scroll, setup navigation).
+    Handled,
+    /// Send the main input's text.
+    Submit,
+    /// ⌘K: the host stages the chat's actions in place.
+    ToggleActions,
+    /// An edit: the main input handles it.
+    Input,
+    /// A dismissal this chat has no route for: the window's own policy decides.
+    Unhandled,
 }
 
 /// Which body a ChatPrompt paints for the current provider/setup state.
@@ -117,6 +143,20 @@ pub fn resolve_chat_render_plan(
             install_key_handlers: false,
             owns_focus: false,
             owns_input_lifecycle: false,
+        };
+    }
+
+    // The main window draws the header, the input and the footer and routes
+    // keys here; auto-submit and the initial response still run in the chat.
+    if mode.composes_in_main_input() {
+        return ChatRenderPlan {
+            body,
+            render_header: false,
+            render_input: false,
+            render_footer: false,
+            install_key_handlers: false,
+            owns_focus: false,
+            owns_input_lifecycle: true,
         };
     }
 

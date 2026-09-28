@@ -7,8 +7,7 @@
 //! This library provides the core functionality for executing scripts
 //! with bidirectional JSONL communication.
 
-// Actions - Reusable action dialog component
-// Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
+// Actions - the source of every action; ⌘K lists them in place under the main input
 pub mod actions;
 pub mod agentic_protocol_bus;
 

@@ -175,27 +175,33 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn chat_prompt_uses_simple_prompt_shell_in_other_rs() {
+    fn chat_prompt_composes_in_the_main_input() {
         let body = fn_source("render_chat_prompt");
-        // Chat renders its own footer (mini hint strip or rich interactive footer),
-        // so it uses render_simple_prompt_shell directly with None footer
-        // instead of render_wrapped_prompt_entity (which always adds a footer).
-        assert!(
-            body.contains("render_simple_prompt_shell("),
-            "render_chat_prompt should use the shared shell directly"
-        );
-        assert!(
-            !body.contains("render_wrapped_prompt_entity("),
-            "render_chat_prompt should not use render_wrapped_prompt_entity (would add duplicate footer)"
-        );
-        assert!(
-            body.contains("entity, None)") || body.contains("entity,\n            None,"),
-            "render_chat_prompt should pass None footer to render_simple_prompt_shell"
-        );
-        assert!(
-            body.contains("other_prompt_shell_handle_key_chat"),
-            "render_chat_prompt should keep the chat-specific key handler"
-        );
+        // The chat sits under the main input, which is its composer: the
+        // host draws the input, the line and the one footer; the chat draws
+        // only its conversation.
+        for part in [
+            "render_builtin_main_input_header(",
+            "render_main_view_chrome_footer_flush(",
+            "main_window_footer_slot(",
+            "other_prompt_shell_handle_key_chat",
+        ] {
+            assert!(body.contains(part), "render_chat_prompt must use {part}");
+        }
+        let render = include_str!("../main_sections/render_impl.rs");
+        let hosted = render
+            .find("self.host_chat_in_main_input(cx);")
+            .expect("render hands the chat's draft to the main input");
+        let synced = render
+            .find("self.sync_filter_input_if_needed(window, cx);")
+            .expect("render syncs the main input");
+        assert!(hosted < synced, "the chat's draft must reach the input in the same frame");
+        for old in ["render_simple_prompt_shell(", "render_wrapped_prompt_entity("] {
+            assert!(
+                !body.contains(old),
+                "render_chat_prompt must not fall back to {old} (a second input)"
+            );
+        }
     }
 
     #[test]

@@ -647,6 +647,12 @@ impl ScriptListApp {
                     let pid = session.process_handle.pid;
                     let previous_pid = self.current_script_pid;
                     self.current_script_pid = Some(pid);
+                    self.current_script_subject = Some(ScriptInfo::with_shortcut_and_alias(
+                        &script.name,
+                        script_path_for_errors.clone(),
+                        script.shortcut.clone(),
+                        script.alias.clone(),
+                    ));
                     tracing::info!(category = "EXEC", pid, "Stored script PID for cleanup");
                     executor::telemetry::log_session_replaced(
                         "execute_script::execute_interactive",

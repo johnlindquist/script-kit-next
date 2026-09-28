@@ -1589,6 +1589,8 @@ pub(crate) struct ScriptListApp {
     focused_input: FocusedInput,
     // Current script process PID for explicit cleanup (belt-and-suspenders)
     current_script_pid: Option<u32>,
+    /// The script that owns the current SDK prompt: what its ⌘K acts on.
+    current_script_subject: Option<ScriptInfo>,
     /// Main menu filtered and grouped result caches.
     main_menu_result_caches: MainMenuResultCacheState,
     // P3: Two-stage filter - display vs search separation with coalescing
@@ -1929,6 +1931,8 @@ pub(crate) struct ScriptListApp {
     inline_chat_actions_sender: mpsc::SyncSender<MiniAiUiRequest>,
     /// Receiver for inline chat UI requests that need parent window access.
     inline_chat_actions_receiver: mpsc::Receiver<MiniAiUiRequest>,
+    /// The chat whose placeholder the main input shows while it composes there.
+    main_input_chat: Option<gpui::EntityId>,
     /// Last close snapshot emitted by the inline Mini AI ChatPrompt path.
     mini_ai_last_close_snapshot: Option<MiniAiCloseSnapshot>,
     /// Sender for inline chat continue signals

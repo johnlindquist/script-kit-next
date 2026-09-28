@@ -420,6 +420,17 @@ impl ScriptListApp {
             return true;
         }
 
+        if matches!(&self.current_view, AppView::TermPrompt { .. }) {
+            let mode = term_prompt_actions_mode(self.has_nonempty_sdk_actions());
+            self.toggle_term_prompt_actions(mode, cx, window);
+            return true;
+        }
+
+        if Self::is_script_prompt_view(&self.current_view) && self.has_nonempty_sdk_actions() {
+            self.toggle_arg_actions(cx, window);
+            return true;
+        }
+
         if matches!(&self.current_view, AppView::TemplatePrompt { .. }) {
             self.toggle_actions(cx, window);
             return true;
@@ -492,7 +503,7 @@ impl ScriptListApp {
         // Generic fallback for any remaining view that advertises SharedDialog
         // support via actions_support_for_view() but doesn't need a dedicated
         // branch with selection-specific context (e.g. DivPrompt, EditorPrompt,
-        // TermPrompt, FormPrompt, EmojiPicker, AgentChatHistory).
+        // FormPrompt, EmojiPicker, AgentChatHistory).
         if self.current_view_supports_shared_actions() {
             return self.dispatch_shared_actions_toggle_fallback(window, cx, trigger);
         }
@@ -620,18 +631,22 @@ impl ScriptListApp {
                 } else {
                     None
                 };
-            let on_day_page = day_page_section.is_some();
-            let script_info = if on_builtin_list || on_day_page {
-                None
-            } else {
+            // `selected_index` and the filter text describe the launcher's own
+            // list; in every other view they are background state, and script
+            // rows resolve their target from that list when run.
+            let on_launcher =
+                matches!(self.current_view, AppView::ScriptList) && !on_builtin_list;
+            let script_info = if on_launcher {
                 self.get_focused_script_info()
+            } else {
+                None
             };
 
             // Get the full scriptlet with actions if focused item is a scriptlet
-            let focused_scriptlet = if on_builtin_list || on_day_page {
-                None
-            } else {
+            let focused_scriptlet = if on_launcher {
                 self.get_focused_scriptlet_with_actions()
+            } else {
+                None
             };
 
             // Run 12 Pass 7 — compute the Power Syntax section from the live
@@ -641,9 +656,9 @@ impl ScriptListApp {
             // the legacy script_context + global rows.
             let power_syntax_section_for_dialog: Option<
                 crate::menu_syntax_actions::PowerSyntaxActionSection,
-            > = if on_day_page {
-                // The launcher filter text is background state while the Day
-                // Page owns the main window; its parse must not leak rows.
+            > = if !on_launcher {
+                // The launcher filter text is background state while another
+                // view owns the main window; its parse must not leak rows.
                 None
             } else {
                 use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
@@ -752,7 +767,10 @@ impl ScriptListApp {
                 d.set_host_context(host_context);
             });
 
-            let title = script_info.as_ref().map(|script| script.name.clone());
+            let title = script_info
+                .as_ref()
+                .map(|script| script.name.clone())
+                .or_else(|| self.script_prompt_staged_subject_title());
             self.one_window_stage_in_view(host, dialog, title, window, cx);
         }
         cx.notify();
@@ -867,8 +885,42 @@ impl ScriptListApp {
         }
         cx.notify();
     }
+    /// A script's own prompt: its ⌘K acts on that script, never the launcher row.
+    fn is_script_prompt_view(view: &AppView) -> bool {
+        matches!(
+            view,
+            AppView::DivPrompt { .. }
+                | AppView::EditorPrompt { .. }
+                | AppView::FormPrompt { .. }
+                | AppView::TemplatePrompt { .. }
+                | AppView::TermPrompt { .. }
+                | AppView::DropPrompt { .. }
+        )
+    }
+
+    /// What a script prompt's staged actions act on: the script, else the prompt itself.
+    fn script_prompt_staged_subject_title(&self) -> Option<String> {
+        let prompt = match &self.current_view {
+            AppView::DivPrompt { .. } => "Output",
+            AppView::EditorPrompt { .. } => "Editor",
+            AppView::FormPrompt { .. } => "Form",
+            AppView::TemplatePrompt { .. } => "Template",
+            AppView::TermPrompt { .. } => "Terminal",
+            AppView::DropPrompt { .. } => "Dropped files",
+            _ => return None,
+        };
+        Some(
+            self.current_script_subject
+                .as_ref()
+                .map_or_else(|| prompt.to_string(), |script| script.name.clone()),
+        )
+    }
+
     /// What ⌘K on an arg prompt acts on: the highlighted choice, else what's typed.
     fn arg_prompt_staged_subject_title(&self) -> Option<String> {
+        if !matches!(self.current_view, AppView::ArgPrompt { .. }) {
+            return self.script_prompt_staged_subject_title();
+        }
         self.filtered_arg_choices()
             .get(self.arg_selected_index)
             .map(|(_, choice)| choice.name.clone())

@@ -1,3 +1,5 @@
 [{"name":"chat-open","waitMs":800},
+ {"name":"chat-type","type":"When does LeBron James play next?","waitMs":500},
+ {"name":"chat-send","key":"enter","waitMs":700},
  {"name":"chat-actions-staged","key":"cmd-k","waitMs":500},
  {"name":"chat-esc","key":"escape","waitMs":500}]

@@ -47,29 +47,21 @@ impl ScriptListApp {
         );
     }
 
-    #[inline]
+    /// Keys in the main input while an SDK chat or Ask AI is on screen: the
+    /// main input is the chat's composer, so the chat's own grammar resolves
+    /// each key and edits fall through to the input.
     fn other_prompt_shell_handle_key_chat(
         &mut self,
         event: &gpui::KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // Hide cursor while typing - automatically shows when mouse moves
         self.hide_mouse_cursor(cx);
 
         let key = event.keystroke.key.as_str();
         let key_char = event.keystroke.key_char.as_deref();
-        let has_cmd = event.keystroke.modifiers.platform;
         let modifiers = &event.keystroke.modifiers;
 
-        // Check for Cmd+K to toggle actions popup
-        if has_cmd && crate::ui_foundation::is_key_k(key) {
-            logging::log("KEY", "Cmd+K in ChatPrompt - calling toggle_chat_actions");
-            self.toggle_chat_actions(cx, window);
-            return;
-        }
-
-        // Route to shared actions dialog handler when open
         match self.route_key_to_actions_dialog(
             key,
             key_char,
@@ -85,26 +77,80 @@ impl ScriptListApp {
                 if should_close {
                     self.close_actions_popup(ActionsDialogHost::ChatPrompt, window, cx);
                 }
-                // Handle chat-specific actions
                 self.execute_chat_action(&action_id, cx);
                 return;
             }
-            ActionsRoute::Handled => {
-                // Key consumed by actions dialog
-                return;
-            }
-            ActionsRoute::NotHandled => {
-                // Actions popup not open - continue with normal handling
-            }
+            ActionsRoute::Handled => return,
+            ActionsRoute::NotHandled => {}
         }
 
-        // Global shortcuts (Cmd+W, ESC for dismissable prompts)
-        // Other keys are handled by the ChatPrompt entity's own key handler.
-        let _ = self.handle_global_shortcut_with_options(
-            event,
-            GlobalShortcutEscape::FromDismissPolicy,
-            cx,
-        );
+        let AppView::ChatPrompt { entity, .. } = &self.current_view else {
+            return;
+        };
+        let entity = entity.clone();
+        let outcome = entity.update(cx, |chat, cx| {
+            chat.handle_main_input_key(key, modifiers.platform, modifiers.shift, cx)
+        });
+        match outcome {
+            prompts::ChatMainInputKey::Handled => cx.stop_propagation(),
+            prompts::ChatMainInputKey::Submit => {
+                self.submit_chat_prompt_draft(&entity, window, cx);
+                cx.stop_propagation();
+            }
+            prompts::ChatMainInputKey::ToggleActions => {
+                self.toggle_chat_actions(cx, window);
+                cx.stop_propagation();
+            }
+            prompts::ChatMainInputKey::Input | prompts::ChatMainInputKey::Unhandled => {
+                let _ = self.handle_global_shortcut_with_options(
+                    event,
+                    GlobalShortcutEscape::FromDismissPolicy,
+                    cx,
+                );
+            }
+        }
+    }
+
+    /// ↵ in the main input sends its text through the chat; the input then
+    /// shows whatever draft the chat kept (empty once the send took it).
+    fn submit_chat_prompt_draft(
+        &mut self,
+        entity: &Entity<prompts::ChatPrompt>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let draft = self.filter_text.clone();
+        let remaining = entity.update(cx, |chat, cx| {
+            chat.mirror_main_input(&draft, cx);
+            let _ = chat.execute_conversation_command(
+                crate::components::conversation_actions::ChatPromptConversationCommand::Send,
+                cx,
+            );
+            chat.draft_text().to_string()
+        });
+        if remaining != self.filter_text {
+            self.set_filter_text_immediate(remaining, window, cx);
+        }
+    }
+
+    /// The main input is the chat's composer. A chat shown for the first time
+    /// lends it its placeholder; after that the input shows any draft the
+    /// chat changed on its own (an auto-submitted query, a script's setInput).
+    /// Runs before the frame's input sync, which applies both.
+    fn host_chat_in_main_input(&mut self, cx: &mut Context<Self>) {
+        let AppView::ChatPrompt { entity, .. } = &self.current_view else {
+            self.main_input_chat = None;
+            return;
+        };
+        let chat = entity.read(cx);
+        if self.main_input_chat != Some(entity.entity_id()) {
+            self.main_input_chat = Some(entity.entity_id());
+            self.pending_placeholder = Some(chat.main_input_placeholder());
+        }
+        if chat.draft_text() != self.filter_text {
+            self.filter_text = chat.draft_text().to_string();
+            self.pending_filter_sync = true;
+        }
     }
 
     #[inline]
@@ -285,19 +331,23 @@ impl ScriptListApp {
             );
         });
 
+        let mut hints: Vec<(
+            SharedString,
+            Option<crate::components::footer_chrome::FooterHintClickHandler>,
+        )> = vec![(
+            SharedString::from("↵ Submit"),
+            Some(Box::new(on_submit)),
+        )];
+        // Drop has no actions of its own: ⌘K is only live when the script set some.
+        if self.has_nonempty_sdk_actions() {
+            hints.push((
+                SharedString::from("⌘K Actions"),
+                Some(Box::new(on_actions)),
+            ));
+        }
         crate::components::footer_chrome::render_clickable_footer_hint_action_rail(
             "drop-prompt-footer-rail",
-            [
-                (
-                    SharedString::from("↵ Submit"),
-                    Some(Box::new(on_submit)
-                        as crate::components::footer_chrome::FooterHintClickHandler),
-                ),
-                (
-                    SharedString::from("⌘K Actions"),
-                    Some(Box::new(on_actions) as _),
-                ),
-            ],
+            hints,
         )
     }
 
@@ -417,7 +467,10 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        let hints = vec!["↵ Submit".into(), "⌘K Actions".into()];
+        let mut hints = vec!["↵ Submit".into()];
+        if self.has_nonempty_sdk_actions() {
+            hints.push("⌘K Actions".into());
+        }
         crate::components::emit_surface_prompt_hint_audit(
             "render_prompts::drop",
             &hints,
@@ -470,34 +523,65 @@ impl ScriptListApp {
     ) -> AnyElement {
         tracing::info!(
             surface = "render_prompts::chat",
-            footer_mode = "custom",
-            footer_owner = "chat_prompt_internal",
+            footer_mode = "hint_strip",
+            footer_owner = "main_window",
             "prompt_surface_rendered"
         );
-
+        let (hints, status) = entity.read(cx).main_input_footer();
         crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit {
             surface: "render_prompts::chat",
-            layout_mode: "mini",
-            input_mode: "bare",
-            divider_mode: "none",
-            footer_mode: "custom",
+            layout_mode: "main_input",
+            input_mode: "main_input",
+            divider_mode: "shared",
+            footer_mode: "hint_strip",
             header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
             header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
-            hint_count: 3,
+            hint_count: hints.len(),
             has_leading_status: true,
             has_actions: self.has_nonempty_sdk_actions(),
-            exception_reason: Some("chat_prompt_renders_hint_strip_internally"),
+            exception_reason: None,
         });
+        crate::components::emit_prompt_hint_audit("render_prompts::chat", &hints);
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            hints,
+            Some(crate::components::render_hint_strip_leading_text(
+                status,
+                self.theme.colors.text.primary,
+            )),
+        ));
 
-        // Chat renders its own hint-strip footer internally,
-        // so pass None to avoid a duplicate footer in the shell.
-        let shell_radius = self.other_prompt_shell_radius();
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, None)
-            .on_key_down(handle_key)
-            .into_any_element()
+        let menu_def = self.current_main_menu_theme.def();
+        let shell = menu_def.shell;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        crate::components::main_view_chrome::render_main_view_chrome_footer_flush(
+            crate::components::main_view_chrome::render_main_view_shell()
+                .text_color(gpui::rgb(chrome.text_primary_hex))
+                .font_family(self.theme_font_family())
+                .key_context("chat_prompt_host")
+                .track_focus(&self.focus_handle)
+                .on_key_down(handle_key),
+            &self.theme,
+            menu_def,
+            crate::components::main_view_chrome::MainViewChrome {
+                header: self.render_builtin_main_input_header(Vec::new(), cx),
+                divider: crate::components::main_view_chrome::MainViewDividerChrome {
+                    margin_x: shell.divider_margin_x,
+                    height: shell.divider_height,
+                    visible: shell.divider_height > 0.0,
+                },
+                main: div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(gpui::px(0.))
+                    .w_full()
+                    .child(entity)
+                    .into_any_element(),
+                footer,
+                overlays: Vec::new(),
+            },
+        )
     }
 
     fn render_naming_prompt(

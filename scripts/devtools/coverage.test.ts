@@ -40,7 +40,6 @@ describe("fail-closed coverage ownership registry", () => {
       "src/platform/secondary_window_glass_lifecycle.rs",
       "src/platform/secondary_window_glass_style.rs",
       "src/platform/secondary_window_resize_policy.rs",
-      "src/platform/secondary_window_vibrancy_impl.rs",
     ]);
     expect(coverageProfileById("dictation-history")?.sourceFiles).toContain(
       "src/mcp_resources/mod.rs",

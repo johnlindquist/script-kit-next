@@ -89,7 +89,7 @@ fn boundary_09_label_as_number_is_ignored() {
 }
 
 #[test]
-fn boundary_10_uppercase_family_matches_case_insensitively_PINNED() {
+fn boundary_10_uppercase_family_matches_case_insensitively_pinned() {
     // Pinned by Run 11 Pass 30: closes
     // `skill-spec-family-filter-case-sensitive`. The family check now uses
     // `eq_ignore_ascii_case("skill.v1")`, so SKILL.V1 / Skill.V1 / sKiLl.v1
@@ -107,7 +107,7 @@ fn boundary_10_uppercase_family_matches_case_insensitively_PINNED() {
 // ============================================================================
 
 #[test]
-fn composition_11_duplicate_slugs_dedupe_first_wins_PINNED() {
+fn composition_11_duplicate_slugs_dedupe_first_wins_pinned() {
     // Pinned by Run 11 Pass 30: closes `skill-spec-no-dedup-on-duplicate-slugs`.
     // Duplicate slugs collapse to one entry; declaration-order wins so the
     // FIRST occurrence (no label here) is kept and the LATER `label: "later one"`

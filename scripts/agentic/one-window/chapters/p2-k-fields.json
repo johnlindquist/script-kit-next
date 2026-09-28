@@ -1,0 +1,3 @@
+[{"name":"fields-open","waitMs":800},
+ {"name":"fields-actions-staged","key":"cmd-k","waitMs":500},
+ {"name":"fields-esc","key":"escape","waitMs":500}]

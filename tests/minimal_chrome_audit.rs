@@ -807,7 +807,10 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
     let footer_branch_start = ui_window
         .find("Resolved DropPrompt footer buttons")
         .expect("DropPrompt native footer branch exists");
-    let footer_branch = &ui_window[footer_branch_start.saturating_sub(700)..footer_branch_start];
+    let drop_branch_start = ui_window[..footer_branch_start]
+        .rfind("if matches!(self.current_view, AppView::DropPrompt { .. })")
+        .expect("DropPrompt native footer branch opens with its view match");
+    let footer_branch = &ui_window[drop_branch_start..footer_branch_start];
     let sizing_start = ui_window
         .find("pub(crate) fn calculate_window_size_params")
         .expect("calculate_window_size_params exists");
@@ -830,8 +833,9 @@ fn drop_footer_submits_drop_prompt_without_launcher_ai() {
         footer_branch.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Submit\")")
             && footer_branch
                 .contains("FooterButtonConfig::new(FooterAction::Actions, \"⌘K\", \"Actions\")")
+            && footer_branch.contains("has_nonempty_sdk_actions()")
             && !footer_branch.contains("FooterAction::Ai"),
-        "DropPrompt native footer should expose Submit and Actions, not launcher AI"
+        "DropPrompt native footer should expose Submit, Actions only when the script set actions, and never launcher AI"
     );
     assert!(
         outer_source.contains("clickable_drop_hint_strip(")
@@ -968,14 +972,14 @@ fn term_prompt_uses_chrome_audit_and_no_hardcoded_wrapper_colors() {
 }
 
 #[test]
-fn chat_prompt_has_chrome_audit_and_custom_footer_exception() {
+fn chat_prompt_has_chrome_audit_and_main_input_hint_footer() {
     let source = include_str!("../src/render_prompts/other.rs");
 
     assert!(
         source.contains("surface: \"render_prompts::chat\""),
         "chat prompt should declare the shared chrome audit surface tag"
     );
-    // Chat owns its footer — verify no duplicate universal footer is forced in
+    // The host owns the chat's one footer: the chat's hints under the input.
     let chat_fn_start = source
         .find("fn render_chat_prompt(")
         .expect("chat fn exists");
@@ -985,15 +989,17 @@ fn chat_prompt_has_chrome_audit_and_custom_footer_exception() {
         .unwrap_or(source.len());
     let chat_fn = &source[chat_fn_start..chat_fn_end];
     assert!(
-        chat_fn.contains(", None)"),
-        "chat prompt should pass None for footer to avoid duplicate"
+        chat_fn.contains("layout_mode: \"main_input\"")
+            && chat_fn.contains("footer_mode: \"hint_strip\""),
+        "chat prompt should declare the main-input layout and hint-strip footer"
     );
     assert!(
-        chat_fn.contains("footer_mode: \"custom\""),
-        "chat prompt should declare custom footer mode in chrome audit"
+        chat_fn.contains("main_window_footer_slot(")
+            && chat_fn.contains("emit_prompt_hint_audit(\"render_prompts::chat\""),
+        "chat prompt should draw one audited hint footer"
     );
     eprintln!(
-        "{{\"audit\":\"minimal_chrome\",\"surface\":\"chat\",\"chrome_audit_present\":true,\"custom_footer\":true,\"status\":\"pass\"}}"
+        "{{\"audit\":\"minimal_chrome\",\"surface\":\"chat\",\"chrome_audit_present\":true,\"main_input\":true,\"status\":\"pass\"}}"
     );
 }
 

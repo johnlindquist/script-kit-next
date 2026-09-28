@@ -88,6 +88,8 @@ impl PromptCompletionObservation {
 
 enum CompletionDestination {
     Sdk(Option<SyncSender<Message>>),
+    // Only the binary's prompt fixtures bind a naming prompt.
+    #[cfg_attr(test, allow(dead_code))]
     Naming(SyncSender<Option<String>>),
     Local,
 }
@@ -205,6 +207,7 @@ impl PromptCompletionBinding {
     pub(crate) fn sdk(id: String, sender: Option<SyncSender<Message>>) -> Self {
         Self::new(id, CompletionDestination::Sdk(sender))
     }
+    #[cfg_attr(test, allow(dead_code))]
     pub(crate) fn naming(id: String, sender: SyncSender<Option<String>>) -> Self {
         Self::new(id, CompletionDestination::Naming(sender))
     }
@@ -289,11 +292,15 @@ impl PromptCompletionBinding {
                 ..Default::default()
             })
     }
+    // Only the binary's webcam and recorder saves record errors.
+    #[cfg_attr(test, allow(dead_code))]
     pub(crate) fn record_error(&self, error: SubmissionError) {
         if let Ok(mut state) = self.sink.state.lock() {
             state.set_error(error);
         }
     }
+    // Only the binary's prompt handler wires SDK chat submission.
+    #[cfg_attr(test, allow(dead_code))]
     pub(crate) fn chat_submit_callback(&self) -> crate::prompts::ChatSubmitCallback {
         let binding = self.clone();
         Arc::new(move |request| {

@@ -15,13 +15,13 @@ test("generated surface inventory includes every AI recovery host", () => {
   expect(report.evidenceStatus).toBe("SOURCE-CONFIRMED");
   expect(report.evidenceClass).toBe("STATIC_INVENTORY");
   expect(report.runtimeCoverage.directRuntimeMappingCount).toBe(0);
-  expect(report.runtimeCoverage.totalMappingCount).toBe(54);
+  expect(report.runtimeCoverage.totalMappingCount).toBe(49);
   expect(report.runtimeCoverage.disposition).toBe("BLOCKED_MISSING_PRIMITIVE");
   expect(report.inventoryNamespaces).toEqual({
-    contractKindCount: 37,
-    contractMappingCount: 54,
-    uniqueAppViewVariantCount: 53,
-    runtimeCoverageProfileCount: 19,
+    contractKindCount: 34,
+    contractMappingCount: 49,
+    uniqueAppViewVariantCount: 48,
+    runtimeCoverageProfileCount: 17,
     orientationAliasCount: 3,
   });
   expect(report.featureMapSource).toEqual({
@@ -36,7 +36,6 @@ test("generated surface inventory includes every AI recovery host", () => {
     (entry: { appViewVariants: string[] }) => entry.appViewVariants,
   );
   for (const variant of [
-    "AgentChatView",
     "ChatPrompt",
     "FlowUxView",
     "FlowSessionView",
@@ -64,9 +63,9 @@ test("coverage reports runtime profiles as a separate inventory namespace", () =
     validatesSourceOwners: true,
   });
   expect(report.inventoryNamespaces).toEqual({
-    runtimeCoverageProfileCount: 19,
-    selectedRuntimeCoverageProfileCount: 19,
-    statusCounts: { supported: 0, partial: 19, missing: 0, planned: 0 },
+    runtimeCoverageProfileCount: 17,
+    selectedRuntimeCoverageProfileCount: 17,
+    statusCounts: { supported: 0, partial: 17, missing: 0, planned: 0 },
     note: "Runtime coverage profiles are not contract kinds, contract mappings, unique AppView variants, or orientation aliases.",
   });
 });

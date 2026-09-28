@@ -287,7 +287,7 @@ impl ScriptListApp {
         debug!(target: "FOCUS", focus_target = ?target, "Applying pending focus");
         match target {
             // The chat's input is the main input.
-            FocusTarget::MainFilter | FocusTarget::AgentChat => {
+            FocusTarget::MainFilter | FocusTarget::AgentChat | FocusTarget::ChatPrompt => {
                 let input_state = self.gpui_input_state.clone();
                 input_state.update(cx, |state, cx| {
                     state.focus(window, cx);
@@ -374,16 +374,6 @@ impl ScriptListApp {
                     let fh = entity.read(cx).focus_handle.clone();
                     window.focus(&fh, cx);
                     // Terminal handles its own cursor
-                    self.focused_input = FocusedInput::None;
-                }
-            }
-            FocusTarget::ChatPrompt => {
-                let entity = match &self.current_view {
-                    AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
-                    _ => None,
-                };
-                if let Some(fh) = entity {
-                    window.focus(&fh, cx);
                     self.focused_input = FocusedInput::None;
                 }
             }

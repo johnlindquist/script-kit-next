@@ -486,6 +486,15 @@ impl ScriptListApp {
                 cx.notify();
                 return; // Don't run main menu filter logic
             }
+            AppView::ChatPrompt { entity, .. } => {
+                // The main input is the chat's composer: the chat reads the
+                // same draft for its send and command availability.
+                self.filter_text = new_text.clone();
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| chat.mirror_main_input(&new_text, cx));
+                cx.notify();
+                return; // Don't run main menu filter logic
+            }
             AppView::ProfileSearchView {
                 filter,
                 selected_index,

@@ -285,6 +285,7 @@ impl Render for ScriptListApp {
 
         self.sync_main_window_resize_lock(window);
 
+        self.host_chat_in_main_input(cx);
         // Sync filter input if needed (views that use shared input)
         if matches!(
             self.current_view,
@@ -300,6 +301,7 @@ impl Render for ScriptListApp {
                 | AppView::ProcessManagerView { .. }
                 | AppView::FlowUxView { .. }
                 | AppView::FlowSessionView { .. }
+                | AppView::ChatPrompt { .. }
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }

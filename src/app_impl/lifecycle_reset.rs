@@ -147,6 +147,7 @@ impl ScriptListApp {
 
         // Belt-and-suspenders: Force-kill the process group using stored PID
         // This ensures cleanup even if Drop doesn't fire properly
+        self.current_script_subject = None;
         if let Some(pid) = self.current_script_pid.take() {
             logging::log(
                 "CLEANUP",

@@ -283,6 +283,9 @@ impl ScriptListApp {
                     }
                     let values = entity.read(cx).collect_values(cx);
                     self.submit_prompt_response(prompt_id, Some(values), cx);
+                } else if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    self.submit_chat_prompt_draft(&entity, window, cx);
                 } else {
                     let _dispatch = self.execute_selected(cx);
                 }
@@ -354,6 +357,13 @@ impl ScriptListApp {
                     // key press does. Without this arm the button rendered and
                     // did nothing but log.
                     self.stop_flow_session(session_id, cx);
+                } else if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    let _ = entity.update(cx, |chat, cx| {
+                        chat.execute_conversation_command(
+                            crate::components::conversation_actions::ChatPromptConversationCommand::Stop,
+                            cx,
+                        )
+                    });
                 } else {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -1049,12 +1059,14 @@ impl ScriptListApp {
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Submit")
                     .disabled_reason("no_files")
             };
-            let buttons = vec![
-                submit_button,
-                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-                    .selected(actions_open)
-                    .enabled(!footer_disabled),
-            ];
+            let mut buttons = vec![submit_button];
+            if actions_open || self.has_nonempty_sdk_actions() {
+                buttons.push(
+                    FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                        .selected(actions_open)
+                        .enabled(!footer_disabled),
+                );
+            }
             tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
@@ -1225,6 +1237,28 @@ impl ScriptListApp {
                 "Resolved EditorPrompt footer buttons"
             );
             return buttons;
+        }
+
+        // A chat composes in the main input: ↵ sends the draft, and ⌘. takes
+        // its place while a reply streams.
+        if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+            let streaming = cx.is_some_and(|cx| entity.read(cx).is_streaming());
+            let primary = if streaming {
+                FooterButtonConfig::new(
+                    FooterAction::Stop,
+                    crate::components::footer_chrome::FOOTER_AI_STOP_KEY,
+                    crate::components::footer_chrome::FOOTER_AI_STOP_LABEL,
+                )
+            } else {
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Send")
+            };
+            return vec![
+                primary.enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(self.show_actions_popup)
+                    .enabled(enabled),
+            ];
         }
 
         let buttons = self.standard_main_window_footer_buttons();

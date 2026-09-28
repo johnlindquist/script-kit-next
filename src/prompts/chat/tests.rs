@@ -152,6 +152,21 @@ mod tests {
                 "transcript-only host owns no input lifecycle"
             );
         }
+
+        // MainInput: the host draws the input and footer and routes keys, but
+        // the chat still runs its conversation (auto-submit, initial reply).
+        for (needs_setup, loading) in [(true, false), (false, true), (false, false)] {
+            let plan =
+                resolve_chat_render_plan(ChatPromptHostMode::MainInput, needs_setup, loading);
+            assert!(!plan.render_header && !plan.render_input && !plan.render_footer);
+            assert!(!plan.install_key_handlers && !plan.owns_focus);
+            assert!(
+                plan.owns_input_lifecycle,
+                "main-input host keeps the chat's lifecycle (setup={needs_setup}, loading={loading})"
+            );
+        }
+        assert!(ChatPromptHostMode::MainInput.composes_in_main_input());
+        assert!(!ChatPromptHostMode::Standalone { mini: false }.composes_in_main_input());
     }
 
     /// C-R2: a transcript-only host owns NO input lifecycle in ANY body state,

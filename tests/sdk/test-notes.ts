@@ -50,19 +50,21 @@ async function runTests() {
     try {
       const skill = await Bun.file(new URL('../../kit-init/skills/manage-notes/SKILL.md', import.meta.url)).text();
       const required = [
-        '"type": "kind", "kind": "notes"',
-        'panel:notes-window',
-        'input:notes-editor',
+        'openNotes',
         '"type": "getElements"',
-        '"type": "waitFor"',
-        '"type": "batch"',
+        '"target": { "type": "main" }',
+        'NOTE · <name>',
+        'kit/notes_create',
       ];
       for (const needle of required) {
         if (!skill.includes(needle)) {
           throw new Error(`missing notes skill text: ${needle}`);
         }
       }
-      debug('Notes skill documents automation target and semantic IDs');
+      if (skill.includes('panel:notes-window')) {
+        throw new Error('notes skill still documents the retired Notes window');
+      }
+      debug('Notes skill documents the note view in the main window');
       logTest(test, 'pass', { result: required, duration_ms: Date.now() - start });
     } catch (err) {
       logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });

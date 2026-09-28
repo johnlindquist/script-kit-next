@@ -944,6 +944,8 @@ impl ScriptListApp {
             // Flow sessions: the main input holds a message draft, not a
             // query. Consume the write so main-menu filter logic never runs.
             AppView::FlowSessionView { .. } => true,
+            // An SDK chat or Ask AI composes in the main input too.
+            AppView::ChatPrompt { .. } => true,
             _ => false,
         };
 

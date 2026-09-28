@@ -532,6 +532,7 @@ impl ScriptListApp {
             cursor_visible: true,
             focused_input: FocusedInput::MainFilter,
             current_script_pid: None,
+            current_script_subject: None,
             main_menu_result_caches: MainMenuResultCacheState::default(),
             // P3: Two-stage filter coalescing
             computed_filter_text: String::new(),
@@ -701,6 +702,7 @@ impl ScriptListApp {
             inline_chat_escape_receiver: inline_chat_escape_rx,
             inline_chat_actions_sender: inline_chat_actions_tx,
             inline_chat_actions_receiver: inline_chat_actions_rx,
+            main_input_chat: None,
             mini_ai_last_close_snapshot: None,
             // Inline chat continue channel - for ChatPrompt continue callback to hide main window
             inline_chat_continue_sender: inline_chat_continue_tx,

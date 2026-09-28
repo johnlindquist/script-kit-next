@@ -106,7 +106,11 @@ fn is_test_path(rel: &str) -> bool {
 }
 
 fn braces(line: &str) -> i64 {
-    line.matches('{').count() as i64 - line.matches('}').count() as i64
+    line.chars().fold(0, |depth, c| match c {
+        '{' => depth + 1,
+        '}' => depth - 1,
+        _ => depth,
+    })
 }
 
 /// `(line number, trimmed line)` for every line outside `#[cfg(test)]` items and comments.
@@ -317,5 +321,62 @@ fn retired_surface_names_are_unused() {
         used.is_empty(),
         "retired window, popup, modal, toast and HUD names are used again:\n{}",
         listing(&used)
+    );
+}
+
+fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("{signature} exists"));
+    let rest = &source[start..];
+    let end = ["\n    pub(crate) fn ", "\n    pub fn ", "\n    fn "]
+        .iter()
+        .filter_map(|next| rest[1..].find(next))
+        .min()
+        .map_or(rest.len(), |i| i + 1);
+    &rest[..end]
+}
+
+#[test]
+fn prompt_cmd_k_acts_on_the_prompt_not_the_launcher_row() {
+    let source = fs::read_to_string(repo_root().join("src/app_impl/actions_toggle.rs")).unwrap();
+    let dispatch = fn_body(&source, "fn dispatch_actions_toggle_for_current_view(");
+    let term = dispatch
+        .find("AppView::TermPrompt { .. }")
+        .expect("the terminal has its own ⌘K branch");
+    let fallback = dispatch
+        .find("dispatch_shared_actions_toggle_fallback(")
+        .expect("the shared fallback exists");
+    assert!(
+        term < fallback && dispatch[term..fallback].contains("toggle_term_prompt_actions("),
+        "⌘K in the terminal stages its own commands (or the script's actions) before the shared fallback"
+    );
+    assert!(
+        dispatch.contains(
+            "Self::is_script_prompt_view(&self.current_view) && self.has_nonempty_sdk_actions()"
+        ),
+        "⌘K in a script's prompt stages the script's own actions when it set some"
+    );
+
+    let toggle = fn_body(&source, "pub(crate) fn toggle_actions(");
+    assert!(
+        toggle.contains("matches!(self.current_view, AppView::ScriptList) && !on_builtin_list"),
+        "only the launcher reads the launcher's selection and filter text"
+    );
+    for launcher_read in [
+        "self.get_focused_script_info()",
+        "self.get_focused_scriptlet_with_actions()",
+    ] {
+        let at = toggle
+            .find(launcher_read)
+            .unwrap_or_else(|| panic!("{launcher_read} is read"));
+        assert!(
+            toggle[..at].trim_end().ends_with("if on_launcher {"),
+            "{launcher_read} must be guarded by on_launcher"
+        );
+    }
+    assert!(
+        toggle.contains(".or_else(|| self.script_prompt_staged_subject_title())"),
+        "a script prompt's line above names the script, else the prompt"
     );
 }

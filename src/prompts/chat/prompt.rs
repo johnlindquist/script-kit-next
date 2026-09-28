@@ -412,6 +412,10 @@ impl ChatPrompt {
         self.host_mode = mode;
         match mode {
             ChatPromptHostMode::Standalone { .. } => {}
+            ChatPromptHostMode::MainInput => {
+                // The main input holds focus; the chat's own input is never drawn.
+                self.pending_auto_focus = false;
+            }
             ChatPromptHostMode::TranscriptOnly { alignment } => {
                 // The host owns the composer; the suppressed internal input
                 // must never grab focus on first render.
@@ -749,6 +753,128 @@ impl ChatPrompt {
         }
 
         handled
+    }
+
+    /// Draft text the main window mirrors into the chat, so command
+    /// availability and submission read one draft.
+    pub(crate) fn mirror_main_input(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.input.text() != text {
+            self.input.set_text(text.to_string());
+            self.sync_pasted_text_tokens();
+            cx.notify();
+        }
+    }
+
+    /// What the main input shows while it composes for this chat.
+    pub(crate) fn main_input_placeholder(&self) -> String {
+        self.placeholder
+            .clone()
+            .unwrap_or_else(|| "Ask follow-up...".to_string())
+    }
+
+    /// The draft the chat holds, for the main input to show after the chat
+    /// changed it (a send clears it, a script or retry fills it).
+    pub(crate) fn draft_text(&self) -> &str {
+        self.input.text()
+    }
+
+    /// A key pressed in the main input while this chat is on screen.
+    pub(crate) fn handle_main_input_key(
+        &mut self,
+        key: &str,
+        platform: bool,
+        shift: bool,
+        cx: &mut Context<Self>,
+    ) -> ChatMainInputKey {
+        use crate::components::conversation_actions::{
+            ChatPromptConversationCommand, ConversationDismissTrigger,
+        };
+        if self.needs_setup {
+            if self.handle_setup_key(key, shift, cx) {
+                return ChatMainInputKey::Handled;
+            }
+            return ChatMainInputKey::Input;
+        }
+        match resolve_chat_input_key_action_with_commands(
+            key,
+            platform,
+            shift,
+            &self.conversation_command_bindings(),
+        ) {
+            ChatInputKeyAction::Submit => ChatMainInputKey::Submit,
+            ChatInputKeyAction::ToggleActions => ChatMainInputKey::ToggleActions,
+            ChatInputKeyAction::DelegateToInput => ChatMainInputKey::Input,
+            // The main input is one line.
+            ChatInputKeyAction::InsertNewline => ChatMainInputKey::Handled,
+            ChatInputKeyAction::Paste => {
+                if self.handle_paste_for_image(cx) {
+                    ChatMainInputKey::Handled
+                } else {
+                    ChatMainInputKey::Input
+                }
+            }
+            ChatInputKeyAction::Escape => {
+                Self::dismissal_key(self.request_dismiss(ConversationDismissTrigger::Escape, cx))
+            }
+            ChatInputKeyAction::DismissCommandW => {
+                Self::dismissal_key(self.request_dismiss(ConversationDismissTrigger::CommandW, cx))
+            }
+            ChatInputKeyAction::StopStreaming => {
+                let _ = self.execute_conversation_command(ChatPromptConversationCommand::Stop, cx);
+                ChatMainInputKey::Handled
+            }
+            ChatInputKeyAction::Retry => {
+                let _ = self.execute_conversation_command(ChatPromptConversationCommand::Retry, cx);
+                ChatMainInputKey::Handled
+            }
+            ChatInputKeyAction::CopyLastResponse => {
+                let _ = self.execute_conversation_command(
+                    ChatPromptConversationCommand::CopyLastResponse,
+                    cx,
+                );
+                ChatMainInputKey::Handled
+            }
+            ChatInputKeyAction::JumpToLatest => {
+                self.force_scroll_turns_to_bottom();
+                self.user_has_scrolled_up = false;
+                cx.notify();
+                ChatMainInputKey::Handled
+            }
+            ChatInputKeyAction::ContinueInChat => {
+                if self.script_generation_mode {
+                    self.handle_script_generation_action(ScriptGenerationAction::SaveAndRun, cx);
+                } else {
+                    self.handle_continue_in_chat(cx);
+                }
+                ChatMainInputKey::Handled
+            }
+            ChatInputKeyAction::ClearConversation => {
+                self.handle_clear(cx);
+                ChatMainInputKey::Handled
+            }
+            // A disabled send must not fall through to the input's own ↵.
+            ChatInputKeyAction::Ignore if crate::ui_foundation::is_key_enter(key) => {
+                ChatMainInputKey::Handled
+            }
+            // ⌘A, ⌘C, ⌘Z and the like edit the main input.
+            ChatInputKeyAction::Ignore => ChatMainInputKey::Input,
+        }
+    }
+
+    fn dismissal_key(
+        execution: crate::components::conversation_actions::ConversationCommandExecution,
+    ) -> ChatMainInputKey {
+        match execution {
+            crate::components::conversation_actions::ConversationCommandExecution::Unsupported => {
+                ChatMainInputKey::Unhandled
+            }
+            _ => ChatMainInputKey::Handled,
+        }
+    }
+
+    /// Footer hints and the status text the main window draws for this chat.
+    pub(crate) fn main_input_footer(&self) -> (Vec<gpui::SharedString>, gpui::SharedString) {
+        (self.conversation_footer_hints(), self.footer_status_text())
     }
 
     /// Check if built-in AI mode is enabled

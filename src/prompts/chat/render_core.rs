@@ -2,7 +2,7 @@ use super::*;
 use crate::ui::chrome::{alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY};
 
 impl ChatPrompt {
-    fn footer_status_text(&self) -> gpui::SharedString {
+    pub(super) fn footer_status_text(&self) -> gpui::SharedString {
         let mut parts: Vec<String> = Vec::new();
 
         if let Some(status) = &self.command_status {
@@ -77,7 +77,7 @@ impl ChatPrompt {
         )
     }
 
-    fn conversation_footer_hints(&self) -> Vec<gpui::SharedString> {
+    pub(super) fn conversation_footer_hints(&self) -> Vec<gpui::SharedString> {
         use crate::components::conversation_actions::ChatPromptConversationCommand;
         let commands = self.conversation_command_bindings();
         let Some(primary) = commands.iter().find(|command| {
@@ -507,6 +507,16 @@ impl Render for ChatPrompt {
                 .child(self.render_input(input_is_focused))
         });
 
+        // The main window draws the composer, so a pasted image shows here.
+        let hosted_attachment = (self.host_mode.composes_in_main_input() && has_pending_image)
+            .then(|| {
+                div()
+                    .w_full()
+                    .px(px(CHAT_LAYOUT_PADDING_X))
+                    .pt(px(CHAT_LAYOUT_SECTION_PADDING_Y))
+                    .child(self.render_pending_image_preview(cx))
+            });
+
         // Message list (conversation turns) - virtualized for large chats
         let has_turns = !self.conversation_turns_cache.is_empty();
         let messages_content = if has_turns {
@@ -666,6 +676,9 @@ impl Render for ChatPrompt {
         // (`input_area` is None). Never render a second input box under it.
         if let Some(input_area) = input_area {
             prompt = prompt.child(input_area);
+        }
+        if let Some(attachment) = hosted_attachment {
+            prompt = prompt.child(attachment);
         }
 
         prompt = prompt.child(messages_content);

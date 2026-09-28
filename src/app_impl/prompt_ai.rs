@@ -471,7 +471,7 @@ impl ScriptListApp {
             .with_needs_setup(true)
             .with_configure_callback(configure_callback)
             .with_claude_code_callback(claude_code_callback)
-            .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+            .with_host_mode(crate::prompts::ChatPromptHostMode::MainInput);
 
             let entity = cx.new(|_| chat_prompt);
             self.current_view = AppView::ChatPrompt {
@@ -518,7 +518,7 @@ impl ScriptListApp {
             callback: dismiss_callback,
         })
         .with_builtin_ai(registry)
-        .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+        .with_host_mode(crate::prompts::ChatPromptHostMode::MainInput);
 
         tracing::info!(
             event = "inline_chat.construction",
