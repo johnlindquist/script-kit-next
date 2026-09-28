@@ -530,7 +530,6 @@ const CANDIDATE_SIZE_MISMATCH_PENALTY: i32 = -1_500;
 const CANDIDATE_TITLE_EXACT_MATCH_SCORE: i32 = 1_000;
 const CANDIDATE_TITLE_CONTAINS_MATCH_SCORE: i32 = 500;
 const CANDIDATE_FOCUS_MATCH_SCORE: i32 = 100;
-const MAIN_WINDOW_SECONDARY_TITLE_PENALTY: i32 = 200;
 
 #[derive(Clone)]
 struct Candidate {
@@ -637,8 +636,6 @@ fn candidate_size_score(
 /// when available, plus title and focus agreement. The resolved target's
 /// metadata drives selection.
 fn score_candidate(resolved: &crate::protocol::AutomationWindowInfo, candidate: &Candidate) -> i32 {
-    use crate::protocol::AutomationWindowKind;
-
     let mut score: i32 = candidate_size_score(resolved, candidate);
 
     // Exact title match is a strong signal
@@ -653,16 +650,6 @@ fn score_candidate(resolved: &crate::protocol::AutomationWindowInfo, candidate: 
     // Focus agreement
     if resolved.focused == candidate.focused {
         score += CANDIDATE_FOCUS_MATCH_SCORE;
-    }
-
-    // For main-window targets, penalize candidates that are clearly secondary
-    // windows (Notes, AI) so we never accidentally prefer them.
-    if resolved.kind == AutomationWindowKind::Main
-        && (candidate.title.contains("Notes")
-            || candidate.title.contains("AI")
-            || candidate.title.contains("Agent Chat"))
-    {
-        score -= MAIN_WINDOW_SECONDARY_TITLE_PENALTY;
     }
 
     score

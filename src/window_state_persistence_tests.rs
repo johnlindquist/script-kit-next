@@ -150,9 +150,6 @@ mod tests {
                 version: 3,
                 main: Some(PersistedWindowBounds::new(100.0, 200.0, 750.0, 475.0)),
                 main_per_display: std::collections::HashMap::new(),
-                notes: None,
-                notes_per_display: std::collections::HashMap::new(),
-                agent_chat: None,
             };
             assert!(save_state_file(&state));
             let loaded = load_state_file().expect("Should load saved state");

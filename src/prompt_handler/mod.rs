@@ -104,7 +104,6 @@ enum AutomationReadTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AutomationBatchTargetKind {
     Main,
-    Notes,
     SnapOverlay,
 }
 
@@ -132,17 +131,6 @@ impl BatchTargetCapabilities {
                     "typeAndSubmit",
                 ],
             },
-            AutomationBatchTargetKind::Notes => Self {
-                display_name: "Notes",
-                unsupported_target_name: "Notes",
-                supported_commands: &[
-                    "setInput",
-                    "openActions",
-                    "togglePreview",
-                    "selectBySemanticId",
-                    "waitFor",
-                ],
-            },
             AutomationBatchTargetKind::SnapOverlay => Self {
                 display_name: "SnapOverlay",
                 unsupported_target_name: "SnapOverlay",
@@ -157,7 +145,6 @@ fn registered_batch_target_kind(
 ) -> AutomationBatchTargetKind {
     match target.kind {
         protocol::AutomationWindowKind::Main => AutomationBatchTargetKind::Main,
-        protocol::AutomationWindowKind::Notes => AutomationBatchTargetKind::Notes,
         protocol::AutomationWindowKind::SnapOverlay => AutomationBatchTargetKind::SnapOverlay,
     }
 }
@@ -255,9 +242,8 @@ fn resolve_automation_read_target(
 
 /// Resolve an automation target for Agent Chat read operations (getAgentChatState, getAgentChatTestProbe).
 ///
-/// Allows `Main` and `AgentChatDetached` kinds. Rejects all other secondary targets
-/// with a structured error. For `AgentChatDetached`, returns the live entity from the
-/// detached chat window (or errors if no detached window is open).
+/// The chat lives in the main window, so only `Main` resolves; any other target is
+/// rejected with a structured error.
 fn resolve_agent_chat_read_target(
     request_id: &str,
     op: &'static str,
@@ -294,21 +280,6 @@ fn resolve_agent_chat_read_target(
                 info: Some(resolved),
             })
         }
-        crate::protocol::AutomationWindowKind::Notes => {
-            // The Notes window no longer hosts an Agent Chat surface: every
-            // notes→AI affordance stages into the MAIN window's Agent Chat.
-            tracing::warn!(
-                target: "script_kit::automation",
-                request_id = %request_id,
-                op = op,
-                window_id = %resolved.id,
-                "automation.agent_chat_target.notes_not_a_chat_host"
-            );
-            Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} resolved Notes target {}, but Notes no longer hosts an Agent Chat surface; target the main window instead",
-                resolved.id
-            )))
-        }
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -319,7 +290,7 @@ fn resolve_agent_chat_read_target(
                 "automation.agent_chat_target.non_agent_chat_rejected"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports only Main, Ai, and AgentChatDetached targets; resolved {} ({:?})",
+                "{op} supports only the main window; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
@@ -576,7 +547,7 @@ impl ScriptListApp {
             .as_ref()
             .map(protocol::default_surface_hit_point);
         let suggested_hit_points =
-            protocol::default_suggested_hit_points(&resolved, target_bounds_in_screenshot.as_ref());
+            protocol::default_suggested_hit_points(target_bounds_in_screenshot.as_ref());
 
         tracing::info!(
             target: "script_kit::automation",
@@ -3207,8 +3178,7 @@ impl ScriptListApp {
                     "agent_chat_state.request"
                 );
 
-                // Resolve target: Main → main window, AgentChatDetached → detached entity,
-                // anything else → structured error.
+                // Resolve target: Main → main window, anything else → structured error.
                 let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
                     "getAgentChatState",
@@ -3350,7 +3320,7 @@ impl ScriptListApp {
                     "agent_chat_setup_action.request"
                 );
 
-                // Resolve the Agent Chat target — now accepts both Main and AgentChatDetached.
+                // Resolve the Agent Chat target: only the main window hosts the chat.
                 let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
                     "performAgentChatSetupAction",
@@ -3534,8 +3504,7 @@ impl ScriptListApp {
                     "agent_chat_test_probe.reset"
                 );
 
-                // Resolve target: Main → main window, AgentChatDetached → detached entity,
-                // anything else → structured error.
+                // Resolve target: Main → main window, anything else → structured error.
                 let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
                     "resetAgentChatTestProbe",
@@ -3609,8 +3578,7 @@ impl ScriptListApp {
                     "agent_chat_test_probe.request"
                 );
 
-                // Resolve target: Main → main window, AgentChatDetached → detached entity,
-                // anything else → structured error.
+                // Resolve target: Main → main window, anything else → structured error.
                 let agent_chat_target = match resolve_agent_chat_read_target(
                     &request_id,
                     "getAgentChatTestProbe",
@@ -4440,7 +4408,7 @@ impl ScriptListApp {
                     }
                 };
 
-                // Resolve target: accept Main, AgentChatDetached, and Notes.
+                // Resolve target: the main window or a registered snap overlay.
                 let batch_target: AutomationReadTarget = if target.is_some() {
                     match resolve_automation_read_target(&rid, "batch", target.as_ref(), cx) {
                         Ok(resolved) => resolved,

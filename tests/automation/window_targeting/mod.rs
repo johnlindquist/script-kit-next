@@ -59,7 +59,6 @@ fn automation_window_target_round_trip_kind() {
 fn automation_window_target_round_trip_all_kinds() {
     let kinds = [
         AutomationWindowKind::Main,
-        AutomationWindowKind::Notes,
         AutomationWindowKind::SnapOverlay,
     ];
     for kind in &kinds {
@@ -176,14 +175,11 @@ fn registry_resolves_each_kind_independently() {
     );
     assert_ne!(resolved_main.id, resolved_snap.id);
 
-    // There is no Notes window: targeting one finds nothing rather than falling back to main.
+    // The retired Notes kind no longer parses, so a script cannot target a Notes window.
     assert!(
-        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::Notes,
-            index: None,
-        }))
-        .is_err(),
-        "no Notes window is registered"
+        serde_json::from_str::<AutomationWindowTarget>(r#"{"type":"kind","kind":"notes"}"#)
+            .is_err(),
+        "the notes window kind is retired"
     );
 
     cleanup(&p, &["main", "snap"]);

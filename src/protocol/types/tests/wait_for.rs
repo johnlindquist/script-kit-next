@@ -888,7 +888,7 @@ fn reset_agent_chat_test_probe_with_target_round_trips() {
         "requestId": "probe-reset-targeted",
         "target": {
             "type": "kind",
-            "kind": "notes",
+            "kind": "snapOverlay",
             "index": 0
         }
     });
@@ -901,7 +901,7 @@ fn reset_agent_chat_test_probe_with_target_round_trips() {
             let t = target.as_ref().expect("should have target");
             match t {
                 crate::protocol::AutomationWindowTarget::Kind { kind, index } => {
-                    assert_eq!(*kind, crate::protocol::AutomationWindowKind::Notes);
+                    assert_eq!(*kind, crate::protocol::AutomationWindowKind::SnapOverlay);
                     assert_eq!(*index, Some(0));
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
@@ -920,7 +920,10 @@ fn reset_agent_chat_test_probe_with_target_round_trips() {
         re_serialized["requestId"].as_str(),
         Some("probe-reset-targeted")
     );
-    assert_eq!(re_serialized["target"]["kind"].as_str(), Some("notes"));
+    assert_eq!(
+        re_serialized["target"]["kind"].as_str(),
+        Some("snapOverlay")
+    );
 }
 
 #[test]

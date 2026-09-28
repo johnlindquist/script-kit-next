@@ -64,7 +64,7 @@ mod prompt_handler_message_tests {
         };
         assert_eq!(
             classify_prompt_message_route(&message),
-            PromptMessageRoute::ConfirmDialog
+            PromptMessageRoute::Confirm
         );
     }
 

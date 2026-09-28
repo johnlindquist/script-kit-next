@@ -94,17 +94,16 @@ fn wait_for_state_match_round_trips_without_semantic_id_fields() {
 // ============================================================
 
 #[test]
-fn wait_for_with_notes_target_round_trips() {
-    let msg =
-        wait_for_message(json!({"type": "elementExists", "semanticId": "input:notes-editor"}));
+fn wait_for_with_snap_overlay_target_round_trips() {
+    let msg = wait_for_message(json!({"type": "elementExists", "semanticId": "snap-overlay-root"}));
     let mut msg_with_target = msg.clone();
-    msg_with_target
-        .as_object_mut()
-        .unwrap()
-        .insert("target".into(), json!({"type": "kind", "kind": "notes"}));
+    msg_with_target.as_object_mut().unwrap().insert(
+        "target".into(),
+        json!({"type": "kind", "kind": "snapOverlay"}),
+    );
 
-    let parsed: Message =
-        serde_json::from_value(msg_with_target).expect("waitFor with notes target should parse");
+    let parsed: Message = serde_json::from_value(msg_with_target)
+        .expect("waitFor with snap overlay target should parse");
     let output = serde_json::to_value(parsed).expect("should serialize");
 
     assert!(
@@ -112,7 +111,7 @@ fn wait_for_with_notes_target_round_trips() {
         "target field must survive round-trip"
     );
     let target = output.get("target").unwrap();
-    assert_eq!(target["kind"], "notes");
+    assert_eq!(target["kind"], "snapOverlay");
 }
 
 #[test]

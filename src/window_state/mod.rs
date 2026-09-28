@@ -53,16 +53,12 @@ pub fn is_save_suppressed() -> bool {
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum WindowRole {
     Main,
-    Notes,
-    AgentChat,
 }
 impl WindowRole {
     /// Get a lowercase string key for persistence/file paths
     pub fn as_str(&self) -> &'static str {
         match self {
             WindowRole::Main => "main",
-            WindowRole::Notes => "notes",
-            WindowRole::AgentChat => "agent_chat",
         }
     }
 
@@ -70,8 +66,6 @@ impl WindowRole {
     pub fn name(&self) -> &'static str {
         match self {
             WindowRole::Main => "Main",
-            WindowRole::Notes => "Notes",
-            WindowRole::AgentChat => "Agent Chat",
         }
     }
 }
@@ -157,17 +151,9 @@ pub struct WindowStateFile {
     /// Main window positions stored per display (keyed by display dimensions + origin)
     #[serde(default)]
     pub main_per_display: HashMap<String, PersistedWindowBounds>,
-    /// Legacy notes window position (for backwards compatibility)
-    pub notes: Option<PersistedWindowBounds>,
-    /// Notes window positions stored per display
-    #[serde(default)]
-    pub notes_per_display: HashMap<String, PersistedWindowBounds>,
-    /// Agent Chat chat detached window position
-    #[serde(default)]
-    pub agent_chat: Option<PersistedWindowBounds>,
 }
 fn default_version() -> u32 {
-    3 // Version 3 adds per-display support for AI and Notes windows
+    3
 }
 // ============================================================================
 // File Path
@@ -268,8 +254,6 @@ pub fn load_window_bounds(role: WindowRole) -> Option<PersistedWindowBounds> {
     let state = load_state_file()?;
     match role {
         WindowRole::Main => state.main,
-        WindowRole::Notes => state.notes,
-        WindowRole::AgentChat => state.agent_chat,
     }
 }
 /// Save bounds for a specific window role.
@@ -288,8 +272,6 @@ pub fn save_window_bounds(role: WindowRole, bounds: PersistedWindowBounds) {
     state.version = 3;
     match role {
         WindowRole::Main => state.main = Some(bounds),
-        WindowRole::Notes => state.notes = Some(bounds),
-        WindowRole::AgentChat => state.agent_chat = Some(bounds),
     }
     save_state_file(&state);
     logging::log(
@@ -329,8 +311,7 @@ pub fn reset_all_positions() {
 }
 /// Check if any window positions have been customized
 pub fn has_custom_positions() -> bool {
-    load_state_file()
-        .is_some_and(|s| s.main.is_some() || !s.main_per_display.is_empty() || s.notes.is_some())
+    load_state_file().is_some_and(|s| s.main.is_some() || !s.main_per_display.is_empty())
 }
 // ============================================================================
 // Per-Display Position Storage (Main Window)

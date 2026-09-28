@@ -628,15 +628,15 @@ fn inspect_schema_version_is_current() {
     );
 }
 
-/// Detached window inspect response must have origin at (0, 0).
+/// A registered window's inspect response must have origin at (0, 0).
 #[test]
-fn inspect_detached_response_has_origin_bounds() {
+fn inspect_registered_response_has_origin_bounds() {
     let p = inspect_prefix();
 
-    let notes = make_window(
+    let snap = make_window(
         &p,
-        "notes",
-        AutomationWindowKind::Notes,
+        "snap",
+        AutomationWindowKind::SnapOverlay,
         Some(AutomationWindowBounds {
             x: 500.0,
             y: 300.0,
@@ -644,10 +644,10 @@ fn inspect_detached_response_has_origin_bounds() {
             height: 280.0,
         }),
     );
-    script_kit_gpui::windows::upsert_automation_window(notes);
+    script_kit_gpui::windows::upsert_automation_window(snap);
 
     let target = AutomationWindowTarget::Id {
-        id: format!("{p}:notes"),
+        id: format!("{p}:snap"),
     };
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
@@ -657,11 +657,11 @@ fn inspect_detached_response_has_origin_bounds() {
 
     assert!(
         (target_bounds.x - 0.0).abs() < f64::EPSILON,
-        "Detached window bounds must start at x=0"
+        "Registered window bounds must start at x=0"
     );
     assert!(
         (target_bounds.y - 0.0).abs() < f64::EPSILON,
-        "Detached window bounds must start at y=0"
+        "Registered window bounds must start at y=0"
     );
     assert!(
         (target_bounds.width - 350.0).abs() < f64::EPSILON,
@@ -672,7 +672,7 @@ fn inspect_detached_response_has_origin_bounds() {
         "Height must match resolved bounds"
     );
 
-    inspect_cleanup(&p, &["notes"]);
+    inspect_cleanup(&p, &["snap"]);
 }
 
 /// Missing bounds must produce empty suggested hit points (fail closed).
@@ -680,8 +680,8 @@ fn inspect_detached_response_has_origin_bounds() {
 fn inspect_no_bounds_produces_no_suggested_hits() {
     let info = AutomationWindowInfo {
         id: "test:no-bounds".to_string(),
-        kind: AutomationWindowKind::Notes,
-        title: Some("Notes".to_string()),
+        kind: AutomationWindowKind::SnapOverlay,
+        title: Some("Snap".to_string()),
         focused: false,
         visible: true,
         semantic_surface: None,
@@ -696,7 +696,7 @@ fn inspect_no_bounds_produces_no_suggested_hits() {
     let target_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&info);
     assert!(target_bounds.is_none(), "No bounds → None");
 
-    let suggested = script_kit_gpui::protocol::default_suggested_hit_points(&info, None);
+    let suggested = script_kit_gpui::protocol::default_suggested_hit_points(None);
     assert!(suggested.is_empty(), "No bounds → no suggested hit points");
 }
 
@@ -805,15 +805,9 @@ fn inspect_snapshot_v2_geometry_round_trip() {
     assert!(json_str.contains("resolvedBounds"));
 }
 
-/// Each window kind gets the correct suggested hit point semantic ID.
+/// The suggested hit point targets the center of the window panel.
 #[test]
-fn inspect_suggested_hit_semantic_ids_per_kind() {
-    let expected = vec![
-        (AutomationWindowKind::Notes, "input:notes-editor"),
-        (AutomationWindowKind::Main, "panel:window"),
-        (AutomationWindowKind::SnapOverlay, "panel:window"),
-    ];
-
+fn inspect_suggested_hit_targets_window_panel() {
     let bounds = InspectBoundsInScreenshot {
         x: 0.0,
         y: 0.0,
@@ -821,36 +815,8 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
         height: 300.0,
     };
 
-    for (kind, expected_id) in expected {
-        let info = AutomationWindowInfo {
-            id: format!("{kind:?}:test"),
-            kind,
-            title: None,
-            focused: false,
-            visible: true,
-            semantic_surface: None,
-            bounds: Some(AutomationWindowBounds {
-                x: 0.0,
-                y: 0.0,
-                width: 400.0,
-                height: 300.0,
-            }),
-            parent_window_id: None,
-            parent_window_generation: None,
-            parent_kind: None,
-            pid: None,
-            generation: None,
-        };
-
-        let hits = script_kit_gpui::protocol::default_suggested_hit_points(&info, Some(&bounds));
-        assert_eq!(
-            hits.len(),
-            1,
-            "{kind:?} should have exactly one suggested hit"
-        );
-        assert_eq!(
-            hits[0].semantic_id, expected_id,
-            "{kind:?} semantic_id mismatch"
-        );
-    }
+    let hits = script_kit_gpui::protocol::default_suggested_hit_points(Some(&bounds));
+    assert_eq!(hits.len(), 1, "exactly one suggested hit");
+    assert_eq!(hits[0].semantic_id, "panel:window");
+    assert_eq!(hits[0].reason, "surface_center");
 }

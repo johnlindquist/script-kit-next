@@ -24,7 +24,7 @@ fn automation_window_target_round_trip_focused() {
 #[test]
 fn automation_window_target_round_trip_id() {
     let target = AutomationWindowTarget::Id {
-        id: "notes:primary".into(),
+        id: "snap-overlay:1".into(),
     };
     let json = serde_json::to_string(&target).expect("serialize");
     let back: AutomationWindowTarget = serde_json::from_str(&json).expect("deserialize");
@@ -34,13 +34,13 @@ fn automation_window_target_round_trip_id() {
 #[test]
 fn automation_window_target_round_trip_instance() {
     let target = AutomationWindowTarget::Instance {
-        id: "dictation-microphone-popup".into(),
+        id: "snap-overlay:1".into(),
         generation: 42,
     };
     let json = serde_json::to_string(&target).expect("serialize");
     assert_eq!(
         json,
-        r#"{"type":"instance","id":"dictation-microphone-popup","generation":42}"#
+        r#"{"type":"instance","id":"snap-overlay:1","generation":42}"#
     );
     let back: AutomationWindowTarget = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(back, target);
@@ -49,7 +49,7 @@ fn automation_window_target_round_trip_instance() {
 #[test]
 fn automation_window_target_instance_requires_generation() {
     let error = serde_json::from_str::<AutomationWindowTarget>(
-        r#"{"type":"instance","id":"dictation-microphone-popup"}"#,
+        r#"{"type":"instance","id":"snap-overlay:1"}"#,
     )
     .expect_err("instance target without generation must fail closed");
     assert!(error.to_string().contains("generation"));
@@ -57,12 +57,12 @@ fn automation_window_target_instance_requires_generation() {
 
 #[test]
 fn automation_window_target_round_trip_kind() {
-    let json = r#"{"type":"kind","kind":"notes","index":0}"#;
+    let json = r#"{"type":"kind","kind":"snapOverlay","index":0}"#;
     let parsed: AutomationWindowTarget =
         serde_json::from_str(json).expect("target should deserialize");
     match &parsed {
         AutomationWindowTarget::Kind { kind, index } => {
-            assert_eq!(*kind, AutomationWindowKind::Notes);
+            assert_eq!(*kind, AutomationWindowKind::SnapOverlay);
             assert_eq!(*index, Some(0));
         }
         other => panic!("Expected Kind, got: {:?}", other),
@@ -74,11 +74,11 @@ fn automation_window_target_round_trip_kind() {
 
 #[test]
 fn automation_window_target_kind_without_index() {
-    let json = r#"{"type":"kind","kind":"notes"}"#;
+    let json = r#"{"type":"kind","kind":"snapOverlay"}"#;
     let parsed: AutomationWindowTarget = serde_json::from_str(json).expect("parse");
     match &parsed {
         AutomationWindowTarget::Kind { kind, index } => {
-            assert_eq!(*kind, AutomationWindowKind::Notes);
+            assert_eq!(*kind, AutomationWindowKind::SnapOverlay);
             assert_eq!(*index, None);
         }
         other => panic!("Expected Kind, got: {:?}", other),
@@ -119,12 +119,12 @@ fn automation_window_kind_all_variants_round_trip() {
 #[test]
 fn automation_window_info_round_trip() {
     let info = AutomationWindowInfo {
-        id: "notes:primary".into(),
-        kind: AutomationWindowKind::Notes,
-        title: Some("Script Kit Notes".into()),
+        id: "snap-overlay:1".into(),
+        kind: AutomationWindowKind::SnapOverlay,
+        title: Some("Snap".into()),
         focused: true,
         visible: true,
-        semantic_surface: Some("notes".into()),
+        semantic_surface: Some("snapOverlay".into()),
         bounds: None,
         parent_window_id: None,
         parent_window_generation: None,
@@ -378,7 +378,7 @@ fn simulate_gpui_event_request_round_trip() {
     let json = r#"{
         "type": "simulateGpuiEvent",
         "requestId": "gpui-1",
-        "target": {"type": "kind", "kind": "notes"},
+        "target": {"type": "kind", "kind": "snapOverlay"},
         "event": {"type": "keyDown", "key": "k", "modifiers": ["cmd"]}
     }"#;
     let msg: crate::protocol::Message =
@@ -440,12 +440,12 @@ fn automation_window_list_result_round_trip() {
                 generation: None,
             },
             AutomationWindowInfo {
-                id: "notes:thread-1".into(),
-                kind: AutomationWindowKind::Notes,
-                title: Some("Script Kit Agent Chat".into()),
+                id: "snap-overlay:1".into(),
+                kind: AutomationWindowKind::SnapOverlay,
+                title: Some("Snap".into()),
                 focused: true,
                 visible: true,
-                semantic_surface: Some("agentChatChat".into()),
+                semantic_surface: Some("snapOverlay".into()),
                 bounds: None,
                 parent_window_id: None,
                 parent_window_generation: None,
@@ -454,7 +454,7 @@ fn automation_window_list_result_round_trip() {
                 generation: None,
             },
         ],
-        Some("notes:thread-1".into()),
+        Some("snap-overlay:1".into()),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains("automationWindowListResult"));
@@ -467,7 +467,7 @@ fn automation_window_list_result_round_trip() {
             ..
         } => {
             assert_eq!(windows.len(), 2);
-            assert_eq!(focused_window_id.as_deref(), Some("notes:thread-1"));
+            assert_eq!(focused_window_id.as_deref(), Some("snap-overlay:1"));
         }
         other => panic!("Expected AutomationWindowListResult, got: {:?}", other),
     }
@@ -577,7 +577,7 @@ fn legacy_simulate_click_still_parses_without_target() {
 
 #[test]
 fn get_elements_with_target_parses() {
-    let json = r#"{"type":"getElements","requestId":"elm-notes","target":{"type":"kind","kind":"notes"},"limit":50}"#;
+    let json = r#"{"type":"getElements","requestId":"elm-notes","target":{"type":"kind","kind":"snapOverlay"},"limit":50}"#;
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
     match msg {
         crate::protocol::Message::GetElements {
@@ -591,7 +591,7 @@ fn get_elements_with_target_parses() {
             let t = target.expect("target should be present");
             match t {
                 AutomationWindowTarget::Kind { kind, index } => {
-                    assert_eq!(kind, AutomationWindowKind::Notes);
+                    assert_eq!(kind, AutomationWindowKind::SnapOverlay);
                     assert_eq!(index, None);
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
@@ -603,7 +603,7 @@ fn get_elements_with_target_parses() {
 
 #[test]
 fn capture_screenshot_with_target_parses() {
-    let json = r#"{"type":"captureScreenshot","requestId":"shot-agent_chat","target":{"type":"kind","kind":"notes","index":0},"hiDpi":true}"#;
+    let json = r#"{"type":"captureScreenshot","requestId":"shot-agent_chat","target":{"type":"kind","kind":"snapOverlay","index":0},"hiDpi":true}"#;
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
     match msg {
         crate::protocol::Message::CaptureScreenshot {
@@ -624,7 +624,7 @@ fn inspect_automation_window_request_round_trip_and_request_id() {
     let json = r#"{
         "type":"inspectAutomationWindow",
         "requestId":"inspect-1",
-        "target":{"type":"kind","kind":"notes","index":0},
+        "target":{"type":"kind","kind":"snapOverlay","index":0},
         "hiDpi":true,
         "probes":[{"x":24,"y":24},{"x":320,"y":180}]
     }"#;
@@ -642,7 +642,7 @@ fn inspect_automation_window_request_round_trip_and_request_id() {
             assert_eq!(probes.len(), 2);
             match target.expect("target should be present") {
                 AutomationWindowTarget::Kind { kind, index } => {
-                    assert_eq!(kind, AutomationWindowKind::Notes);
+                    assert_eq!(kind, AutomationWindowKind::SnapOverlay);
                     assert_eq!(index, Some(0));
                 }
                 other => panic!("Expected Kind target, got: {:?}", other),
@@ -658,15 +658,15 @@ fn automation_inspect_result_round_trip_and_request_id() {
         "inspect-1".into(),
         crate::protocol::AutomationInspectSnapshot {
             schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
-            window_id: "notes:thread-1".into(),
-            window_kind: "Notes".into(),
+            window_id: "snap-overlay:1".into(),
+            window_kind: "SnapOverlay".into(),
             surface_kind: None,
             app_view_variant: None,
             native_footer_surface: None,
             target_generation: Some(1),
             surface_generation: Some(1),
             data_generation: Some(1),
-            title: Some("Script Kit Agent Chat".into()),
+            title: Some("Snap".into()),
             resolved_bounds: None,
             target_bounds_in_screenshot: None,
             surface_hit_point: None,
@@ -687,7 +687,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
             }],
             os_window_id: Some(99),
             semantic_quality: Some(crate::protocol::SemanticQuality::PanelOnly),
-            warnings: vec!["panel_only_agent_chat_detached".into()],
+            warnings: vec!["panel_only".into()],
             pid: Some(1234),
         },
     );
@@ -701,7 +701,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
             snapshot,
         } => {
             assert_eq!(request_id, "inspect-1");
-            assert_eq!(snapshot.window_id, "notes:thread-1");
+            assert_eq!(snapshot.window_id, "snap-overlay:1");
             assert_eq!(snapshot.screenshot_width, Some(1440));
             assert_eq!(snapshot.pixel_probes.len(), 1);
         }

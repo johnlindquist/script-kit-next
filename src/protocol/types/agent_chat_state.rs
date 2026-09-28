@@ -16,7 +16,7 @@ pub const AGENT_CHAT_STATE_SCHEMA_VERSION: u32 = 7;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentChatResolvedTarget {
-    /// Stable automation window ID (e.g. `"main"`, `"agentChatDetached:thread-1"`).
+    /// Stable automation window ID (e.g. `"main"`).
     pub window_id: String,
     /// The kind of window that was resolved.
     pub window_kind: String,
@@ -949,14 +949,14 @@ mod tests {
     #[test]
     fn agent_chat_resolved_target_round_trips() {
         let target = AgentChatResolvedTarget {
-            window_id: "agentChatDetached:thread-1".to_string(),
-            window_kind: "agentChatDetached".to_string(),
-            title: Some("Script Kit Agent Chat".to_string()),
+            window_id: "main".to_string(),
+            window_kind: "main".to_string(),
+            title: Some("Script Kit".to_string()),
         };
         let json = serde_json::to_value(&target).expect("serialize");
-        assert_eq!(json["windowId"], "agentChatDetached:thread-1");
-        assert_eq!(json["windowKind"], "agentChatDetached");
-        assert_eq!(json["title"], "Script Kit Agent Chat");
+        assert_eq!(json["windowId"], "main");
+        assert_eq!(json["windowKind"], "main");
+        assert_eq!(json["title"], "Script Kit");
 
         let back: AgentChatResolvedTarget = serde_json::from_value(json).expect("deserialize");
         assert_eq!(back, target);
@@ -966,18 +966,15 @@ mod tests {
     fn agent_chat_state_snapshot_with_resolved_target_round_trips() {
         let snap = AgentChatStateSnapshot {
             resolved_target: Some(AgentChatResolvedTarget {
-                window_id: "agentChatDetached:thread-1".to_string(),
-                window_kind: "agentChatDetached".to_string(),
-                title: Some("Script Kit Agent Chat".to_string()),
+                window_id: "main".to_string(),
+                window_kind: "main".to_string(),
+                title: Some("Script Kit".to_string()),
             }),
             ..Default::default()
         };
         let json = serde_json::to_value(&snap).expect("serialize");
-        assert_eq!(
-            json["resolvedTarget"]["windowId"],
-            "agentChatDetached:thread-1"
-        );
-        assert_eq!(json["resolvedTarget"]["windowKind"], "agentChatDetached");
+        assert_eq!(json["resolvedTarget"]["windowId"], "main");
+        assert_eq!(json["resolvedTarget"]["windowKind"], "main");
         assert_eq!(json["schemaVersion"], AGENT_CHAT_STATE_SCHEMA_VERSION);
 
         let back: AgentChatStateSnapshot = serde_json::from_value(json).expect("deserialize");

@@ -120,7 +120,7 @@ pub enum DictationTarget {
     /// A prompt in the main window that accepts text input (arg, path,
     /// select, env, template, form, file search, mini, micro).
     MainWindowPrompt,
-    /// The notes window editor.
+    /// Today's note: the words become a line in it, shown under the main input.
     NotesEditor,
     /// Legacy AI composer target retained only for persisted-history/config migration.
     AiChatComposer,

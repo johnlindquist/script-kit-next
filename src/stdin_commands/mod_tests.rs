@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_external_command_simulate_key_target_deserialization() -> anyhow::Result<()> {
-        let json = r#"{"type":"simulateKey","target":{"type":"kind","kind":"notes"},"key":"p","modifiers":["cmd","shift"]}"#;
+        let json = r#"{"type":"simulateKey","target":{"type":"kind","kind":"snapOverlay"},"key":"p","modifiers":["cmd","shift"]}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::SimulateKey {
@@ -589,10 +589,10 @@ mod tests {
                 assert_eq!(modifiers, vec![KeyModifier::Cmd, KeyModifier::Shift]);
                 match target {
                     Some(protocol::AutomationWindowTarget::Kind { kind, index }) => {
-                        assert_eq!(kind, protocol::AutomationWindowKind::Notes);
+                        assert_eq!(kind, protocol::AutomationWindowKind::SnapOverlay);
                         assert_eq!(index, None);
                     }
-                    other => panic!("Expected targeted Notes simulateKey, got {other:?}"),
+                    other => panic!("Expected targeted snap overlay simulateKey, got {other:?}"),
                 }
             }
             _ => panic!("Expected SimulateKey command"),

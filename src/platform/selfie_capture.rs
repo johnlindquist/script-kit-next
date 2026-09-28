@@ -33,54 +33,11 @@ const SCRIPT_KIT_SELFIE_MARGIN: i32 = 48;
 static SCRIPT_KIT_SELFIE_SEQUENCE: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ScriptKitSelfieWindowKind {
-    Notes,
-    MainOrOther,
-}
-
-impl ScriptKitSelfieWindowKind {
-    fn priority(self) -> i32 {
-        match self {
-            Self::Notes => 2,
-            Self::MainOrOther => 1,
-        }
-    }
-
-    fn state_label(self, fallback: &str) -> String {
-        match self {
-            Self::Notes => "Notes".to_string(),
-            Self::MainOrOther => fallback.to_string(),
-        }
-    }
-
-    fn capture_method_suffix(self) -> &'static str {
-        match self {
-            Self::Notes => "notes",
-            Self::MainOrOther => "main",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct ScriptKitSelfieCandidateSnapshot {
-    title: String,
-    app_name: String,
     focused: bool,
     width: i32,
     height: i32,
-}
-
-fn classify_script_kit_selfie_candidate(
-    candidate: &ScriptKitSelfieCandidateSnapshot,
-) -> ScriptKitSelfieWindowKind {
-    let title = candidate.title.to_lowercase();
-    let app_name = candidate.app_name.to_lowercase();
-    if title.contains("notes") || app_name.contains("notes") {
-        ScriptKitSelfieWindowKind::Notes
-    } else {
-        ScriptKitSelfieWindowKind::MainOrOther
-    }
 }
 
 fn select_script_kit_selfie_candidate_index(
@@ -90,9 +47,8 @@ fn select_script_kit_selfie_candidate_index(
         .iter()
         .enumerate()
         .max_by_key(|(_, candidate)| {
-            let kind = classify_script_kit_selfie_candidate(candidate);
             let area = candidate.width as i64 * candidate.height as i64;
-            (kind.priority(), candidate.focused, area)
+            (candidate.focused, area)
         })
         .map(|(index, _)| index)
 }
@@ -182,8 +138,6 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
     let candidate_snapshots = candidates
         .iter()
         .map(|candidate| ScriptKitSelfieCandidateSnapshot {
-            title: candidate.title.clone(),
-            app_name: candidate.app_name.clone(),
             focused: candidate.focused,
             width: candidate.width,
             height: candidate.height,
@@ -192,8 +146,7 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
     let candidate_index = select_script_kit_selfie_candidate_index(&candidate_snapshots)
         .context("no visible Script Kit window found for selfie capture")?;
     let candidate = &candidates[candidate_index];
-    let captured_kind = classify_script_kit_selfie_candidate(&candidate_snapshots[candidate_index]);
-    let captured_state = captured_kind.state_label(state);
+    let captured_state = state.to_string();
 
     let window_x = candidate.window.x().context("failed to read window x")?;
     let window_y = candidate.window.y().context("failed to read window y")?;
@@ -257,10 +210,7 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
         created_at: created_at.to_rfc3339(),
         state: captured_state,
         shortcut: SCRIPT_KIT_SELFIE_SHORTCUT.to_string(),
-        capture_method: format!(
-            "xcap.monitor.capture_region.composited_desktop.{}",
-            captured_kind.capture_method_suffix()
-        ),
+        capture_method: "xcap.monitor.capture_region.composited_desktop.main".to_string(),
         png_path: png_path.to_string_lossy().to_string(),
         receipt_path: receipt_path.to_string_lossy().to_string(),
         window_bounds: ScriptKitSelfieBounds {
@@ -301,10 +251,9 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
 #[cfg(test)]
 mod selfie_capture_tests {
     use super::{
-        build_script_kit_selfie_receipt_id, classify_script_kit_selfie_candidate,
-        persist_private_script_kit_selfie_artifacts, select_script_kit_selfie_candidate_index,
-        slugify_script_kit_selfie_state, ScriptKitSelfieCandidateSnapshot,
-        ScriptKitSelfieWindowKind,
+        build_script_kit_selfie_receipt_id, persist_private_script_kit_selfie_artifacts,
+        select_script_kit_selfie_candidate_index, slugify_script_kit_selfie_state,
+        ScriptKitSelfieCandidateSnapshot,
     };
 
     #[test]
@@ -439,29 +388,39 @@ mod selfie_capture_tests {
     }
 
     #[test]
-    fn selfie_prefers_notes_over_the_focused_main_window() {
+    fn selfie_prefers_the_focused_window_then_the_largest() {
         let candidates = vec![
             ScriptKitSelfieCandidateSnapshot {
-                title: "Script Kit".to_string(),
-                app_name: "Script Kit".to_string(),
-                focused: true,
-                width: 1200,
-                height: 900,
+                focused: false,
+                width: 1600,
+                height: 1000,
             },
             ScriptKitSelfieCandidateSnapshot {
-                title: "Notes".to_string(),
-                app_name: "Script Kit".to_string(),
+                focused: true,
+                width: 750,
+                height: 475,
+            },
+        ];
+        assert_eq!(
+            select_script_kit_selfie_candidate_index(&candidates),
+            Some(1)
+        );
+
+        let unfocused = vec![
+            ScriptKitSelfieCandidateSnapshot {
                 focused: false,
                 width: 350,
                 height: 280,
             },
+            ScriptKitSelfieCandidateSnapshot {
+                focused: false,
+                width: 750,
+                height: 475,
+            },
         ];
-
-        let index = select_script_kit_selfie_candidate_index(&candidates).unwrap();
-        assert_eq!(index, 1);
         assert_eq!(
-            classify_script_kit_selfie_candidate(&candidates[index]),
-            ScriptKitSelfieWindowKind::Notes
+            select_script_kit_selfie_candidate_index(&unfocused),
+            Some(1)
         );
     }
 }

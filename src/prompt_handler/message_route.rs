@@ -1,13 +1,13 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PromptMessageRoute {
-    ConfirmDialog,
+    Confirm,
     UnhandledWarning,
     Other,
 }
 #[inline]
 fn classify_prompt_message_route(message: &PromptMessage) -> PromptMessageRoute {
     match message {
-        PromptMessage::ShowConfirm { .. } => PromptMessageRoute::ConfirmDialog,
+        PromptMessage::ShowConfirm { .. } => PromptMessageRoute::Confirm,
         PromptMessage::UnhandledMessage { .. } => PromptMessageRoute::UnhandledWarning,
         _ => PromptMessageRoute::Other,
     }

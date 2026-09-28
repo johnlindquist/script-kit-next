@@ -677,34 +677,6 @@ for (const origin of ["source", "main", "direct"] as const) {
   });
 }
 
-await runScenario("agent-detached", "Agent Chat detached", async (driver, pasteboard) => {
-  driver.send({ type: "openAgentChatDetachedFixture", requestId: "c06-detached" });
-  const target = await exactTarget(driver, "agentChatDetached");
-  await assertOverlayPrecedence(driver, target);
-  await assertCopyGrammar(driver, pasteboard, target);
-  await assertActiveDismissStopRetry(driver, target);
-  await setFixture(driver, "c06Completed", EXACT_ANSWER);
-  await key(driver, target, "w", ["cmd"]);
-  const closeDeadline = Date.now() + 10_000;
-  let windows = (await driver.listAutomationWindows()) as ObjectJson;
-  while (
-    asObjects(windows.windows).some(
-      (window) => window.kind === "agentChatDetached" && window.visible === true,
-    ) &&
-    Date.now() < closeDeadline
-  ) {
-    await Bun.sleep(40);
-    windows = (await driver.listAutomationWindows()) as ObjectJson;
-  }
-  assert(
-    !asObjects(windows.windows).some(
-      (window) => window.kind === "agentChatDetached" && window.visible === true,
-    ),
-    "detached Cmd+W did not close the idle conversation",
-  );
-  return { origin: "detached", nativeClosePolicy: true, exactCopy: true, stopRetry: true };
-});
-
 await runScenario("chat-prompt", "ordinary ChatPrompt", async (driver, pasteboard) => {
   driver.send({ type: "show" });
   await driver.waitForSettle();

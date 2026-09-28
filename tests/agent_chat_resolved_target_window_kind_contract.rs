@@ -65,7 +65,6 @@ fn as_camel_case_matches_serde_for_every_variant() {
     // helper and this contract together.
     let cases: &[(AutomationWindowKind, &str)] = &[
         (AutomationWindowKind::Main, "main"),
-        (AutomationWindowKind::Notes, "notes"),
         (AutomationWindowKind::SnapOverlay, "snapOverlay"),
     ];
     for (kind, expected) in cases {
@@ -115,16 +114,6 @@ fn build_agent_chat_resolved_target_main_arm_reads_info_kind() {
          `\"main\".to_string(), info.title.clone()` tuple pattern — \
          that is the exact shape the Pass #18 Fix replaced. Seeing it \
          back indicates a revert or a cherry-pick collision.\n\nBody was:\n{}",
-        body
-    );
-    assert!(
-        !body.contains("\"agentChatDetached\".to_string(),"),
-        "build_agent_chat_resolved_target MUST NOT hardcode \
-         `\"agentChatDetached\".to_string()` for the Detached arm — use \
-         `info.kind.as_camel_case()` so the Main and Detached arms \
-         stay lock-step with the helper. Hardcoding one arm creates a \
-         drift surface: a future variant serialized differently via \
-         serde would disagree with the hardcoded literal.\n\nBody was:\n{}",
         body
     );
 }

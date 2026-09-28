@@ -45,7 +45,6 @@ fn automation_kind_to_window_role(
 
     match kind {
         AutomationWindowKind::Main => Some(WindowRole::Main),
-        AutomationWindowKind::Notes => Some(WindowRole::Notes),
         // Each display overlay has its own exact runtime handle, not a shared role.
         AutomationWindowKind::SnapOverlay => None,
     }
@@ -984,10 +983,7 @@ mod deferred_dispatch_tests {
             )
         });
         let mut windows = vec![main];
-        for kind in [
-            AutomationWindowKind::Notes,
-            AutomationWindowKind::SnapOverlay,
-        ] {
+        for kind in [AutomationWindowKind::SnapOverlay] {
             windows.push(cx.update(|cx| {
                 mount(
                     cx,
@@ -1060,7 +1056,6 @@ mod deferred_dispatch_tests {
         let mut registrations = TestWindowRegistrations::default();
         for kind in [
             AutomationWindowKind::Main,
-            AutomationWindowKind::Notes,
             AutomationWindowKind::SnapOverlay,
         ] {
             let (handle, info, count) = cx.update(|cx| {

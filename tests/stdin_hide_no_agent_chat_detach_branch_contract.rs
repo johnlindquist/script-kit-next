@@ -28,7 +28,7 @@
 //!   `[{kind:"main", visible:true, semanticSurface:"agentChatChat"}]`
 //! then `hide` → `listAutomationWindows` reports
 //!   `[{kind:"main", visible:false, semanticSurface:"scriptList"}]`
-//! (no second detached window, no `agentChatDetached` popup spawned).
+//! (no second window is spawned).
 //!
 //! A future refactor that "unifies" the hide paths — e.g. by having stdin hide
 //! delegate to the hotkey toggle helper, or by pulling the detach branch into

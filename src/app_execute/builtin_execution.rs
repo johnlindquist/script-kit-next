@@ -4434,7 +4434,7 @@ impl ScriptListApp {
                     semantic_focus_id: match canonical_target {
                         crate::dictation::DictationTarget::MainWindowFilter => "input:main-filter",
                         crate::dictation::DictationTarget::MainWindowPrompt => "input:prompt",
-                        crate::dictation::DictationTarget::NotesEditor => "input:notes-editor",
+                        crate::dictation::DictationTarget::NotesEditor => "note:today",
                         crate::dictation::DictationTarget::AiChatComposer
                         | crate::dictation::DictationTarget::TabAiHarness => {
                             "input:agent-chat-composer"
@@ -4773,7 +4773,7 @@ impl ScriptListApp {
         let semantic_focus_id = match target {
             crate::dictation::DictationTarget::MainWindowFilter => "input:main-filter",
             crate::dictation::DictationTarget::MainWindowPrompt => "input:prompt",
-            crate::dictation::DictationTarget::NotesEditor => "input:notes-editor",
+            crate::dictation::DictationTarget::NotesEditor => "note:today",
             crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness => "input:agent-chat-composer",
             crate::dictation::DictationTarget::ExternalApp => "external-window",
@@ -5112,7 +5112,7 @@ impl ScriptListApp {
         let semantic_focus_id = match selection.target {
             crate::dictation::DictationTarget::MainWindowFilter => "input:main-filter",
             crate::dictation::DictationTarget::MainWindowPrompt => "input:prompt",
-            crate::dictation::DictationTarget::NotesEditor => "input:notes-editor",
+            crate::dictation::DictationTarget::NotesEditor => "note:today",
             crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness => "input:agent-chat-composer",
             crate::dictation::DictationTarget::ExternalApp => "external-window",
@@ -6071,7 +6071,7 @@ impl ScriptListApp {
                     semantic_focus_id: match target {
                         crate::dictation::DictationTarget::MainWindowFilter => "input:main-filter",
                         crate::dictation::DictationTarget::MainWindowPrompt => "input:prompt",
-                        crate::dictation::DictationTarget::NotesEditor => "input:notes-editor",
+                        crate::dictation::DictationTarget::NotesEditor => "note:today",
                         crate::dictation::DictationTarget::AiChatComposer
                         | crate::dictation::DictationTarget::TabAiHarness => {
                             "input:agent-chat-composer"

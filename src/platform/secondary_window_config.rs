@@ -337,7 +337,7 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
     }
 
     let content_bounds: NSRect = msg_send![content_view, bounds];
-    let mut backdrop_layout = tahoe_backdrop_layout(window_name);
+    let backdrop_layout = tahoe_backdrop_layout(window_name);
     let backdrop_frame = backdrop_layout.frame(content_bounds);
     let vev_count_before =
         tahoe_count_views_kind_of_excluding(content_view, class!(NSVisualEffectView), nil);
@@ -358,21 +358,6 @@ unsafe fn configure_tahoe_window_backdrop_with_result(
                 ),
             );
             return None;
-        }
-        // Appearance/theme refresh over an existing Notes backdrop must
-        // preserve the dynamically selected inset (Agent mode reserves the
-        // footer band via `set_gpui_window_backdrop_bottom_inset`); resetting
-        // to the static default would silently collapse the Agent partition.
-        if window_name == "Notes" {
-            let existing_inset: f64 = *(*(glass_view as *const objc::runtime::Object))
-                .get_ivar::<f64>("_scriptKitBottomInset");
-            backdrop_layout = if existing_inset > 0.0 {
-                TahoeBackdropLayout::ContentAboveDetachedFooter {
-                    bottom_inset: existing_inset,
-                }
-            } else {
-                TahoeBackdropLayout::FullWindow
-            };
         }
     } else {
         let Some(backdrop_class) = tahoe_glass_backdrop_view_class(glass_class) else {

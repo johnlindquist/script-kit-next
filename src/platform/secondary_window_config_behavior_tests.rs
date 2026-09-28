@@ -25,23 +25,6 @@ fn detached_backdrop_excludes_footer_and_exact_eight_point_gutter() {
     assert!(footer_top <= frame.origin.y);
 }
 
-/// The exit-motion contract and the backdrop partition are now SEPARATE
-/// decisions: Notes keeps the calibrated fixed-frame fade exit in both
-/// surface modes while its DEFAULT backdrop is full-window (its Agent
-/// mode reserves the footer band dynamically through
-/// `set_gpui_window_backdrop_bottom_inset`).
-#[cfg(target_os = "macos")]
-#[test]
-fn notes_defaults_to_full_backdrop() {
-    for window_name in ["Notes", "Actions popup"] {
-        assert_eq!(
-            super::tahoe_backdrop_layout(window_name).bottom_inset(),
-            0.0,
-            "{window_name} must not reserve a detached footer strip"
-        );
-    }
-}
-
 /// The main window's glass fills the whole window in glass mode (its footer
 /// is in-stage) while keeping the partitioned host's shadowless, rounded
 /// policy: a full-window NSWindow shadow would outline the transparent host.
@@ -63,7 +46,7 @@ fn main_backdrop_fills_the_window_but_keeps_the_partitioned_host_policy() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn notes_backdrop_layout_can_toggle_without_changing_outer_frame() {
+fn backdrop_layout_can_toggle_without_changing_outer_frame() {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
 
     // The same outer content bounds partition into full-window and

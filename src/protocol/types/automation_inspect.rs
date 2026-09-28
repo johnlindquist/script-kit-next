@@ -88,7 +88,7 @@ pub struct AutomationInspectSnapshot {
     /// Schema version for forward compatibility.
     pub schema_version: u32,
 
-    /// Resolved automation window ID (e.g. `"main:0"`, `"agentChatDetached:thread-2"`).
+    /// Resolved automation window ID (e.g. `"main:0"`, `"snap-overlay:1"`).
     pub window_id: String,
 
     /// Automation window kind as a string (e.g. `"Main"`, `"Notes"`, `"AgentChatDetached"`).
@@ -186,7 +186,7 @@ pub struct AutomationInspectSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub semantic_quality: Option<SemanticQuality>,
 
-    /// Machine-readable warnings (e.g. `"panel_only_agent_chat_detached"`).
+    /// Machine-readable warnings (e.g. `"panel_only"`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     /// Process ID of the window owner.
@@ -246,15 +246,15 @@ mod tests {
     fn snapshot_serde_roundtrip_full() {
         let snapshot = AutomationInspectSnapshot {
             schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
-            window_id: "notes:0".to_string(),
-            window_kind: "Notes".to_string(),
-            surface_kind: Some("NotesWindow".to_string()),
+            window_id: "snap-overlay:1".to_string(),
+            window_kind: "SnapOverlay".to_string(),
+            surface_kind: Some("SnapOverlay".to_string()),
             app_view_variant: None,
             native_footer_surface: None,
             target_generation: Some(2),
             surface_generation: Some(3),
             data_generation: Some(4),
-            title: Some("Script Kit Notes".to_string()),
+            title: Some("Snap".to_string()),
             resolved_bounds: Some(crate::protocol::AutomationWindowBounds {
                 x: 100.0,
                 y: 200.0,
@@ -269,7 +269,7 @@ mod tests {
             }),
             surface_hit_point: Some(InspectPoint { x: 400.0, y: 300.0 }),
             suggested_hit_points: vec![SuggestedHitPoint {
-                semantic_id: "input:notes-editor".to_string(),
+                semantic_id: "panel:window".to_string(),
                 x: 400.0,
                 y: 300.0,
                 reason: "surface_center".to_string(),
@@ -414,8 +414,8 @@ mod tests {
     #[test]
     fn os_window_id_present_in_json() {
         let mut snapshot = make_minimal_snapshot();
-        snapshot.window_id = "agentChatDetached:thread-1".to_string();
-        snapshot.window_kind = "AgentChatDetached".to_string();
+        snapshot.window_id = "snap-overlay:1".to_string();
+        snapshot.window_kind = "SnapOverlay".to_string();
         snapshot.screenshot_width = Some(800);
         snapshot.screenshot_height = Some(600);
         snapshot.os_window_id = Some(42);

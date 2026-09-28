@@ -561,7 +561,6 @@ fn collect_registered_surface_layout_inner(
     });
     let mut required = Vec::<String>::new();
     let mut layout = match target.kind {
-        AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
         AutomationWindowKind::SnapOverlay => {
             let entity = exact_root::<crate::window_control::SnapOverlayView>(&target, cx)
                 .ok_or_else(|| anyhow::anyhow!("snap_layout_owner_missing"))?;
@@ -643,7 +642,6 @@ pub fn surface_revision_facts(
         return None;
     }
     match resolved.kind {
-        AutomationWindowKind::Notes => None,
         AutomationWindowKind::SnapOverlay => read_window_root(
             handle.downcast::<crate::window_control::SnapOverlayView>()?,
             window,
@@ -676,7 +674,6 @@ pub fn close_owned_registered_surface(
         "owned_native_host_required"
     );
     match resolved.kind {
-        AutomationWindowKind::Notes => anyhow::bail!("no_notes_window"),
         AutomationWindowKind::SnapOverlay => {
             let handle = handle
                 .downcast::<crate::window_control::SnapOverlayView>()
@@ -701,7 +698,6 @@ pub fn collect_surface_snapshot(
     let current = current_surface_metadata(resolved)?;
     let resolved = &current;
     let mut snapshot = match resolved.kind {
-        AutomationWindowKind::Notes => return None,
         AutomationWindowKind::SnapOverlay => collect_snap_snapshot(resolved, cx)?,
         _ => return None,
     };
@@ -819,7 +815,7 @@ mod root_layer_projection_tests {
             notifications_expanded: false,
         };
         let mut snapshot = super::SurfaceElementSnapshot {
-            focused_semantic_id: Some("input:notes-editor".into()),
+            focused_semantic_id: Some("snap-overlay-root".into()),
             ..Default::default()
         };
         super::append_root_layer_elements(&mut snapshot, &layers);

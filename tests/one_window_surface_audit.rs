@@ -2,7 +2,8 @@
 //!
 //! Production code only: not a test file, not inside a `#[cfg(test)]` item or a module declared
 //! under one, not a comment. Across `src/` and `crates/`:
-//! 1. no `open_window(` outside the main window's setup, the snap guide and dev binaries;
+//! 1. no `open_window(` (or its fallible and hidden variants) outside the main window's setup, the
+//!    snap guide, dev binaries and the headless design-evaluation fixtures;
 //! 2. no native `NSWindow`/`NSPanel` allocation outside the footer's glass capsule panel;
 //! 3. none of the retired surface files exist;
 //! 4. none of the retired surface names are used.
@@ -18,6 +19,10 @@ const ALLOWED_OPEN_WINDOW: &[(&str, &str)] = &[
         "the snap guide drawn over other apps' windows, not a Script Kit surface",
     ),
     ("src/bin/", "dev binaries, not shipped in the app"),
+    (
+        "src/design_evaluation/",
+        "fixtures rendered inside a headless visual-test app that never shows a window",
+    ),
 ];
 
 const ALLOWED_NATIVE_WINDOW: &[(&str, &str)] = &[(
@@ -68,6 +73,15 @@ const RETIRED_NAMES: &[&str] = &[
     r"\brender_actions_backdrop\w*\b",
     r"\bActionsBackdropConfig\b",
     r"\bprompt_actions_dialog_offsets\b",
+    // Automation, window state and fixtures address the main window and the snap guide only.
+    r"\bAutomationWindowKind::Notes\b",
+    r"\bAutomationBatchTargetKind::Notes\b",
+    r"\bWindowRole::(Notes|AgentChat)\b",
+    r"\b[aA]gentChatDetached\b",
+    r"\bno_notes_window\b",
+    r"\bNotesFixtureCommand\b",
+    r"\bScriptKitSelfieWindowKind\b",
+    r"\bset_gpui_window_backdrop_bottom_inset\b",
 ];
 
 fn repo_root() -> PathBuf {
@@ -254,7 +268,9 @@ fn listing(sites: &[&Site]) -> String {
 
 #[test]
 fn no_window_opens_outside_the_main_window() {
-    let sites = production_matches(&Regex::new(r"\bopen_window\(").unwrap());
+    let sites = production_matches(
+        &Regex::new(r"\bopen_(owned_hidden_)?window(_fallible|_with_options)?\(").unwrap(),
+    );
     assert!(
         sites
             .iter()

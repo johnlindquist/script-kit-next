@@ -34,7 +34,6 @@ pub enum AutomationWindowTarget {
 #[serde(rename_all = "camelCase")]
 pub enum AutomationWindowKind {
     Main,
-    Notes,
     /// Production snap target overlay, independent of a launcher parent.
     SnapOverlay,
 }
@@ -47,7 +46,6 @@ impl AutomationWindowKind {
     pub fn as_camel_case(self) -> &'static str {
         match self {
             AutomationWindowKind::Main => "main",
-            AutomationWindowKind::Notes => "notes",
             AutomationWindowKind::SnapOverlay => "snapOverlay",
         }
     }
@@ -70,7 +68,7 @@ pub struct AutomationWindowBounds {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationWindowInfo {
-    /// Stable automation ID (e.g. `"main"`, `"agentChatDetached:thread-1"`).
+    /// Stable automation ID (e.g. `"main"`, `"snap-overlay:1"`).
     pub id: String,
     /// The kind of window this represents.
     pub kind: AutomationWindowKind,

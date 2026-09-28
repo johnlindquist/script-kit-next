@@ -910,15 +910,15 @@ mod tests {
         let see = target_tool_validator(COMPUTER_SEE_TOOL);
         for generation in [1, 7, u64::MAX] {
             let target = AutomationWindowTarget::Instance {
-                id: "notes:primary".into(),
+                id: "snap-overlay:1".into(),
                 generation,
             };
             let request = ComputerUseCaptureRenderWindowArgs {
                 target: target.clone(),
                 expected: Some(crate::protocol::AutomationTargetIdentitySnapshot {
-                    window_id: "notes:primary".into(),
+                    window_id: "snap-overlay:1".into(),
                     window_generation: Some(generation),
-                    app_view_variant: "Notes".into(),
+                    app_view_variant: "SnapOverlay".into(),
                     target_generation: 2,
                     surface_generation: 3,
                     data_generation: 4,
@@ -3264,11 +3264,11 @@ mod tests {
 
         crate::windows::upsert_automation_window(AutomationWindowInfo {
             id: id.clone(),
-            kind: AutomationWindowKind::Notes,
+            kind: AutomationWindowKind::SnapOverlay,
             title: Some("MCP List Windows Test".to_string()),
             focused: false,
             visible: true,
-            semantic_surface: Some("notes".to_string()),
+            semantic_surface: Some("snapOverlay".to_string()),
             bounds: Some(AutomationWindowBounds {
                 x: 10.0,
                 y: 20.0,
@@ -3301,9 +3301,9 @@ mod tests {
             .iter()
             .find(|window| window["id"] == id)
             .expect("registered test window should be listed");
-        assert_eq!(window["kind"], "notes");
+        assert_eq!(window["kind"], "snapOverlay");
         assert_eq!(window["visible"], true);
-        assert_eq!(window["semanticSurface"], "notes");
+        assert_eq!(window["semanticSurface"], "snapOverlay");
     }
 
     #[test]
@@ -3316,11 +3316,11 @@ mod tests {
 
         crate::windows::upsert_automation_window(AutomationWindowInfo {
             id: id.clone(),
-            kind: AutomationWindowKind::Notes,
+            kind: AutomationWindowKind::SnapOverlay,
             title: Some("MCP Focused Window Test".to_string()),
             focused: false,
             visible: true,
-            semantic_surface: Some("notes".to_string()),
+            semantic_surface: Some("snapOverlay".to_string()),
             bounds: Some(AutomationWindowBounds {
                 x: 10.0,
                 y: 20.0,
@@ -3355,10 +3355,10 @@ mod tests {
         assert_eq!(value["status"], "focused");
         assert_eq!(value["focusedWindowId"], id);
         assert_eq!(value["window"]["id"], id);
-        assert_eq!(value["window"]["kind"], "notes");
+        assert_eq!(value["window"]["kind"], "snapOverlay");
         assert_eq!(value["window"]["focused"], true);
         assert_eq!(value["window"]["visible"], true);
-        assert_eq!(value["window"]["semanticSurface"], "notes");
+        assert_eq!(value["window"]["semanticSurface"], "snapOverlay");
         assert!(value["warnings"].is_array());
 
         for forbidden in [
@@ -3387,11 +3387,11 @@ mod tests {
 
         crate::windows::upsert_automation_window(AutomationWindowInfo {
             id: id.clone(),
-            kind: AutomationWindowKind::Notes,
+            kind: AutomationWindowKind::SnapOverlay,
             title: Some("MCP Get Window Test".to_string()),
             focused: false,
             visible: true,
-            semantic_surface: Some("notes".to_string()),
+            semantic_surface: Some("snapOverlay".to_string()),
             bounds: Some(AutomationWindowBounds {
                 x: 10.0,
                 y: 20.0,
@@ -3423,9 +3423,9 @@ mod tests {
         assert_eq!(value["source"], "automationWindowRegistry");
         assert_eq!(value["status"], "found");
         assert_eq!(value["window"]["id"], id);
-        assert_eq!(value["window"]["kind"], "notes");
+        assert_eq!(value["window"]["kind"], "snapOverlay");
         assert_eq!(value["window"]["visible"], true);
-        assert_eq!(value["window"]["semanticSurface"], "notes");
+        assert_eq!(value["window"]["semanticSurface"], "snapOverlay");
         assert!(value["warnings"].is_array());
 
         for forbidden in [

@@ -139,11 +139,11 @@ mod registered_root_layer_tests {
             crate::windows::register_runtime_window_instance(
                 AutomationWindowInfo {
                     id: "test:registered-root-layer-selection".into(),
-                    kind: crate::protocol::AutomationWindowKind::Notes,
+                    kind: crate::protocol::AutomationWindowKind::SnapOverlay,
                     title: None,
                     focused: false,
                     visible: false,
-                    semantic_surface: Some("notes".into()),
+                    semantic_surface: Some("snapOverlay".into()),
                     bounds: None,
                     parent_window_id: None,
                     parent_window_generation: None,

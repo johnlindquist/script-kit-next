@@ -54,7 +54,6 @@ static AUTOMATION_WINDOWS: LazyLock<Mutex<AutomationRegistryState>> =
 fn kind_rank(kind: AutomationWindowKind) -> u8 {
     match kind {
         AutomationWindowKind::Main => 0,
-        AutomationWindowKind::Notes => 1,
         AutomationWindowKind::SnapOverlay => 10,
     }
 }
@@ -992,11 +991,10 @@ pub(crate) mod tests {
         assert_eq!(standalone.kind, batch_path.kind);
         assert_eq!(standalone.semantic_surface, batch_path.semantic_surface);
 
-        // Targeting a kind with no window (there is no Notes window) fails with an error, not a
-        // silent fallback
+        // Targeting a window that is not registered fails with an error, not a silent fallback
         let missing = AutomationWindowTarget::Kind {
-            kind: AutomationWindowKind::Notes,
-            index: None,
+            kind: AutomationWindowKind::SnapOverlay,
+            index: Some(1),
         };
         let err = resolve_automation_window(Some(&missing));
         assert!(
@@ -1087,16 +1085,14 @@ pub(crate) mod tests {
 
         // Insert in reverse kind-rank order
         upsert_automation_window(make_info(&p, "snap", AutomationWindowKind::SnapOverlay));
-        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
         upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
 
         let list1 = list_automation_windows();
         let ours1: Vec<_> = list1.iter().filter(|w| w.id.starts_with(&p)).collect();
 
-        // Main (rank 0) < Notes (rank 1) < SnapOverlay (rank 10)
+        // Main (rank 0) < SnapOverlay (rank 10)
         assert_eq!(ours1[0].kind, AutomationWindowKind::Main);
-        assert_eq!(ours1[1].kind, AutomationWindowKind::Notes);
-        assert_eq!(ours1[2].kind, AutomationWindowKind::SnapOverlay);
+        assert_eq!(ours1[1].kind, AutomationWindowKind::SnapOverlay);
 
         // Second call produces identical order
         let list2 = list_automation_windows();

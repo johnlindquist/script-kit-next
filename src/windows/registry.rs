@@ -18,15 +18,15 @@
 //!
 //! // Register a window after creation
 //! let handle = cx.open_window(options, |window, cx| { ... })?;
-//! register_window(WindowRole::Notes, handle);
+//! register_window(WindowRole::Main, handle);
 //!
 //! // Get a window handle (returns Copy)
-//! if let Some(handle) = get_window(WindowRole::Notes) {
+//! if let Some(handle) = get_window(WindowRole::Main) {
 //!     handle.update(cx, |root, window, cx| { ... });
 //! }
 //!
 //! // Clear when window closes
-//! clear_window(WindowRole::Notes);
+//! clear_window(WindowRole::Main);
 //!
 //! // Notify all windows (e.g., for theme changes)
 //! notify_all_windows(cx);
@@ -268,13 +268,6 @@ mod tests {
     #[test]
     fn test_window_role_name() {
         assert_eq!(WindowRole::Main.name(), "Main");
-        assert_eq!(WindowRole::Notes.name(), "Notes");
-    }
-
-    #[test]
-    fn test_window_role_eq() {
-        assert_eq!(WindowRole::Main, WindowRole::Main);
-        assert_ne!(WindowRole::Main, WindowRole::Notes);
     }
 
     #[test]
@@ -289,9 +282,6 @@ mod tests {
         // WindowRole is now re-exported from window_state, so they're the same type
         let main = WindowRole::Main;
         assert!(matches!(main, crate::window_state::WindowRole::Main));
-
-        let notes = WindowRole::Notes;
-        assert!(matches!(notes, crate::window_state::WindowRole::Notes));
     }
 
     #[test]
@@ -302,14 +292,14 @@ mod tests {
         let registry = registry();
         if let Ok(mut reg) = registry.lock() {
             // Clear any existing state
-            reg.handles.remove(&WindowRole::Notes);
+            reg.handles.remove(&WindowRole::Main);
         }
 
         // After take on empty, should return None
-        let result = take_window(WindowRole::Notes);
+        let result = take_window(WindowRole::Main);
         assert!(result.is_none());
 
         // Verify nothing to take
-        assert!(!is_window_open(WindowRole::Notes));
+        assert!(!is_window_open(WindowRole::Main));
     }
 }

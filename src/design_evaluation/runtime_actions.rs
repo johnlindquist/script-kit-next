@@ -103,7 +103,6 @@ impl Evaluator {
             FixtureControl::Search(command) => {
                 explicit_observation = Some(self.search_fixture_control(&mounted, command)?);
             }
-            FixtureControl::Notes(_) => anyhow::bail!("no_notes_window"),
             FixtureControl::Flow(command) => {
                 let RootOwner::Main(main) = &mounted.owner else {
                     anyhow::bail!("flow_host_required");

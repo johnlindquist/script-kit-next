@@ -285,21 +285,6 @@ pub enum OneWindowFixtureCommand {
     rename_all_fields = "camelCase",
     deny_unknown_fields
 )]
-pub enum NotesFixtureCommand {
-    ToggleTask {
-        marker_start: usize,
-        marker_end: usize,
-        checked: bool,
-    },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(
-    tag = "operation",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase",
-    deny_unknown_fields
-)]
 pub enum SearchFixtureCommand {
     Prepare {
         scenario: String,
@@ -510,7 +495,6 @@ pub struct ScheduledFrameRequirement {
 pub enum FixtureControl {
     Flow(FlowFixtureCommand),
     SdkChat(SdkChatFixtureCommand),
-    Notes(NotesFixtureCommand),
     Theme(ThemeFixtureCommand),
     Search(SearchFixtureCommand),
     OneWindow(OneWindowFixtureCommand),

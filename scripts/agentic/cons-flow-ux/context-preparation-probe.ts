@@ -102,12 +102,6 @@ readyTimeoutMs: 30_000,
 defaultTimeoutMs: 15_000, });
 
 try {
-  driver.send({
-    type: "openAgentChatDetachedFixture",
-    requestId: "safe001-agent-chat-fixture",
-  });
-  await Bun.sleep(300);
-
   const acceptedResponse = await driver.request(
     { type: "inspectContextPreparation", fixtureId: "acceptedOversizedJson" },
     { expect: "contextPreparationProbeResult", timeoutMs: 15_000 },
@@ -170,20 +164,15 @@ try {
   assertReceiptIsPrivate(supplemental);
 
   const elements = await driver.getElements(
-    { target: { type: "kind", kind: "agentChatDetached" }, limit: 300 },
+    { target: { type: "main" }, limit: 300 },
     { timeoutMs: 15_000 },
   );
   assertReceiptIsPrivate(elements);
-  targetObservation = await observeWorkflowTaskTarget(driver, binary, {
-    type: "kind",
-    kind: "agentChatDetached",
-    index: 0,
-  });
+  targetObservation = await observeWorkflowTaskTarget(driver, binary, { type: "main" });
 
   receipt = {
     ...receipt,
     classification: "RUNTIME-CONFIRMED",
-    agentChatFixtureOpened: true,
     accepted: {
       decision: acceptedPreparation.decision,
       attempted: acceptedContext.attempted,

@@ -4,7 +4,7 @@
 //! suggested click targets from resolved automation window metadata.
 
 use super::automation_inspect::{InspectBoundsInScreenshot, InspectPoint, SuggestedHitPoint};
-use super::automation_window::{AutomationWindowInfo, AutomationWindowKind};
+use super::automation_window::AutomationWindowInfo;
 
 /// Compute the bounding rectangle of the target surface inside the
 /// captured screenshot. Every automation target owns its own window, so the
@@ -31,7 +31,6 @@ pub fn default_surface_hit_point(bounds: &InspectBoundsInScreenshot) -> InspectP
 
 /// Build a list of suggested named click targets for the surface.
 pub fn default_suggested_hit_points(
-    resolved: &AutomationWindowInfo,
     bounds: Option<&InspectBoundsInScreenshot>,
 ) -> Vec<SuggestedHitPoint> {
     let Some(bounds) = bounds else {
@@ -40,13 +39,8 @@ pub fn default_suggested_hit_points(
 
     let center = default_surface_hit_point(bounds);
 
-    let semantic_id = match resolved.kind {
-        AutomationWindowKind::Notes => "input:notes-editor",
-        _ => "panel:window",
-    };
-
     vec![SuggestedHitPoint {
-        semantic_id: semantic_id.to_string(),
+        semantic_id: "panel:window".to_string(),
         x: center.x,
         y: center.y,
         reason: "surface_center".to_string(),
@@ -55,7 +49,7 @@ pub fn default_suggested_hit_points(
 
 #[cfg(test)]
 mod tests {
-    use super::super::automation_window::AutomationWindowBounds;
+    use super::super::automation_window::{AutomationWindowBounds, AutomationWindowKind};
     use super::*;
 
     fn make_bounds(x: f64, y: f64, w: f64, h: f64) -> AutomationWindowBounds {
@@ -88,9 +82,9 @@ mod tests {
     }
 
     #[test]
-    fn detached_window_bounds_at_origin() {
+    fn registered_window_bounds_at_origin() {
         let info = make_info(
-            AutomationWindowKind::Notes,
+            AutomationWindowKind::SnapOverlay,
             Some(make_bounds(500.0, 300.0, 800.0, 600.0)),
         );
         let result = target_bounds_in_screenshot(&info).expect("should compute");
@@ -102,7 +96,7 @@ mod tests {
 
     #[test]
     fn no_bounds_returns_none() {
-        let info = make_info(AutomationWindowKind::Notes, None);
+        let info = make_info(AutomationWindowKind::SnapOverlay, None);
         assert!(target_bounds_in_screenshot(&info).is_none());
     }
 
@@ -121,26 +115,21 @@ mod tests {
 
     #[test]
     fn no_bounds_no_suggested_hits() {
-        let info = make_info(AutomationWindowKind::Main, None);
-        let hits = default_suggested_hit_points(&info, None);
+        let hits = default_suggested_hit_points(None);
         assert!(hits.is_empty());
     }
 
     #[test]
-    fn suggested_hit_uses_correct_semantic_id() {
+    fn suggested_hit_targets_the_window_panel() {
         let bounds = InspectBoundsInScreenshot {
             x: 0.0,
             y: 0.0,
             width: 400.0,
             height: 300.0,
         };
-        let info = make_info(
-            AutomationWindowKind::Notes,
-            Some(make_bounds(0.0, 0.0, 400.0, 300.0)),
-        );
-        let hits = default_suggested_hit_points(&info, Some(&bounds));
+        let hits = default_suggested_hit_points(Some(&bounds));
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].semantic_id, "input:notes-editor");
+        assert_eq!(hits[0].semantic_id, "panel:window");
         assert_eq!(hits[0].reason, "surface_center");
     }
 }
