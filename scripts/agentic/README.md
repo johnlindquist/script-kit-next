@@ -28,7 +28,10 @@ Build / dev loop:
   isolated-binary path for runs that must not share `target/`.
 - `ensure-goose-sidecar.sh` — resolves the goose sidecar for non-bundle dev
   builds; `./dev.sh` runs it automatically. Without it, Agent Chat shows
-  "Agent Chat is unavailable" (an environment gap, not an app bug).
+  "Agent Chat is unavailable" (an environment gap, not an app bug). A sidecar
+  counts only when its `goose.stamp` matches `scripts/goose-sidecar-pin.sh`;
+  a missing one is adopted from any stamped sidecar (repo-local or another
+  SSD root) before building. `--repair` always rebuilds.
 - `seed-sandbox-home.sh` — one-call sandbox auth seeding for live Agent
   Chat/brain probes (APFS-clones `~/.scriptkit/goose/config` + `~/.codex/{auth.json,config.toml}`);
   also available as `Driver.launch({ seedAgentAuth: true })`.

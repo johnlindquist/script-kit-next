@@ -95,7 +95,7 @@ agent-cargo SIGTERM mid-build / target-agent missing -> the low-disk watcher evi
 configured model unavailable -> stop and report the exact runtime error; never silently switch models
 rg exits 1 (no matches) -> broaden the pattern once, then report the absence plus the exact command used
 test target not found under --lib -> app_impl tests live in the binary target: ./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui
-"Agent Chat is unavailable" -> environment gap, not an app bug: run bash scripts/agentic/ensure-goose-sidecar.sh --repair and relaunch
+"Agent Chat is unavailable" -> environment gap, not an app bug: run bash scripts/agentic/ensure-goose-sidecar.sh (reuses or adopts a stamped build; --repair forces a rebuild) and relaunch
 "window not found" log spam -> known noise lead (~180k lines); do not chase it as the primary bug
 screenshot returns TCC/permission error -> the binary was rebuilt and lost screen-capture grant; fall back to protocol receipts (state/elements/layout)
 probe drove a stale binary -> the driver auto-picks the freshest of target/debug and the agent pool and prints its choice to stderr; pin with SCRIPT_KIT_GPUI_BINARY or an artifact clone

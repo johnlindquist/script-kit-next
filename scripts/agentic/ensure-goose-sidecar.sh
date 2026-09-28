@@ -33,6 +33,12 @@ healthy() {
 	[[ -x "${candidate}" ]] && health_receipt "${candidate}"
 }
 
+# The managed sidecar must also carry the stamp of the pinned build inputs.
+source "${REPO_ROOT}/scripts/goose-sidecar-pin.sh"
+managed_healthy() {
+	goose_sidecar_stamp_matches "$1" && healthy "$1"
+}
+
 resolved() {
 	log "goose available: $1"
 	exit 0
@@ -90,11 +96,13 @@ fi
 # An executable target sidecar is also authoritative in debug Rust resolution.
 # Default mode checks first and repairs only when needed; explicit --repair
 # deliberately rebuilds the managed pinned candidate.
-if [[ "${MODE}" != "--repair" ]] && healthy "${SIDECAR}"; then
+if [[ "${MODE}" != "--repair" ]] && managed_healthy "${SIDECAR}"; then
 	resolved "${SIDECAR}"
 fi
 if [[ "${MODE}" == "--check" ]]; then
-	if [[ -x "${SIDECAR}" ]]; then
+	if [[ -x "${SIDECAR}" ]] && ! goose_sidecar_stamp_matches "${SIDECAR}"; then
+		log "ERROR: ${SIDECAR} is not stamped with the pinned build ($(goose_sidecar_stamp)); run scripts/agentic/ensure-goose-sidecar.sh"
+	elif [[ -x "${SIDECAR}" ]]; then
 		log "ERROR: runtime-selected ${SIDECAR} is executable but does not answer ACP initialize"
 	else
 		log "ERROR: no goose sidecar at ${SIDECAR}; run scripts/agentic/ensure-goose-sidecar.sh --repair"
@@ -102,7 +110,13 @@ if [[ "${MODE}" == "--check" ]]; then
 	exit 1
 fi
 
-if [[ -x "${SIDECAR}" ]]; then
+prepare_args=()
+if [[ "${MODE}" == "--repair" ]]; then
+	prepare_args=(--rebuild)
+	log "rebuilding managed sidecar: ${SIDECAR}"
+elif [[ -x "${SIDECAR}" ]] && ! goose_sidecar_stamp_matches "${SIDECAR}"; then
+	log "replacing sidecar not stamped with the pinned build: ${SIDECAR}"
+elif [[ -x "${SIDECAR}" ]]; then
 	log "repairing unhealthy runtime-selected sidecar: ${SIDECAR}"
 else
 	if [[ -n "${SCRIPT_KIT_DEV_STORAGE_ROOT:-}" ]]; then
@@ -111,8 +125,8 @@ else
 		log "preparing missing repo-local goose sidecar"
 	fi
 fi
-bash "${REPO_ROOT}/scripts/prepare-goose-sidecar.sh"
-if healthy "${SIDECAR}"; then
+bash "${REPO_ROOT}/scripts/prepare-goose-sidecar.sh" ${prepare_args[@]+"${prepare_args[@]}"}
+if managed_healthy "${SIDECAR}"; then
 	resolved "${SIDECAR} (repaired)"
 fi
 
