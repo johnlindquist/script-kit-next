@@ -31,6 +31,53 @@ Every feature below should be locked with the smallest proof set that can fail f
 
 For search, the owned launcher recipe is the shared executable inventory, not a claim that every live provider or native desktop effect is covered. Receipts must account for every declared case/schedule, preserve exact target and completed-frame identities, distinguish semantic/production-consumer/GPUI/framebuffer evidence, and fail on missing capability or invalid cleanup. A sampled or blocked case is not a pass. Builds use immutable `ArtifactReference` outputs; no mtime-selected binaries, desktop activation, or native-input fallback is permitted for the owned recipe.
 
+## One-Window Intent Surfaces
+
+The main window is the only window and the input is its anchor. These contracts cover what the
+intent-first input itself promises. Like the Brain Time entries below, they sit outside the
+`scriptkit-core-qa-50` matrix until a future QA lock-in selection.
+
+### Jev reads the sentence and fills three reserved rows
+
+- Stable anchor: `jev-reads-the-sentence-and-fills-reserved-rows`
+- Surface: Main Input / One-window host / Intent engine
+- Status: Active
+- User contract: A typed or spoken sentence (not launcher syntax) is read by Jev against what is on screen, and its top readings fill three reserved rows under "Jev · ⌘1–3"; ⌘1–3 run them. The rows are reserved before Jev answers, so nothing below them moves when it does. A reading that needs a service the user hasn't connected is a "Needs <service>" row whose ↵ opens the connect view in place, and the waiting sentence runs once the service connects. An Enter that waited for Jev runs its row only when Jev's top reading leads clearly; otherwise the window asks once.
+- Regression risk: Host or engine changes can shift rows when Jev answers, send launcher syntax to Jev, run a reading Jev was unsure of, or treat a missing integration as an error.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window`
+  - `./scripts/agentic/agent-cargo.sh test --lib intent`
+  - `bash scripts/agentic/one-window/run.sh` (chapters `m2` and `p2-d`)
+- Pass evidence: Reducer, replay and intent tests pass; frames show "Jev · ⌘1–3" with its rows at a fixed position before and after Jev answers, and the input at the same y.
+- Fail evidence: Rows shift when Jev answers, a symbol-led line asks Jev, a missing service runs anyway, or tests fail.
+
+### The input marks each word of the sentence in its own color
+
+- Stable anchor: `input-marks-each-word-in-its-own-color`
+- Surface: Main Input / Word marks (S04)
+- Status: Active
+- User contract: The input's text stays white. Each run that fills a word of the sentence gets an underline in that word's color: Subject, Action, Target, Details, Owner. Typed symbols (`@selection`, `@clipboard`, `@file:…`, `/command`, `>:dev`, `todo;`, `;todo`, `due:…`, `.style`, `|profile`) mark themselves as they are typed and list their completions in the main list; every other mark is a run Jev read, moved with edits, never guessed. Marks never overlap and never change the words, the caret, or selection.
+- Regression risk: Input rendering changes can split the text run, recolor the text, drift marks off their words after an edit, or break IME/caret handling.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --lib marks`
+  - `bash scripts/agentic/one-window/run.sh` (chapters `s04-symbols`, `s04-jev`), graded by `scripts/agentic/one-window/check-marks.py`
+- Pass evidence: Mark tests pass; frames show each expected underline color under its run with white text above.
+- Fail evidence: A mark under the wrong run, recolored text, overlapping marks, a moved caret, or tests fail.
+
+### ↵ names what Enter runs and holds steady while a sentence is typed
+
+- Stable anchor: `enter-label-holds-steady-while-typing`
+- Surface: Main Input / Capsule
+- Status: Active
+- User contract: The ↵ label always names exactly what Enter runs. While each key only extends the words ("when does LeBron James play next?"), it changes only when that truly changes and never returns to a label it showed earlier in the sentence; Jev's reading reaches the label only once the keys pause. When Enter's target changes on its own, Enter is ignored for 400 ms, so a press meant for the old target can't run the new one.
+- Regression risk: Debounce, selection or footer changes can flash "Run", fall back to a disabled label mid-typing, or let a stale Enter run a new row.
+- Proof commands:
+  - `./scripts/agentic/agent-cargo.sh test -p sk-one-window --test properties`
+  - `./scripts/agentic/agent-cargo.sh test --bin script-kit-gpui enter_button_property_tests::one_window`
+  - `bash scripts/agentic/one-window/run.sh` (chapter `m2` and the typing stress run)
+- Pass evidence: Typing properties pass; the frames grader finds no ↵ label that returns to an earlier one while the text grows.
+- Fail evidence: The label flips back, flashes a generic label, or Enter runs a target it did not name.
+
 ## Memory Layer Surfaces (Brain Time)
 
 New surfaces from the Brain Time work (`.notes/brain-time.md`). These are NOT
@@ -43,8 +90,8 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `day-page-opens-in-main-launcher-window`
 - Surface: Day Page / Main Launcher
 - Status: Active (Brain Time T9), pending QA lock-in selection
-- User contract: Tap-while-open toggles Script List ↔ Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes view, with selected rows opening in the current editor by default. Esc dismisses the main window.
-- Regression risk: Gesture routing or `AppView` morph refactors can break in-place toggle, day rollover binding, or editor save semantics.
+- User contract: Holding the main hotkey from closed opens the Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes view, with selected rows opening in the current editor by default. Esc dismisses the main window.
+- Regression risk: Gesture routing or `AppView` refactors can break the hold-to-open route, day rollover binding, or editor save semantics.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib day_page`
   - `bun scripts/agentic/notes-day-page-switcher-probe.ts`
@@ -52,18 +99,18 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Day-page unit tests pass; DevTools inspect shows `day-page-editor` and stable main-window bounds across launcher ↔ Day Page toggle.
 - Fail evidence: Wrong view after toggle, missing editor semantic id, day file not created, or unit tests fail.
 
-### Main hotkey gesture grammar morphs surfaces in place
+### Main hotkey gesture grammar switches views in place
 
 - Stable anchor: `main-hotkey-gesture-grammar-morphs-surfaces`
 - Surface: Main Launcher / Day Page / Agent Chat
 - Status: Active (Brain Time T2/T8), pending QA lock-in selection
-- User contract: Key-down shows the launcher immediately. Tap-while-open toggles launcher ↔ Day Page with query carry-over. Double-tap opens Agent Chat. Hold (~250ms) opens Day Page. Tap never dismisses — Esc is the only dismiss.
-- Regression risk: Hotkey delivery or classifier wiring can regress instant show, retire tap-to-dismiss, or route gestures to the wrong surface.
+- User contract: Key-down shows the main window immediately. A tap while it is open hides it: at once over an empty launcher or the Day Page, otherwise after the double-tap window so a double-tap can't destroy typed words. Double-tap opens a quick question in the model's chat with nothing attached, and closes it if it is already open. Hold (~250ms) from closed opens the Day Page; hold while open does nothing.
+- Regression risk: Hotkey delivery or classifier wiring can regress instant show, let a tap destroy typed words, attach the highlighted row to a quick question, or route gestures to the wrong view.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib gesture`
   - `scripts/agentic/main-hotkey-gesture-probe.ts` (runtime receipt when available)
-- Pass evidence: Gesture classifier unit tests pass; runtime probe shows stable window id across morphs and carry-over text in Day Page editor after toggle.
-- Fail evidence: Delayed first paint, tap hides window, wrong surface after double-tap/hold, or classifier tests fail.
+- Pass evidence: Gesture classifier unit tests pass; runtime probe shows a stable window id across view switches.
+- Fail evidence: Delayed first paint, typed words lost to a double-tap, wrong view after double-tap/hold, or classifier tests fail.
 
 ### Script Kit Brain substrate persists memory as markdown files
 
@@ -79,7 +126,7 @@ the matrix only through a future QA lock-in selection.
 - Pass evidence: Substrate unit tests pass; notes rebuild-from-files test passes; brain indexer includes day pages and fragments.
 - Fail evidence: Content only in sqlite, failed atomic writes, missing rebuild parity, or tests fail.
 
-### Clipboard sediment keeps brain content without popup UI
+### Clipboard sediment keeps brain content without interrupting
 
 - Stable anchor: `clipboard-sediment-no-popup`
 - Surface: Clipboard History / Day Page
@@ -143,7 +190,7 @@ the matrix only through a future QA lock-in selection.
 ### Cmd+K actions target the current row
 
 - Stable anchor: `cmd-k-actions-target-the-current-row`
-- Choice id: `cmd-k-actions-popup-targets-current-row`
+- Choice id: `cmd-k-stages-current-row-and-lists-its-actions-in-place`
 - Surface: Actions / Cmd+K in place
 - Status: Active QA lock-in candidate
 - User contract: ⌘K puts the highlighted row in the line above the input ("Acting on · …") and the list under the same input becomes that row's actions, led by a "Say what to do with it, or pick one" header. The row's own action comes first, so ⌘K then ↵ does what the row does; "Ask the model about it" is next. Typing filters the actions, ↵ runs the highlighted one on the staged row, and Esc lets go and highlights the row again. No window opens.
@@ -207,8 +254,8 @@ the matrix only through a future QA lock-in selection.
 
 ### Agent Chat opens under the main input and past chats reopen in place
 
-- Stable anchor: `detached-agent-chat-with-pi-backend-targets-reattaches-and-cleans-up`
-- Choice id: `agent_chat-detached-targeting-and-close-cleanup`
+- Stable anchor: `model-chat-opens-under-the-main-input-and-past-chats-reopen-in-place`
+- Choice id: `model-chat-in-place-entry-and-past-chats`
 - Surface: Agent Chat / Past chats
 - Status: Active QA lock-in candidate
 - User contract: Every way into the model's chat (the launcher, ⌘↵, a script error, the SDK, stdin, the tray, dictation, a note) opens the one chat under the main input in the main window. What the chat is about waits in the line above the input and goes with the first turn. Past chats are rows under the main input that filter as you type and reopen in place; deleting one waits 8 s in the line and ⌘Z stops it.
@@ -471,7 +518,7 @@ the matrix only through a future QA lock-in selection.
 - Choice id: `mini-mode-toggle-size-filter-reveal`
 - Surface: Mini Mode
 - Status: Experimental/WIP documentation only
-- User contract: Mini window reports correct semantic surface, sizing constraints, focused input, filtered-row reveal, and clean reset on close/toggle.
+- User contract: The main window in mini mode reports correct semantic surface, sizing constraints, focused input, filtered-row reveal, and clean reset on close/toggle.
 - Regression risk: Mini mode touches alternate chrome and input routing, making it easy to regress during launcher changes.
 - Feedback lock: keep this as experimental/WIP documentation until Mini Mode behavior is intentionally stabilized.
 - Proof commands:
@@ -736,7 +783,7 @@ the matrix only through a future QA lock-in selection.
 ### Shortcut view captures keys and shows errors clearly
 
 - Stable anchor: `shortcut-recorder-captures-keys-and-shows-errors-clearly`
-- Choice id: `shortcut-recorder-captures-errors-and-popup-state`
+- Choice id: `shortcut-view-captures-keys-and-errors-in-place`
 - Surface: Shortcut view (in the main window)
 - Status: Active QA lock-in candidate
 - User contract: Giving something a shortcut (a saved run, a script, the SDK's hotkey()) opens the shortcut view under the main input with a "Press the keys for …" header. It records normalized keycaps, names the saved script, and shows validation errors without corrupting existing shortcut config. Esc goes back.

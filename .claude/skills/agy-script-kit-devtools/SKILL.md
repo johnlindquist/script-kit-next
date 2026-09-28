@@ -22,7 +22,7 @@ Oracle work.
 Run the wrapper from the repo root:
 
 ```bash
-scripts/agentic/agy-devtools.sh run --prompt "The actions dialog shortcuts overlap on notes" --surface actions-dialog
+scripts/agentic/agy-devtools.sh run --prompt "⌘K on a note line lists the wrong actions" --surface actions-dialog
 ```
 
 Important options:

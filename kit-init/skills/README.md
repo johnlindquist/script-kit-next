@@ -9,11 +9,11 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 | [new-script](new-script/SKILL.md) | Create or update TypeScript scripts |
 | [new-scriptlet](new-scriptlet/SKILL.md) | Create or update markdown scriptlet bundles |
 | [start-chat](start-chat/SKILL.md) | Programmatic Agent Chat flows, typed context parts, streaming, and chat lifecycle operations |
-| [add-actions](add-actions/SKILL.md) | Add Actions Menu commands in scripts and shared scriptlet companion `.actions.md` files |
+| [add-actions](add-actions/SKILL.md) | Add ⌘K actions in scripts and shared scriptlet companion `.actions.md` files |
 | [new-agent](new-agent/SKILL.md) | Create agent files (compatibility — prefer skills for new work) |
 | [update-config](update-config/SKILL.md) | Update configuration, theming, and workspace setup |
 | [configure-mcp](configure-mcp/SKILL.md) | Configure external MCP servers shared by scripts and Agent Chat |
-| [manage-notes](manage-notes/SKILL.md) | Manage the Notes window — creation, search, and automation |
+| [manage-notes](manage-notes/SKILL.md) | Manage notes, which open under the main input — creation, search, and automation |
 | [troubleshoot](troubleshoot/SKILL.md) | Diagnose common issues and inspect logs |
 
 ## How to Use

@@ -47,7 +47,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 
 ## Roster
 
-- **[actions.md](./actions.md)** (workspace-write): Actions menu, trigger picker, action builders, and keyboard affordances (holds, undo and questions live in the line above the input: `src/one_window/ledger_view.rs`).
+- **[actions.md](./actions.md)** (workspace-write): ⌘K acting in place, trigger picker, action builders, and keyboard affordances (holds, undo and questions live in the line above the input: `src/one_window/ledger_view.rs`).
 - **[agent-chat.md](./agent-chat.md)** (workspace-write): Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff.
 - **[ai-core.md](./ai-core.md)** (workspace-write): AI capabilities outside Agent Chat: local LLM (ghost completion backend), dictation/whisper capture, computer use, OCR, camera, and AI vault.
 - **[auditor.md](./auditor.md)** (read-only): Read-only audit sweeps: UX inconsistencies, shared-component bypasses, hardcoded theme values, policy violations; prioritized findings, never edits.
@@ -61,7 +61,7 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 - **[escape.md](./escape.md)** (workspace-write): Escape/dismiss medic: owns the cross-surface Escape grammar — the ScriptList escape ladder, the opened_from_main_menu origin flag, DismissPolicy, go_back_or_close vs close_and_reset_window, and the 'extra Escape needed' bug family.
 - **[execution.md](./execution.md)** (workspace-write): Script discovery, metadata parsing, menu cache, scheduler, keywords, snippets, scriptlets, aliases, and execution lifecycle.
 - **[gpui-vendor.md](./gpui-vendor.md)** (workspace-write): Vendored GPUI internals owner: vendor/gpui (list element, ListState, elements, window draw loop) and vendor/gpui-kit (gpui-kit 0.6.6: TextView/markdown, scrollbar, highlighter) — semantics questions, minimal semantics-preserving patches, and the source-audit tests in src that pin vendor source text.
-- **[hotkeys.md](./hotkeys.md)** (workspace-write): Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency surface morphs.
+- **[hotkeys.md](./hotkeys.md)** (workspace-write): Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency in-place views.
 - **[launcher.md](./launcher.md)** (workspace-write): Script list, main window, main menu, mini/full view, selection behavior, frecency, favorites, fallbacks, and shared main-window chrome. Escape/dismiss ladder bugs route to imp-sk-escape.
 - **[mcp.md](./mcp.md)** (workspace-write): MCP server, protocol handling, resources, script tools, schema compatibility, and tests.
 - **[migrate.md](./migrate.md)** (workspace-write): v1→v2 script migration engine: classifier, compat map, agent port pipeline, validator ladder, honesty pass, and the Migrate board built-in.

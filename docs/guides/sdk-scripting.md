@@ -130,7 +130,7 @@ await div(`<a class="text-blue-500 underline" href="${url}">${url}</a>`);
 - `getSelectedText()` / `setSelectedText(text)` — read/replace the selection in the focused app.
 - `readFile(path, encoding?)`, `writeFile(path, contents, encoding?)`, and
   `home(...paths)` — explicit-path filesystem helpers.
-- `hud(message)` — in-launcher overlay; `notify(message | { title, body })` — macOS Notification Center.
+- `hud(message)` — a notice in the line above the main input ("Last · <message> just now"); `notify(message | { title, body })` — macOS Notification Center.
 - `beep()` and `say(text)` are **experimental**: they return a dispatch receipt, but audible delivery isn't verified.
 
 ## Automation Receipts

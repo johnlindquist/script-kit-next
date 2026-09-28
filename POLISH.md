@@ -42,9 +42,9 @@ Layout shift reads to John as literally *broken*: "it causes the footer layout t
 - **Every list leads with a persistent section separator — even if it's just "Results".** A list whose first row is a bare item shifts every row down the moment a header-led state (empty query, grouped mode) swaps in, and vice versa. The main menu's stable "Results" header in search mode is the reference fix (`4d76327b8`); the Flows desk got the same treatment 2026-07-10. The separator row never appears/disappears with filtering — only its label may swap. Applies to every launcher-family list, builtin browser, and new surface.
 - **Mode-entry prefixes preserve the launcher list plane.** Typing `~` / `~/` must not move the input or first result row. Builtin leading separators use the active main-menu theme's first-section slot height, not the legacy label's intrinsic height; surface-local top padding must not add another offset. Loading/status text changes inside the same fixed slot.
 - **No stale-content flash on mode entry.** Typing `/` or `@` must never flash the previous command/mention before clearing (2026-04-16, 2026-04-20 — a repeat regression; deserves a permanent probe).
-- **Popups freeze their shell size once open** and scroll inside it. Actions menu resize-while-typing is a standing P1 (layout-stability audit 2026-07-04); content-sized popups are not user-resizable (`76268b2b7`).
+- **The input never moves.** The line above it is always there at one height, every list leads with its header, and the window grows at once but holds its height while typing, shrinking only after a 300 ms pause; a view that just opened holds its height too (`sk_one_window::height`). The one-window frames grader fails any frame where the input's y changes.
 - **No loading-skeleton flash when a synchronous first paint is cheap** — the ~59ms skeleton was replaced by a ~0.5ms sync seed (`977cee601`). Threshold: if first paint can be computed in **≤5ms (proposed)**, paint it synchronously.
-- **Stable slots for stateful chrome.** Footer actions swap labels, not slots (Agent Chat audit item); reserve lanes for validation messages and status rows instead of inserting them.
+- **Stable slots for stateful chrome.** Capsule buttons swap labels, not slots (Agent Chat audit item); reserve lanes for validation messages and status rows instead of inserting them. While a sentence is typed forward, ↵'s label changes only when what Enter runs truly changes and never returns to an earlier label (`sk_one_window::steady`).
 - **Overflow clips the disposable end, never the data** ('100 words' must not render as '00 words', `c2b69cad0`). Widths come from real flex layout, never per-character estimates (`8af8eb31f`, `ca4c93d19`; standing flexbox mandate).
 - **Footer buttons never shrink or truncate** — "or else they're useless" (2026-07-06). Shortcut buttons keep intrinsic width (`flex_none` / hug-to-content in `footer_chrome`); informational lanes absorb width pressure and may truncate instead.
 - Scroll containment: inner regions scroll themselves, never the page around them (2026-06-15).
@@ -60,9 +60,9 @@ Layout shift reads to John as literally *broken*: "it causes the footer layout t
 - **Escape unwinds exactly one layer per press**; every branch stops propagation so nothing double-fires (`8900405ee`). Delete has its own ladder in cwd mode (one delete → `/`, two → main menu, 2026-05-28).
 - **Destination depends on origin:** opened from the main menu → Escape returns there; opened directly (shortcut/tray/deeplink) → Escape closes the window (`4794e630c`).
 - **Escape and Cmd+W have identical data-loss behavior** — Escape saves before closing (`db96a750d`). Semantics stay distinct: Escape = back, Cmd+W = close window (2026-04-02).
-- **Destructive dismissal needs a two-press arm + HUD within a 2s window** (`cdb65127c`).
+- **Destructive dismissal needs a two-press arm within a 2s window**, and the first press says so in the line above the input ("Press Esc again to discard and cancel", `cdb65127c`).
 - **Toggles are debounced (300ms)** so close-then-reopen can't strand or double-open (`c9f2c3311`, `2da4365f0`).
-- **Popups/dialogs auto-close on focus loss** (2026-03-23) and HUD messages always auto-dismiss (2026-06-11). No redundant confirmation HUDs when the outcome is visible (2026-03-26).
+- **Nothing pops up to dismiss.** Word from the app lands in the line above the input ("Last · … just now") and never covers a waiting hold or a staged subject. No redundant notice when the outcome is visible (2026-03-26).
 - Escape must never look hung: a paused-but-open dictation UI on Escape is a defect (2026-04-01).
 
 **Proof:** `flows/escape.md` owns this dimension; every surface gets an escape-ladder behavior test; new surfaces cannot ship without a `DismissPolicy` row (compiler rung: exhaustive match, no wildcard).
@@ -72,13 +72,13 @@ Layout shift reads to John as literally *broken*: "it causes the footer layout t
 **The bar:**
 
 - **The filter input owns focus by default.** Unclaimed clicks and window drags return focus to the input, never dump it on the list root (`9858f21b8`; "if you type, nothing happens" 2026-06-11).
-- **Focus is restored after every popup, action, or dialog dismiss** (`82696857a`; "it doesn't refocus on the ai chat input" 2026-03-21). No pre-attach focus steal (`a6fd4e035`, `a39de7029`).
+- **Focus returns to the input after every action, view change, or Esc** (`82696857a`; "it doesn't refocus on the ai chat input" 2026-03-21). No pre-attach focus steal (`a6fd4e035`, `a39de7029`).
 - **Every displayed shortcut fires.** A rendered keycap that doesn't work is a broken promise ("ensure that all actions with displayed shortcuts have their shortcuts enabled", 2026-06-08).
-- **Modals trap the keyboard:** Tab cycles inside, Escape closes, nothing leaks to the surface behind (`225240d4c`; "each 'Tab' is sending values to the ACP Chat behind the scenes" 2026-04-28). The focused button is unmistakable — the user always knows what Enter will do (`3f42543b1`).
+- **A view gets exactly its keys and nothing leaks behind it:** the reducer routes each key to the open view (`Effect::ViewKey`), Escape goes back one step, and nothing reaches a surface underneath (`225240d4c`; "each 'Tab' is sending values to the ACP Chat behind the scenes" 2026-04-28). The user always knows what Enter will do, because ↵ names it (`3f42543b1`).
 - **Paste is paste** — never re-typed character-by-character, never auto-submits (2026-06-19).
 - Global keys are scoped: surface-level bindings (Tab, Cmd+P) must not shadow editor semantics ("I *hate* 'Tab' to open ACP Chat… inside of a markdown editor", 2026-04-09).
 
-**Proof:** simulateGpuiEvent focus probes per surface (open → click dead space → type; open popup → dismiss → type); autofocus regressions get permanent probes — they've recurred (2026-03-13, 2026-04-16).
+**Proof:** simulateGpuiEvent focus probes per surface (open → click dead space → type; ⌘K → Esc → type; open a view → Esc → type); autofocus regressions get permanent probes — they've recurred (2026-03-13, 2026-04-16).
 
 For hidden launcher proof, observe the actual local GPUI input focus handle separately from native window focus (which remains false). The selected row is not the focused input. Exercise both real GPUI key/pointer events and revision-bound semantic actions; selecting the already-selected row deliberately must still establish anchored intent.
 
@@ -89,9 +89,9 @@ John's most emotionally-loaded complaint pattern: "I feel like you're misunderst
 **The bar:**
 
 - **Shared render paths, not lookalikes.** Same input component in main menu, mini agent, Agent Chat; Today == Notes editor render path (`8b266e444`); ACP input == main menu layout (`2dee3c380`). A surface reimplementing shared UX locally is a defect even if pixel-identical today — drift is the failure mode.
-- **Zero hardcoded visual values outside token layers.** Colors, spacing, radii, insets, opacity resolve through `crate::theme` / chrome tokens; one canonical vibrancy opacity token resolved by every window (`f4cca5f55`); accent-derived chrome via alpha overlays (`d7da006cf`). Target: **hardcoded-value count ratchets to zero**.
+- **Zero hardcoded visual values outside token layers.** Colors, spacing, radii, insets, opacity resolve through `crate::theme` / chrome tokens; one canonical vibrancy opacity token for the window's glass (`f4cca5f55`); accent-derived chrome via alpha overlays (`d7da006cf`). Target: **hardcoded-value count ratchets to zero**.
 - **Accent stays on the theme accent.** Hue drift budget: shader hue_shift ≤0.06, warm-side only — 0.10–0.16 rotates gold into green (`9fe049439`).
-- **`.impeccable.md` is law:** opacity tiers, Raycast-style text grading, three-key footer, list-item anatomy, surface-layout decision rule, actions-dialog anatomy. Deviations need a documented owner + reason (CLAUDE.md contract).
+- **`.impeccable.md` is law:** opacity tiers, Raycast-style text grading, three-key capsule, window and list-item anatomy, surface-layout decision rule, ⌘K acting in place. Deviations need a documented owner + reason (CLAUDE.md contract).
 - **A fix changes the real UI, not the audit** — token added AND applied (`d67df7cb4`).
 - Interaction states are calibrated, not binary: hover sits visibly between idle and focused ("we need it like halfway between the focus strength and the 'nothing' strength", 2026-04-13); pressed/toggle == focused style (`.impeccable.md`).
 
@@ -104,7 +104,7 @@ Notably: John has *never* complained about missing animation — only about moti
 **The bar:**
 
 - **Pulses breathe, never blink:** ≥2s cycle, opacity floor ≥0.6 (`a1e663f08`). Streaming states get a spinner, not a blinking cursor (2026-04-02).
-- **No appear animation on modals** (`a158bf910`). No unnecessary animation at all — ".impeccable.md: no unnecessary animation, no visual noise".
+- **The window fades; it never grows.** A 90 ms fade in and a 0.12 s fade out at its settled size, owner-locked (CLAUDE.md "Glass Motion Calibration Lock"). No unnecessary animation at all — ".impeccable.md: no unnecessary animation, no visual noise".
 - **Ambient effects are always-on subtle; change amplifies** — never fade to nothing at idle, never grab attention (`9fe049439`, `3fbb39b03`).
 - **Hover state never churns during scroll** — suppress enter/leave while rows slide under a stationary pointer (`6c7950040`).
 
@@ -114,9 +114,9 @@ Notably: John has *never* complained about missing animation — only about moti
 
 **The bar:**
 
-- **Vibrancy must actually read.** Material-led, not tint-led: Menu material + tint ≤0.30 + backdrop_saturation 2.6; target ~54% body saturation (Raycast's measured value) — a 0.85 neutral tint crushes it to ~15% (`f4cca5f55`). "Drastically lower the background opacity… so I can actually see the blur" (2026-03-23). Blur parity across ALL windows — main, notes, chat, dialogs (2026-03-24).
+- **Vibrancy must actually read.** Material-led, not tint-led: Menu material + tint ≤0.30 + backdrop_saturation 2.6; target ~54% body saturation (Raycast's measured value) — a 0.85 neutral tint crushes it to ~15% (`f4cca5f55`). "Drastically lower the background opacity… so I can actually see the blur" (2026-03-23). Blur reads the same in every view, because every view is in the one window (2026-03-24).
 - **The footer blur trio is non-negotiable** (native NSVisualEffectView + hitTest:nil + deferred transparent hitbox) — never change one leg independently (memory: footer-blur-architecture). The list visibly scrolls behind the blurred footer (2026-04-07).
-- **Non-activating overlay discipline:** the window interacts with the frontmost app Raycast-style (2026-03-25), never steals activation, never lingers on top after work ends (standing AFK feedback), and never ghost-flashes on unrelated shortcuts (2026-03-30). Overlay ordering hides siblings synchronously in the same unsafe block — no async flash gap (`2492acfa9`).
+- **Non-activating window discipline:** the window interacts with the frontmost app Raycast-style (2026-03-25), never steals activation, never lingers on top after work ends (standing AFK feedback), and never ghost-flashes on unrelated shortcuts (2026-03-30). Window ordering hides siblings synchronously in the same unsafe block — no async flash gap (`2492acfa9`).
 - **Chrome metrics are measured against native macOS, and refuted concerns are dropped, not "fixed"** (`1c71559a7`): 9pt input inset from a real NSTextField (`d67df7cb4`), 12pt footer gap at Apple's soft bezel floor (`ac3345ce9`).
 
 **Proof:** screenshot + saturation measurement probes (the vibrancy work was won by measuring); window show/hide/z-order choreography probes via devtools getState — leave `windowVisible:false` after every pass.

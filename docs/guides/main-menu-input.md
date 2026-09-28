@@ -1,6 +1,8 @@
 # Main Menu Input
 
-The launcher input is a search box first, but a small set of sigils turns it into a prompt builder, capture composer, or filtered search — without leaving the main list. The parser is conservative: plain text, URLs, `localhost:3000`, `hello@world.com`, and unknown heads all stay normal search.
+The launcher input takes whatever you type: a command name, a search, or a sentence saying what should happen. Jev reads a sentence against what's on screen and fills up to three readings under a "Jev · ⌘1–3" header, while the list below keeps matching commands. The ↵ label always names exactly what Enter will run.
+
+A small set of symbols says part of a sentence exactly, turning the input into a prompt builder, capture composer, or filtered search without leaving the main list. Each word the app understands gets a colored underline in its role's color (subject, action, target, details, owner); the text itself stays white. The parser is conservative: plain text, URLs, `localhost:3000`, `hello@world.com`, and unknown heads all stay normal search.
 
 ## Quick Reference
 
@@ -38,11 +40,14 @@ A sigil only counts at a word boundary — `hello@world.com` is plain search.
 
 ## Keyboard Behavior
 
-- `Enter` — run the current eligible selected row, or accept the highlighted picker row when a picker is open. A stale query or missing row is refused; Enter never silently substitutes a neighboring result.
-- `Tab` — with typed text: **Quick AI** (opens the AI window with your query for review). With empty input: the **cwd picker**. Directory-browse queries keep `Tab` for path completion.
+- `Enter` — run what the ↵ label names: the current eligible selected row, or the highlighted picker row when a picker is listed. A stale query or missing row is refused; Enter never silently substitutes a neighboring result.
+- `⌘1`–`⌘3` — run one of Jev's readings.
+- `Tab` — with typed text: hand the words to an agent (Tab again takes them back). With empty input: the **cwd picker**. Directory-browse queries keep `Tab` for path completion.
 - `Shift+Tab` — open the agent **model/profile picker**.
-- `⌘K` — actions for the selected row or current mode.
-- `Escape` — closes the active picker/popup first, then clears/dismisses the launcher.
+- `⌘K` — stage the selected row in the line above the input; the list becomes its actions, in place.
+- `⌘↵` — with typed words, **Do It**: run Jev's first reading (same as `⌘1`). With empty input, **Agent**: open the model's chat.
+- `↑` on an empty input — stage the last run (undo it, run it again, share it).
+- `Escape` — let go of what's staged first, then go back one view, then clear the input, and only then hide the window.
 
 ### Selection while results arrive
 
@@ -51,7 +56,8 @@ A sigil only counts at a word boundary — `hello@world.com` is plain search.
 - Changing the query restores automatic selection. If an anchored row disappears, selection falls back to the first eligible result; an empty or status-only list has no selected result.
 - Empty `@source:` sub-searches are initially unarmed: the first Down arrow selects the first eligible row, not the second. Headers and layout-only slots are never choices.
 - Unavailable explanatory choices may remain selectable for inspection, but cannot run.
-- Result selection does not take keyboard focus away from the input. Refreshes do not undo deliberate scrolling. The preview, footer, actions, and Enter refer to the same current subject.
+- Result selection does not take keyboard focus away from the input. Refreshes do not undo deliberate scrolling. The preview, the capsule, ⌘K, and Enter refer to the same current subject.
+- While a sentence is typed forward, the ↵ label changes only when what Enter runs truly changes, and it never goes back to a label it already showed.
 - `~` File Search keeps its own automatic-first/user-locked-path policy; it is not the launcher's query state.
 
 ## Capture
@@ -66,7 +72,7 @@ cal; Design review start:"friday 2pm" for:45m
 snippet; update @snippet:fetch-json -- const value = 1
 ```
 
-Prefix (`;todo ...`), legacy `+todo ...`, and keyword (`todo: ...`) forms parse the same way. A bare `;` (or `+`) opens the **capture target picker** (the trigger picker), which suggests targets and can scaffold a handler script for a new target.
+Prefix (`;todo ...`), legacy `+todo ...`, and keyword (`todo: ...`) forms parse the same way. A bare `;` (or `+`) lists **capture targets** in the main list (the trigger picker), suggesting targets and offering to scaffold a handler script for a new one.
 
 Built-in targets: `todo`, `note`, `link`, `snippet`, `cal`, `social`. Todo aliases: `reminder`, `snooze`, `defer`. `mcal` (macOS Calendar) is parser-known but hidden from the picker. Unknown heads like `github;` stay plain search until a script registers that target through metadata.
 

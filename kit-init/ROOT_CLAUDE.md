@@ -183,7 +183,7 @@ const result = await $`ls -la ~/Desktop`.text();
 // Open URLs/apps
 await open("https://example.com");
 
-// Feedback: `hud(message)` for in-launcher overlay, `notify(message)`
+// Feedback: `hud(message)` for a notice in the line above the input, `notify(message)`
 // for an OS-level system notification (Notification Center).
 hud("Task complete!");
 ```

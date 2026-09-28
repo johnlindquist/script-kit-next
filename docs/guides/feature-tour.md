@@ -1,6 +1,10 @@
 # Feature Tour
 
-Script Kit GPUI looks like a launcher, but it is also a script runtime, notes system, clipboard memory, dictation system, and a local MCP server for AI agents. This guide maps the features people usually miss.
+Script Kit GPUI is one window you tell what should happen. It looks like a launcher, but it is also a script runtime, notes system, clipboard memory, dictation system, and a local MCP server for AI agents, all under the same input. This guide maps the features people usually miss.
+
+## Say What Should Happen
+
+Type a command name, a search, or a sentence. Jev reads a sentence against what's on screen and lists up to three readings under a "Jev · ⌘1–3" header; the ↵ label names exactly what Enter will run, and it holds steady while you type. Words it understands get colored underlines. A missing integration is a row ("Needs Google Calendar", ↵ connects it). Every view opens under the same input, which never moves, and nothing pops up: something that can't be undone waits 8 s in the line above the input ("Runs in 8s") and `⌘Z` stops it; something that can be undone just happens, with `⌘Z` in the line to take it back.
 
 ## One Hotkey, Three Gestures
 
@@ -8,9 +12,9 @@ The main hotkey (default `⌘;`) is gesture-aware:
 
 | Gesture | Result |
 | --- | --- |
-| Tap | Toggle the launcher open/closed |
+| Tap | Open the launcher; a tap while it's open hides it |
 | Hold (~250 ms) | Open the **Day Page** — today's markdown diary |
-| Double-tap | Open **Agent Chat** |
+| Double-tap | Open **Agent Chat** under the same input; a double-tap while it's open closes it |
 
 ## Global Hotkeys
 
@@ -34,7 +38,7 @@ export default {
 
 ## The Main Input Is a Grammar
 
-The launcher input accepts sigils that switch modes in place:
+The launcher input accepts symbols that say part of a sentence exactly, or switch modes in place:
 
 | Sigil | Meaning |
 | --- | --- |
@@ -49,8 +53,9 @@ The launcher input accepts sigils that switch modes in place:
 
 Two keyboard moves worth learning:
 
-- `Tab` — **Quick AI** on typed text (sends your query to AI), or the cwd picker on an empty input.
+- `Tab` — on typed text, hand the words to an agent (Tab again takes them back); on an empty input, the cwd picker.
 - `Shift+Tab` — open the agent **model/profile picker**.
+- `↑` on an empty input — stage the last run in the line: undo it, run it again, or share it.
 
 Full details with examples: [Main Menu Input](./main-menu-input.md).
 
@@ -130,7 +135,7 @@ With a script selected in the launcher:
 
 | Shortcut | Action |
 | --- | --- |
-| `⌘K` | Actions menu |
+| `⌘K` | Stage the row in the line above the input; the list becomes its actions, in place |
 | `⌘I` | Toggle info panel |
 | `⌘E` | Edit script in `$EDITOR` |
 | `⌘L` | Show script logs |

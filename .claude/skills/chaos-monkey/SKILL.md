@@ -108,16 +108,17 @@ invent from scratch:
 | `.notes/power-user-stories.md` | The grammar acceptance matrix (`+ : # ! / @` sigils; plain text stays fuzzy search) |
 | `scripts/hitl-choice/data/script-kit-qa-scenarios.json` + `.hitl-choice/script-kit-qa-scenarios-v2-25.json` | ~75 structured QA scenarios with per-scenario proof commands and pass/fail evidence |
 | `.claude/skills/script-kit-devtools/references/devtools-truth-scenarios/` | ~40 executed truth-scenario receipts — treat as covered; don't re-prove, chaos around their edges |
-| `references/surface-contract-matrix.md` (this skill) | The affordance-parity oracle: per-surface expected footer affordances + overlay symmetry contract + ratified divergences — every surface gets a parity row |
+| `references/surface-contract-matrix.md` (this skill) | The affordance-parity oracle: per-surface expected capsule affordances + in-place view symmetry contract + ratified divergences — every surface gets a parity row |
 | `tests/*_contract.rs` corpus, `docs/adr/` | Already-locked invariants and decisions — the "intent" side of reality-vs-intent |
 
 **Chaos classes** (from `.notes/chaos-monkey.md` batteries, applied *per
 story*, not just globally): nominal · empty/zero-results · hostile input
 (encoding edges, huge, control chars, pathological filters) · corrupt/churning
 state · rapid interaction (open-while-opening, Esc storms, hold-repeat) ·
-**chord/affordance symmetry** (every chord that opens an overlay must toggle it
-closed on repeat, close on Escape, restore focus to the pre-open owner, and
-leave the underlying footer/chrome intact — run surface × registered chord) ·
+**chord/affordance symmetry** (every chord that stages something or opens a
+view must let go on Escape, bring the view back exactly as it was, restore
+focus to the input, keep the input where it was, and leave the capsule and
+chrome intact — run surface × registered chord) ·
 degraded environment (LLM down, permission denied — expect graceful clarity) ·
 recovery (cancel mid-stream, relaunch dirty).
 
@@ -142,7 +143,7 @@ return it to `ready` — proof goes stale, the ledger says so.
    `getState`, `getElements`, `getLayoutInfo`, `setFilterAndWait`, `batch`,
    `simulateGpuiEvent` (the only path that arms @mentions), `waitForSettle`
    (never hardcoded sleeps), `getLogs`, `captureScreenshot`, fixtures
-   (`openAgentChatKitchenSinkFixture`, `pushDictationResult`, …).
+   (`openChatPromptFixture`, `pushDictationResult`, … — `EXTERNAL_COMMAND_VERBS` in `src/stdin_commands/mod.rs`).
 2. **Fail-closed receipt CLIs** (`scripts/devtools/*.ts`: `surface.ts`,
    `layout.ts`, `scroll.ts`, `focus.ts`, `actions.ts`, `compare.ts redgreen`,
    `events.ts crashes`) when a row needs target-identity receipts or red/green
@@ -332,8 +333,11 @@ processes. Leaving the app visible is itself a reportable failure.
   demand delivery evidence.
 - Sampling an idle window yields wait/kernel leaves only — sample WHILE
   driving input.
-- A leftover popup/menu eats keystrokes — if input seems inert, dismiss the
-  overlay and re-read state first.
+- A staged subject or an open view owns the keys the reducer routes to it — if
+  input seems inert, read `getState.oneWindow` (`view`, `crumb`) and the line
+  above the input first.
+- Anything that pops up over the window (a panel, dialog, or second window) is
+  a bug to report, not a state to work around.
 - Don't trust `SCRIPT_KIT_AGENT_CHAT_RENDER_TRACE` for perf verdicts — it
   times render() body only; trust `sample`.
 - The existing contract-test corpus is intent, not precedent — chaos around

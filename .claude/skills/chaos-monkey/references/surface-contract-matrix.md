@@ -11,31 +11,34 @@ story-harvest source (Phase 1). Update it in the same change that alters any
 surface's footer/chord behavior; the divergence-ratification rule (Phase 3)
 makes silent drift a red.
 
-## Universal footer affordance contract
+## Universal capsule affordance contract
 
-Every main-window surface's native footer must expose:
+Every view is in the one main window, under the same input, which never moves;
+the line above the input is always there at 34 pt. Every view's capsule must
+expose:
 
 1. **Primary action** — ↵ or ⌘↩, truthfully labeled, dispatching real behavior
    (never a decorative label).
-2. **Actions (⌘K)** — the contextual actions menu, unless a ratified
-   divergence says otherwise.
+2. **Actions (⌘K)** — stages the focused thing in the line above the input and
+   lists its actions in place, unless a ratified divergence says otherwise.
 3. **Dismiss affordance** — Esc, labeled for what it truthfully does on that
    surface (Cancel / Back / Close).
 
-Verification: enumerate the surface's actual footer buttons via
+Verification: enumerate the surface's actual capsule buttons via
 `getElements`/the automation surface and diff against the table — presence,
 keycap, label truthfulness, enabled-state coherence.
 
-## Overlay symmetry contract
+## In-place symmetry contract
 
-For EVERY chord that opens an overlay/popup/menu on a surface (⌘K actions,
-pickers, dropdowns, confirm dialogs):
+Nothing opens over the window. For EVERY chord that stages something or lists
+something in place on a surface (⌘K actions, pickers, dropdowns):
 
-- the **same chord toggles it closed** (open → chord → closed, idempotent);
-- **Escape closes it**, consuming exactly one rung of the escape ladder;
-- **focus returns** to the pre-open owner (typing works immediately);
-- the **underlying footer/chrome survives** beneath and after the overlay;
-- the opener's footer button (if any) reflects open state (`selected`) and
+- the **same chord lets go of it** (open → chord → back, idempotent);
+- **Escape lets go of it**, consuming exactly one rung of the escape ladder,
+  and the view comes back exactly as it was;
+- **focus returns** to the input (typing works immediately);
+- the **input does not move** and the capsule and chrome survive throughout;
+- the opener's capsule button (if any) reflects open state (`selected`) and
   clears on close.
 
 Run as a probe family: surface × registered chord. Open-path-only coverage is
@@ -66,8 +69,8 @@ by the next campaign's parity lane.
 | Dictation History | ✓ | TBV | ✓ Esc | |
 | Theme Chooser | ✓ apply ↵ | TBV | ✓ Esc | |
 | Emoji Picker | ✓ insert ↵ | TBV | ✓ Esc | |
-| Notes (under the main input) | TBV | TBV | TBV | The Notes window was retired 2026-09-27; a note opens as a view under the main input |
-| ActionsDialog overlay (live ⌘K) | n/a (overlay) | self | ✓ Esc + ⌘K toggle (OF-61!) | Overlay keeps the UNDERLYING footer visible; the footerless full-view variant is dead code pending delete-vs-wire ratification |
+| Note (under the main input) | ✓ add ↵ | TBV | TBV | Lines are rows under `NOTE · <name>`; ⌘P finds a note, ⌘↵ asks the model |
+| ⌘K staged in place | n/a (in place) | self | ✓ Esc + ⌘K toggle (OF-61!) | The staged subject sits in the line above the input and its actions are the list; the view's capsule stays; the footerless full-view variant is dead code pending delete-vs-wire ratification |
 
 ## Ratified divergences
 
@@ -77,8 +80,7 @@ by the next campaign's parity lane.
 
 Pending ratification: Quick Terminal Actions omission (OF-60 — presumption is
 it JOINS the contract, since the user filed its absence as a bug), About
-single-affordance footer, Notes secondary-window chrome, ActionsDialog dead
-variant.
+single-affordance footer, ActionsDialog dead variant.
 
 ## Seed findings (boarded 2026-07-20, ledger round 158)
 

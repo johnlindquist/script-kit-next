@@ -102,40 +102,6 @@ When a failure matches these patterns, surface it clearly in your report so it c
 ## Local lessons (advisory)
 These lessons come from prior runs in this repository. They guide judgment but never override the user's instructions, Mission, Mutation policy, or Command rules.
 
-<!-- selfimprove:5cf38737a247477a d=2026-06-15 -->
-- [generic] Command `/bin/zsh -lc "sed -n '1,40p' src/main_sections/day_page_view.rs && rg -n \"mod day_page_view|include"'!.*day_page_view|pub'"\\(crate\\) use.*day_page\" src/main...` exited 1. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: // Day Page surface entry, render host, and footer helpers.
-
-use chrono::Utc;
-
-use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
-use crate::footer_popup::{FooterAction, FooterButtonConfig};
-use crate::notes::deeplink_activation::{
-    resolve_activation, run_deeplink_confirm_options, Activation, ActivationErrorReason,
-    ActivationSurface,
-};
-use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
-use script_kit_gpui::day_page::normalize_day_page_markdown_references;
-use script_kit_gpui::day_page::{
-    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
-};
-
-impl DayPageView {
-    pub fn new(
-        app: Entity<ScriptListApp>,
-        substrate: BrainSubstrate,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let metrics = crate::notes::window::style::adopted_metrics();
-        let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
-            window,
-            cx,
-            NotesEditorMarkdownConfig::new("")
-                .placeholder("Today...")
-                .layout(NotesEditorLayout::new(
-                    metrics.editor_padding_x,
-          ...
-
 <!-- selfimprove:4a4ab751fea20f4b d=2026-06-15 -->
 - [missing-path] Command `/bin/zsh -lc "sed -n '1,120p' src/main_sections/mod.rs"` exited 1. The path did not exist. List the parent directory first (`ls PARENT_DIR`) to find the real path, then retry with the path copied from that listing. Evidence: sed: src/main_sections/mod.rs: No such file or directory
 

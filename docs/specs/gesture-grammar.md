@@ -9,7 +9,7 @@ Status: implemented (T2/T8/T9/T11 in flight). Owning decision:
 The existing main hotkey keeps the launcher contract: tap opens or closes the
 main window. The launcher opens on key-down in 100% of cases; hold and
 double-tap can escalate the already-open window before the tap resolves.
-Surfaces morph in place inside the main window. No new chords.
+Every surface opens in place under the same input. No new chords.
 
 ## Gesture Table
 
@@ -17,9 +17,9 @@ Surfaces morph in place inside the main window. No new chords.
 | --- | --- | --- |
 | Tap | Launcher, visible on key-down | Close main window |
 | Hold (≥ hold threshold) | Day Page | — (window already open; see Open Questions) |
-| Double-tap | Agent Chat | Agent Chat |
-| Cmd+Enter | — | Agent Chat (established convention, unchanged) |
-| Esc | — | Dismiss |
+| Double-tap | Agent Chat | Agent Chat; while the chat is showing, a double-tap hides the window |
+| Cmd+Enter | — | Agent Chat on an empty input; "Do It" once words are typed |
+| Esc | — | Back one step (let go of what's staged, back one view, clear the input), then hide |
 
 ## State Machine
 
@@ -28,23 +28,27 @@ CLOSED
   └─ key-down ──────────────► LAUNCHER_VISIBLE (render immediately, no waiting)
         │
         ├─ key-up < HOLD_MS ───► TAP_PENDING
-        │     ├─ key-down < DOUBLE_MS ──► AGENT_CHAT (morph in place)
+        │     ├─ key-down < DOUBLE_MS ──► AGENT_CHAT (in place)
         │     └─ DOUBLE_MS elapses ─────► LAUNCHER (plain tap, steady state)
         │
         └─ key still down at HOLD_MS ──► DAY_PAGE
               └─ key-up ──► no-op (Day Page stays; dictation is owned by the
-                            dedicated dictation shortcut/window)
+                            dictation hotkey and the voice key)
 
 LAUNCHER (open, steady)
   ├─ tap ──► CLOSED
   ├─ double-tap ──► AGENT_CHAT
-  ├─ Cmd+Enter ──► AGENT_CHAT
-  └─ Esc ──► CLOSED
+  ├─ Cmd+Enter (empty input) ──► AGENT_CHAT
+  └─ Esc (nothing staged, empty input) ──► CLOSED
 
 DAY_PAGE (open, steady)
   ├─ tap ──► CLOSED
   ├─ double-tap / Cmd+Enter ──► AGENT_CHAT
-  └─ Esc ──► CLOSED
+  └─ Esc ──► back one view
+
+AGENT_CHAT (open, steady)
+  ├─ tap / double-tap ──► CLOSED
+  └─ Esc ──► back one view (the sentence goes back to the input)
 ```
 
 Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
@@ -59,23 +63,21 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
    tap/hold/double-tap classification. Classification only ever *deepens* an
    already-visible window. Any design that delays first paint to disambiguate
    is rejected.
-2. **No window swaps.** Launcher, Day Page, and Agent Chat are surfaces of the
-   main window (the architecture already morphs content in place:
-   `MainWindowMode` in `src/main_sections/app_view_state.rs`, Chat Prompt in
-   `src/render_prompts/other.rs`). Notes open as a view under the same input
-   (see Notes below), and the Day Page never opens as a second window.
-3. **Geometrically calm morphs.** The input row keeps its position and size
-   across launcher ↔ Day Page; the results list folds away and editor space
-   expands beneath. The transformation must read as "the window grew a body,"
-   not a screen change. Same window frame, same size as the main input window.
+2. **No window swaps.** Launcher, Day Page, and Agent Chat are views of the
+   main window under the same input (the one-window host, `src/one_window/**`;
+   the chat is a work view and `AppView` stays `ScriptList`). Notes open as a
+   view under the same input (see Notes below). There is no second window.
+3. **The input never moves.** The input row keeps its position and size across
+   launcher, Day Page, and chat; the view replaces the list beneath it, and the
+   first header stays in place. It must read as the same window showing
+   something else, not a screen change.
 4. **No tap carry-over.** Tapping while the launcher is open closes the main
    window. It must not move search input into the Day Page; Day Page entry is
    owned by hold-from-closed and explicit in-app triggers.
-5. **No dictation on hold.** Hold opens the Day Page and nothing else.
-   Dictation is invoked exclusively through the dedicated dictation
-   shortcut/window; the Day Page does not start, render, or manage dictation.
-   (An earlier push-to-talk-on-hold design was implemented and deliberately
-   removed.)
+5. **No dictation on the main hotkey's hold.** Hold opens the Day Page and
+   nothing else. Dictation is invoked through the dictation hotkey or the voice
+   key, which open the voice view under the same input; the Day Page does not
+   start, render, or manage dictation.
 6. **Tap-to-dismiss remains.** Tap-while-open closes the main window, matching
    the established launcher hotkey convention. Esc remains a dismiss path too.
 7. **Shared note behavior.** The Day Page and the note view under the main
@@ -85,9 +87,8 @@ Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
 
 ## Notes
 
-The floating Notes window was retired on 2026-09-27. A note opens as a view
-under the main input: its lines are rows under a `NOTE · <name>` header and the
-input never moves. Its role is unchanged: a note about something *other than*
+There is no Notes window. A note opens as a view under the main input: its
+lines are rows under a `NOTE · <name>` header and the input never moves. Its role is unchanged: a note about something *other than*
 today — pinned reference material, a document being drafted alongside other
 work. The Day Page and a note must feel identical because they share the same
 storage and the same input.
@@ -108,10 +109,10 @@ referenced by excerpt + link, per
   closed; tap-while-open closes the main window.
 - ~~Exact `HOLD_MS`/`DOUBLE_MS` values~~ — **answered:** `HOLD_MS = 250`,
   `DOUBLE_MS = 300` in `src/hotkeys/gesture.rs`, overridable for tests.
-- ~~Whether double-tap morphs to the in-window Chat Prompt or focuses the
-  dedicated Agent Chat surface~~ — **answered:** double-tap routes to the
-  dedicated Agent Chat surface via `open_tab_ai_agent_chat_with_entry_intent`
-  (`src/main_sections/gesture_routing.rs`).
+- ~~Where double-tap lands~~ — **answered:** a clean quick chat under the same
+  input, never the launcher's selected row as context
+  (`one_window_open_chat(ChatEntry::quick())` in
+  `src/main_sections/gesture_routing.rs`).
 - ~~Key-repeat suppression while held~~ — **answered:** repeated `KeyDown`
   while already down are ignored (`src/hotkeys/gesture.rs`, unit-tested).
 
@@ -123,7 +124,7 @@ Per repo policy, prefer behavior tests and runtime proof over source audits:
   injected, no sleeps).
 - Key-down render: devtools probe proving launcher target identity exists
   before `HOLD_MS` elapses after key-down.
-- Morph-not-swap: window identity receipt (same window id across
-  launcher → Day Page → Agent Chat transitions).
+- No swap: window identity receipt (same window id across
+  launcher → Day Page → Agent Chat transitions), with the input's y unchanged.
 - Tap-while-open: runtime receipt showing the main window hides instead of
-  morphing to the Day Page.
+  opening the Day Page.

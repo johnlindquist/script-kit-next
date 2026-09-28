@@ -15,7 +15,7 @@ Welcome to Script Kit! This guide will help you get started and master the power
 7. [Themes](#themes-themejson)
 8. [Built-in Features](#built-in-features)
 9. [Agent Chat](#agent-chat)
-10. [Notes Window](#notes-window)
+10. [Notes](#notes)
 11. [File Watching](#file-watching)
 12. [Multiple Environments](#multiple-environments)
 13. [SDK Quick Reference](#sdk-quick-reference)
@@ -709,10 +709,10 @@ Then `{{content}}` becomes `https://github.com` when the action runs.
 
 ### How Shared Actions Work
 
-1. When you open the Actions menu on a scriptlet
+1. When you press ⌘K on a scriptlet, it is staged in the line above the input
 2. Script Kit loads both the scriptlet's inline actions (H3 headers within the scriptlet) AND the shared actions from the companion `.actions.md` file
 3. Inline actions take precedence over shared actions with the same name
-4. All actions appear together in the Actions menu
+4. All actions appear together as rows under the same input
 
 ### Action Precedence
 
@@ -992,7 +992,7 @@ Customize the look and feel with `~/.scriptkit/theme.json`:
   },
   "vibrancy": {
     "enabled": true,
-    "style": "popover"
+    "material": "menu"
   },
   "dropShadow": {
     "enabled": true,
@@ -1012,16 +1012,14 @@ Colors can be specified as:
 - **RGB objects**: `{"r": 255, "g": 255, "b": 255}`
 - **RGBA objects**: `{"r": 255, "g": 255, "b": 255, "a": 1.0}`
 
-### Vibrancy Styles (macOS)
+### Vibrancy Materials (macOS)
 
-Available vibrancy styles:
-- `"popover"` - Popover-style blur (default)
-- `"menu"` - Menu-style blur
-- `"sidebar"` - Sidebar-style blur
-- `"header"` - Header-style blur
-- `"sheet"` - Sheet-style blur
-- `"window"` - Window-style blur
-- `"hud"` - HUD-style blur
+`vibrancy.material` picks the blur behind the main window:
+- `"menu"` - System-menu blur that stays dark over bright content (default)
+- `"popover"` - Light blur
+- `"sidebar"` - Sidebar blur
+- `"content"` - Near-opaque content plate
+- `"hud"` - The most translucent dark blur; needs a heavy tint to stay legible
 
 ### Focus-Aware Colors
 
@@ -1151,7 +1149,7 @@ Agent defaults, model preferences, profiles, and related runtime settings live i
 - **Streaming responses** with real-time token display
 - **Markdown rendering** for formatted AI responses
 - **Model picker** to select agent-advertised models
-- **Chat history** with sidebar navigation
+- **Past chats** as rows under the same input
 - **Multiple agent support** (Claude Code, OpenCode, AGY, Codex, and compatible adapters)
 - **Explicit context** — attach only the user-selected launcher row, note, file,
   or other reviewed context; Tab never authorizes implicit desktop capture
@@ -1211,28 +1209,25 @@ aiHotkey: {
 
 ---
 
-## Notes Window
+## Notes
 
-A floating notes window with Markdown support for quick note-taking.
+Notes open in the main window, under the same input. There is no separate Notes window.
 
-### Opening the Notes Window
+### Opening a Note
 
-- **Hotkey**: No default — set `notesHotkey` in `config.ts` to enable
-- **From script**: See [SDK Reference](#sdk-quick-reference)
+- **Hotkey**: `Cmd+Ctrl+N` opens today's note — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`
+- **From the launcher**: search "Notes"
+- **From automation**: the `openNotes` protocol command
 
-### Features
+### Working in a Note
 
-- **Markdown editing** with formatting toolbar
-- **Formatting shortcuts**:
-  - `Cmd+B` - Bold
-  - `Cmd+I` - Italic
-  - `Cmd+K` - Link
-  - `Cmd+Shift+C` - Code block
-- **Multiple notes** with sidebar navigation
-- **Full-text search** across all notes
-- **Soft delete** with trash and restore
-- **Export** to plain text, Markdown, or HTML (copies to clipboard)
-- **Character count** in footer
+A note's lines are rows under a `NOTE · <name>` header; the input never moves.
+
+- Type and press `Enter` — add a line
+- `Enter` on a line — put its words in the input; `Enter` again saves them in place (its time and bullet are kept)
+- `Cmd+Backspace` — delete a line; it waits 8 s in the line above the input, and `Cmd+Z` stops it
+- `Cmd+P` — list notes by name
+- `Cmd+Enter` — ask the model about the note; the chat opens under the same input with the note attached
 
 ### Configuring the Hotkey
 
@@ -1246,34 +1241,11 @@ notesHotkey: {
 
 ### Storage
 
-Notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`.
+Day notes are markdown files at `~/.scriptkit/brain/days/<date>.md`. Other notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`, and every active note is mirrored as a read-only markdown file under `~/.scriptkit/notes/`.
 
 ### Notes Automation
 
-Notes are currently exposed to scripts through the automation protocol rather than dedicated JavaScript globals.
-
-```json
-{"type":"getElements","requestId":"elm-notes","target":{"type":"kind","kind":"notes"},"limit":10}
-```
-
-```json
-{"type":"waitFor","requestId":"w-notes","target":{"type":"kind","kind":"notes"},"condition":{"type":"elementExists","semanticId":"input:notes-editor"},"timeout":3000,"pollInterval":25}
-```
-
-```json
-{"type":"batch","requestId":"b-notes","target":{"type":"kind","kind":"notes"},"commands":[{"type":"setInput","text":"Hello from automation"}]}
-```
-
-Use the semantic IDs `panel:notes-window` and `input:notes-editor`. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
-
-## Agent Chat Handoffs
-
-Use the Notes UI actions for cross-surface handoffs:
-
-- **Send to Agent Chat** — opens or focuses Agent Chat with the active note content
-- **Save as Note** — creates or updates a note from Agent Chat content
-
-These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) unless real Notes functions are added to `scripts/kit-sdk.ts`.
+Scripts and agents change notes through the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`) and open them with `openNotes`. An open note is a view of the main window: inspect it with `getState` and `getElements` on the main window like any other view. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
 
 ---
 
@@ -1405,7 +1377,7 @@ export SK_PATH=~/Projects/my-app/.kit
 | `beep()` | Request platform system beep; resolves to a dispatch receipt |
 | `say(text, voice?)` | Request platform text-to-speech; resolves to a dispatch receipt |
 | `notify(options)` | OS-level system notification (Notification Center); resolves to a dispatch receipt. Distinct from `hud(message)` — use `hud` for in-launcher feedback, `notify` when the message should persist outside the launcher. |
-| `hud(message, options?)` | Brief HUD notification |
+| `hud(message, options?)` | A notice in the line above the main input ("Last · <message> just now") |
 | `setStatus(options)` | Unsupported in GPUI; returns `ERR_UNSUPPORTED_SDK_FEATURE` |
 | `menu(icon, scripts?)` | Unsupported in GPUI; returns `ERR_UNSUPPORTED_SDK_FEATURE` |
 | `exec(command, args?)` | Execute an explicit subprocess without invoking a shell; returns stdout, stderr, and exit code |

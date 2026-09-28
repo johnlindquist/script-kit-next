@@ -130,19 +130,19 @@ are not required to load or validate this catalog.
 
 - Acceptance: Actions search reuses a supported shared input and follows the same editing, focus, and shortcut policy as its host.
 
-### UX-013 — Put searchable Actions at top and freeze the shell
+### UX-013 — Filter Actions from the main input and freeze the window
 
-- Acceptance: action filtering keeps the search field discoverable and preserves popup geometry and pointer-target stability.
+- Acceptance: ⌘K lists actions under the same input; filtering them keeps the input where it is, the list header first, and pointer targets stable.
 
-### UX-014 — Complete popup lifecycle: attach, dismiss one layer, restore focus
+### UX-014 — Complete the staging lifecycle: stage, let go one step, restore focus
 
-- Acceptance: popups keep their owner identity, close one layer per dismissal, and restore the correct semantic focus target.
+- Acceptance: ⌘K and in-place pickers keep their owner identity, let go one step per Escape, bring the view back exactly as it was, and return focus to the input.
 
 ### UX-015 — Remove fake pointer affordances from static hints
 
 - Acceptance: informational hints never display button interaction, pointer cursor, or nonexistent activation semantics.
 
-### UX-016 — Make Button, Toast, and shortcut feedback keyboard-operable and uniquely identified
+### UX-016 — Make Button, notice, and shortcut feedback keyboard-operable and uniquely identified
 
 - Acceptance: actionable controls have stable semantic IDs, truthful keyboard behavior, and accessible labels.
 

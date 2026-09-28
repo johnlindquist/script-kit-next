@@ -97,7 +97,7 @@ while the *kind* comes from the fact.
   `setup_required:<reason>`.
 - `prompt_handler` logged the full raw SDK error; it now logs `error_len`.
 
-**Details dialogs** show code + summary + diagnostic fingerprint. See
+**Copy Details** carries code + summary + diagnostic fingerprint. See
 `flow_recovery_copy_details` for the canonical shape.
 
 ---
@@ -121,12 +121,15 @@ the action a dead flow engine needs.
 
 ---
 
-## Rule 4a — A recovery action lives in a footer, a menu, or a modal
+## Rule 4a — A recovery action lives in the capsule, under ⌘K, or in a question in the line
 
 **Rule.** This app has exactly two sanctioned homes for a button:
 
-1. a **modal**, for a decision the user must make before continuing;
-2. a **floating footer** or the **actions menu**, for everything else.
+1. a **question in the line above the input** (`one_window_ask`, answered as
+   rows under the same input), for a decision the user must make before
+   continuing. Never a dialog;
+2. the **capsule** (↵) or **⌘K** (actions listed in place), for everything
+   else.
 
 A recovery card is a *message* — what broke, and what was preserved. It renders
 no buttons. `render_ai_recovery_card` does not even take an action handler, and
@@ -138,15 +141,15 @@ Placement is decided by one pure function,
 
 | Role / layout | Home |
 | --- | --- |
-| Primary | Footer — the `↵` affordance |
-| Secondary, Diagnostic | Actions menu |
-| Any role on `BlockingPanel` | Modal (a blocking panel already IS a must-decide) |
+| Primary | Capsule — the `↵` affordance (`RecoveryActionHome::Footer`) |
+| Secondary, Diagnostic | ⌘K (`RecoveryActionHome::ActionsMenu`) |
+| Any role on `BlockingPanel` | A question in the line (a blocking panel already IS a must-decide). The planner calls this home `RecoveryActionHome::Modal`; nothing draws `plan.modal` yet |
 
 **Corollary — never trade a visible action for a dead promise.** Moving an
 affordance is allowed; leaving the user with a promise nothing keeps is not.
 Two failure modes, both shipped here and both caught:
 
-- advertising `⌘K Options` when no actions dialog is wired to it;
+- advertising `⌘K Options` when no ⌘K actions are wired to it;
 - letting Secondary/Diagnostic actions vanish because the card stopped drawing
   them and the menu never started.
 

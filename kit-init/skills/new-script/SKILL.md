@@ -263,6 +263,6 @@ const url3 = await arg("URL 3");
 
 - [new-scriptlet](../new-scriptlet/SKILL.md) — package scripts as scriptlet bundles
 - [start-chat](../start-chat/SKILL.md) — programmatic Agent Chat workflows using the chat SDK
-- [add-actions](../add-actions/SKILL.md) — expose script helpers through the Actions Menu
-- [manage-notes](../manage-notes/SKILL.md) — automate the Notes window from scripts
+- [add-actions](../add-actions/SKILL.md) — expose script helpers as ⌘K actions
+- [manage-notes](../manage-notes/SKILL.md) — create and automate notes from scripts
 - [new-agent](../new-agent/SKILL.md) — mdflow-backed agent files (compatibility path)

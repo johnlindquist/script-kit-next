@@ -150,11 +150,11 @@ Nothing here was runtime-verified — capturing the reference PNG is the next st
   the confirm screen's off-window footer spacer.
 - The bespoke `TerminalCommandBar` component
   (`src/terminal/command_bar_ui.rs`) is re-exported but not mounted by any
-  current render path — ⌘K on this surface opens the shared ActionsDialog in a
-  separate vibrancy window with `terminal_actions_for_dialog()`
-  (`src/app_impl/actions_toggle.rs:1626-1660`, backdrop wiring
-  `src/render_prompts/term.rs:449-464`). GUESS (by absence of references):
-  the command-bar popup is legacy; do not mock it.
+  current render path — ⌘K on this surface stages "Terminal" in the line above
+  the input and lists `terminal_actions_for_dialog()` as rows under the same
+  input (`toggle_terminal_commands` → `one_window_stage_in_view` in
+  `src/app_impl/actions_toggle.rs`). There is no actions window and no
+  command-bar popup; do not mock either.
 
 ---
 

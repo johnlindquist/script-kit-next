@@ -26,7 +26,7 @@ Each surface also carries `sourceFiles` so agents can jump from a missing DevToo
 
 The coverage map intentionally mirrors Chrome DevTools breadth while using Script Kit language:
 
-- Targets and Windows: exact automation windows, attached popups, detached panels, bounds, parentage, and screenshot identity.
+- Targets and Windows: exact automation windows, the open one-window view, bounds, parentage, and screenshot identity.
 - Elements and Semantics: semantic ids, roles, labels, selected and focused nodes, disabled reasons, action ids, and owners.
 - Layout and Box Model: target-scoped bounds, scroll extents, anchor rects, safe areas, overlap pairs, and resize deltas.
 - Styles, Theme, and Text Fit: theme tokens, computed colors, contrast, font metrics, wrapping, truncation, and clipping.
@@ -40,19 +40,13 @@ The coverage map intentionally mirrors Chrome DevTools breadth while using Scrip
 - Screenshots and Visual Proof: strict target capture, nonblank checks, pixel probes, semantic agreement, occlusion, and before/after proof.
 - Investigation Records: bug intake, hypothesis trail, action transcript, receipts, classification, owner hints, and red/green artifacts.
 
-## Notes Coverage Requirements
+## Note View Coverage
 
-The Notes window was retired on 2026-09-27: a note opens as a view under the main input and `scripts/devtools/notes.ts` is deleted. The requirements below are the pre-retirement backlog; re-scope them to the note view before building on them.
-
-Notes must be treated as a first-class target, not as a launcher proxy. DevTools coverage must include the floating host, editor mode, browse/list mode, trash mode, markdown editor, markdown preview, editor find, global search, format toolbar, focus mode, pinning, sort cycling, command bar, actions panel, recent-note switcher, note cart, clipboard-backed note creation, embedded AgentChat mode, AgentChat actions popup, AgentChat history portal, attachment and context chips, draft snapshots, auto-resize, autosave and dirty state, history back/forward, scroll collapse after deleting trailing lines, and independent app-hide behavior.
-
-Required Notes shortcuts and ownership paths include `Cmd+K`, `Cmd+P`, `Cmd+Shift+P`, `Cmd+F`, `Cmd+Shift+F`, `Cmd+N`, `Cmd+Shift+N`, `Cmd+Shift+T`, `Cmd+W`, `Cmd+.`, `Cmd+Shift+.`, `Cmd+Shift+S`, `Cmd+Z`, `Cmd+D`, `Cmd+Shift+D`, `Cmd+Shift+X`, `Cmd+Shift+L`, `Cmd+L`, `Cmd+Shift+-`, `Cmd+Shift+H`, `Cmd+V`, `Cmd+Shift+C`, `Cmd+E`, `Cmd+/`, `Cmd+J`, `Cmd+Shift+U`, `Cmd+B`, `Cmd+I`, `Cmd+Shift+I`, `Cmd+Enter`, `Cmd+Shift+A`, `Cmd+Shift+O`, `Cmd+Up`, `Cmd+Down`, `Cmd+Shift+Up`, `Cmd+Shift+Down`, `Cmd+[`, `Cmd+]`, `Cmd+Shift+Backspace`, `Cmd+Shift+Delete`, `Cmd+Shift+7`, `Cmd+Shift+8`, `Cmd+1..Cmd+9`, `Tab`, `Shift+Tab`, `Alt+Up`, `Alt+Down`, `Alt+Shift+Up`, `Alt+Shift+Down`, `Ctrl+Shift+K`, `Escape`, `Enter`, arrows, paging, Home/End, Backspace, and Delete.
-
-Runtime primitives now expose target-scoped layout info, cursor and selection ranges, note store generation and sandbox identity, active note id and dirty state, command bar route stack, shortcut registry snapshots, focus owner transitions, redacted draft snapshot fingerprints, real editor scroll metrics, target-scoped `batch.togglePreview`, target-scoped `simulateKey` for the Notes `Cmd+Shift+P` preview shortcut, and sandboxed auto-resize before/after comparison through `bun scripts/devtools/notes.ts resize-compare --start --sandbox`. Missing runtime primitives that block full Notes proof include populated markdown preview scroll content bounds, AgentChat embedded generation and origin receipts, portal session provenance, and remaining Notes shortcut activation parity receipts beyond `Cmd+Shift+P`.
+A note is a view under the main input (`src/one_window/notes.rs`): its lines are rows under a `NOTE · <name>` header, ↵ adds a line, ↵ on a line puts its words in the input and ↵ again saves them in place, ⌘⌫ deletes a line through the 8 s hold, ⌘P lists notes by name, and ⌘↵ asks the model about the note. Prove it through `getState.oneWindow` (`view`, `crumb`), `getElements` rows and the `main-view-slot-line`, and the one-window frames chapter `p2-c-notes`.
 
 ## Dictation Coverage Requirements
 
-Dictation needs media-aware DevTools instead of generic screenshots or scripts. DevTools coverage must include idle/hidden, recording, quiet recording, active speech, confirming, stop confirmation, transcribing, delivering, finished, failed/error, every phase transition from idle through failed, Script Kit target delivery, Notes editor target delivery, AgentChat target delivery, Tab AI target delivery, external/frontmost-app delivery, waveform/audio level bars, microphone permission, microphone device selection, preferred-device fallback, model readiness, model download/extract/failure status, hotkey readiness, hotkey registration, hotkey conflict detection, target identity, transcript generation, cursor insertion range, wrong-target rejection, and cleanup without mutating System Settings or TCC.
+Dictation needs media-aware DevTools instead of generic screenshots or scripts. DevTools coverage must include idle/hidden, recording, quiet recording, active speech, confirming, stop confirmation, transcribing, delivering, finished, failed/error, every phase transition from idle through failed, Script Kit target delivery, today's note delivery, AgentChat target delivery, Tab AI target delivery, external/frontmost-app delivery, waveform/audio level bars, microphone permission, microphone device selection, preferred-device fallback, model readiness, model download/extract/failure status, hotkey readiness, hotkey registration, hotkey conflict detection, target identity, transcript generation, cursor insertion range, wrong-target rejection, and cleanup without mutating System Settings or TCC.
 
 Required Dictation shortcut and input paths include the configured dictation hotkey, `Escape`, `Enter`, `Space`, and `Cmd+W`.
 
@@ -60,11 +54,9 @@ Runtime primitives now support passive Dictation readiness without opening the m
 
 Dictation History coverage must also expose fixture store identity, transcript row generation, preview generation, redacted transcript fingerprints, audio path redaction proof, scroll and selection anchor metrics, and portal attachment receipts.
 
-## Actions Layout Coverage
+## Actions Coverage
 
-Cmd+K now stages actions in the line above the input; an `actionsDialog` target answers `actions_are_staged_in_place`. The paragraph below describes the retired popup.
-
-ActionsDialog and attached action menus must expose runtime-owned layout, not TypeScript-inferred boxes. `getLayoutInfo(target actionsDialog)` returns the ActionsDialog root, search input, optional context header, list viewport, visible grouped rows, and shortcut hint bounds from the same runtime row-geometry model used by `devtools.actions.inspect`. Disabled reason text bounds remain the explicit missing primitive only for routes that render visible disabled explanations.
+⌘K stages the focused thing in the line above the input and lists its actions under the same input. `scripts/devtools/actions.ts` and the `actionsDialog` target still read the popup-era state and have not been retargeted. Prove staged actions through `getElements` (the `main-view-slot-line` and the list rows) and the one-window frames suite (`scripts/agentic/one-window/run.sh`), not through popup geometry.
 
 ## Build Order
 

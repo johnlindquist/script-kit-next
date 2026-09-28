@@ -39,13 +39,13 @@ unfamiliar surface / orientation -> bun scripts/devtools/inspect.ts --session <n
 user bug intake -> bun scripts/devtools/investigate.ts --surface <id> --bug "<report>"
 multi-step or high-volume probing -> throwaway script importing Driver from scripts/devtools/driver.ts: Driver.launch({ sandboxHome: true }), await driver.waitForSettle() (never hardcoded sleeps), batch/setFilterAndWait/getState/getLogs, always await driver.close() in finally
 semantic tree -> bun scripts/devtools/elements.ts snapshot ; layout -> layout.ts measure ; scroll -> scroll.ts inspect ; focus -> focus.ts inspect ; text -> text.ts measure ; keyboard -> keyboard.ts inspect
-actions dialog -> bun scripts/devtools/actions.ts inspect ; safe user-like acts -> bun scripts/devtools/act.ts set-input|select|key|open-actions
+⌘K staged actions (rows under the main input) -> bun scripts/devtools/actions.ts inspect ; safe user-like acts -> bun scripts/devtools/act.ts set-input|select|key|open-actions
 logs and crashes -> bun scripts/devtools/events.ts logs|crashes ; in-process ring -> driver getLogs in the same receipt stack as UI state
 before/after bug proof -> bun scripts/devtools/compare.ts redgreen --red <receipt> --green <receipt>
 coverage gap / missing primitive -> bun scripts/devtools/coverage.ts --surface <id> ; source-backed backlog -> bun scripts/devtools/surfaces.ts
-deterministic UI without live agents -> fixtures (openConfirmPrompt, openAgentChatKitchenSinkFixture, openAiWithMockData, ...) instead of live provider state
+deterministic UI without live agents -> stdin fixtures (openConfirmPrompt, openChatPromptFixture, injectClipboardCaptureFixture, pushDictationResult; the full list is EXTERNAL_COMMAND_VERBS in src/stdin_commands/mod.rs) instead of live provider state
 fresh stable binary for probes -> SCRIPT_KIT_AGENT_ARTIFACT_NAME=<task> ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui
-Agent Chat / brain probes -> bash scripts/agentic/ensure-goose-sidecar.sh once first; seed sandbox auth via seedAgentAuth: true or scripts/agentic/seed-sandbox-home.sh
+model chat / brain probes -> bash scripts/agentic/ensure-goose-sidecar.sh once first; seed sandbox auth via seedAgentAuth: true or scripts/agentic/seed-sandbox-home.sh
 verify changed behavior -> run the exact primitive/probe and read its actual receipt — green means the same user-path symptom that failed red now passes, never that a recipe passed
 verify changed behavior -> bun scripts/devtools/driver.ts smoke when the driver layer itself is suspect
 verify changed behavior -> after any UI pass: escape -> hide -> getState must show windowVisible:false

@@ -1,6 +1,6 @@
 # Dictation
 
-Script Kit GPUI includes native, local dictation: hold a hotkey, speak, and the transcript lands in the surface you chose — a prompt, the frontmost app, Notes, or Agent Chat. Transcription runs on-device.
+Script Kit GPUI includes native, local dictation: hold a hotkey and speak. The main window fades in over the front app without taking its cursor, your words fill the main input as they're heard, and letting go either types them where you were or runs them as a request. Transcription runs on-device. There is no separate dictation window.
 
 ## First-Time Setup
 
@@ -30,9 +30,18 @@ export default {
 
 **Push-to-talk is the default**: hold the hotkey, speak, release to stop and transcribe. A quick tap keeps classic toggle behavior (tap to start, tap to stop).
 
+## Writing or a Request
+
+While you talk, the list under the input is one header and two rows, each with Jev's percentage:
+
+- **Type it into <app>** (`⌘1`) — paste the words at the cursor you were in. The line above the input reads "Typing into · <app>" while this leads.
+- **The request** (`⌘2`) — run the words as something that should happen ("summarize what I copied").
+
+Letting go acts on the final words only when Jev agrees and is at least 65 % sure. Otherwise the line reads "Pick one · ⌘1 or ⌘2". `Esc` drops everything.
+
 ## Live Partials
 
-While recording, the overlay shows a live partial transcript so you can see recognition in flight (on by default; `dictation.livePreview: false` disables it).
+While recording, the main input shows the words as they're recognized so you can see recognition in flight (on by default; `dictation.livePreview: false` disables it).
 
 ## Configuration Reference
 
@@ -59,14 +68,14 @@ Script Kit records the intended target when dictation starts, so delivery is sta
 
 | Command | Delivers to |
 | --- | --- |
-| **Start Dictation to Current App** | The active Script Kit surface / current app |
+| **Start Dictation to Current App** | The active Script Kit view / current app |
 | **Start Dictation to App** | The frontmost macOS app |
-| **Start Dictation to Notes** | The Notes editor |
-| **Start Dictation to Agent Chat** | Agent Chat quick-submit |
+| **Start Dictation to Notes** | Today's note: the one row is "Add it to today's note", and letting go appends the words ("Added to today's note: …") |
+| **Start Dictation to Agent Chat** | The model's chat: the one row is "Send it to the model", and letting go opens the chat with the words as the first message |
 
 ## Dictation History
 
-With `saveHistory` on, transcripts are stored locally and searchable via the **Dictation History** built-in — preview, paste, reuse, hand to Agent Chat, or delete entries. Saved transcripts are also exposed over MCP:
+With `saveHistory` on, transcripts are stored locally and searchable via the **Dictation History** built-in: rows under the same input, newest first. `↵` pastes; `⌘K` stages an entry in the line to reuse it, hand it to Agent Chat, or delete it (the delete waits in the line with `⌘Z` to stop it). Saved transcripts are also exposed over MCP:
 
 ```text
 kit://dictation                      # most recent dictation envelope

@@ -89,11 +89,11 @@ which fields are *required* before Enter ships the payload.
       defaultHandler: true          # win the rank-tie among handlers for "link"
       kvEnums:                       # Run 14: per-key enum overrides
         env: [prod, staging, dev]    #   typing `;link foo env:` ranks
-        priority: [P0, P1, P2]       #   declared values FIRST in the popup;
+        priority: [P0, P1, P2]       #   declared values FIRST in the list;
                                      #   history-only values (e.g. "custom")
                                      #   appear after, dimmed with a
                                      #   "previously used" badge. Empty or
-                                     #   absent kvEnums → pure-history popup.
+                                     #   absent kvEnums → history-only rows.
 
 **Command handler template (`>head -- argv…`)**
 

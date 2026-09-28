@@ -19,7 +19,7 @@ The loop is:
 1. Intake the bug report, screenshot, observed behavior, expected behavior, surface hints, and safety constraints.
 2. Form a lightweight hypothesis.
 3. Open or reveal the real app through the real user entry path.
-4. Use DevTools primitives to inspect semantic state, layout, text, focus, popups, scroll, screenshots, and target identity.
+4. Use DevTools primitives to inspect semantic state, layout, text, focus, the line above the input, scroll, screenshots, and target identity.
 5. Produce red proof or classify the blocker.
 6. Identify likely code owner and missing primitive if proof is blocked.
 7. After a code fix, rerun the same primitive stack for green proof.
@@ -50,6 +50,14 @@ Driver rules of thumb:
 - Whole-scenario `batch` (setInput → waitFor → select) is one round trip and the fastest proof shape; per-command calls are still fast and easier to interleave with assertions.
 - Always `await driver.close()` (use try/finally) so no app instance outlives the probe.
 - The one-shot CLIs below remain correct for single inspections, strict target-identity receipts, and red/green compare artifacts. `scripts/agentic/root-source-filter-matrix.ts` is the migration template for porting a session.sh script to the driver.
+
+### One-Window Proof
+
+Everything opens in the one main window, under the same input: there are no popups, dialogs, toasts, or secondary windows to inspect. ⌘K stages the focused thing in the line above the input and lists its actions in place; holds, undo, notices, and questions live in that line. Read `getState.oneWindow` (`view`, `crumb`, `strip`, `marks`) and the `main-view-slot-line` element from `getElements`.
+
+- Reducer rules: `./scripts/agentic/agent-cargo.sh test -p sk-one-window` (pure, no GPUI, no clock).
+- Frames: `bash scripts/agentic/one-window/run.sh [out-dir]` builds once, runs every chapter in `scripts/agentic/one-window/chapters/`, and grades each frame. `check-frames.py` fails any frame where the input moves, the 34 pt line or the 28 pt leading header is missing, a row has a fill, bar or keycap, the focused tile isn't 24 pt, a popup window opens, or ↵ returns to an earlier label. `check-marks.py` fails any word mark that isn't painted under exactly its text in its word's color. Limit a run with `CHAPTERS="m2 p2-d"`, and reuse a build with `ARTIFACT=<app.reference.json>`.
+- Frame runs are large: put the output directory on a mounted external SSD (`CLAUDE.md` "Keep bulk evidence off the boot disk").
 
 ### Parallel Feature Loops
 
@@ -87,7 +95,7 @@ Prefer direct primitives over prewritten recipes:
 - Focus CLI: `bun scripts/devtools/focus.ts inspect` returns target identity plus window focus, focused/selected semantic ids, focused/selected nodes, active footer, and keyboard ownership policy.
 - Text CLI: `bun scripts/devtools/text.ts measure` returns target identity plus input/selected text fingerprints, text node lengths, footer label text, and explicit text-bounds gaps.
 - Keyboard CLI: `bun scripts/devtools/keyboard.ts inspect` returns target identity plus keyboard policy, input ownership, footer bindings, popup/action shortcuts, duplicate-key checks, and routing warnings.
-- Actions CLI: `bun scripts/devtools/actions.ts inspect --start --keep-open --open` starts proof sessions with the actions keep-open guard when requested, opens or targets the ActionsDialog from a parent target, and returns route stack, parent target, popup rect, placement/clipping, target-scoped `getLayoutInfo(actionsDialog)` search/header/list/visible-row/shortcut bounds, runtime row/section bounds, hover-state availability, `--prove-click-select`, `--prove-click-activate`, `--prove-shortcut-open-freshness`, `--prove-shortcut-close-cleanup`, `--prove-escape-close-cleanup`, runtime shortcut layout bounds, visible actions, and explicit missing disabled-reason geometry. Cmd+K now stages actions in the line above the input, so an `actionsDialog` target answers `actions_are_staged_in_place` until this CLI is retargeted.
+- Actions CLI: ⌘K stages the focused thing in the line above the input and lists its actions as rows under the same input, so prove staged actions with `getElements` (the `main-view-slot-line` and the list rows) and the one-window frames suite (`bash scripts/agentic/one-window/run.sh`). `bun scripts/devtools/actions.ts inspect` and its `--prove-*` flags still read the popup-era `actionsDialog` target and have not been retargeted to the staged rows; do not read its popup rect, placement or clipping fields as current behavior.
 - Act CLI: `bun scripts/devtools/act.ts set-input|select|key|open-actions` performs safe protocol-first user-like actions with strict target identity, pre/post focus and scroll receipts, explicit submit gating, target-scoped popup opening, and no native escalation.
 - Main CLI: `bun scripts/devtools/main.ts inspect --start --show --prove-open-close-freshness --prove-early-frame-freshness` proves main-window close/reopen input freshness plus early-frame surface/footer/chrome freshness with target-scoped state, target identity, and sampled stale-view refusal receipts.
 - Compare CLI: `bun scripts/devtools/compare.ts redgreen --red <receipt> --green <receipt>` compares primitive stack, user path, target selector, target identity, metric names, and classification deltas for before/after bug proof.
@@ -105,7 +113,7 @@ Prefer direct primitives over prewritten recipes:
 - Semantics: `getElements(target)`, semantic ids, roles, labels, selected/focused ids, row metadata, warnings.
 - Layout: `getLayoutInfo`, layout component bounds, window bounds, footer/input/list/content bounds.
 - Interaction: `devtools.act`, `batch`, `waitFor`, `simulateKey`, `triggerBuiltin`, `triggerAction` (fire an actions-dialog action by id, bypassing keyboard navigation), `simulateClick` (window-relative protocol mouse click), `simulateGpuiEvent` (real GPUI event dispatch with dispatchPath/activationProof receipts — the only real-dispatch automation path), `simulateMainHotkeyGesture`, `setMenuSyntaxFormField`, `pasteClipboardIntoAgentChat`, `pushDictationResult` (synthetic dictation delivery, no microphone), target-scoped `batch.setInput`, `batch.openActions`, `batch.selectBySemanticId`, and target-scoped `simulateKey` for surface-owned shortcuts.
-- Fixtures: deterministic UI without live agents or credentials — `openConfirmPrompt`, `openAgentChatKitchenSinkFixture`, `openAiWithMockData`/`openMiniAiWithMockData`, `openFocusedTextAgentChat{MockData,FromFocusedField,PiData}`, `openAgentChatDetachedFixture`, `setAgentChatTestFixture`, `openDictationOverlayFixture`, `openCreationFeedback`, `showAiCommandBar`. Prefer these for visual/layout proofs that do not depend on live provider state.
+- Fixtures: deterministic UI without live agents or credentials — `openConfirmPrompt` (a question in the line above the input), `setAgentChatTestFixture`, `openCreationFeedback`, `showAiCommandBar`. Prefer these for visual/layout proofs that do not depend on live provider state; for one-window views, prefer the frames suite below.
 - Visuals: `captureScreenshot`, `captureWindow`, `verify-shot.ts`, `image-diff.ts`, screenshot identity, strict target matching.
 - Perf/specialized CLIs: `perf.ts` (protocol timing), `agent_chat.ts` (Agent Chat receipts), `liquid-glass-proof.ts`, `apple-guideline-constants.ts`.
 - Native observation: MCP `computer/*` read-only tools for windows, apps, screenshots, menus, screens, and permissions.

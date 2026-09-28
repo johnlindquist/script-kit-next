@@ -37,6 +37,26 @@ What's changed:
 - Scripts must explicitly import dependencies via Bun
 - Configuration is TypeScript-based (`~/.scriptkit/config.ts`)
 
+## How It Works
+
+Script Kit is one window you tell what should happen.
+
+- **Say it.** Type or speak a sentence ("when does LeBron play next", "remind Sam about the deck
+  friday"). Jev reads it against what's on screen and the list offers what it could mean; ⌘1–3 run
+  Jev's readings, ↵ runs the highlighted row, and its label always names exactly what will run.
+- **Or say it exactly.** Symbols complete in the list and underline themselves: `@selection`,
+  `@clipboard`, `@file:…` (what to act on), `/command` (what to do), `>:dev`, `todo;` (where it goes),
+  `due:friday`, `.concise` (details), `|profile` (who does it).
+- **The input never moves.** The line above it shows what's staged, waiting, or just ran. Forms,
+  answers, notes, the model's chat, agents, voice, and script prompts all open in place under it; Esc
+  goes back one step.
+- **Act on anything.** ⌘K stages the highlighted row (or the clipboard, or the last run) in the line
+  and the list becomes what you can do with it. ⌘↵ hands it to the agent.
+- **No dialogs.** Irreversible actions wait 8 seconds in the line and run unless you stop them;
+  reversible ones happen at once with ⌘Z.
+- **It learns.** What you ran becomes an instant match next time, and runs that did several things
+  are saved as scripts you can bind to a shortcut.
+
 ## Quick Start
 
 New to Script Kit GPUI? Start with the user guides:
@@ -288,10 +308,10 @@ gets only the tools it lists.
 
 The launcher and Agent Chat say "Not signed in" until you sign in to a
 subscription provider (ChatGPT, Gemini, or xAI). The first time you use an AI
-feature, a "Sign in to ChatGPT" dialog asks first: ↵ opens sign-in in your
-browser, Esc means not now. While you sign in, Script Kit steps aside; when you
-finish, it comes back and your message continues. If sign-in doesn't finish,
-↵ Try Again returns you to the browser. Switch Account in the Actions menu (⌘K)
+feature, a "Sign in to ChatGPT" row asks first, under the same input: ↵ opens
+sign-in in your browser, Esc means not now. While you sign in, Script Kit steps
+aside; when you finish, it comes back and your message continues. If sign-in
+doesn't finish, ↵ Try Again returns you to the browser. Switch Account under ⌘K
 forgets the stored sign-in. Sign-ins are stored in `~/.scriptkit/goose`,
 separate from the Codex CLI's own login. API keys saved with the Configure
 OpenAI/Anthropic/Vercel API Key commands are passed to goose automatically.
@@ -300,7 +320,7 @@ Release builds use the bundled goose engine. Developers and support builds can
 override it with `SCRIPT_KIT_GOOSE_BINARY`, `ai.gooseBinary`, or a per-profile
 `gooseBinary`.
 
-Use the Agent Chat actions menu to change profile or model.
+In the chat, ⌘K (or saying "use opus for this") changes profile or model.
 
 ### Advanced Provider Configuration
 
@@ -338,25 +358,24 @@ See `kit-init/theme.example.json` for all available options.
 
 ### Main-window animation presets
 
-Search **Animation Presets** in the launcher to browse 26 numbered choices.
-Pick a row to save it and replay the actual launcher once; no restart or rebuild
-is required. Search **Animation 01** through **Animation 26** for direct access.
+The main window fades in and out at its final size; it never grows or shrinks to
+appear. Two entry fades are available. Search **Animation Presets** in the
+launcher to pick one; it saves and replays the actual launcher once, with no
+restart or rebuild:
+
+- **Animation 01 — Soft Focus Fade** (`fixed_frame`): a slower 140 ms fade that
+  resolves a light defocus.
+- **Animation 02 — Sharp Presence** (`sharp_presence`, the default): a 90 ms,
+  near-opaque fade with no defocus.
+
 **Next Animation Preset**, **Previous Animation Preset**, and
-**Replay Current Animation** make repeated comparisons available from the same menu.
-The selection persists independently of color themes in `config.ts`:
-`animation: { preset: "sharp_presence" }`.
+**Replay Current Animation** are in the same list. The selection persists
+independently of color themes in `config.ts`:
+`animation: { preset: "sharp_presence" }`; retired preset ids load as the default.
+Exit is always a 0.12 s fade.
 
-The choices cover brisk/cinematic timing, fixed-frame/grow/shallow/deep motion,
-strong/soft/early/late presence, sharp/diffuse/foreground focus, and combinations.
-**Animation 21 — Previous Calibration** restores the preserved Spotlight-derived
-entry. The default, **Sharp Presence** (Animation 24), keeps the window at its
-settled size with no width morph or defocus; its existing fast presence fade is unchanged.
-Only main-window entry changes; Actions, Notes, Dictation, and exits retain their
-calibrated behavior. This is a real-use comparison catalog, not a claim of
-Spotlight visual parity.
-
-Agents use the same operations through `triggerBuiltin` with the catalog's
-canonical `builtin/animation-<slug>` IDs, plus `builtin/animation-presets`,
+Agents use the same operations through `triggerBuiltin` with
+`builtin/animation-fixed-frame` and `builtin/animation-sharp-presence`, plus `builtin/animation-presets`,
 `builtin/animation-next`, `builtin/animation-previous`, and `builtin/animation-replay`.
 Read `getState.mainWindowAnimation` for selection/catalog and captured
 `nativeLifecycle` separately; a dispatched replay is not a completed animation.
@@ -555,13 +574,12 @@ Changes to Rust code trigger a rebuild (~2-5 seconds). Theme and script changes 
 
 Operator development retains `./dev.sh`'s default `local-llm` feature. Owned evaluations above are a separate opt-in build and do not change it.
 
-On every main-window surface the glass stage fills the window and the native
-footer capsules float inside it (Tahoe floating chrome), in one fixed bottom
-zone with an 8pt gap above, below, and at the sides. Views keep their content
-above that zone. The main menu list alone extends under it: rows scrolled
-behind the capsules fade into the glass and ignore hover and clicks, selection
-reveal stops above the zone, and the scrollbar track ends there too. The
-Actions popup opens above the capsules.
+In every view the glass stage fills the window and the native capsule (↵, ⌘K,
+⌘↵) floats inside it at the bottom right (Tahoe floating chrome), in one fixed
+bottom zone with an 8pt gap above, below, and at the sides. Views keep their
+content above that zone. The main list alone extends under it: rows scrolled
+behind the capsule fade into the glass and ignore hover and clicks, selection
+reveal stops above the zone, and the scrollbar track ends there too.
 `getState.activeFooter.overContentPreview` reports whether the main-menu list
 currently scrolls under the footer.
 
@@ -615,8 +633,12 @@ script-kit-gpui/
 │   ├── protocol/          # JSON message protocol
 │   ├── prompts/           # Prompt implementations
 │   ├── terminal/          # Terminal emulator
-│   ├── notes/             # Notes window feature
+│   ├── one_window/        # The one window: host for the sk-one-window reducer
+│   ├── intent/            # Jev intent engine (sentence → plan)
+│   ├── notes/             # Notes (a view under the main input)
 │   └── ai/                # Agent Chat runtime + context assembly
+├── crates/
+│   └── sk-one-window/     # The one window's rules, with no UI and no clock
 ├── scripts/
 │   └── kit-sdk.ts         # The SDK (preloaded into scripts)
 ├── tests/
@@ -669,11 +691,13 @@ bash scripts/verify-macos-bundle.sh
 
 ### Built-in Capabilities
 
+- **Intent** - Say what should happen; Jev reads it and the list offers what it could mean
+- **Voice** - Hold the voice key in any app to type at its cursor or ask for something, in the same window
 - **Clipboard History** - Access your clipboard history (enable in config)
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
-- **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **Agent Chat** - Press Command+Enter to open Agent Chat with the current context staged for the active profile
+- **Notes** - Markdown notes that open under the main input (`Cmd+Ctrl+N`)
+- **Agent Chat** - Press Command+Enter to open the model's chat under the main input with the current context staged
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -706,23 +730,21 @@ Script Kit exposes desktop context and UI state to scripts and AI agents through
 
 ### Agent Chat
 
-Agent Chat is the primary and only AI chat surface. Command+Enter routes into
-Agent Chat; some internal helpers and compatibility types still use `tab_ai_*`
+Agent Chat is the one AI chat: the model's chat view under the main window's
+input. Some internal helpers and compatibility types still use `tab_ai_*`
 naming, but those are implementation details rather than separate chat products.
 
 **Entry path:**
-- Command+Enter opens Agent Chat and stages current context for the active profile.
-- Command+Enter with typed launcher text can submit that text as user intent when the active surface supports it.
-- Detached Agent Chat windows use the same conversation model and automation targeting contract as the in-panel Agent Chat view.
+- Command+Enter with nothing typed opens a clean chat (the capsule reads "Agent"). With words typed, it reads "Do It" and runs Jev's first reading, the same row ⌘1 runs.
+- Every way in (⌘↵, the SDK's `aiStartChat`, a failed script, the tray, stdin, dictation, Notes) builds a `ChatEntry`; what goes with it waits in the line above the input and is sent with the first turn.
+- Past chats are rows under the same input ("Past chats"); ↵ reopens one.
 
 **Close semantics:**
-- `Cmd+W` closes the detached Agent Chat window.
-- Plain `Escape` returns the in-panel Agent Chat view to the previous launcher surface when applicable.
-- The footer keeps Agent Chat aligned with the launcher chrome and action model.
+- `Escape` goes back one step and gives the typed sentence back to the input.
+- Tool calls, the model's questions, and sign-in are rows in the chat, never dialogs.
 
 **Runtime contract:**
-- Agent Chat entry is driven from `src/app_impl/agent_handoff.rs` and rendered through the compatibility `AppView::AgentChatView` surface.
-- Detached Agent Chat windows are managed by the compatibility implementation in `src/ai/agent_chat/ui/chat_window.rs`.
+- Entry goes through `ScriptListApp::one_window_open_chat` (library code: `ai::agent_chat::ui::entry::open_chat`); the view is hosted by `src/one_window/chat_host.rs` and the conversation state lives in `src/ai/agent_chat/ui/thread.rs`.
 - Agent selection, model preferences, and profiles live under the `ai` block in `~/.scriptkit/config.ts` and are backed by the Agent Catalog.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.
@@ -855,7 +877,7 @@ The app replies with per-command results including elapsed time and selected val
 }
 ```
 
-Available wait conditions: `choicesRendered`, `inputEmpty`, `windowVisible`, `windowFocused`, plus detailed conditions like `elementExists`, `elementFocused`, and `stateMatch`. See [`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the full reference.
+Available wait conditions: `choicesRendered`, `inputEmpty`, `windowVisible`, `windowFocused`, plus detailed conditions like `elementExists`, `elementFocused`, and `stateMatch`. See `WaitCondition` in [`src/protocol/types/batch_wait.rs`](src/protocol/types/batch_wait.rs) for the full reference.
 
 ## Contributing
 

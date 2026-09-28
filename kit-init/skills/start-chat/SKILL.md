@@ -68,6 +68,6 @@ Use `kit://context?profile=minimal` for current desktop context.
 
 ## Related Skills
 
-- [add-actions](../add-actions/SKILL.md) — expose Agent Chat helpers through the Actions Menu
+- [add-actions](../add-actions/SKILL.md) — expose Agent Chat helpers as ⌘K actions
 - [manage-notes](../manage-notes/SKILL.md) — hand off note content into Agent Chat
 - [new-scriptlet](../new-scriptlet/SKILL.md) — package Agent Chat helpers as scriptlet bundles

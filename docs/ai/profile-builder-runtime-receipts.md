@@ -1,6 +1,8 @@
 # Profile Builder Runtime Receipts
 
 Receipts captured on 2026-06-01 for the profile-builder implementation path.
+They predate the one-window app: `AgentChatView` and the `agent_chat` footer surface named
+below are gone (the chat is a view under the main input), and ⌘K lists actions in place.
 
 ## profile-builder-ledger-proof
 

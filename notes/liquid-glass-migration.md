@@ -19,7 +19,7 @@ The main window composites, bottom to top:
    `cornerRadius` currently **0.0** (logged `corner_radius=0.0`).
 2. GPUI `BlurredView` (an NSVisualEffectView subclass) — exists because window
    creation requests `WindowBackgroundAppearance::Blurred` when vibrancy is
-   enabled (`src/main_entry/app_run_setup.rs`, `src/ai/window/window_api.rs`).
+   enabled (`src/main_entry/app_run_setup.rs`).
    Configured by `configure_visual_effect_views_recursive`
    (`src/platform/vibrancy_config.rs`): menu material, VibrantDark/Light,
    behind-window blending, emphasized+active in dark.
@@ -50,7 +50,7 @@ Derived from the shipped recipe's receipts
 - **Rainbow backdrop**: panel body saturation ≥ ~35% (recipe: 36%) at body
   luminance ≤ ~30% — the Raycast-style hue glow.
 - **Footer matches body** — no luminance/saturation divergence between the
-  panel body and the footer overlay strip.
+  panel body and the floating ↵ / ⌘K capsule.
 - **Pre-Tahoe / engine=vibrancy unchanged** — pixel-equal to the `f4cca5f55`
   receipts.
 
@@ -112,7 +112,7 @@ phase makes it the engine path.
 | `src/platform/secondary_window_config.rs` | `configure_tahoe_window_backdrop`: set `cornerRadius` from the window radius token (22pt — `src/ui/chrome/tokens.rs`; today it logs 0.0), and use the Phase-1 winning glass tint alpha (new token, see next row) instead of the shared 0.30. Install the glass view only when the resolved engine is LiquidGlass. |
 | `src/theme/opacity.rs` | `OPACITY_GLASS_TINT` + `OPACITY_GLASS_ROOT_VEIL` tokens = the Phase-1 winning cell, with the measurement table in the doc comment (same pattern as `OPACITY_VIBRANCY_BACKGROUND`). |
 | `src/theme/gpui_integration.rs` | `main_bg` alpha: engine-aware — `OPACITY_GLASS_ROOT_VEIL` under LiquidGlass, `vibrancy_background` under Vibrancy. |
-| `src/ui_foundation/mod.rs` | `resolve_window_vibrancy_opacity` engine-aware the same way, so HUD/dictation/notes native tints (`main_window_matched_background_rgba`) stay matched to the main window. |
+| `src/ui_foundation/mod.rs` | `resolve_window_vibrancy_opacity` engine-aware the same way, so every native tint that reads `main_window_matched_background_rgba` stays matched to the main window. |
 
 Gate: sandbox theme.json with `"vibrancy": {"engine": "liquid_glass"}` hits the
 acceptance targets over white + rainbow; engine=vibrancy run is pixel-equal to
@@ -124,8 +124,7 @@ Rollback: flip the engine field — hot-reloads via the theme watcher.
 | File | Change |
 |---|---|
 | `src/main_entry/app_run_setup.rs` | when the resolved engine at window-creation time is LiquidGlass, request `WindowBackgroundAppearance::Transparent` instead of `Blurred` (no BlurredView is ever built). |
-| `src/ai/window/window_api.rs` | same branch for the AI window. |
-| `src/confirm/window.rs`, `src/notes/window/init.rs` | audit their `Blurred`/`Opaque` choices; apply the same branch where they pick Blurred for vibrancy. |
+
 | `src/platform/vibrancy_config.rs` | the Phase-2 hide loop stays (it covers runtime engine flips on already-created windows; document that a flip to/from LiquidGlass fully applies on next window create). |
 
 Gate: same receipts as Phase 2 plus a resize-feel pass. No vendored
@@ -133,33 +132,32 @@ Gate: same receipts as Phase 2 plus a resize-feel pass. No vendored
 
 ## Phase 4 — Footer blur trio (HIGHEST RISK — the trio is non-negotiable)
 
-The footer overlay is its own native window (`src/footer_popup.rs`,
-`window_background: Transparent`) with a custom NSVisualEffectView subclass
+The ↵ and ⌘K capsule is a native view floating inside the main window's glass
+stage (`src/footer_popup.rs`), not a window, with a custom NSVisualEffectView subclass
 (registered ~line 4331) whose contract is: **native blur view + `hitTest`
 delegation + deferred transparent hitbox** — the three move together or not at
 all (see memory `reference_footer_blur_architecture`). Additional invariant:
-no `open_window` during draw (SIGSEGV — overlay sync must stay `cx.defer`).
+capsule sync stays deferred (`cx.defer`); vendored GPUI still refuses `open_window`
+during draw (SIGSEGV).
 
 | File | Change |
 |---|---|
-| `src/footer_popup.rs` | register a parallel subclass over `NSGlassEffectView` (same runtime-resolved superclass trick as `tahoe_glass_backdrop_view_class`), implementing the identical `hitTest` delegation. The footer window build instantiates VEV-or-glass by resolved engine. Glass tint + corner radius from the Phase-2 tokens / footer radius. |
-| `src/app_impl/ui_window.rs` | no contract change — verify the deferred overlay sync path is untouched; the engine only swaps which native class backs the strip. |
+| `src/footer_popup.rs` | register a parallel subclass over `NSGlassEffectView` (same runtime-resolved superclass trick as `tahoe_glass_backdrop_view_class`), implementing the identical `hitTest` delegation. The capsule build instantiates VEV-or-glass by resolved engine. Glass tint + corner radius from the Phase-2 tokens / footer radius. |
+| `src/app_impl/ui_window.rs` | no contract change — verify the deferred capsule sync path is untouched; the engine only swaps which native class backs the strip. |
 | `src/theme/chrome.rs` | `popup_surface_rgba`: engine-aware alpha if Phase-2 measurements show the popup/footer strip diverging from the body under glass. |
 
-Gate: footer strip vs body luminance/saturation match over white + rainbow;
+Gate: capsule vs body luminance/saturation match over white + rainbow;
 `bun scripts/devtools/actions.ts inspect --prove-shortcut-open-freshness
 --prove-escape-close-cleanup`; real-hotkey repro (`osascript key code 41`)
-shows no SIGSEGV; footer hitbox still passes clicks through.
+shows no SIGSEGV; capsule hitbox still passes clicks through.
 
-## Phase 5 — Secondary windows
+## Phase 5 — No secondary windows
 
-| File | Change |
-|---|---|
-| `src/platform/secondary_window_config.rs` | `configure_window_vibrancy_common`: engine branch mirroring Phase 2 (hide VEVs, install glass with the window's own corner radius). Covers the call sites: notes (`src/notes/window/window_ops.rs`), AI / Agent Chat (`src/ai/window/platform.rs`, `src/ai/agent_chat/ui/chat_window.rs`), dictation overlay, HUD, actions popup (the `"ACTIONS"` config). |
-| `src/notes/window/init.rs`, dictation/HUD window builders | Phase-3 style `Transparent` request under LiquidGlass at creation. |
+Every view (notes, chat, voice, ⌘K actions, questions, holds) is in the main
+window under the same input, so Phases 2–4 cover them; there is no separate
+window to migrate. The main window and the snap overlay are the only windows the
+app opens.
 
-Gate: notes window + actions popup + HUD screenshots over white/rainbow hit the
-same targets; `bun scripts/devtools/notes.ts inspect --open` receipts clean.
 
 ## Phase 6 — Theme designer, cycling, docs
 
@@ -177,8 +175,8 @@ same targets; `bun scripts/devtools/notes.ts inspect --open` receipts clean.
 - `VibrancySettings::default()` engine → `LiquidGlass` (resolution still
   degrades to Vibrancy pre-26 via the `NSClassFromString` gate, so old
   machines and old theme.json files are untouched).
-- Run an AFK visual pass across main / notes / actions / Agent Chat / HUD /
-  dictation per `feedback_afk_loop_user_focus` (oracle → implement → screenshot
+- Run an AFK visual pass across the main window's views (launcher, a note, ⌘K
+  staged, the model's chat, voice, a hold in the line) per `feedback_afk_loop_user_focus` (oracle → implement → screenshot
   receipts into `.test-screenshots/`).
 - Keep engine=vibrancy fully supported for at least one release as the escape
   hatch; only delete the VEV path (and the saturation swizzle) when glass has
@@ -190,7 +188,7 @@ same targets; `bun scripts/devtools/notes.ts inspect --open` receipts clean.
 |---|---|
 | Glass can't hit chroma targets (no saturate knob) | Phase 1 is the kill gate; NO-GO leaves shipped recipe in place. |
 | Footer trio regression | Phase 4 touches all three contract pieces together; devtools prove-* + hotkey SIGSEGV repro before merge. |
-| `open_window` during draw SIGSEGV | No changes to overlay sync timing; it stays `cx.defer`. |
+| `open_window` during draw SIGSEGV | No changes to capsule sync timing; it stays `cx.defer`. |
 | Reduce Transparency / increased contrast | Measured explicitly in Phase 1; engine resolution may need to degrade to Vibrancy when set. |
 | Light mode unvalidated | One light-mode cell in every phase gate. |
 | Live-resize perf on 4K/ultrawide | Phase 1 feel-check + compare resize frame times before flipping the default. |

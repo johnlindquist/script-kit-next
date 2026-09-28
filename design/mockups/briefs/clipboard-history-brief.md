@@ -162,9 +162,10 @@ All colors resolve from raw theme fields + hand alphas; with stock
   `src/ai/agent_chat/ui/labels.rs:2`), routed through
   `main_window_footer_slot(render_simple_hint_strip(...))` (`clipboard.rs:789-790`).
 - **GUESS** Native AppKit footer overlay button labels/order
-  (`Paste ↵ · Actions ⌘K · Agent ⌘↵` in the mockup): the real footer is a
-  separate overlay window (36px host, 32px rail — cross-cutting truth,
-  receipt-verified for main-menu/confirm) and the GPUI capture band is EMPTY.
+  (`Paste ↵ · Actions ⌘K · Agent ⌘↵` in the mockup): the real footer is the
+  native glass capsule floating inside the main window's glass stage
+  (`src/footer_popup.rs`, 36px host, 32px rail), not GPUI content, so the GPUI
+  capture band is EMPTY.
   Run a protocol `activeFooter` probe on this surface before treating the
   labels as contract.
 

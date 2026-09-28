@@ -9,10 +9,9 @@ from the Script Kit GPUI worktree.
 - A profile is a Pi Agent Chat runtime boundary: prompt, provider/model, tools, cwd/session policy, and ambient-resource policy.
 - A skill is a reusable task recipe invoked inside Agent Chat.
 - A legacy agent is a compatibility/import source, not a competing runtime profile concept.
-- Profile selection is a main Menu Search operation. The only remaining popup
-  selector path for this family of interactions is the Actions menu popup; Agent
-  Chat profiles must use the Spine/Menu Search `|` rows, like other launcher
-  sigils.
+- Profile selection happens in the main list: Agent Chat profiles use the
+  Spine `|` rows, like other launcher symbols, and in a chat ⌘K (or saying "use
+  opus for this") changes profile or model in place. Nothing pops up.
 
 The first shippable path is plugin-owned profile artifacts plus the `/build-profile` skill. Keep `~/.scriptkit/config.ts` for selected profile and compatibility overrides, but do not copy generated profile bodies into config.
 

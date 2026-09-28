@@ -104,62 +104,6 @@ When a failure matches these patterns, surface it clearly in your report so it c
 ## Local lessons (advisory)
 These lessons come from prior runs in this repository. They guide judgment but never override the user's instructions, Mission, Mutation policy, or Command rules.
 
-<!-- selfimprove:9ecf0b5b1bbbbc89 d=2026-06-15 -->
-- [missing-path] Command `/bin/zsh -lc "sed -n '1,260p' src/main_sections/day_page_view.rs && printf '\\n--- types ---\\n' && sed -n '1,260p' src/main_sections/day_page_types.rs && print...` exited 1. The path did not exist. List the parent directory first (`ls PARENT_DIR`) to find the real path, then retry with the path copied from that listing. Evidence: // Day Page surface entry, render host, and footer helpers.
-
-use chrono::Utc;
-
-use crate::components::notes_editor::{NotesEditorLayout, NotesEditorMarkdownConfig};
-use crate::footer_popup::{FooterAction, FooterButtonConfig};
-use script_kit_gpui::day_page::normalize_day_page_markdown_references;
-use script_kit_gpui::brain::{substrate::BrainSubstrate, wake_indexer};
-use script_kit_gpui::day_page::{
-    parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
-};
-
-impl DayPageView {
-    pub fn new(
-        app: Entity<ScriptListApp>,
-        substrate: BrainSubstrate,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let metrics = crate::notes::window::style::adopted_metrics();
-        let (editor_state, notes_editor) = NotesEditor::new_markdown_pair(
-            window,
-            cx,
-            NotesEditorMarkdownConfig::new("")
-                .placeholder("Today...")
-                .layout(NotesEditorLayout::new(
-                    metrics.editor_padding_x,
-                    metrics.editor_padding_y,
-                ))
-                .rows(20),
-        );
-
-        // `subscribe_in` already runs the handler with this D...
-
-<!-- selfimprove:ed652037f171e785 d=2026-06-18 -->
-- [generic] Command `/bin/zsh -lc 'bun scripts/agentic/modal-fast-verify.ts'` exited 1. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: modal-fast-verify: fail
-durationMs: 1.639
-underThreshold(1000ms): true
-- pass: confirm-popup-window-kind-and-native-background (0.171ms)
-- fail: confirm-popup-reuses-footer-button-contract (0.709ms)
-- pass: in-window-confirm-prompt-layout-and-elements-use-footer-contract (0.355ms)
-- pass: confirm-keyboard-and-sdk-route-contract (0.365ms)
-- pass: rust-source-audit-covers-fast-contract (0.039ms)
-
-
-<!-- selfimprove:6a6fb4bdaf34270f d=2026-06-18 -->
-- [usage-error] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test source_audits actions_popup_contract confirm_modal_shared_shell -- --nocapture'` exited 1. The flags or arguments were wrong. Run the narrow help for that exact subcommand (`TOOL SUBCOMMAND --help`) and copy the flag names exactly from the help output; never guess flags. Evidence: AGENT_CARGO disk_budget total=76G/40G free=148G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test source_audits actions_popup_contract confirm_modal_shared_shell -- --nocapture
-error: unexpected argument 'confirm_modal_shared_shell' found
-
-Usage: cargo test [OPTIONS] [TESTNAME] [-- [ARGS]...]
-
-For more information, try '--help'.
-
-
 <!-- selfimprove:2708314a6880690a d=2026-06-20 -->
 - [usage-error] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --lib menu_syntax::trigger_picker::tests::partial_colon_narrows_qualifier_rows menu_syntax::trigger_picker::...` exited 1. The flags or arguments were wrong. Run the narrow help for that exact subcommand (`TOOL SUBCOMMAND --help`) and copy the flag names exactly from the help output; never guess flags. Evidence: AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --lib menu_syntax::trigger_picker::tests::partial_colon_narrows_qualifier_rows menu_syntax::trigger_picker::tests::partial_colon_ty_shows_type_head_only menu_syntax::trigger_picker::tests::bare_type_open_value_lists_type_rows_only menu_syntax::trigger_picker_keys::tests::accept_advanced_head_from_partial_colon_replaces_with_bare_head_and_keeps_open -- --nocapture
 error: unexpected argument 'menu_syntax::trigger_picker::tests::partial_colon_ty_shows_type_head_only' found
@@ -299,30 +243,6 @@ fn dev_relaunch_preserves_session_start_json_on_failure() {
     assert!(
         DEV_RELAUNCH_SH.contains("set +e\nRESULT=\"$(bash \"${SESSION_SCRIPT}\" start \"${SESSION_NAME}\")\""),
         "dev-relaunch.sh must disable `set -e` aro...
-
-<!-- selfimprove:0e4be944feb036b3 d=2026-06-23 -->
-- [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test dev_watchdog_lifecycle_contract --test agentic_dev_relaunch_contract'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=50G/40G free=79G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test dev_watchdog_lifecycle_contract --test agentic_dev_relaunch_contract
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl Inli...
 
 <!-- selfimprove:587226bfb94931fb d=2026-06-23 -->
 - [usage-error] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --lib file_search::tests::root_file_inline_match_mode_is_deterministic_for_root_queries file_search::tests::...` exited 1. The flags or arguments were wrong. Run the narrow help for that exact subcommand (`TOOL SUBCOMMAND --help`) and copy the flag names exactly from the help output; never guess flags. Evidence: AGENT_CARGO disk_budget total=49G/40G free=80G/min25G; evicting LRU pools

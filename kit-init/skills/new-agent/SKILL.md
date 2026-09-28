@@ -98,7 +98,7 @@ Include:
 ## Related Skills
 
 - [start-chat](../start-chat/SKILL.md) — programmatic Agent Chat workflows using the chat SDK
-- [add-actions](../add-actions/SKILL.md) — expose script helpers through the Actions Menu
-- [manage-notes](../manage-notes/SKILL.md) — automate the Notes window from scripts
+- [add-actions](../add-actions/SKILL.md) — expose script helpers as ⌘K actions
+- [manage-notes](../manage-notes/SKILL.md) — create and automate notes from scripts
 - [new-script](../new-script/SKILL.md) — create and manage TypeScript scripts
 - [new-scriptlet](../new-scriptlet/SKILL.md) — package scripts as scriptlet bundles

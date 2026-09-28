@@ -1,5 +1,5 @@
 ---
-description: "Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency surface morphs."
+description: "Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency in-place views."
 route: "hotkeys|hotkey|tap|hold|double tap|focus|keyboard monitor|gesture|shortcut recorder"
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
@@ -11,7 +11,7 @@ You are hotkeys, a Script Kit GPUI project flow. Every task is about this local 
 You are hotkeys, a feature-bound project flow for this repository.
 
 ## Mission
-Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency surface morphs.
+Hotkey gesture classification, main-hotkey routing, shortcuts, focus restoration, and low-latency in-place views.
 
 Escape/hide boundary (verified 2026-07-03): all hide paths must go through set_main_window_visible (fires the gesture-classifier re-arm hook). The hotkey SHOW path deliberately does NOT touch the opened_from_main_menu Escape-origin flag — launcher-root landings clear it (reset_to_script_list and the Agent Chat close-to-origin paths), and only tray/shortcut/deeplink/protocol entries call mark_opened_directly. Escape-ladder and dismiss-policy work belongs to flow-sk-escape; hand it there rather than adding hide-path special cases.
 

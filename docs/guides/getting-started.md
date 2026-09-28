@@ -1,6 +1,6 @@
 # Getting Started with Script Kit GPUI
 
-Script Kit GPUI turns macOS into a scriptable command center: run TypeScript scripts, search built-in utilities, chat with agents, dictate text, and expose desktop context over MCP — all from one launcher.
+Script Kit GPUI is one window you tell what should happen: run TypeScript scripts, search built-in utilities, say a sentence and let it do the steps, chat with agents, dictate text, and expose desktop context over MCP — all under one input that never moves.
 
 ## Prerequisites
 
@@ -51,9 +51,9 @@ The main hotkey understands more than one gesture:
 
 | Gesture | Result |
 | --- | --- |
-| Tap | Toggle the launcher |
+| Tap | Open the launcher; a tap while it's open hides it |
 | Hold (~250 ms) | Open the Day Page (today's diary/notes surface) |
-| Double-tap | Open Agent Chat |
+| Double-tap | Open Agent Chat under the same input; a double-tap while it's open closes it |
 
 ## 3. Your First Script
 
@@ -71,19 +71,20 @@ const name = await arg("What's your name?");
 await div(`<h1 class="text-4xl p-8">Hello, ${name}!</h1>`);
 ```
 
-Press the hotkey, type `hello`, and press `Enter`. Script Kit picks up new files automatically; if a script doesn't appear, run **Reload Scripts** from the actions menu (`⌘K`).
+Press the hotkey, type `hello`, and press `Enter`. The prompt opens under the same input. Script Kit picks up new files automatically; if a script doesn't appear, run the **Reload Scripts** command.
 
 ## 4. The Core Workflow
 
 1. **Hotkey** — press `⌘;` from anywhere.
-2. **Search** — type a script name, built-in, app, or task. Fuzzy matching applies.
-3. **Run** — press `Enter` on the selected row.
+2. **Say it** — type a script name, built-in, app, or a sentence saying what should happen. Fuzzy matching applies, and Jev lists up to three readings of a sentence under a "Jev · ⌘1–3" header.
+3. **Run** — press `Enter`. The ↵ label always names exactly what it will run.
 
 Along the way:
 
-- `⌘K` opens the **actions menu** for the selected row (edit, logs, copy path, and more).
+- `⌘K` stages the selected row in the line above the input, and the list becomes its actions (edit, logs, copy path, and more). `Esc` lets go.
 - `⌘I` toggles an info panel about the selected item.
-- `Tab` on typed text asks AI about it (**Quick AI**); `Tab` on an empty input opens the working-directory picker.
+- `Tab` on typed text hands the words to an agent (Tab again takes them back); `Tab` on an empty input opens the working-directory picker.
+- Nothing asks "Are you sure?": something that can't be undone waits 8 s in the line ("Runs in 8s") and `⌘Z` stops it; something that can be undone just happens, and `⌘Z` takes it back.
 - If nothing matches, fallback rows appear: **Do in Current App**, **Search Files**, **Ask AI**, open-as-URL/file, and an inline calculator for math input.
 
 ## 5. Use Bun Packages

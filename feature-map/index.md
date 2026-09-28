@@ -4,9 +4,9 @@ This maintained atlas indexes the 37 source-declared UI surface contracts. Runti
 
 | ID | Feature | Cluster | Status | Primary owners | Raw Oracle | Chapter |
 |---:|---|---|---|---|---|---|
-| 001 | Script List | Launcher | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md#1-core-windows--presentation-modes) |
+| 001 | Script List | Launcher | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md#1-the-main-window-and-its-views) |
 | 002 | About | Utility | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md) |
-| 003 | Actions Dialog | Popup | Source-declared | `actions-dialog` | — | [Glossary](../GLOSSARY.md#2-popups--dialogs) |
+| 003 | Actions (⌘K in place) | Acting | Source-declared | `actions-dialog` | — | [Glossary](../GLOSSARY.md#2-acting-holding-and-the-line) |
 | 004 | Prompt Entity | Prompt | Source-declared | `prompt-surface-contracts` | — | [Glossary](../GLOSSARY.md#3-interactive-script-prompts) |
 | 005 | Prompt Entity Cancels to Script | Prompt | Source-declared | `prompt-surface-contracts` | — | [Glossary](../GLOSSARY.md#3-interactive-script-prompts) |
 | 006 | Prompt Child Content | Prompt | Source-declared | `prompt-surface-contracts` | — | [Glossary](../GLOSSARY.md#3-interactive-script-prompts) |
@@ -36,8 +36,8 @@ This maintained atlas indexes the 37 source-declared UI surface contracts. Runti
 | 030 | SDK Reference | Built-in | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md#4-built-in-surfaces) |
 | 031 | Tips | Built-in | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md#4-built-in-surfaces) |
 | 032 | Script Template Catalog | Built-in | Source-declared | `launcher-surface-contracts` | — | [Glossary](../GLOSSARY.md#4-built-in-surfaces) |
-| 033 | Agent Chat History | Assistant | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#6-flow-launcher-mdflow) |
-| 034 | Attachment Portal Browser | Portal | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#6-flow-launcher-mdflow) |
-| 035 | Agent Chat | Assistant | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#6-flow-launcher-mdflow) |
+| 033 | Agent Chat History | Assistant | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#1-the-main-window-and-its-views) |
+| 034 | Attachment Portal Browser | Portal | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#1-the-main-window-and-its-views) |
+| 035 | Agent Chat | Assistant | Source-declared | `agent-chat` | — | [Glossary](../GLOSSARY.md#1-the-main-window-and-its-views) |
 | 036 | Day Page | Notes | Source-declared | `brain-day-page` | — | [Glossary](../GLOSSARY.md#5-memory-layer-script-kit-brain) |
-| 037 | Confirm Prompt | Popup | Source-declared | `confirm-dialog` | — | [Glossary](../GLOSSARY.md#2-popups--dialogs) |
+| 037 | SDK Confirm (a question in the line, or a hold when it carries a risk) | Acting | Source-declared | `one-window-line` | — | [Glossary](../GLOSSARY.md#2-acting-holding-and-the-line) |

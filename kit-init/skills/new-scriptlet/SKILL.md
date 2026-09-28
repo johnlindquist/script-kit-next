@@ -110,7 +110,7 @@ See [add-actions](../add-actions/SKILL.md) for the canonical pattern.
 Generic examples are flat files under `~/.scriptkit/plugins/examples/scriptlets/`. Focused feature examples are **nested bundles**:
 
 - `~/.scriptkit/plugins/examples/scriptlets/agent_chat-chat/main.md` — Agent Chat-oriented scriptlet helpers
-- `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.md` — shared Actions Menu patterns
+- `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.md` — shared ⌘K action patterns
 - `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.actions.md` — companion actions file
 - `~/.scriptkit/plugins/examples/scriptlets/notes/main.md` — Notes automation as a scriptlet bundle
 
@@ -118,7 +118,7 @@ Flat mirrors (`~/.scriptkit/plugins/examples/scriptlets/agent_chat-chat.md`, `cu
 
 ## Related Skills
 
-- [add-actions](../add-actions/SKILL.md) — shared Actions Menu patterns for scriptlet bundles
+- [add-actions](../add-actions/SKILL.md) — shared ⌘K action patterns for scriptlet bundles
 - [start-chat](../start-chat/SKILL.md) — Agent Chat-oriented scriptlet helpers
 - [manage-notes](../manage-notes/SKILL.md) — package Notes automation examples as scriptlet bundles
 

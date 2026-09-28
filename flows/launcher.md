@@ -39,7 +39,7 @@ verify changed behavior -> git diff --check
 ## Owned paths
 - `src/main_sections/**`
 - `src/render_script_list/**`
-- `src/flows/**` (flow-first launcher substrate: mdflow roster/explain/events client, run registry, Flow Manager window — contract in docs/ai/flow-ux-protocol.md)
+- `src/flows/**` (flow-first launcher substrate: mdflow roster/explain/events client, run registry — contract in docs/ai/flow-ux-protocol.md)
 - `src/render_builtins/flow_ux.rs`
 - `src/app_layout/**`
 - `src/components/main_view_chrome.rs`
@@ -214,30 +214,6 @@ pub fn fuzzy_search_unified_all_with_skills(
     let parsed = parse_query_prefix(query);
     let search_query = if parsed.fi...
 
-<!-- selfimprove:fba06122d806f8ba d=2026-06-21 -->
-- [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test devtools_act_lifecycle_contract act_allows_menu_syntax_trigger_accept_by_enter_or_select_semantic_id'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test devtools_act_lifecycle_contract act_allows_menu_syntax_trigger_accept_by_enter_or_select_semantic_id
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ------------------- meth...
-
 <!-- selfimprove:61adde21dc0981fd d=2026-06-21 -->
 - [usage-error] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --lib menu_syntax::trigger_picker::tests::complete_type_value_closes_picker menu_syntax::trigger_picker::tes...` exited 1. The flags or arguments were wrong. Run the narrow help for that exact subcommand (`TOOL SUBCOMMAND --help`) and copy the flag names exactly from the help output; never guess flags. Evidence: AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --lib menu_syntax::trigger_picker::tests::complete_type_value_closes_picker menu_syntax::trigger_picker::tests::bare_type_open_value_lists_type_rows_only menu_syntax::trigger_picker_keys::tests::accept_preserves_open_value_rows
 error: unexpected argument 'menu_syntax::trigger_picker::tests::bare_type_open_value_lists_type_rows_only' found
@@ -336,31 +312,6 @@ error: timed out waiting for session response
 
 
 
-<!-- selfimprove:4fc986e94b4e14db d=2026-06-23 -->
-- [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test filter_input_updates_reconciliation -- --nocapture'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=48G/40G free=73G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test filter_input_updates_reconciliation -- --nocapture
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ...
-
 <!-- selfimprove:9524c2f4b52e04ab d=2026-06-23 -->
 - [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --lib brain_inbox_enter_stages_agent_chat_without_submit_or_resolve'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=51G/40G free=78G/min25G; evicting LRU pools
 AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --lib brain_inbox_enter_stages_agent_chat_without_submit_or_resolve
@@ -417,57 +368,6 @@ error: `async move` blocks are only allowed in Rust 2018 or later
      |
 1634 |         cx.spawn(async move |_this, cx| {
      |            ...
-
-<!-- selfimprove:9c3933abae5671cc d=2026-06-24 -->
-- [generic] Command `/bin/zsh -lc 'SCRIPT_KIT_AGENT_ARTIFACT_NAME=day-notes-editor-parity ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui'` exited 101. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: AGENT_CARGO disk_budget total=52G/40G free=74G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo build --bin script-kit-gpui
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ------------------- method in this ...
-
-<!-- selfimprove:ed80033e5babebb4 d=2026-06-24 -->
-- [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh check --lib && SCRIPT_KIT_AGENT_ARTIFACT_NAME=day-notes-editor-parity ./scripts/agentic/agent-cargo.sh build --bi...` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=52G/40G free=75G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo check --lib
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ------------------- method in this implementation
-...
-29 |     pub(crate) fn empty_state(mut self, empty_state: InlineDropdownEmpty...
 
 ## Output
 Be terse and source-grounded. Include file paths with line numbers and the exact verification commands run. Report what you found or changed, what was verified, and what was skipped. Do not describe these instructions.

@@ -37,7 +37,9 @@ locks the exporter to the renderer's resolved bytes.
 - **source** — authored Rust leaves (writable; edits round-trip via
   `workbench/*.edits.json`).
 - **resolved** — post-quantization values the renderer actually paints
-  (read-only; e.g. selected row = `#FFFFFF20`, not `theme.opacity.selected`).
+  (read-only; e.g. the main menu's selected row paints no fill,
+  `--sk-main-menu-row-selected-background` alpha `0`, not
+  `theme.opacity.selected`).
 - **emulator** — `--sk-emulator-*` browser-only calibration (blur radii,
   material bias, synthetic desktop). Never maps back to Rust.
 
@@ -48,6 +50,16 @@ locks the exporter to the renderer's resolved bytes.
 3. **Raster-calibrated** — pixels match under a fixed backdrop/scale/motion;
    vibrancy, starfield, native-footer and glyph rasterization are recorded in
    `known-divergence.json` per screen and are non-blocking.
+
+## Screens of retired surfaces
+
+The app is one window: notes, the model's chat, ⌘K actions and questions are
+views under the main input (`CLAUDE.md`, "Hold, Undo, and the Line"). These
+screens still draw the surfaces that came before and are kept for history, not
+as targets: `screens/actions-dialog`, `screens/confirm-popup`,
+`screens/notes` (the Notes window) and `screens/agent-chat` (its fixture,
+`openAgentChatKitchenSinkFixture`, is gone). Their briefs in `briefs/` carry
+the same status.
 
 ## Recorded conflicts
 

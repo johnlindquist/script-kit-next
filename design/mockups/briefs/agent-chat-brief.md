@@ -1,5 +1,10 @@
 # Agent Chat — design-contract mockup brief
 
+> **Superseded.** This brief describes the Agent Chat surface and its detached
+> window from before the one-window app. The model's chat is now a view under the
+> main input (`src/one_window/chat_host.rs`; `CLAUDE.md`, "Agent Chat Entry Context
+> Contract"), and the fixtures cited below are gone.
+
 Screen slice for `design/mockups/screens/agent-chat/`. Covers the Pi-backed
 Agent Chat surface (`src/ai/agent_chat/**`), NOT the script chat prompt
 (`src/prompts/chat/**`). Fixture: `openAgentChatKitchenSinkFixture`, Standard

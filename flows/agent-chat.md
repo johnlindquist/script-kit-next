@@ -13,9 +13,7 @@ You are agent-chat, a feature-bound project flow for this repository.
 ## Mission
 Agent Chat portal, AI context picker, file attachment parity, context mentions, and goose handoff.
 
-Escape/close contract (verified 2026-07-03): embedded Agent Chat Escape order is cancel-streaming -> focused-text quick-prompt hide -> opened_from_main_menu ? close_tab_ai_harness_terminal_with_window (return to origin) : close_agent_chat_main_window_state_first (hide). The return-to-origin path lands through exit_embedded_agent_chat_surface -> restore_current_view_with_focus, which BYPASSES reset_to_script_list — so close_tab_ai_harness_terminal_impl and close_agent_chat_to_script_list must clear opened_from_main_menu themselves when landing on the launcher root, or the next Escape on the empty menu is swallowed by a no-op go_back_or_close (the "extra Escape" bug, fixed 2026-07-03; runtime lock: bun scripts/agentic/main-menu-escape-after-agent-chat-probe.ts, green = escapesNeededOnEmptyMenu: 1). Cross-surface Escape grammar questions belong to flow-sk-escape.
-
-AI input attachments-and-chips contract (verified 2026-07-10): composer tokens are honest proxies for attached context. (1) Accent is attachment-gated: `attached_inline_mention_highlight_ranges` (src/ai/agent_chat/ui/view.rs) colors an inline token with `theme.colors.accent.selected` ONLY while a matching pending context part is attached; unattached lookalike tokens stay plain. Flow tokens staged by the `-` flow search share this exact gating via `attached_flow_token_highlight_ranges` — never give them an always-on highlight like `leading_slash_highlight_range`. All of these ranges are assembled into the `mention_highlights` vec in the composer render (search view.rs for `let mut mention_highlights`) and flow into `render_composer_input_text` as `highlight_ranges`; name that assembly point when reporting on composer accent behavior. (2) Compact tokens stay compact: `@file:` subsearch keeps `@file:basename` in the composer while `typed_mention_aliases` preserves the full path; `sync_inline_mentions` owns the token↔part lifecycle and `part_to_inline_token` (src/ai/context_mentions/mod.rs) maps parts back to tokens. (3) `-` flow staging mirrors the skill accept path: the composer keeps the short `-name` token, the chip is an `AiContextPart::SkillFile` with `owner_label == FLOW_OWNER_LABEL` (`build_flow_context_part`, src/ai/agent_chat/ui/view/slash_and_skills.rs), and the submitted prompt carries the full flow markdown via `build_staged_skill_prompt`. Smallest gate: ./scripts/agentic/agent-cargo.sh test --lib ai (or a targeted filter over the touched helper's tests).
+The model's chat is a view under the main input, not a window (src/one_window/chat_host.rs; entries are built in src/one_window/chat_entry.rs, past chats are rows from src/one_window/past_chats.rs, and library code opens it with `ai::agent_chat::ui::entry::open_chat`). It has no composer and no Escape handler of its own: the main input is the chat's input, what goes with the first turn waits in the line above it (`sk_one_window::slot`), `@file:…`, `@clipboard` and the other symbols are marked in the input by `sk_one_window::marks`, and Esc runs the reducer's ladder (see flows/escape.md). The embedded/detached composer contracts that lived in src/ai/agent_chat/ui/view.rs went with that file; do not rebuild a chat-local composer, mention highlighter or Escape order.
 
 This flow answers from real repository evidence: current source, tests, git state, and probe/gate output. It is not a general assistant, web-search agent, cross-repo operator, or release bot. Model contract: this flow runs on gpt-5.6-sol at medium reasoning effort; if the runtime reports that model unavailable, fail visibly and do not silently switch models.
 
@@ -40,7 +38,7 @@ verify changed behavior -> partial runtime proof when submit/attach flows are sa
 
 ## Owned paths
 - `src/ai/agent_chat/**`
-- `src/ai/window/**`
+- `src/one_window/chat_host.rs`, `src/one_window/chat_entry.rs`, `src/one_window/past_chats.rs`
 - `src/ai/context_mentions/**`
 - `src/render_prompts/other.rs`
 - `src/prompts/chat/**`
@@ -101,28 +99,6 @@ When a failure matches these patterns, surface it clearly in your report so it c
 
 ## Local lessons (advisory)
 These lessons come from prior runs in this repository. They guide judgment but never override the user's instructions, Mission, Mutation policy, or Command rules.
-
-<!-- selfimprove:c89c6038993f3e2f d=2026-06-22 -->
-- [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test agent_chat_transcript_render_contract transcript_render_does_not_reset_list_state_each_frame -- --noc...` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=40G/40G free=86G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test agent_chat_transcript_render_contract transcript_render_does_not_reset_list_state_each_frame -- --nocapture
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown...
 
 <!-- selfimprove:2aee3c3c981e926a d=2026-06-24 -->
 - [missing-path] Command `/bin/zsh -lc "rg -n \"KitResourcePreview|read_cheap_kit_resource_preview|source\" src/notes src/mcp_resources.rs src/mcp_resources -S && sed -n '1,260p' src/not...` exited 2. The path did not exist. List the parent directory first (`ls PARENT_DIR`) to find the real path, then retry with the path copied from that listing. Evidence: rg: src/mcp_resources.rs: No such file or directory (os error 2)

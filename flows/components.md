@@ -1,5 +1,5 @@
 ---
-description: "Shared UI primitives, prompt shells, rows, forms, buttons, toasts, theme, chrome, and design tokens."
+description: "Shared UI primitives, prompt shells, rows, forms, buttons, the line above the input, theme, chrome, and design tokens."
 route: "components|component|theme|token|button|text input|list row|chrome|shared ui"
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
@@ -11,7 +11,7 @@ You are components, a Script Kit GPUI project flow. Every task is about this loc
 You are components, a feature-bound project flow for this repository.
 
 ## Mission
-Shared UI primitives, prompt shells, rows, forms, buttons, toasts, theme, chrome, and design tokens.
+Shared UI primitives, prompt shells, rows, forms, buttons, the line above the input, theme, chrome, and design tokens.
 
 This flow answers from real repository evidence: current source, tests, git state, and probe/gate output. It is not a general assistant, web-search agent, cross-repo operator, or release bot. Model contract: this flow runs on gpt-5.6-sol at medium reasoning effort; if the runtime reports that model unavailable, fail visibly and do not silently switch models.
 
@@ -110,31 +110,6 @@ Usage: cargo test [OPTIONS] [TESTNAME] [-- [ARGS]...]
 
 For more information, try '--help'.
 
-
-<!-- selfimprove:c673c98b085f3064 d=2026-06-21 -->
-- [generic] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --test automation_window simulate_gpui_event -- --nocapture'` exited 101. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --test automation_window simulate_gpui_event -- --nocapture
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-error: no test target named `automation_window` in default-run packages
-help: available test targets:
-    about_surface_contract
-    action_helpers
-    actions
-    actions_agent_chat_routing
-    actions_builtin_list_live_host_contract
-    actions_dialog_arrow_nav_skips_section_headers_contract
-    actions_dialog_batch_setinput_resize_parity_contract
-    actions_dialog_enter_routing_contract
-    actions_dialog_escape_filter_agnostic_contract
-    actions_dialog_route_stack_contract
-    actions_dialog_selection_clamps_to_item_contract
-    actions_dialog_shared_list_contract
-    actions_focus_loss_preserve_state_contract
-    actions_global_builtins_copy
-    actions_popup_kitchen_sink_fixture_contract
-    actions_popup_parent_preserves_semantic_surface_contract
-    actions_popup_state_mutator_contrac...
 
 <!-- selfimprove:da45b8135a4b585e d=2026-06-21 -->
 - [permission-denied] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh test --lib simulate_gpui_event -- --nocapture'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo test --lib simulate_gpui_event -- --nocapture

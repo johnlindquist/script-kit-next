@@ -1,5 +1,10 @@
 # Notes screen — design-contract brief
 
+> **Superseded.** This brief describes the retired Notes window. Notes now open as
+> a view under the main input (`src/one_window/notes.rs`; `CLAUDE.md`, "Notes Live
+> Under the Main Input"). Its citations are kept for history and several no longer
+> exist (e.g. `src/notes/window/contract.rs`).
+
 Screen slice for the Notes window (separate NSPanel hosting the markdown
 editor). Mockup: `design/mockups/screens/notes/`. Every metric/color claim
 below is tagged **MEASURED** (read from source at the cited file:line) or

@@ -47,6 +47,8 @@ pressures on the same key. See the Memory Layer section below and
 Within the first few minutes, a new user should understand the promise:
 
 - The launcher appears instantly and responds like a native Mac tool.
+- You say what should happen, typed or spoken, and one window understands it:
+  the input never moves, and everything opens in place under it.
 - Scripts are local TypeScript files the user can inspect, edit, and version.
 - Prompt UIs feel coherent across scripts, built-ins, and Agent Chat.
 - AI behavior is selected through explicit profiles, not hidden personas.
@@ -66,8 +68,8 @@ architecture language.
 
 In the first five minutes, a new user should be able to:
 
-- Open Main Menu Search, find a runnable example, and understand where its local
-  TypeScript file lives.
+- Summon the window, say what they want, run it, and understand where the local
+  TypeScript file behind it lives.
 - Describe a workflow to Agent Chat, review the generated script, run a bounded
   verification step, and save the result as an owned local artifact.
 - See which profile, cwd, model, tools, and context posture Agent Chat will use
@@ -78,8 +80,8 @@ In the first five minutes, a new user should be able to:
 
 In the daily loop, a returning user should be able to:
 
-- Type one query, choose a script, built-in, profile, capture target, or Action,
-  then return to work without managing a dashboard.
+- Say one sentence, take Jev's reading or choose a script, built-in, profile,
+  capture target, or Action, then return to work without managing a dashboard.
 - Attach current desktop context to Agent Chat with a resolution receipt that
   names attempted, resolved, and failed parts.
 - Inspect or adopt a local plugin artifact by looking at its manifest and
@@ -94,19 +96,20 @@ Script Kit GPUI uses launcher speed as the front door, but the launcher is not
 the whole product. The product is the loop:
 
 ```text
-search -> choose -> prompt -> act -> automate -> verify -> return
+say -> choose -> prompt -> act -> automate -> verify -> return
 ```
 
 Each step is a product lens:
 
-- Search: find scripts, built-ins, profiles, commands, capture targets, and
-  context through one keyboard-first command surface.
+- Say: type or speak what should happen. Jev reads it against what is on
+  screen and offers what it could mean; symbols say it exactly; names, built-ins,
+  profiles, commands, capture targets, and context still match as you type.
 - Choose: make the right object obvious through shared rows, preview rules,
   source labels, and predictable focus.
 - Prompt: turn workflows into native-feeling prompt UIs instead of one-off app
   panels.
-- Act: run the selected workflow, switch profile, open Actions, or stage intent
-  for Agent Chat.
+- Act: run the selected workflow, switch profile, stage it with ⌘K to act on it
+  in place, or hand the intent to Agent Chat.
 - Automate: expose state and actions semantically so scripts and agents can
   operate without timing guesses or coordinate hacks.
 - Verify: produce receipts for target identity, semantic state, layout,
@@ -127,6 +130,13 @@ Script Kit GPUI is a fast native GPUI launcher shell over a programmable local
 automation runtime. The shell should appear instantly, accept intent, execute or
 stage the right workflow, and disappear.
 
+It is intent-first and one window. The user says what should happen instead of
+searching for a thing to run; Jev, fast and effectively free, reads each
+sentence against what is on screen and turns it into a plan. Forms, answers,
+steps, notes, the model's chat, agents, and voice all open in place under one
+input that never moves. Nothing pops up: risk is declared in the line above the
+input (an 8-second hold, or ⌘Z) instead of asked in a dialog.
+
 It is a Bun-powered TypeScript runtime where users can write and version their
 own scripts, bring their own dependencies, and keep control of the code that runs
 on their machine.
@@ -136,9 +146,9 @@ composition model for personal automation. Stable prompt surfaces should share
 chrome, focus behavior, footer discipline, semantic IDs, and layout receipts.
 
 It is a shared native UI system for scripts, prompts, built-ins, and Agent Chat.
-The product should feel coherent because surfaces share main search, Actions,
-list row language, prompt shells, footer affordances, theme tokens, and
-automation semantics.
+The product should feel coherent because every surface is a view under the same
+input and shares the line above it, ⌘K, list row language, prompt shells, the
+capsule, theme tokens, and automation semantics.
 
 It is a local plugin workspace for scripts, scriptlets, skills, profiles, and
 shareable plugin repos. The filesystem model is part of the product: users
@@ -175,16 +185,15 @@ plus two established conventions (Cmd+Enter for Agent Chat, Esc to dismiss). No
 new chords.
 
 - Tap (closed): the launcher, visible on key-down, instant, unchanged.
-- Tap (open): toggle launcher <-> Day Page. In-flight query text carries over
-  as the start of a capture. Esc is the only dismiss.
-- Hold (~250ms): the window deepens into the Day Page. (Dictation stays with
-  the dedicated dictation shortcut and window.)
-- Double-tap: Agent Chat, from closed or from either surface.
+- Tap (open): hide the window.
+- Hold (~250ms, from closed): the window deepens into the Day Page. (Voice is
+  its own key, and it opens in the same window.)
+- Double-tap: a quick question in the model's chat, with nothing attached.
 
 The disambiguation rule is "always open, then deepen": the launcher appears on
 key-down in every case, and hold/double-tap escalate the already-open window.
-No gesture ever waits on another. Surfaces morph inside one window; windows are
-never swapped.
+No gesture ever waits on another. Views change inside the one window; there is
+no other window to swap to.
 
 ### The Day Page
 
@@ -199,18 +208,17 @@ The brain indexes the files; it never owns them. Markdown on disk is canonical;
 SQLite (FTS, embeddings, signals) is a derived, rebuildable index. Delete the
 app, keep your life.
 
-The floating Notes window survives for notes about something other than today.
-The Day Page and a note must feel identical — same editor entity, hosted by
-different shells.
+Notes about something other than today open as a note view under the same
+input. The Day Page and a note must feel identical.
 
 ### Clipboard Sediment
 
 Copies become memory through earned importance, not filing decisions:
 
 - URLs are kept automatically.
-- Other content is kept when behavior proves value (re-paste), or when the user
-  promotes it via the post-copy quick menu (tap Cmd shortly after Cmd+C) by
-  adding the "why".
+- Other content is kept when behavior proves value (re-copy), or when the user
+  promotes it deliberately: pasted into the empty input, it stages in the line
+  above the input, and "Add it to today's note" is one of its rows.
 - Concealed pasteboard types, password-manager sources, and user-defined
   secret patterns are hard-rejected. This is a launch-facing privacy claim and
   needs receipts before strong language.
@@ -221,8 +229,7 @@ Copies become memory through earned importance, not filing decisions:
 
 - No cloud, no accounts. The brain is local files plus a local index.
 - The launcher input does not silently keep plain queries. Capture requires
-  expressed intent: a semicolon tag, the hold gesture, the toggle, a grab, or a
-  clipboard rule.
+  expressed intent: a semicolon tag, the Day Page, a grab, or a clipboard rule.
 - The brain must never become a second filing system the user has to manage.
   Importance is earned by behavior, not declared by the user.
 
@@ -310,8 +317,8 @@ the launch promise is still being proven.
 
 ### Now
 
-- Make Main Menu Search the command spine for scripts, built-ins, profiles,
-  command grammar, capture targets, and Agent Chat intent.
+- Make the intent-first main input the command spine for sentences, scripts,
+  built-ins, profiles, command grammar, capture targets, and Agent Chat intent.
 - Make verified local artifact creation feel first-class: intent becomes a
   reviewable TypeScript script, profile, skill, scriptlet, or plugin artifact
   with a local path and proof status.
@@ -395,11 +402,12 @@ prompt launch-ready.
 | `webcam()` | Coming-soon media prompt | Do not call launch-ready while source routes it through `WebcamComingSoon` or lacks runtime media receipts. |
 | `ShowMicro` | Compact input implementation detail | Do not confuse micro input support with `mic()` audio capture readiness. |
 
-### The Launcher Is The Spine
+### The Input Is The Spine
 
-Main Menu Search is the entry point for scripts, built-ins, profiles, command
-syntax, context staging, and Agent Chat intent. Avoid side-channel pickers unless
-they are contextual Actions.
+The main input is the entry point for sentences Jev reads, scripts, built-ins,
+profiles, command syntax, context staging, and Agent Chat intent. It never moves.
+Avoid side-channel pickers: completions, actions, and views all list under the
+same input.
 
 The launcher should not become a cluttered dashboard. It is the command spine:
 type intent, choose the right object, run or stage the workflow, then return the
@@ -418,9 +426,10 @@ action to the wrong object.
 Command+K / Actions should answer "what can I do here?" New persistent controls
 should go into Actions before earning permanent chrome.
 
-Actions should feel like a natural extension of the main list, not a separate UI
-system. The invariant is shared language, keyboard-first behavior, native feel,
-contextual relevance, and no footer bloat.
+Actions are the main list, not a separate UI system: ⌘K stages the focused thing
+in the line above the input and its actions list under the same input. The
+invariant is shared language, keyboard-first behavior, native feel, contextual
+relevance, and no footer bloat.
 
 ### Three-Affordance Footer Discipline
 
@@ -593,7 +602,7 @@ Source areas are intentionally subsystem-level; exact type placement can move.
 
 | Loop step | Owning surfaces | Source areas | Representative checks | Runtime receipts |
 | --- | --- | --- | --- | --- |
-| Search | Main Menu Search, catalog sources, command grammar | `src/app_impl/filter_input_*`, `src/app_impl/filtering_cache.rs`, `src/main_sections/root_search_store.rs`, `crates/sk-protocol/src/search_contract.rs` | `./scripts/agentic/agent-cargo.sh test --locked -p sk-protocol --lib search_contract::tests`; owned `design run --scenario launcher-ranking-provider` with an immutable artifact | query/scope revision, exact provider run and publication policy, committed row content, complete finite schedule accounting |
+| Say | The main input, Jev's readings, catalog sources, command grammar | `src/intent/**`, `crates/sk-one-window/**`, `src/one_window/**`, `src/app_impl/filter_input_*`, `src/app_impl/filtering_cache.rs`, `src/main_sections/root_search_store.rs`, `crates/sk-protocol/src/search_contract.rs` | `./scripts/agentic/agent-cargo.sh test -p sk-one-window`; `./scripts/agentic/agent-cargo.sh test --locked -p sk-protocol --lib search_contract::tests`; `bash scripts/agentic/one-window/run.sh`; owned `design run --scenario launcher-ranking-provider` with an immutable artifact | query/scope revision, exact provider run and publication policy, committed row content, complete finite schedule accounting |
 | Choose | ScriptList rows, built-ins, profile rows, Actions rows | `src/main_sections/app_state.rs`, `src/components/unified_list_item/**`, `src/render_script_list/**`, semantic dispatch | shared `scripts/agentic/launcher-selection-stability-probe.ts` recipe through the owned launcher journey; surface-specific Actions/profile checks remain separate | automatic/anchored intent, selected semantic identity, actual GPUI input focus, preview/footer subject, natural completed frame and matching retained pixels |
 | Prompt | Prompt APIs and prompt shells | `src/main_sections/prompt_messages.rs`, `src/render_prompts/**`, `src/components/prompt_*` | `./scripts/agentic/agent-cargo.sh test --test surface_contract_matrix_artifact_contract`, prompt-specific source checks | prompt state, focus owner, footer hints, `getLayoutInfo` |
 | Act | Enter, Cmd+K Actions, Cmd+Enter Agent Chat, direct action execution | `src/actions/**`, `src/app_actions/**`, `src/app_impl/**` | `./scripts/agentic/agent-cargo.sh test --test actions_dialog_enter_routing_contract`, `./scripts/agentic/agent-cargo.sh test --test main_window_footer_surface_owner_contract` | action receipt, route stack, target identity, focus restoration |
@@ -623,9 +632,9 @@ behavior.
 Build as a skill when it is a repeatable AI task recipe that should run inside an
 existing profile instead of defining a new runtime.
 
-Expose through Main Menu Search when the object is first-class and
+Expose through the main input when the object is first-class and
 runnable/selectable: scripts, built-ins, profiles, command grammar heads, or
-capture targets.
+capture targets, and make sure Jev can reach it from a plain sentence.
 
 Expose through Actions when the user is asking what can be done with the current
 context.
@@ -657,7 +666,7 @@ chrome, footer ownership, semantic elements, and layout receipt model.
   tools, cwd, session policy, context posture, or warm behavior.
 - Build as a skill when the value is a repeatable task recipe that should run
   inside an existing profile instead of defining a new runtime boundary.
-- Expose through Main Menu Search when the object is first-class, runnable, or
+- Expose through the main input when the object is first-class, runnable, or
   selectable.
 - Expose through Actions when the operation depends on the currently selected
   row, prompt, profile, built-in, Agent Chat thread, or artifact.
@@ -698,8 +707,8 @@ One-off UI is launch debt.
 
 Mismatched prompt, built-in, and Agent Chat chrome is launch debt.
 
-Any feature that cannot be discovered through Main Menu Search or Actions needs
-a reason.
+Any feature that cannot be reached from the main input (by sentence or name) or
+Actions needs a reason.
 
 Any launch-facing surface that cannot produce semantic elements and layout
 receipts is not agent-ready.
@@ -790,11 +799,12 @@ Representative runtime receipts:
 
 When evaluating a launch-facing change, ask:
 
-- Does this strengthen the loop of search, choose, prompt, act, automate,
-  verify, and return?
+- Does this strengthen the loop of say, choose, prompt, act, automate, verify,
+  and return?
+- Does the input stay where it is, with nothing popping up over it?
 - Does it preserve launcher speed and keyboard confidence?
 - Does it reuse the shared surface language instead of creating a new island?
-- Is discovery in Main Menu Search or Actions?
+- Is discovery in the main input or Actions?
 - Can a human inspect the local artifact or understand the runtime boundary?
 - Can an agent inspect the semantic state and produce a receipt?
 - Are the claims honest about what the current runtime can enforce?

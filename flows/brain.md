@@ -60,7 +60,7 @@ Day Page view / footer wiring lives in the bin target -> ./scripts/agentic/agent
   files stay raw-free. Every plan or change touching the shelf, sediment, or
   day-file save path MUST name and run its round-trip gate verbatim:
   `./scripts/agentic/agent-cargo.sh test --lib day_page::sediment`.
-- **kit:// resource previews are read-only overlays, and closing one returns.**
+- **kit:// resource previews are read-only views, and closing one returns.**
   Escape/Close from a preview restores the editor underneath; it never closes
   the window. Labels come from `kit_resource_preview_return_label()`
   ("Back to Today" / "Back to Day" / "Back to Note" / "Back to Fragment") —
@@ -70,8 +70,7 @@ Day Page view / footer wiring lives in the bin target -> ./scripts/agentic/agent
   `src/components/resource_preview.rs` component; its actions are contributed
   by `day_page_footer_buttons` (src/main_sections/day_page_view.rs) and routed
   through `dispatch_day_page_preview_footer_action` (src/app_impl/ui_window.rs).
-  The Notes window has no native footer and keeps the in-body action row. Do
-  not add in-body action links back to the Day Page preview.
+  Do not add in-body action links back to the Day Page preview.
 
 ## Workflow
 1. Preserve unrelated dirty work; note pre-existing dirty files before changing anything.
@@ -175,52 +174,6 @@ fn write_fragment(
     fs::create_dir_all(parent).expect("fragments dir");
     let frontmatter = BrainFrontmatter::new(NoteId::new(), now, now).wit...
 
-<!-- selfimprove:82ce30f8f65132a6 d=2026-06-15 -->
-- [missing-path] Command `/bin/zsh -lc "sed -n '1,140p' src/lib.rs; sed -n '1,80p' src/main_sections/mod.rs; rg -n \"mod notes|pub mod notes|main_sections::deeplink|pub(crate) mod deepli...` exited 2. The path did not exist. List the parent directory first (`ls PARENT_DIR`) to find the real path, then retry with the path copied from that listing. Evidence: #![allow(unexpected_cfgs)]
-#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
-#![recursion_limit = "8192"]
-
-//! Script Kit GPUI - A GPUI-based launcher for Script Kit
-//!
-//! This library provides the core functionality for executing scripts
-//! with bidirectional JSONL communication.
-
-// Actions - Reusable action dialog component
-// Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
-pub mod actions;
-pub mod agentic_protocol_bus;
-
-pub mod about;
-pub mod brain;
-pub mod branding;
-pub mod calculator;
-#[cfg(target_os = "macos")]
-pub mod camera;
-pub mod components;
-pub mod config;
-pub mod dictation;
-
-// Deterministic AI-relevant desktop context snapshots
-pub mod context_snapshot;
-
-// Computer-use vocabulary over the existing automation inspection protocol
-pub mod computer_use;
-
-// Unified icon system - single API for all icon sources
-// Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
-pub mod debug_grid;
-pub mod designs;
-pub mod dev_style_tool;
-pub mod editor;
-pub mod emoji;
-pub mod emoji_usage;
-pub mod error;
-pub mod executor;
-pub mod focus_coordinator;
-pub mod form_prompt;
-pub mod formatting;
-pub mod ho...
-
 <!-- selfimprove:0c3f38731862f226 d=2026-06-15 -->
 - [generic] Command `/bin/zsh -lc "rg -n \"ContextSubsearchSource|parse_context_subsearch|build_context_subsearch|day_page_context_return|restore_day_page|round_trip|@{}:|set_filter...` exited 2. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: rg: regex parse error:
     (?:ContextSubsearchSource|parse_context_subsearch|build_context_subsearch|day_page_context_return|restore_day_page|round_trip|@{}:|set_filter|filter.*@|Subsearch|subsearch)
@@ -315,31 +268,6 @@ warning: methods `focus_with_cursor_at_end` and `scroll_to_bottom` are never use
 ...
 113 |     pub(crate) fn focus_with_cursor_at_end(&mut self, w...
 
-<!-- selfimprove:9328839037975049 d=2026-06-24 -->
-- [generic] Command `/bin/zsh -lc './scripts/agentic/agent-cargo.sh check --bin script-kit-gpui'` exited 101. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: AGENT_CARGO disk_budget total=53G/40G free=72G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo check --bin script-kit-gpui
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ------------------- method in this ...
-
 <!-- selfimprove:5fe1a7b792f5abbd d=2026-06-24 -->
 - [generic] Command `/bin/zsh -lc 'TMPDIR=this repository/.test-output bun --syntax-check scripts/agentic/day-page-context-roundtrip-probe.ts'` exited 1. Read the failure output before retrying. If syntax is uncertain, run the narrow `--help`/discovery command first, then retry once with corrected syntax. Evidence: 126 |   }
 127 | 
@@ -354,31 +282,6 @@ error: Binary not found at target-agent/artifacts/day-page-context/script-kit-gp
 
 Bun v1.3.11 (macOS arm64)
 
-
-<!-- selfimprove:bb48f84b78a2c6a6 d=2026-06-24 -->
-- [permission-denied] Command `/bin/zsh -lc 'SCRIPT_KIT_AGENT_ARTIFACT_NAME=day-page-context ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui'` exited 101. Permission was denied. Do not retry with sudo or work around the restriction; report the blocker unless the user explicitly asked for a privileged action. Evidence: AGENT_CARGO disk_budget total=53G/40G free=72G/min25G; evicting LRU pools
-AGENT_CARGO mode=pool pool=agent-debug target_dir=this repository/target-agent/pools/agent-debug lock=pool-agent-debug rustc_wrapper=none debug=line-tables-only incremental=default cargo build --bin script-kit-gpui
-warning: unused field in patch for `gpui`: `features`
-  |
-  = help: configure `features` in the `dependencies` entry
-   Compiling script-kit-gpui v0.1.14 (this repository)
-warning: variant `DayPage` is never constructed
-    --> src/actions/builders/script_context.rs:1515:5
-     |
-1510 | pub(crate) enum AgentChatActionsDialogHost {
-     |                 -------------------------- variant in this enum
-...
-1515 |     DayPage,
-     |     ^^^^^^^
-     |
-     = note: `AgentChatActionsDialogHost` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: method `empty_state` is never used
-  --> src/components/inline_dropdown/component.rs:29:19
-   |
-16 | impl InlineDropdown {
-   | ------------------- method in this ...
 
 ## Output
 Be terse and source-grounded. Include file paths with line numbers and the exact verification commands run. Report what you found or changed, what was verified, and what was skipped. Do not describe these instructions.

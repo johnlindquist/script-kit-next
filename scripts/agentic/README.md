@@ -71,7 +71,7 @@ Families, by prefix:
 - `brain-*` — brain capture/recall/inbox/substrate probes.
 - `day-*`, `day-page-*` — Day Page editor, handoff, spine, perf.
 - `notes-*` — the notes editor and the Today switcher.
-- `mini-*` — mini AI window sizing/dismiss/handoff.
+- `mini-*` — the main window's mini mode: sizing, dismiss, handoff.
 - `main-*` — main window focus, hotkeys, Escape.
 - `root-*` — main-menu perf benchmarks and source-filter matrices
   (`root-source-filter-matrix.ts` is the canonical template for porting a

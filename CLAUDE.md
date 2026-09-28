@@ -8,6 +8,39 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 - Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
 - Keep tool-facing root docs in place: `README.md`, `CLAUDE.md`, `AGENTS.md`, and `.impeccable.md`.
 
+## One Window, Intent First
+
+Script Kit is one window that you tell what should happen. Every other section of this file assumes it.
+
+- **Say it, don't search for it.** The main input takes a sentence. `src/intent/**` asks Jev (fast,
+  near-free classification) to read it against what is on screen (`intent::ScreenContext`), and the engine
+  turns the readings into a runnable `Plan`. The top readings fill three reserved rows under
+  "Jev · ⌘1–3". Launcher syntax already says what to do and skips Jev (`intent::wants_reading`). A reading
+  that needs a service the user hasn't connected is a "Needs <service>" row whose ↵ opens the connect view
+  in place; the sentence runs once the service connects.
+- **The input never moves.** Above it is always the 34 pt line (`sk_one_window::slot`): a staged subject,
+  a waiting hold, the last thing that ran, or what "this" means. Every list starts with a 28 pt header.
+  Rows are 44 pt with a 24 pt icon tile that turns yellow (`#FBBF24`) when focused; there is no row fill,
+  accent bar or row keycap. ↵ and ⌘K live in the floating glass capsule, and ↵'s label never flips back
+  to an earlier one while a sentence is typed forward (`sk_one_window::steady`). The values live in
+  `crates/sk-one-window/src/contract.rs`.
+- **Symbols and marks.** `@selection`, `@clipboard`, `@file:…`, `/command`, `.style`, `>:dev`, `todo;`,
+  `;todo`, `due:…` and `|profile` list their completions in the main list and mark themselves as typed;
+  Jev's words are marked where they still stand in the text. The text stays white, and each run gets an
+  underline in its word's color (Subject, Action, Target, Details, Owner): `sk_one_window::marks`,
+  `src/one_window/marks.rs`, painted by `vendor/gpui-kit/gpui-base/src/input/base/script_kit.rs`.
+- **Everything opens in place.** Forms (assembled from Jev's reading by `sk_one_window::form`), answers,
+  steps, the connect view, notes, the model's chat, agents, the voice view and SDK prompts are views under
+  the same input, and Esc goes back one step with that step's words. ⌘K stages the highlighted thing in
+  the line and lists its actions; ↑ on an empty input stages the last run; pasting into an empty input
+  stages the clipboard.
+- **It learns.** A sentence whose row ran becomes a learned match (`sk_one_window::lessons`), and runs
+  that did several things are saved to `saved.ts` so they can become scripts with shortcuts.
+- **Rules live in the reducer.** `crates/sk-one-window` owns every rule with no GPUI and no clock:
+  headers, Jev's rows, what Enter runs, the 400 ms Enter guard, the 300 ms shrink hold, the view stack,
+  holds and undo. `src/one_window/**` connects it to `ScriptListApp`. Change behavior in the reducer and
+  prove it there first (see "Hold, Undo, and the Line" for the proof commands).
+
 ## Oracle / Packx Bundle Context
 
 For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
@@ -68,7 +101,7 @@ tell working from finished from dead without asking a human to look at a pane.
 
 ## UI Consistency and Shared Component Contract
 
-When touching app UI, treat shared components and theme/chrome tokens as the source of truth. Do not build one-off UI when an existing component, shell, list item, input, footer, popup, or token can be reused or extended.
+When touching app UI, treat shared components and theme/chrome tokens as the source of truth. Do not build one-off UI when an existing component, shell, list item, input, footer, dropdown, or token can be reused or extended.
 
 Before adding or changing UI:
 
@@ -92,18 +125,18 @@ Theme and visual values must be tokenized:
 
 - Resolve colors and chrome surfaces through `crate::theme`, especially `AppChromeColors::from_theme`, `PromptColors`, theme opacity, and the design token layers.
 - Use chrome/layout constants from `src/ui/chrome/tokens.rs`, `src/theme/**`, `src/designs/core/**`, and `src/designs/traits/**`.
-- Do not hardcode new colors, opacity values, spacing, typography, border radii, borders, popup surfaces, vibrancy behavior, or chrome layer semantics in surface renderers when an existing token/helper exists.
+- Do not hardcode new colors, opacity values, spacing, typography, border radii, borders, vibrancy behavior, or chrome layer semantics in surface renderers when an existing token/helper exists.
 - If a visual value needs to become standard, add or extend a token/helper in the appropriate shared layer so theme changes propagate automatically.
 
 Cross-surface behavior must stay predictable:
 
-- Main window, prompt/make windows, built-ins, and Agent Chat/Agent Chat should share inputs, menu/search behavior, list rows, prompt shells, hint strips, footer affordances, popup/dropdown mechanics, and chrome tokens wherever possible.
+- Every view under the main input (the launcher list, SDK prompts, built-ins, notes, the model's chat, forms, answers, steps) shares the one input, the line above it, the header-first list rows, prompt shells, the capsule, dropdown mechanics, and chrome tokens. A view never brings its own input bar or its own window.
 - Native left-pinned and trailing footer keycaps must both resolve token-specific
   x/y glyph offsets and horizontal padding through the shared
   `footer_appkit_glyph_x`, `footer_appkit_glyph_y`, and
   `footer_keycap_padding_x_for_token` helpers. Do not duplicate or locally
   approximate keycap centering formulas.
-- Actions UI should feel like the main list: same row language, same search treatment, same shortcut/keycap conventions, and no extra local chrome unless the owning contract requires it.
+- Actions are the main list: ⌘K stages the subject in the line and its actions are ordinary rows under a header, filtered by the same input. Do not give them their own chrome, window or popover.
 - Expanded/preview surfaces may differ in layout, but their list side, footer, and chrome should still use the shared anatomy and tokens.
 - Any intentional divergence must be documented in the code or PR summary with the owning surface, the reused alternatives considered, and why the shared component could not fit.
 
@@ -116,15 +149,11 @@ generic bug fix, refactor, theme change, or contrast task is not permission.
 If a requested change appears to require different motion values, preserve the
 calibration and ask for explicit permission instead.
 
-**2026-09-24 fade cutover (owner-authorized):** the owner retired every
-grow/shrink entry and exit — "the window entry animation of growing and
-shrinking is completely outdated. It's really just the quick fade … super fast
-fade in, super fast fade out" — for the main window, modals, the Agent modal,
-the Actions menu, Notes, and every other window. The contract:
+The main window fades: "super fast fade in, super fast fade out" (owner,
+2026-09-24). The contract:
 
-- every window keeps its settled frame on entry and exit. No window animates
-  its width, height, or a layer transform, and child popups stay attached to
-  their parent;
+- the window keeps its settled frame on entry and exit. It never animates its
+  width, height, or a layer transform to appear or disappear;
 - entry is one grouped ease-out `NSAnimationContext` fade
   (`animate_tahoe_glass_entry`): the glass material (Clear → Regular + tint),
   GPUI content roots, footer capsules, and NSWindow alpha rise together to
@@ -135,42 +164,28 @@ the Actions menu, Notes, and every other window. The contract:
   `FixedFrame` ("Soft Focus Fade") — `140ms`, window `0.85`, material and
   content `0.15`, `12pt` backdrop/capsule and `4pt` foreground defocus.
   Retired preset ids in `config.ts` load as the default;
-- exit is a `0.12s` ease-in-out alpha fade to `0` for every window
-  (`FadeOnly`); the window is removed after `135ms`;
+- exit is a `0.12s` ease-in-out alpha fade to `0` (`FadeOnly`); the window
+  is ordered out after `135ms`;
 - NSWindow alpha below `0.85` shows the desktop through the glass, so no
   visible frame starts below it. Truly hidden parking (window ordered out)
   stays alpha `0.0` via `GLASS_HIDDEN_PARK_ALPHA`; zero-alpha parking of a
   visible window is a contract violation (runtime tripwire
   `glass_hidden_park_on_visible_window`);
-- every window uses the window material; the untinted popup material
-  (formerly `NativeGlassSurfaceRole::PopupBackdrop`) is deleted, since ⌘K acts
-  in place and confirm modals are retired;
-- the Notes window is retired (2026-09-27): notes open as a view under the main
-  input, so there is no Notes reveal or resize unlock;
+- there is one glass material, the window material; there is no popup
+  material;
 - glass material: stability tint floor `0.35` and capsule veil `0.0`
   (`src/ui/chrome/tokens.rs`).
 
-Before the cutover, for comparison: the default `SharpPresence` already kept
-a fixed frame but took `235ms` to settle, revealing material and content over
-`90ms`; Notes, HUD, and Dictation shrank in `101.2% → 98.7% → 100%` over
-`298ms`; inline and shortcut-recorder popups grew in `98.8% → 101.3% → 100%`;
-those popups plus the microphone and Agent Chat history popups exited by
-shrinking `5%/3.5%` under an `8pt` blur, and any other window outside the
-fade-only set grew out `3%/1.2%` under the same blur; and a 26-preset
-comparison catalog (including `PreviousCalibration`, the
-Spotlight-measured `298ms` shrink-in) was selectable. The Spotlight evidence
-for those curves stays in git history (lineage 09bddd931 → eb8e1e115 →
-cd5634ec8) and at https://eager-hollow-dyyf.here.now/.
+Do not bring back grow/shrink entry curves or a preset catalog; the retired
+curves and their Spotlight evidence are in git history (lineage 09bddd931 →
+eb8e1e115 → cd5634ec8).
 
-**2026-09-23 in-stage footer everywhere (owner-authorized, executive call):**
-the main window's glass stage fills the whole window and the native footer
-capsules float INSIDE it on every main-window surface, in one fixed bottom zone
-(`main_window_footer_zone_height()` = footer + one gap above and below; capsules
-one gap from the sides and bottom). The old transparent strip below the stage
-is gone (backdrop inset 0, same shadowless/rounded host policy). Views keep
+**In-stage capsule (owner-authorized):** the main window's glass stage fills
+the whole window and the native footer capsules (↵ and ⌘K) float inside it
+in one fixed bottom zone (`main_window_footer_zone_height()` = footer + one
+gap above and below; capsules one gap from the sides and bottom). Views keep
 content above the zone via root stage padding and `main_window_content_height`;
-only the main-menu list scrolls under it (fade, input blocker, reveal padding).
-Window heights, motion timings, materials, and glyph tokens are unchanged.
+only the main list scrolls under it (fade, input blocker, reveal padding).
 
 `src/theme/animation.rs` owns preset IDs/specs; `config.ts`'s
 `animation.preset` persists the explicit choice. Launcher registration/dispatch,
@@ -192,8 +207,7 @@ Owning sources and anti-drift evidence:
 - fade envelope:
   `scripts/devtools/glass-entry-motion-contract.ts`;
 - frame/runtime probes:
-  `scripts/devtools/glass-lifecycle-filmstrip.ts`,
-  `scripts/devtools/actions-entry-filmstrip.ts`, and
+  `scripts/devtools/glass-lifecycle-filmstrip.ts` and
   `scripts/devtools/rapid-toggle-stress.ts`.
 
 Do not update the fixture, envelope thresholds, expected values, or their
@@ -210,8 +224,8 @@ bun test ./scripts/devtools/glass-entry-motion-contract.test.ts \
 ./scripts/agentic/agent-cargo.sh test --lib glass_entry_property_tests
 ```
 
-For runtime/visual changes, also run the lifecycle, Actions-entry, and rapid
-toggle probes with `SCRIPT_KIT_TEST_STATUS=1` and the named calibration fixture.
+For runtime/visual changes, also run the lifecycle and rapid-toggle probes
+with `SCRIPT_KIT_TEST_STATUS=1` and the named calibration fixture.
 An `INVALID_INTERFERENCE` receipt means rerun when input is quiet; it is not a
 product failure and must not be converted into a green result.
 
@@ -237,9 +251,7 @@ A fresh launcher always highlights a real row (`first_selectable_index` — a Br
 
 ## Notes Live Under the Main Input
 
-There is no Notes window. The 2026-09-27 one-window build deleted `src/notes/window/**`
-(creation, placement, focus handoff, automation registration, settings, and their tests). Every
-way into a note — the Notes hotkey, tray, deeplink, stdin/SDK `openNotes`, MCP note tools, the
+There is no Notes window. Every way into a note — the Notes hotkey, tray, deeplink, stdin/SDK `openNotes`, MCP note tools, the
 Notes built-ins, root note results, the day page's "Open as a Note", the Add Note fallback, and
 "Add it to today's note" — calls `crate::notes::open_note(cx, NoteTarget)`, or
 `ScriptListApp::one_window_show_note` from inside the app entity. The binary's hook shows the main
@@ -256,17 +268,14 @@ same input.
 - Do not bring back a Notes window, a Notes-only editor host, or a confirm dialog for deleting a
   line.
 
-## Hold, Undo, and the Line (replaces the Modal Contract)
+## Hold, Undo, and the Line
 
-There are no modals, toasts, HUD windows, or banners. The main window is the only window, and
-everything that used to pop up now lands in the line above the input, which the
-`sk_one_window` reducer owns. The 2026-09-26 one-window build (lane A) deleted `src/confirm/**`,
-`src/toast_popup.rs`, `src/toast_manager/**`, `src/undo_offer.rs`, `src/hud_manager/**`,
-`src/warning_banner.rs`, and the modal key-owner interceptor. Do not bring any of them back.
+There are no modals, toasts, HUD windows, or banners, and nothing floats over the main window:
+it is the only window. Anything the app needs to say or ask lands in the line above the input,
+which the `sk_one_window` reducer owns. Do not add a confirm dialog, a toast or HUD manager, an
+undo-offer window, a warning banner, or a modal key-owner interceptor.
 
-Nothing floats over the main window, because there is nothing else to float over: the Notes,
-Dictation, detached chat, history, actions and footer-overlay windows are all gone (2026-09-27),
-and the only other window the app ever opens is the snap overlay drawn while snapping a window to a
+The only other window the app ever opens is the snap overlay drawn while snapping a window to a
 screen edge. Automation targets are the main window or a view's surface id inside it; a test that
 needs "a second window" to prove targeting has nothing real to target. `clippy.toml` refuses
 `gpui::App::open_window` / `gpui::AsyncApp::open_window`; in the app, the main window and the snap overlay are
@@ -300,7 +309,7 @@ third), and a new one is a design change, not a fix.
   "bun is not installed · Install from bun.sh"; Enter opens bun.sh). Nothing is drawn above the
   line and the input never moves.
 - Prove these with the reducer (`./scripts/agentic/agent-cargo.sh test -p sk-one-window`,
-  including `tests/replay.rs` and `tests/properties/`), the app tests in
+  including `crates/sk-one-window/tests/replay.rs` and `tests/properties/`), the app tests in
   `enter_button_property_tests::ledger`, and owned-evaluator frames that show exactly one owned
   window: `bash scripts/agentic/one-window/run.sh` builds once, captures every chapter in
   `scripts/agentic/one-window/chapters/` and the typing, fast-navigation and views stress runs
@@ -362,7 +371,7 @@ The canonical `scripts/devtools/inspect.ts` orchestrator must follow the same ow
 - **Check free space before large runs.** Run `df -h /` first. If Macintosh HD has less than 25 GB free, do not start a barrage or matrix; clean your own leftovers or report the pressure instead.
 - **Before finishing**, run `du -sh /tmp/sk-driver-sessions` and report the number and total size of sessions your task left behind (it should be zero).
 
-All agentic scenario, target-thread, and filterable-surface subprocesses cross the shared noninteractive subprocess guard before `Bun.spawn`: only reviewed read-only session transports are permitted, while AppleScript, Swift, native input, screen capture, arbitrary shell commands, and weakened child safety authority fail closed. Scenario cleanup, the filterable matrix, both surface navigators, and Notes use an in-memory owned-session registry; resumed sessions are borrowed, and newly created sessions can be stopped only with their original PID and generation. A pending-ready process may retain cleanup identity without converting its genuine `ready: false` receipt into a successful readiness proof.
+All agentic scenario, target-thread, and filterable-surface subprocesses cross the shared noninteractive subprocess guard before `Bun.spawn`: only reviewed read-only session transports are permitted, while AppleScript, Swift, native input, screen capture, arbitrary shell commands, and weakened child safety authority fail closed. Scenario cleanup, the filterable matrix, and both surface navigators use an in-memory owned-session registry; resumed sessions are borrowed, and newly created sessions can be stopped only with their original PID and generation. A pending-ready process may retain cleanup identity without converting its genuine `ready: false` receipt into a successful readiness proof.
 
 The direct native leaf tools follow the same policy even when invoked outside a scenario: `macos-input.ts key|type|click` and `window.ts focus|capture|status|list|find` fail with `NONINTERACTIVE_SAFETY_REFUSED` before launching System Events, AppleScript, Swift, `cliclick`, or a window/full-screen screenshot. Pure `macos-input.ts check` and help stay available. The automation-window transport and navigator's independent screenshot subprocess are guarded before spawn, and the actual native-input behavior suite is mandatory in release proof.
 
@@ -370,9 +379,9 @@ The direct native leaf tools follow the same policy even when invoked outside a 
 
 Every DevTools session consumer must validate the actual lifecycle receipt before follow-up work: start requires `status: "ok"`, the exact requested session, `ready: true`, and explicit borrowed/new ownership; show requires an exact successful session receipt. Shared target resolution, Actions, Agent Chat, Dictation, and Events all fail before inspection, capture, log collection, or another child when startup/show fails. Subprocess environment overrides must cross `assertNoninteractiveSubprocess`; no child may weaken inherited noninteractive, CI, native-input, screen-capture, or launch authority. All four independent consumer owners are mandatory release sources.
 
-Visible/native proof entrypoints must call `assertNoninteractiveVisualProbe` before resolving an application binary, creating/deleting output directories, compiling Swift helpers, activating/focusing windows, injecting keyboard/pointer input, capturing pixels, or starting any child. Both Notes resize probes, Actions/glass lifecycle filmstrips, rapid-toggle stress, the live glass observer aggregator, Spotlight live capture, and main-window native drag fail closed under `SCRIPT_KIT_NONINTERACTIVE=1`; pure imported analyzers, `classify-synthetic`, and Spotlight `--grade-only` remain available. The main-window inspector validates exact successful start/show lifecycle receipts. Every actual visual owner is mandatory release provenance. This protects the operator without changing the locked glass-motion calibration.
+Visible/native proof entrypoints must call `assertNoninteractiveVisualProbe` before resolving an application binary, creating/deleting output directories, compiling Swift helpers, activating/focusing windows, injecting keyboard/pointer input, capturing pixels, or starting any child. The glass lifecycle filmstrip, rapid-toggle stress, the live glass observer aggregator, and main-window native drag fail closed under `SCRIPT_KIT_NONINTERACTIVE=1`; pure imported analyzers and `classify-synthetic` remain available. The main-window inspector validates exact successful start/show lifecycle receipts. Every actual visual owner is mandatory release provenance. This protects the operator without changing the locked glass-motion calibration.
 
-System clipboard reads are native operator-data access, even when a probe promises to restore the value. Flow multiline, Dictation History, Conversation Hosts, and Notes Actions must reject noninteractive runs before output creation, `pbpaste`/`pbcopy`, or compiling a helper that archives every private `NSPasteboard` representation; never rely on a later `Driver.launch` guard. Every one of the fifteen `scripts/agentic/cons-flow-ux/*-probe.ts` workflow owners rejects noninteractive execution at its own entrypoint before deleting an existing authoritative runtime receipt, creating shared state or fixtures, hashing an application, observing pasteboard changes, launching a scenario child, or importing live AI credentials. Root-search visual stability, Notes glass fallback, browser DOM/screenshot capture, AppKit window fixtures, Swift helper identity/compilation, global keyboard/pointer monitoring, glass contrast, and live smoke studies also fail before application startup, filesystem mutation, clipboard access, native subprocesses, capture, or backdrop takeover. Pure helper-key/interference/fixture analyzers, browser help, and smoke-study `--dry-run` remain available. The central agentic recipe orchestrator validates every child (including standalone navigator/vision delegation), and the DevTools dispatcher rejects activation, launch, profiling, start/show/open routes before delegation. Direct `xctrace` recording/export refuses while noninteractive; command inventories and help stay passive. Missing optional scenario owners must yield a typed, fail-closed receipt and must never prevent the other 126 agentic commands or `help --json` from loading.
+System clipboard reads are native operator-data access, even when a probe promises to restore the value. Flow multiline, Dictation History, and Conversation Hosts must reject noninteractive runs before output creation, `pbpaste`/`pbcopy`, or compiling a helper that archives every private `NSPasteboard` representation; never rely on a later `Driver.launch` guard. Every one of the fifteen `scripts/agentic/cons-flow-ux/*-probe.ts` workflow owners rejects noninteractive execution at its own entrypoint before deleting an existing authoritative runtime receipt, creating shared state or fixtures, hashing an application, observing pasteboard changes, launching a scenario child, or importing live AI credentials. Root-search visual stability, browser DOM/screenshot capture, AppKit window fixtures, Swift helper identity/compilation, global keyboard/pointer monitoring, glass contrast, and live smoke studies also fail before application startup, filesystem mutation, clipboard access, native subprocesses, capture, or backdrop takeover. Pure helper-key/interference/fixture analyzers, browser help, and smoke-study `--dry-run` remain available. The central agentic recipe orchestrator validates every child (including standalone navigator/vision delegation), and the DevTools dispatcher rejects activation, launch, profiling, start/show/open routes before delegation. Direct `xctrace` recording/export refuses while noninteractive; command inventories and help stay passive. Missing optional scenario owners must yield a typed, fail-closed receipt and must never prevent the other 126 agentic commands or `help --json` from loading.
 
 The wrapper qualifies installed `sccache` against the pinned compiler, preserves semantic compiler wrappers, and uses repository-owned compiler/shader caches under `target-agent/shared`. Auto mode reports an unusable cache honestly; required caching fails rather than silently replacing a semantic wrapper or pretending to be enabled. **Every managed build forces `CARGO_INCREMENTAL=0` and Cargo build/dev/test incremental settings to `false`**, regardless of inherited environment defaults. Conflicting forced configuration and incremental rustflags are refused. Do not change the human watcher's incremental/profile defaults to enforce this agent-only policy. Dev UI dependencies intentionally stay optimized, correctness-test dependencies are unoptimized, and local docs-only Git commits do not invalidate the app harness; release/CI Git provenance remains exact.
 

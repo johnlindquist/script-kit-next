@@ -1,6 +1,6 @@
 ---
-description: "Actions menu, trigger picker, confirm popup, action builders, and keyboard affordances."
-route: "actions|actions menu|command palette|cmd\\+k|action builder|shortcut action|trigger picker|confirm popup"
+description: "⌘K acting in place, trigger picker, holds and undo, action builders, and keyboard affordances."
+route: "actions|actions menu|command palette|cmd\\+k|action builder|shortcut action|trigger picker|hold|undo"
 model: "gpt-5.6-sol"
 sandbox: "workspace-write"
 config: model_reasoning_effort="medium"
@@ -11,7 +11,7 @@ You are actions, a Script Kit GPUI project flow. Every task is about this local 
 You are actions, a feature-bound project flow for this repository.
 
 ## Mission
-Actions menu, trigger picker, confirm popup, action builders, and keyboard affordances.
+⌘K acting in place (the focused thing staged in the line above the input, its actions listed under the same input), trigger picker, holds and undo, action builders, and keyboard affordances.
 
 This flow answers from real repository evidence: current source, tests, git state, and probe/gate output. It is not a general assistant, web-search agent, cross-repo operator, or release bot. Model contract: this flow runs on gpt-5.6-sol at medium reasoning effort; if the runtime reports that model unavailable, fail visibly and do not silently switch models.
 
@@ -31,7 +31,7 @@ find code / who owns / where is -> rg -n "<term>" src/actions/**
 surface map / repo policy -> read GLOSSARY.md and AGENTS.md
 type-check the library -> ./scripts/agentic/agent-cargo.sh check --lib
 verify changed behavior -> ./scripts/agentic/agent-cargo.sh test --lib actions
-verify changed behavior -> focused source/runtime proof for popup geometry
+verify changed behavior -> ./scripts/agentic/agent-cargo.sh test -p sk-one-window
 verify changed behavior -> git diff --check
 
 ## Owned paths

@@ -1,6 +1,10 @@
 # One conversation experience — Quick AI, Flow chat, Agent Chat
 
-**Status:** measured audit + build order. Nothing here is built yet.
+**Status:** superseded by the one-window app. There is now one chat, a view under the
+main input (`src/one_window/chat_host.rs`; `CLAUDE.md`, "Agent Chat Entry Context
+Contract"). The Agent Chat view files measured below (`src/ai/agent_chat/ui/view.rs`,
+`ui/components/transcript.rs`, `ui/style_contract.rs`) are gone; the audit is kept
+for its measurements and history.
 **Scope:** the everyday, working path. Failure and recovery are already unified —
 see `rules/AI_RELIABILITY.md` and the receipt in §0.
 
@@ -191,11 +195,9 @@ running*. Both footers now name `⌘.`, the one chord that already stops on
 both, via `FOOTER_AI_STOP_KEY`/`FOOTER_AI_STOP_LABEL` in
 `components/footer_chrome.rs`.
 
-Escape's *behavior* is deliberately untouched here — it still stops in Agent
-Chat and backgrounds in Flow. That divergence is the Escape modal's to
-resolve (`docs/specs/backgrounded-ai-sessions.md`), and naming `⌘.` in the
-footer is forward-compatible with it: once Escape means "Background or Close"
-everywhere, `⌘.` is already established as the unambiguous Stop.
+Escape's *behavior* is deliberately untouched here. Escape goes back one step
+and never asks what to do with the session
+(`docs/specs/backgrounded-ai-sessions.md`); `⌘.` is the unambiguous Stop.
 
 Locked by `agent_chat_and_flow_advertise_the_same_stop_chord`, which renders
 Agent Chat's Stop hint through Agent Chat's own label mapper and compares it
@@ -280,10 +282,10 @@ every (history length, cursor, direction) combination to prove no recalled
 index can ever be out of range — an off-by-one there would panic on subscript
 or silently recall the wrong prompt.
 
-### 8. Sending while busy: queued vs error toast
+### 8. Sending while busy: queued vs error notice
 
 Agent Chat queues the message and shows a queue strip (`view.rs:11664`). Flow
-rejects it with an **error toast** (`flow_ux.rs:978`). An error is the wrong
+rejects it with an **error notice** in the line (`flow_ux.rs:978`). An error is the wrong
 register for "you typed ahead", and the footer already hides `↵ Send` while
 busy, so it is a double negative. **Size:** medium.
 
@@ -357,7 +359,7 @@ Revised after the full sweep. The rule that keeps this landable:
    per-turn copy into Agent Chat and code-block copy into Flow (§2.5),
    New Conversation into Flow (§2.10, reuse the `RethreadFlow` machinery).
 3. **Queue instead of scold** (§2.8): a busy Flow send joins a queue rather
-   than raising an error toast.
+   than raising an error notice.
 4. **One footer grammar function**, taking capabilities + turn state. Retire
    `Esc Desk`; fix standalone `ChatPrompt`'s `↵ Run`.
    - **Started:** `flow_session_native_footer_and_hint_strip_agree_on_the_same_grammar`
@@ -394,9 +396,8 @@ hunk list should be short enough to read.
 - **Source Audit Test Policy**: prefer the compiler and behavior tests. A
   "no bare `px(` in conversation renderers" check is a source audit and is only
   justified once the shared token exists for it to point at.
-- **The Escape design is coupled**: `docs/specs/backgrounded-ai-sessions.md`
-  puts a Background/Close modal on the last Escape rung. Step 1 here decides
-  what the earlier rungs mean. Land them in that order.
+- **Escape never asks**: it goes back one step, and leaving a session never
+  raises a question (`docs/specs/backgrounded-ai-sessions.md`).
 
 ## 5. Landed — the shared conversation renderer batch (2026-07-25)
 

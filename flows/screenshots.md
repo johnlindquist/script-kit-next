@@ -29,10 +29,10 @@ Numbered names are stable identifiers — reuse them exactly when re-capturing; 
 
 - `01-main-launcher` — main launcher floating over the desktop (hero shot)
 - `02-search-filter` — typing `clip` in unified search: Script Kit tools + front-app menu commands in one list
-- `03-actions-menu` — actions menu (captured, currently unused on the site)
+- `03-actions-menu` — ⌘K: a row staged in the line with its actions listed in place (captured, currently unused on the site)
 - `04-clipboard-history` — clipboard history with a code snippet previewed
 - `05-emoji-picker` — emoji picker grid
-- `06-notes` — Notes window with a launch checklist
+- `06-notes` — a note under the main input with a launch checklist
 - `07-day-page` — Day Page with focus list and auto-captured clipboard entries
 - `08-agent-chat` — Agent Chat answering with markdown bullets
 - `09-terminal` — quick terminal listing directories

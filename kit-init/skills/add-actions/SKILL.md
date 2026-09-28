@@ -1,11 +1,11 @@
 ---
 name: add-actions
-description: Add Actions Menu commands to scripts and scriptlet bundles with setActions() and companion .actions.md files.
+description: Add ⌘K actions to scripts and scriptlet bundles with setActions() and companion .actions.md files.
 ---
 
 # Add Actions
 
-Use this skill when the user wants Actions Menu commands (Cmd+K), script-local actions via `setActions()`, or shared scriptlet actions via `<bundle>.actions.md`.
+Use this skill when the user wants ⌘K actions (⌘K stages the focused thing above the input and lists its actions as rows under it), script-local actions via `setActions()`, or shared scriptlet actions via `<bundle>.actions.md`.
 
 ## Write Here
 
@@ -77,14 +77,14 @@ open -a Safari "{{content}}"
 
 ## Common Pitfalls
 
-- Discovery belongs in the Actions Menu. Do not add persistent chrome to solve discoverability.
+- Discovery belongs in ⌘K actions. Do not add persistent chrome to solve discoverability.
 - The companion file must share the same basename: `main.md` + `main.actions.md`.
 - Use `{{content}}` inside companion actions to read the selected parent command content.
 
 ## Related Examples
 
 - **Canonical**: `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.md` — parent bundle entries that receive shared actions
-- **Canonical**: `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.actions.md` — companion Actions Menu definitions using `{{content}}`
+- **Canonical**: `~/.scriptkit/plugins/examples/scriptlets/custom-actions/main.actions.md` — companion ⌘K action definitions using `{{content}}`
 - **Flat mirror**: `~/.scriptkit/plugins/examples/scriptlets/custom-actions.md`
 - **Flat mirror**: `~/.scriptkit/plugins/examples/scriptlets/custom-actions.actions.md`
 

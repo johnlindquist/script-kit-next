@@ -321,7 +321,7 @@ await arg("Copied Notes resource payload", [
 ## Copy getElements Example
 
 ```metadata
-description: Copy a targeted getElements request for the Notes window
+description: Copy a getElements request for the note view under the main input
 tool:copy-notes-get-elements
 ```
 
@@ -331,7 +331,7 @@ import "@scriptkit/sdk";
 const request = {
   type: "getElements",
   requestId: "elm-notes",
-  target: { type: "kind", kind: "notes" },
+  target: { type: "kind", kind: "main" },
   limit: 10,
 };
 await copy(JSON.stringify(request, null, 2));
@@ -343,7 +343,7 @@ await arg("Copied Notes getElements example", [
 ## Copy batch setInput Example
 
 ```metadata
-description: Copy a batch request that writes into the Notes editor
+description: Copy a batch request that types into the main input while a note is open
 tool:copy-notes-batch
 ```
 
@@ -353,7 +353,7 @@ import "@scriptkit/sdk";
 const request = {
   type: "batch",
   requestId: "b-notes",
-  target: { type: "kind", kind: "notes" },
+  target: { type: "kind", kind: "main" },
   commands: [{ type: "setInput", text: "Hello from automation" }],
 };
 await copy(JSON.stringify(request, null, 2));

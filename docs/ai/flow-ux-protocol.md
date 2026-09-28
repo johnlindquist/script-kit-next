@@ -119,7 +119,7 @@ Classification is deliberate, not blanket:
   ("not found" naming `roster`) → `legacy` (pre-protocol mdflow).
 - Any other nonzero exit or parse failure → `error`, with a stderr excerpt
   surfaced in `roster.warnings` — a broken config must never hide behind a
-  calm "legacy mdflow" banner.
+  calm "legacy mdflow" row.
 
 Legacy mode is honest: the app shows the upgrade path (`npm i -g mdflow`)
 and disables protocol-driven launch. There is no silent `--json` blob
@@ -183,6 +183,5 @@ Built-ins (hidden, QueryOnly visibility — excluded only for the empty query):
 - `flow-ux-lens` → "Flow UX — Lens"
 - `flow-ux-mission-control` → "Flow UX — Mission Control"
 
-The detached Flow Manager window was removed (2026-07-22, dead-surface
-cleanup): run supervision lives in the main-window Flow Desk. Closing the
-launcher never cancels runs.
+Run supervision lives in the main-window Flow Desk; there is no separate flow
+window. Closing the launcher never cancels runs.

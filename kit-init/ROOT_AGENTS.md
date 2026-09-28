@@ -216,14 +216,14 @@ await Bun.write("~/data.json", JSON.stringify(data, null, 2));
 ## Feedback
 
 ```typescript
-hud("Task complete!");                   // HUD feedback (fire-and-forget)
+hud("Task complete!");                   // a notice in the line above the input (fire-and-forget)
 await copy("Copied to clipboard");       // Copy + implicit feedback
 await open("https://example.com");       // Open URL/file in default app
 ```
 
 Pick the right feedback API for the caller's intent:
 
-- `hud(message)` — fire-and-forget in-launcher overlay. Best for confirmations while the user is still interacting with the launcher (e.g. "Copied").
+- `hud(message)` — fire-and-forget notice in the line above the main input ("Last · <message> just now"). Best for confirmations while the user is still interacting with the launcher (e.g. "Copied").
 - `notify(message)` — OS-level system notification (macOS Notification Center). Use when the message should be visible after the launcher closes, or when the script runs headless/background.
 
 ## Extensions (Scriptlet Bundles)
