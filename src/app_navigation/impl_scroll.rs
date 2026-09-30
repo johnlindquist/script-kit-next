@@ -141,20 +141,14 @@ fn main_list_safe_scroll_offset_for_item(
     let footer_overlay_height = footer_overlay_height.as_f32();
     let safe_viewport_height =
         viewport_height - header_overlay_height.as_f32() - footer_overlay_height;
-    let max_scroll_top =
-        (script_list_content_height_with(items, heights) - safe_viewport_height).max(0.0);
-    let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset, heights);
     let target_top = script_list_pixel_top_for_item(items, target_ix, heights);
-    let target_bottom = target_top + heights.row_height(&items[target_ix], target_ix);
-    let safe_bottom = current_scroll_top + safe_viewport_height;
-    let safe_scroll_top = if target_top < current_scroll_top {
-        target_top
-    } else if target_bottom > safe_bottom {
-        target_bottom - safe_viewport_height
-    } else {
-        return None;
-    }
-    .clamp(0.0, max_scroll_top);
+    let safe_scroll_top = crate::scrolling::list_geometry::safe_reveal_scroll_top(
+        script_list_pixel_top_for_offset(items, current_offset, heights),
+        safe_viewport_height,
+        script_list_content_height_with(items, heights),
+        target_top,
+        target_top + heights.row_height(&items[target_ix], target_ix),
+    )?;
     Some(script_list_offset_for_pixel_top(
         items,
         safe_scroll_top,

@@ -10,10 +10,17 @@
 pub const SHRINK_HOLD_MS: u64 = 300;
 /// A view that just opened keeps the window's height this long before it may shrink.
 pub const VIEW_HOLD_MS: u64 = 300;
-/// A shrink animates over this long.
-pub const SHRINK_ANIM_MS: u64 = 260;
-/// The shrink's cubic-bezier control points.
-pub const SHRINK_CURVE: [f32; 4] = [0.4, 0.0, 0.2, 1.0];
+/// The window shrinks only when it would lose at least this much; a smaller drop leaves the
+/// space under the list. The app's own number, not the prototype's (it animated every shrink).
+pub const MIN_SHRINK_PX: f32 = 2.0 * app::ROW_PX;
+/// A list still waiting for Jev's reading keeps its height this long after the last key, so the
+/// window shrinks once for the words, when the reading lands, instead of once before and once after.
+pub const READING_WAIT_MS: u64 = 1_000;
+/// When Jev's reading lands while a shrink waits for it, the shrink waits this much longer for the
+/// list's next measure, so it lands once, on the list with the reading in it.
+pub const MEASURE_WAIT_MS: u64 = 16;
+/// Space has staged what's focused this many times, so the line's hint drops its word.
+pub const USE_HINT_GRABS: u32 = 3;
 /// Enter is ignored this long after its target changed without a keypress.
 pub const ENTER_GUARD_MS: u64 = 400;
 /// After a Jev row replaces another in a place the highlight isn't on, that place's ⌘ digit still
@@ -193,31 +200,6 @@ pub fn to_app_px(prototype_px: f32) -> f32 {
     (prototype_px * GEOMETRY_SCALE).round()
 }
 
-/// The cubic-bezier easing of the shrink at progress `t` (0..=1), solved for x like CSS does.
-pub fn shrink_ease(t: f32) -> f32 {
-    let [x1, y1, x2, y2] = SHRINK_CURVE;
-    let t = t.clamp(0.0, 1.0);
-    let bez = |a: f32, b: f32, s: f32| {
-        let u = 1.0 - s;
-        3.0 * u * u * s * a + 3.0 * u * s * s * b + s * s * s
-    };
-    let (mut lo, mut hi) = (0.0f32, 1.0f32);
-    let mut s = t;
-    for _ in 0..40 {
-        let x = bez(x1, x2, s);
-        if (x - t).abs() < 1e-5 {
-            break;
-        }
-        if x < t {
-            lo = s;
-        } else {
-            hi = s;
-        }
-        s = (lo + hi) / 2.0;
-    }
-    bez(y1, y2, s)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,18 +215,6 @@ mod tests {
     #[test]
     fn tile_alpha_is_95_percent() {
         assert_eq!(TILE_ALPHA, (0.95f32 * 255.0).round() as u8);
-    }
-
-    #[test]
-    fn shrink_ease_starts_ends_and_rises() {
-        assert!(shrink_ease(0.0).abs() < 1e-3);
-        assert!((shrink_ease(1.0) - 1.0).abs() < 1e-3);
-        let mut prev = 0.0;
-        for i in 1..=20 {
-            let v = shrink_ease(i as f32 / 20.0);
-            assert!(v >= prev - 1e-4, "ease must not go backwards");
-            prev = v;
-        }
     }
 }
 

@@ -1,15 +1,10 @@
 //! The main window's height: how tall the list wants it, and where the reducer's height
 //! decisions put it.
 
-use std::time::Duration;
-
 use gpui::{AppContext as _, Context};
 use sk_one_window::{HeightDecision, HeightMode};
 
 use crate::{AppView, MainWindowMode, ScriptListApp};
-
-/// How often a shrinking window is redrawn.
-const SHRINK_FRAME: Duration = Duration::from_millis(8);
 
 impl ScriptListApp {
     /// How tall the launcher may get in its current mode.
@@ -35,9 +30,14 @@ impl ScriptListApp {
         let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
             self.current_main_menu_theme,
         );
+        let coming = if self.one_window_owns_list() {
+            self.one_window.list().rows_coming()
+        } else {
+            0
+        };
         let list = crate::scrolling::list_geometry::content_height(grouped.len(), |ix| {
             heights.row_height(&grouped[ix], ix)
-        });
+        }) + coming as f32 * heights.item;
         let chrome = sk_one_window::contract::app::SLOT_LINE_PX
             + f32::from(crate::main_list_header_overlay_height(
                 self.current_main_menu_theme.def(),
@@ -66,42 +66,10 @@ impl ScriptListApp {
         decision: HeightDecision,
         cx: &mut Context<Self>,
     ) {
-        self.one_window_host.height_generation += 1;
-        let generation = self.one_window_host.height_generation;
-        if decision.mode != HeightMode::Shrink {
-            self.one_window_set_height(decision.px, cx);
+        if decision.mode == HeightMode::Hold && self.one_window_host.height == Some(decision.px) {
             return;
         }
-        let (from, to) = (decision.from, decision.px);
-        let span = Duration::from_millis(decision.anim_ms.max(1));
-        self.one_window_set_height(from, cx);
-        cx.spawn(async move |this, cx| {
-            let start = cx.background_executor().now();
-            loop {
-                cx.background_executor().timer(SHRINK_FRAME).await;
-                let t = (cx
-                    .background_executor()
-                    .now()
-                    .saturating_duration_since(start)
-                    .as_secs_f32()
-                    / span.as_secs_f32())
-                .min(1.0);
-                let height = from + (to - from) * sk_one_window::contract::shrink_ease(t);
-                let drawing = this
-                    .update(cx, |app, cx| {
-                        let current = app.one_window_host.height_generation == generation;
-                        if current {
-                            app.one_window_set_height(height, cx);
-                        }
-                        current
-                    })
-                    .unwrap_or(false);
-                if !drawing || t >= 1.0 {
-                    break;
-                }
-            }
-        })
-        .detach();
+        self.one_window_set_height(decision.px, cx);
     }
 
     fn one_window_set_height(&mut self, height: f32, cx: &mut Context<Self>) {

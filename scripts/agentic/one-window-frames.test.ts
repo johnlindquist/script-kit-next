@@ -33,6 +33,10 @@ describe("steps", () => {
       .toEqual({ family: "oneWindow", operation: "summon" });
     expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "summon", destination: "note" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", control: { family: "notes", operation: "summon" } }])).toThrow();
+    expect(parseSteps([{ name: "front", control: { family: "oneWindow", operation: "focusWindow", app: "Ghostty", title: "zsh" } }])[0]?.control)
+      .toEqual({ family: "oneWindow", operation: "focusWindow", app: "Ghostty", title: "zsh" });
+    expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "focusWindow", app: "Ghostty" } }])).toThrow();
+    expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "focusWindow", app: " ", title: "zsh" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", control: { family: "oneWindow", operation: "talkTo", destination: "slack" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", key: "enter", control: { family: "oneWindow", operation: "talkTo", destination: "chat" } }])).toThrow();
     expect(() => parseSteps([{ name: "a", waitMs: -1 }])).toThrow();

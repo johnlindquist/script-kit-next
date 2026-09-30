@@ -205,6 +205,31 @@ pub(crate) fn visible_range_for_offset(
     visible_range(item_count, scroll_top, viewport_height, row_height)
 }
 
+/// The scroll top that brings the row `[target_top, target_bottom)` into the safe viewport:
+/// the `safe_viewport_height` pixels below the scroll top, which exclude whatever floats over
+/// the list's bottom (the footer capsules). Scrolls the least it can; `None` when the row is
+/// already in it or there is no safe viewport to reveal into.
+pub(crate) fn safe_reveal_scroll_top(
+    current_scroll_top: f32,
+    safe_viewport_height: f32,
+    content_height: f32,
+    target_top: f32,
+    target_bottom: f32,
+) -> Option<f32> {
+    if safe_viewport_height <= 0.0 {
+        return None;
+    }
+    let max_scroll_top = (content_height - safe_viewport_height).max(0.0);
+    let scroll_top = if target_top < current_scroll_top {
+        target_top
+    } else if target_bottom > current_scroll_top + safe_viewport_height {
+        target_bottom - safe_viewport_height
+    } else {
+        return None;
+    };
+    Some(scroll_top.clamp(0.0, max_scroll_top))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,5 +392,30 @@ mod tests {
             Some(1)
         );
         assert_eq!(first_rendered_item_at_or_after(1, 1, |_| 40.0), None);
+    }
+
+    #[test]
+    fn a_row_under_the_footer_is_revealed_above_it() {
+        // Ten 44 pt rows; a 300 pt list whose bottom 80 pt sit under the footer capsules.
+        let (content, safe) = (440.0, 220.0);
+        // Row 5 (220..264) is inside the 300 pt list but under the footer: it scrolls up.
+        assert_eq!(
+            safe_reveal_scroll_top(0.0, safe, content, 220.0, 264.0),
+            Some(44.0)
+        );
+        // Row 4 (176..220) already ends where the footer begins: nothing moves.
+        assert_eq!(
+            safe_reveal_scroll_top(0.0, safe, content, 176.0, 220.0),
+            None
+        );
+        // Going back up reveals the row at the top; the last row never scrolls past the end.
+        assert_eq!(
+            safe_reveal_scroll_top(132.0, safe, content, 88.0, 132.0),
+            Some(88.0)
+        );
+        assert_eq!(
+            safe_reveal_scroll_top(0.0, safe, content, 396.0, 440.0),
+            Some(220.0)
+        );
     }
 }

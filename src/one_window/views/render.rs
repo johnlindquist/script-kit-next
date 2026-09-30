@@ -200,6 +200,32 @@ fn word_meta(row: &super::super::reading::WordRow, muted: u32) -> Option<AnyElem
     })
 }
 
+/// Scrolls a view's rows so row `ix` sits in the part of the list the footer capsules don't
+/// cover, by the same rule the main list reveals its highlight with. False until the rows have
+/// been laid out once, so the next draw tries again.
+fn reveal_above_footer(
+    scroll: &gpui::ScrollHandle,
+    ix: usize,
+    row_count: usize,
+    row_height: f32,
+) -> bool {
+    let viewport = scroll.bounds().size.height;
+    if viewport <= px(0.) {
+        return false;
+    }
+    let top = row_height * ix as f32;
+    if let Some(scroll_top) = crate::scrolling::list_geometry::safe_reveal_scroll_top(
+        -scroll.offset().y.as_f32(),
+        (viewport - crate::main_list_footer_overlay_total_padding()).as_f32(),
+        row_height * row_count as f32,
+        top,
+        top + row_height,
+    ) {
+        scroll.set_offset(gpui::point(px(0.), px(-scroll_top)));
+    }
+    true
+}
+
 impl ScriptListApp {
     /// The open view, or the staged subject's rows while the input is empty; `None` leaves the
     /// launcher's list in place.
@@ -219,11 +245,17 @@ impl ScriptListApp {
         let header_h = crate::list_item::effective_first_section_header_height_for_theme(theme);
         let scroll = &self.one_window_host.view_scroll;
         let selected = rows.iter().position(|row| row.selected);
-        if selected != self.one_window_host.view_scrolled_to.get() {
+        if selected != self.one_window_host.view_scrolled_to.get()
+            && selected.is_none_or(|ix| {
+                reveal_above_footer(
+                    scroll,
+                    ix,
+                    rows.len(),
+                    crate::list_item::effective_list_item_height_for_theme(theme),
+                )
+            })
+        {
             self.one_window_host.view_scrolled_to.set(selected);
-            if let Some(selected) = selected {
-                scroll.scroll_to_item(selected);
-            }
         }
         let mut list = div()
             .id("one-window-view-rows")
@@ -261,6 +293,7 @@ impl ScriptListApp {
         }
         Some(
             div()
+                .relative()
                 .w_full()
                 .h_full()
                 .flex()
@@ -276,6 +309,23 @@ impl ScriptListApp {
                         )),
                 )
                 .child(list)
+                // Rows scrolled under the capsules show through but can't be clicked, as in the
+                // main list; the wheel still scrolls them.
+                .when(
+                    crate::footer_popup::main_list_scrolls_under_footer(),
+                    |view| {
+                        view.child(
+                            div()
+                                .debug_selector(|| "main-list-footer-occlusion".into())
+                                .absolute()
+                                .left_0()
+                                .right_0()
+                                .bottom_0()
+                                .h(crate::main_list_footer_overlay_total_padding())
+                                .block_mouse_except_scroll(),
+                        )
+                    },
+                )
                 .into_any_element(),
         )
     }

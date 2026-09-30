@@ -81,7 +81,7 @@ def row_band(im, m, y0, y1):
 
 def row_fill(im, m):
     """(selected row, backdrop) colors: the selected row's strip and the strip just above it, which
-    is the header or another row. A fill is the selected strip differing from its backdrop."""
+    is the header or another row. The selected row's fill is its strip differing from its backdrop."""
     row = m.get("selectedRow")
     if not im or not row:
         return None, None
@@ -191,7 +191,9 @@ def wordless_rows(im, m, rows):
         back = row_band(im, m, y + 8, y + h - 8)
         if not back:
             continue
-        inked = any(sum(abs(a - b) for a, b in zip(im.getpixel((int(x * k), int(yy * k)))[:3], back[:3])) > 90
+        # All four channels: the readback isn't composited, so white words over the focused row's
+        # white fill differ from it only in alpha.
+        inked = any(sum(abs(a - b) for a, b in zip(im.getpixel((int(x * k), int(yy * k))), back)) > 90
                     for yy in range(int(y + 10), int(y + h - 10), 2)
                     for x in range(56, int(min(w * 0.5, 360)), 2))
         if not inked:
@@ -274,13 +276,13 @@ def main():
         im = rgba_image(d, m)
         selected_band, backdrop = row_fill(im, m)
         if selected_band and backdrop:
-            fill = max(abs(a - b) for a, b in zip(selected_band, backdrop))
-            if fill > 3:
-                fails.append(f"fill {selected_band} over backdrop {backdrop}")
+            fill = selected_band[3] if len(selected_band) > 3 else None
+            if max(abs(a - b) for a, b in zip(selected_band, backdrop)) <= 3:
+                fails.append(f"no fill: {selected_band} over backdrop {backdrop}")
         else:
             fill = ((m.get("selectedRowFill") or {}).get("rgba") or [None] * 4)[3]
-            if fill:
-                fails.append(f"fill a={fill}")
+            if fill == 0:
+                fails.append("no fill: a=0")
         list_rows = drawn_rows(m) if on_main_list(m) and not view else []
         blank = wordless_rows(im, m, list_rows)
         if blank:
