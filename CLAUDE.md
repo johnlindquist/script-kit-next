@@ -318,6 +318,33 @@ third), and a new one is a design change, not a fix.
   never returning to an earlier label while the text grows). A chapter's `.expect.json` fails any
   step that now shows a different header, ↵ label or view.
 
+# Build Output Lives on the SSDs
+
+Macintosh HD runs close to full, so no Cargo target or other build output for this repo lives on
+it (owner, 2026-09-28). Where each one is:
+
+| Output | Location |
+|---|---|
+| `./dev.sh` watcher target | `/Volumes/OMEGA SSD/sk/<id>/target`, chosen by `scripts/agentic/dev-storage.py` |
+| `target-agent/` (the agent Cargo wrapper) | symlink to `/Volumes/Samsung SSD T5 2TB/offload/Users/johnlindquist/dev/script-kit-gpui/target-agent` |
+| `target/` (rust-analyzer, sidecar builds, anything on Cargo's default) | symlink to `/Volumes/Samsung SSD T5 2TB/offload/Users/johnlindquist/dev/script-kit-gpui/target` |
+
+Any new one (another target dir, a `target-*` experiment, a sidecar or worktree build, a large
+generated cache) follows the same rule:
+
+- Create it on the Samsung SSD at the mirrored path under
+  `/Volumes/Samsung SSD T5 2TB/offload/` (the repo's `/Users/johnlindquist/...` path appended) and
+  symlink the repo path to it. Never let it start as a real directory on Macintosh HD.
+- Ignore the link with a root-anchored pattern that has no trailing slash (`/target`,
+  `/target-agent`): `name/` only matches directories, so git lists the symlink as untracked.
+- Never replace these links with directories or repoint them. If the SSD is not mounted the link
+  dangles and Cargo fails to create its directory; mount the SSD or report it instead of building
+  on the boot disk. `target-agent` is also pinned by the wrapper's trust registration (below).
+- To move an existing one: `rsync -aH` it to the mirrored path (`-H` keeps Cargo's hard links, so
+  the copy doesn't double in size), confirm `rsync -aHn --itemize-changes <src>/ <dst>/` prints
+  nothing, rename the original, create the symlink, `rsync -aH` the renamed original again to
+  catch late writes, then delete it.
+
 # Agent Cargo Wrapper
 
 Every explicit `bun test` file or directory MUST start with `./`, `../`, or
@@ -328,7 +355,7 @@ limit, spike system load, and silently lose child-process stdout/stderr; the
 resulting empty or failing evidence is invalid. Use
 `bun test ./scripts/devtools/example.test.ts` instead.
 
-`./dev.sh` runs `cargo watch` on the shared `target/` dir continuously. Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").
+`./dev.sh` runs `cargo watch` continuously on its own target on `/Volumes/OMEGA SSD`, and rust-analyzer builds in `target/` (see "Build Output Lives on the SSDs"). Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").
 
 All agent-driven cargo invocations MUST go through `./scripts/agentic/agent-cargo.sh`, which defaults to the bounded shared `CARGO_TARGET_DIR=target-agent/pools/agent-debug` pool with a visible lock. Examples:
 
