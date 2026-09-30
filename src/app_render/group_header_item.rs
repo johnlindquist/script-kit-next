@@ -59,6 +59,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::SdkReference => "SDK Reference".to_string(),
         builtins::BuiltInFeature::Tips => "Tips".to_string(),
         builtins::BuiltInFeature::RunHistory => "What You Ran Today".to_string(),
+        builtins::BuiltInFeature::DayPage => "Day Page".to_string(),
         builtins::BuiltInFeature::MigrateV1Scripts => "Migration".to_string(),
         builtins::BuiltInFeature::FlowUxVariant(_) => "Flow Launcher".to_string(),
         builtins::BuiltInFeature::BackgroundEffectNext

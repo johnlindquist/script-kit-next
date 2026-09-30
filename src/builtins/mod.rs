@@ -297,6 +297,8 @@ pub enum BuiltInFeature {
     Tips,
     /// Today's runs as a view under the same input; Enter acts on one again.
     RunHistory,
+    /// Today's Day Page; a backtick on an empty input opens it too.
+    DayPage,
     /// Script template catalog — launcher view that picks a starter template
     /// then opens the naming prompt. Kept distinct from
     /// [`ScriptCommandType::NewScript`] so the fast `New Script` path stays
@@ -552,6 +554,7 @@ impl BuiltInEntry {
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::Tips => "Browse Tips",
             BuiltInFeature::RunHistory => "Show What Ran",
+            BuiltInFeature::DayPage => "Open Day Page",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate v1 Scripts",
             BuiltInFeature::BackgroundEffectNext | BuiltInFeature::BackgroundEffectPrevious => {
@@ -679,6 +682,7 @@ impl BuiltInEntry {
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::Tips => "Tips",
             BuiltInFeature::RunHistory => "Today",
+            BuiltInFeature::DayPage => "Day Page",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate",
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
@@ -914,6 +918,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::RunHistory,
             "history",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/day-page",
+            "Day Page",
+            "Today's page for notes, todos, and captures; type ` on an empty input to open it",
+            vec!["day", "today", "journal", "daily", "note", "page", "`"],
+            BuiltInFeature::DayPage,
+            "calendar",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(

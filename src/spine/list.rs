@@ -538,7 +538,7 @@ fn build_mode_exit_section(
     let (title, subtitle, icon) = match sigil {
         '~' => ("Open File Search", "Browse files", "folder"),
         '!' => ("Open Quick Terminal", "Run a shell command", "terminal"),
-        '?' => ("Open Actions Help", "Show available actions", "circle-help"),
+        '?' => ("Open Help", "Shortcuts, triggers, and tips", "circle-help"),
         _ => (
             "Open Mode",
             "Leave the prompt-builder flow",

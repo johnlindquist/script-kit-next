@@ -2616,6 +2616,18 @@ impl ScriptListApp {
                 self.one_window_open_history(cx);
                 Self::builtin_success(dctx, "open_run_history")
             }
+            builtins::BuiltInFeature::DayPage => {
+                let app_entity = cx.entity();
+                cx.defer(move |cx| {
+                    let Some(handle) = crate::get_main_window_handle() else {
+                        return;
+                    };
+                    let _ = handle.update(cx, |_, window, cx| {
+                        app_entity.update(cx, |app, cx| app.show_day_page_view(window, cx));
+                    });
+                });
+                Self::builtin_success(dctx, "open_day_page")
+            }
             // =========================================================================
             // New Script from Template — browse kit://script-templates catalog, pick
             // a starter, then hand off to the naming prompt with template metadata

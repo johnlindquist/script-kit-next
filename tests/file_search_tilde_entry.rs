@@ -73,14 +73,19 @@ fn filter_input_change_routes_script_list_mode_exit_entries() {
         "filter_input_change must open quick terminal for '>'"
     );
     assert!(
-        source.contains("ScriptListSpecialEntry::ActionsHelp"),
-        "filter_input_change must route '?' into help/actions"
+        source.contains("ScriptListSpecialEntry::Help => {")
+            && source.contains("self.open_help(cx);"),
+        "filter_input_change must open help for '?'"
     );
     assert!(
-        source.contains(
-            "ScriptListSpecialEntry::ActionsHelp => {\n                self.one_window_stage(cx);"
-        ),
-        "filter_input_change must open actions/help for '?'"
+        source.contains("ScriptListSpecialEntry::Grab => {")
+            && source.contains("self.one_window_key(sk_one_window::Key::Space, cx);"),
+        "filter_input_change must hand a bare space to the reducer, which stages what's focused"
+    );
+    assert!(
+        source.contains("ScriptListSpecialEntry::DayPage => {")
+            && source.contains("self.show_day_page_view(window, cx);"),
+        "filter_input_change must open the Day Page for its trigger"
     );
 }
 

@@ -485,4 +485,22 @@ mod origin_flag_propagation_tests {
             );
         });
     }
+
+    #[gpui::test]
+    fn help_opened_from_main_menu_goes_back_on_escape(cx: &mut gpui::TestAppContext) {
+        let app = crate::main_menu_selection_test_app(cx);
+        app.update(cx, |app, cx| {
+            // The window itself was summoned by hotkey; `?` is typed in it.
+            app.mark_opened_directly("shortcut");
+            app.current_view = AppView::ScriptList;
+
+            app.open_help(cx);
+
+            assert!(matches!(app.current_view, AppView::TipsView { .. }));
+            assert!(
+                app.opened_from_main_menu,
+                "help opened from the main menu must return there on Esc, not close"
+            );
+        });
+    }
 }

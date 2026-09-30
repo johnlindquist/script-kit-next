@@ -1949,6 +1949,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 platform::ensure_move_to_active_space();
 
                                 view.ensure_selection_at_first_item(ctx);
+                                view.one_window_summon(ctx);
 
                                 // Compute dynamic window size matching the hotkey path.
                                 let current_bounds = platform::get_main_window_bounds();

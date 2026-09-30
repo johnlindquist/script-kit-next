@@ -1,10 +1,17 @@
 use super::*;
 
+/// Typed first on an empty input, opens today's Day Page. Quotes start an exact phrase.
+pub(crate) const DAY_PAGE_TRIGGER: &str = "`";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptListSpecialEntry {
     FileSearchMini { query: String },
     QuickTerminal,
-    ActionsHelp,
+    /// `?`: the shortcuts and triggers.
+    Help,
+    /// A space on an empty input: what's focused goes in play.
+    Grab,
+    /// A backtick: today's Day Page.
     DayPage,
 }
 
@@ -12,7 +19,7 @@ impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | "!" | "?" | " ")
+        matches!(new_text, "~" | "!" | "?" | " " | DAY_PAGE_TRIGGER)
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -126,8 +133,9 @@ impl ScriptListApp {
         match new_text {
             "!" => Some(ScriptListSpecialEntry::QuickTerminal),
             ">" => None,
-            "?" => Some(ScriptListSpecialEntry::ActionsHelp),
-            " " => Some(ScriptListSpecialEntry::DayPage),
+            "?" => Some(ScriptListSpecialEntry::Help),
+            " " => Some(ScriptListSpecialEntry::Grab),
+            DAY_PAGE_TRIGGER => Some(ScriptListSpecialEntry::DayPage),
             _ => None,
         }
     }
@@ -730,18 +738,29 @@ mod tests {
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("?"),
-            Some(ScriptListSpecialEntry::ActionsHelp)
+            Some(ScriptListSpecialEntry::Help)
         );
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(" "),
+            Some(ScriptListSpecialEntry::Grab)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("`"),
             Some(ScriptListSpecialEntry::DayPage)
         );
+        for phrase in ["'", "\"", "'lunch", "\"lunch with sarah\""] {
+            assert_eq!(
+                ScriptListApp::special_entry_from_script_list_filter(phrase),
+                None,
+                "a quote starts an exact phrase: {phrase}"
+            );
+        }
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(","),
             None
         );
         // A space-prefixed query (only reachable via paste or programmatic
-        // setFilter, since the bare space swaps surfaces on the first keystroke)
+        // setFilter, since the bare space is taken on the first keystroke)
         // must stay normal search text.
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter(" todo"),
@@ -765,7 +784,7 @@ mod tests {
     fn test_is_transient_script_list_trigger() {
         use super::ScriptListApp;
 
-        for trigger in ["~", "!", "?", " "] {
+        for trigger in ["~", "!", "?", " ", "`"] {
             assert!(
                 ScriptListApp::is_transient_script_list_trigger(trigger),
                 "expected '{trigger}' to be transient"

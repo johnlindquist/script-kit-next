@@ -268,6 +268,7 @@ impl MainMenuContentDigest {
             BuiltInFeature::SdkReference => self.text("SdkReference"),
             BuiltInFeature::Tips => self.text("Tips"),
             BuiltInFeature::RunHistory => self.text("RunHistory"),
+            BuiltInFeature::DayPage => self.text("DayPage"),
             BuiltInFeature::NewScriptFromTemplate => self.text("NewScriptFromTemplate"),
             BuiltInFeature::MigrateV1Scripts => self.text("MigrateV1Scripts"),
             BuiltInFeature::BackgroundEffectNext => self.text("BackgroundEffectNext"),

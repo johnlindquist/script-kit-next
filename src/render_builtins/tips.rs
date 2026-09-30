@@ -15,7 +15,7 @@ impl ScriptListApp {
         let Some(example) = visible
             .get(*selected_index)
             .and_then(|index| entries.get(*index))
-            .and_then(|tip| tip.examples.first())
+            .and_then(|tip| tip.copyable_example())
         else {
             return;
         };
@@ -203,7 +203,13 @@ impl ScriptListApp {
                                         .on_hover(hover_handler)
                                         .child(
                                             ListItem::new(tip.title.clone(), list_colors)
-                                                .description_opt(Some(tip.full_hint()))
+                                                .icon_kind(match tip.trigger_glyph() {
+                                                    Some(glyph) => list_item::IconKind::Emoji(glyph),
+                                                    None => list_item::IconKind::Svg(
+                                                        "MagnifyingGlass".to_string(),
+                                                    ),
+                                                })
+                                                .description(tip.hint_sentence())
                                                 .selected(is_selected)
                                                 .hovered(is_hovered),
                                         )
@@ -259,6 +265,85 @@ impl ScriptListApp {
             );
 
         let preview_panel = if let Some(tip) = preview {
+            let theme = &self.theme;
+            let accent: gpui::Hsla = rgb(chrome.accent_hex).into();
+            let card_bg = rgba(chrome.whisper_surface_rgba);
+            let trigger = tip.hint_key.clone().map(|key| {
+                crate::components::footer_chrome::render_footer_shortcut_keycaps_with_metrics(
+                    key,
+                    theme,
+                    Some(14.0),
+                    Some(26.0),
+                    None,
+                    None,
+                )
+            });
+            let has_examples = !tip.examples.is_empty();
+            let examples = tip.examples.into_iter().map(|example| {
+                let typed = (!example.input.trim().is_empty()).then(|| {
+                    let highlights: Vec<_> =
+                        script_kit_gpui::tips::example_syntax_ranges(&example.input)
+                            .into_iter()
+                            .map(|range| {
+                                (
+                                    range,
+                                    gpui::HighlightStyle {
+                                        color: Some(accent),
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .collect();
+                    div()
+                        .min_w(px(0.))
+                        .font_family(typography.font_family_mono)
+                        .text_size(px(typography.font_size_sm))
+                        .text_color(primary)
+                        .child(gpui::StyledText::new(example.input).with_highlights(highlights))
+                });
+                let keys = example.keys.map(|keys| {
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(spacing.padding_xs))
+                        .children(keys.split_whitespace().map(|chord| {
+                            crate::components::footer_chrome::render_footer_shortcut_keycaps(
+                                chord.to_string(),
+                                theme,
+                            )
+                        }))
+                });
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(spacing.padding_xs))
+                    .px(px(spacing.padding_md))
+                    .py(px(spacing.padding_sm))
+                    .rounded(px(8.))
+                    .bg(card_bg)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(spacing.padding_sm))
+                            .children(typed)
+                            .children(keys),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(spacing.padding_xs))
+                            .text_size(px(typography.font_size_xs))
+                            .text_color(muted)
+                            .child(div().text_color(hint).child("→"))
+                            .child(example.note),
+                    )
+            });
             div()
                 .w_full()
                 .h_full()
@@ -272,36 +357,43 @@ impl ScriptListApp {
                 .gap(px(spacing.padding_md))
                 .child(
                     div()
-                        .text_size(px(typography.font_size_xl))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(primary)
-                        .child(tip.title),
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(spacing.padding_md))
+                        .children(trigger)
+                        .child(
+                            div()
+                                .text_size(px(typography.font_size_xl))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(primary)
+                                .child(tip.title),
+                        ),
                 )
                 .child(
                     div()
                         .text_size(px(typography.font_size_md))
+                        .line_height(gpui::relative(1.5))
                         .text_color(muted)
                         .child(tip.description),
                 )
-                .children(tip.examples.into_iter().map(|example| {
+                .when(has_examples, |panel| {
+                    panel.child(
+                        div()
+                            .pt(px(spacing.padding_sm))
+                            .text_size(px(typography.font_size_xs))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(hint)
+                            .child("TRY IT"),
+                    )
+                })
+                .child(
                     div()
                         .flex()
                         .flex_col()
-                        .gap(px(spacing.padding_xs))
-                        .child(
-                            div()
-                                .font_family(typography.font_family_mono)
-                                .text_size(px(typography.font_size_sm))
-                                .text_color(primary)
-                                .child(example.input),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(typography.font_size_xs))
-                                .text_color(hint)
-                                .child(example.note),
-                        )
-                }))
+                        .gap(px(spacing.padding_sm))
+                        .children(examples),
+                )
                 .into_any_element()
         } else {
             div()
