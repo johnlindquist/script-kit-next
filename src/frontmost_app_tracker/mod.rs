@@ -225,6 +225,7 @@ const K_CFSTRING_ENCODING_UTF8: u32 = 0x08000100;
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     fn AXUIElementCreateApplication(pid: i32) -> AXUIElementRef;
+    fn AXUIElementSetMessagingTimeout(element: AXUIElementRef, timeout_seconds: f32) -> i32;
     fn AXUIElementCopyAttributeValue(
         element: AXUIElementRef,
         attribute: CFStringRef,
@@ -397,8 +398,22 @@ fn get_ax_string_attribute(element: AXUIElementRef, attribute: &str) -> Option<S
     result
 }
 
+/// Bounds a title re-read so an unresponsive app cannot stall the caller; a timeout
+/// reads as "no title", never as the stale one.
 #[cfg(target_os = "macos")]
-fn capture_window_title_for_pid(pid: i32) -> Option<String> {
+const FRESH_TITLE_TIMEOUT_SECS: f32 = 0.05;
+
+/// `None` keeps the system default AX timeout.
+#[cfg(target_os = "macos")]
+fn set_ax_timeout(element: AXUIElementRef, timeout_secs: Option<f32>) {
+    if let Some(seconds) = timeout_secs {
+        // SAFETY: `element` is a live AX element retained by the caller.
+        unsafe { AXUIElementSetMessagingTimeout(element, seconds) };
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn capture_window_title_for_pid(pid: i32, timeout_secs: Option<f32>) -> Option<String> {
     if !crate::window_control::has_accessibility_permission() {
         tracing::debug!(
             target: "script_kit::frontmost_app_tracker",
@@ -414,6 +429,7 @@ fn capture_window_title_for_pid(pid: i32) -> Option<String> {
     if app.is_null() {
         return None;
     }
+    set_ax_timeout(app, timeout_secs);
 
     let title = (|| {
         let attr = try_create_cf_string("AXFocusedWindow")?;
@@ -435,18 +451,18 @@ fn capture_window_title_for_pid(pid: i32) -> Option<String> {
             return None;
         }
 
-        let title = get_ax_string_attribute(focused_window as AXUIElementRef, "AXTitle");
+        let window = focused_window as AXUIElementRef;
+        set_ax_timeout(window, timeout_secs);
+        let title = get_ax_string_attribute(window, "AXTitle");
+        // AX may hand other callers the same element, so a short timeout must not outlive this read.
+        set_ax_timeout(window, timeout_secs.map(|_| 0.0));
         cf_release(focused_window);
         title
     })();
 
+    set_ax_timeout(app, timeout_secs.map(|_| 0.0));
     cf_release(app);
     normalize_window_title(title)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn capture_window_title_for_pid(_pid: i32) -> Option<String> {
-    None
 }
 /// Start the background frontmost app tracker.
 ///
@@ -487,6 +503,47 @@ pub fn start_tracking() {
 /// Returns `None` if no app has been tracked yet (e.g., Script Kit just launched).
 pub fn get_last_real_app() -> Option<TrackedApp> {
     TRACKER_STATE.read().last_real_app.clone()
+}
+
+/// Re-read the tracked app's focused window title and return the updated app.
+///
+/// Switching tabs or windows inside an app changes its title without activating
+/// anything, so the title captured at activation goes stale. Call this before
+/// using `window_title`.
+#[cfg(target_os = "macos")]
+pub fn refresh_front_window_title() -> Option<TrackedApp> {
+    let app = get_last_real_app()?;
+    if !TRACKING_STARTED.load(Ordering::SeqCst) {
+        return Some(app);
+    }
+    let title = capture_window_title_for_pid(app.pid, Some(FRESH_TITLE_TIMEOUT_SECS));
+    if publish_window_title(app.pid, &app.bundle_id, title) {
+        tracing::debug!(
+            target: "script_kit::frontmost_app_tracker",
+            pid = app.pid,
+            bundle_id = %app.bundle_id,
+            "front window title changed since activation"
+        );
+    }
+    get_last_real_app()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn refresh_front_window_title() -> Option<TrackedApp> {
+    get_last_real_app()
+}
+
+/// Title-only changes skip the menu-change wake: nothing that listens reads the title.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn publish_window_title(pid: i32, bundle_id: &str, title: Option<String>) -> bool {
+    let mut state = TRACKER_STATE.write();
+    match state.last_real_app.as_mut() {
+        Some(app) if app.pid == pid && app.bundle_id == bundle_id && app.window_title != title => {
+            app.window_title = title;
+            true
+        }
+        _ => false,
+    }
 }
 
 /// Get the bundle identifier for the last real app.
@@ -690,7 +747,7 @@ fn capture_current_frontmost_app() {
                 pid,
                 bundle_id: bundle_id.clone(),
                 name: name.unwrap_or_else(|| bundle_id.clone()),
-                window_title: capture_window_title_for_pid(pid),
+                window_title: capture_window_title_for_pid(pid, None),
             };
 
             logging::log(
@@ -813,7 +870,7 @@ fn setup_workspace_observer() {
                         pid,
                         bundle_id: bundle_id.clone(),
                         name: name.unwrap_or_else(|| bundle_id.clone()),
-                        window_title: capture_window_title_for_pid(pid),
+                        window_title: capture_window_title_for_pid(pid, None),
                     };
 
                     logging::log(
@@ -1442,6 +1499,55 @@ mod tests {
             subscription.receiver.try_recv(),
             Err(async_channel::TryRecvError::Empty)
         );
+        restore_tracker_state(
+            previous.last_real_app,
+            previous.cached_menu_items,
+            previous.cached_menu_identity,
+            previous.fetching_menu_identity,
+            previous.fetching_menu_generation,
+        );
+    }
+
+    #[test]
+    fn test_window_title_refresh_updates_same_app_without_menu_wake() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock();
+        let previous = std::mem::take(&mut *TRACKER_STATE.write());
+        let tracked = TrackedApp {
+            pid: 300,
+            bundle_id: "com.google.Chrome".to_string(),
+            name: "Google Chrome".to_string(),
+            window_title: Some("Old tab".to_string()),
+        };
+        publish_tracked_app(tracked.clone());
+        let subscription = subscribe_menu_changes();
+
+        assert!(publish_window_title(
+            300,
+            "com.google.Chrome",
+            Some("New tab".to_string())
+        ));
+        assert_eq!(
+            get_last_real_app()
+                .and_then(|app| app.window_title)
+                .as_deref(),
+            Some("New tab")
+        );
+        assert!(!publish_window_title(
+            300,
+            "com.google.Chrome",
+            Some("New tab".to_string())
+        ));
+        assert!(
+            !publish_window_title(301, "com.google.Chrome", Some("Other".to_string())),
+            "a read for an app that is no longer tracked must not land"
+        );
+        assert!(publish_window_title(300, "com.google.Chrome", None));
+        assert_eq!(get_last_real_app().and_then(|app| app.window_title), None);
+        assert_eq!(
+            subscription.receiver.try_recv(),
+            Err(async_channel::TryRecvError::Empty)
+        );
+
         restore_tracker_state(
             previous.last_real_app,
             previous.cached_menu_items,

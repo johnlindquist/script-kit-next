@@ -70,17 +70,18 @@ fn choose_external_window<'a>(
         if matching.len() == 1 {
             return Ok(matching[0]);
         }
-    } else {
-        let focused = windows
-            .iter()
-            .filter(|(_, _, focused)| *focused)
-            .collect::<Vec<_>>();
-        if focused.len() == 1 {
-            return Ok(focused[0]);
-        }
-        if windows.len() == 1 {
-            return Ok(&windows[0]);
-        }
+    }
+    // A title can change between the read and now (a tab switch), so an unmatched
+    // title still resolves to the one focused or only window.
+    let focused = windows
+        .iter()
+        .filter(|(_, _, focused)| *focused)
+        .collect::<Vec<_>>();
+    if focused.len() == 1 {
+        return Ok(focused[0]);
+    }
+    if windows.len() == 1 {
+        return Ok(&windows[0]);
     }
     Err(
         "The previous app's exact window cannot be identified; choose another destination"
@@ -92,7 +93,7 @@ fn choose_external_window<'a>(
 pub fn capture_frozen_external_destination() -> Result<FrozenDictationDestination, String> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
         .map_err(|error| error.to_string())?;
-    let app = crate::frontmost_app_tracker::get_last_real_app()
+    let app = crate::frontmost_app_tracker::refresh_front_window_title()
         .ok_or_else(|| "No previously focused app is available".to_string())?;
     let windows = matching_external_windows(app.pid)?;
     let selected = choose_external_window(&windows, app.window_title.as_deref())?;
@@ -300,6 +301,28 @@ mod tests {
             11
         );
         assert_eq!(choose_external_window(&windows, None).unwrap().0, 12);
+    }
+
+    #[test]
+    fn external_window_selection_falls_back_to_focus_when_title_changed() {
+        let windows = vec![
+            (11, "First".to_string(), false),
+            (12, "New tab".to_string(), true),
+        ];
+        assert_eq!(
+            choose_external_window(&windows, Some("Old tab")).unwrap().0,
+            12
+        );
+        let only = vec![(21, "New tab".to_string(), false)];
+        assert_eq!(
+            choose_external_window(&only, Some("Old tab")).unwrap().0,
+            21
+        );
+        let unfocused = vec![
+            (31, "First".to_string(), false),
+            (32, "Second".to_string(), false),
+        ];
+        assert!(choose_external_window(&unfocused, Some("Old tab")).is_err());
     }
 
     #[test]

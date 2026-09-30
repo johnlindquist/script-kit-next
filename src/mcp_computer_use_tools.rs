@@ -14,7 +14,7 @@ use crate::computer_use::runtime_bridge::{
 use crate::computer_use::types::{
     ComputerUseCaptureNativeWindowArgs, ComputerUseCaptureRenderWindowArgs, ComputerUseSeeArgs,
 };
-use crate::frontmost_app_tracker::{get_cached_menu_snapshot, get_last_real_app};
+use crate::frontmost_app_tracker::{get_cached_menu_snapshot, refresh_front_window_title};
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use crate::menu_bar::MenuBarItem;
 use crate::protocol::{
@@ -1910,7 +1910,7 @@ fn handle_get_frontmost_app(arguments: &Value) -> ToolResult {
         Err(error) => return error_result("invalid_arguments", &error.to_string()),
     };
 
-    let app = get_last_real_app().map(|app| ComputerUseFrontmostApp {
+    let app = refresh_front_window_title().map(|app| ComputerUseFrontmostApp {
         pid: app.pid,
         bundle_id: app.bundle_id,
         name: app.name,

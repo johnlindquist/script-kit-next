@@ -206,7 +206,7 @@ fn capture_browser_live() -> Result<Option<BrowserContext>, String> {
 ///
 /// When `include_image` is false, uses metadata-only paths that never invoke
 /// `capture_image()` or PNG encoding:
-///   1. Fast path: tracker cache (zero-cost, no OS calls)
+///   1. Fast path: tracker app with its title re-read (one bounded AX call)
 ///   2. Fallback: `capture_focused_window_metadata()` (window enumeration only)
 ///
 /// When `include_image` is true, goes through `capture_focused_window_screenshot`
@@ -216,8 +216,8 @@ fn capture_focused_window_with_image_live(
 ) -> Result<(Option<FocusedWindowContext>, Option<Base64PngContext>), String> {
     // Metadata-only path: never capture pixels
     if !include_image {
-        // Try 1: tracker cache (cheapest)
-        if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
+        // Try 1: tracker, with the title re-read (one bounded AX call)
+        if let Some(app) = crate::frontmost_app_tracker::refresh_front_window_title() {
             if let Some(title) = app.window_title {
                 let title = title.trim().to_string();
                 if !title.is_empty() {
