@@ -241,6 +241,23 @@ impl Evaluator {
                     app.one_window_summon(cx)
                 });
             }
+            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::FocusWindow {
+                app: name,
+                title,
+            }) => {
+                let RootOwner::Main(main) = &mounted.owner else {
+                    anyhow::bail!("one_window_host_required");
+                };
+                let app = crate::frontmost_app_tracker::TrackedApp {
+                    pid: 0,
+                    bundle_id: String::new(),
+                    name,
+                    window_title: Some(title),
+                };
+                main.update(&mut **self.cx.app.borrow_mut(), |view, cx| {
+                    view.focus_front_window(&app, cx)
+                });
+            }
             FixtureControl::Fault {
                 operation: crate::protocol::ThemeFaultOperation::SuppressThemeNotification,
                 target: fault_target,

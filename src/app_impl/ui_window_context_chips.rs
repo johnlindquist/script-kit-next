@@ -1,3 +1,37 @@
+/// The front window as the line above the input names it: its title, beside the app's own icon.
+fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_one_window::Subject {
+    let window_title = app
+        .window_title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty() && *title != app.name);
+    sk_one_window::Subject {
+        kind: sk_one_window::SubjectKind::Window,
+        label: "Front window".into(),
+        title: window_title.unwrap_or(&app.name).to_string(),
+        sub: if window_title.is_some() {
+            app.name.clone()
+        } else {
+            String::new()
+        },
+        icon: app_icon_name(&app.bundle_id),
+        ..Default::default()
+    }
+}
+
+/// The line's icon for an app: its own icon when the launcher knows its bundle.
+fn app_icon_name(bundle_id: &str) -> String {
+    let bundle_id = bundle_id.trim();
+    if bundle_id.is_empty() {
+        "window".to_string()
+    } else {
+        format!(
+            "{}{bundle_id}",
+            crate::one_window::slot_line::APP_ICON_PREFIX
+        )
+    }
+}
+
 impl ScriptListApp {
     /// Refresh the passive "selected text" sniff that powers the header hint
     /// chip. Runs `get_selected_text_ax_only` on the background executor — it
@@ -15,18 +49,36 @@ impl ScriptListApp {
         let source_app = crate::frontmost_app_tracker::get_last_real_app();
         let source_pid = source_app.as_ref().map(|app| app.pid);
         if let Some(app) = &source_app {
-            self.focus_slot_line(
-                sk_one_window::Subject {
-                    kind: sk_one_window::SubjectKind::Window,
-                    label: "Front window".into(),
-                    title: app.name.clone(),
-                    sub: app.window_title.clone().unwrap_or_default(),
-                    icon: "window".into(),
-                    ..Default::default()
-                },
-                cx,
-            );
+            self.focus_front_window(app, cx);
+            // Tab and same-app window switches change the title without an
+            // activation, so the tracker's cached title may be stale.
+            let shown = app.clone();
+            cx.spawn(async move |this, cx| {
+                let fresh = cx
+                    .background_executor()
+                    .spawn(async { crate::frontmost_app_tracker::refresh_front_window_title() })
+                    .await;
+                let _ = this.update(cx, |view, cx| {
+                    let Some(fresh) = fresh else {
+                        return;
+                    };
+                    if view.shown_selection_hint_token != token
+                        || view.shown_selection_hint_text.is_some()
+                        || fresh.pid != shown.pid
+                        || fresh.window_title == shown.window_title
+                    {
+                        return;
+                    }
+                    view.focus_front_window(&fresh, cx);
+                    cx.notify();
+                });
+            })
+            .detach();
         }
+        let source_icon = source_app
+            .as_ref()
+            .map(|app| app_icon_name(&app.bundle_id))
+            .unwrap_or_else(|| "selection".to_string());
         let source_name = source_app.map(|app| app.name);
         cx.spawn(async move |this, cx| {
             // Passive AX-only reads: selection first, then the focused
@@ -80,9 +132,9 @@ impl ScriptListApp {
                         title: format!("\u{201c}{snippet}\u{201d}"),
                         sub: source_name
                             .as_deref()
-                            .map(|name| format!("in {name}"))
+                            .map(|name| format!("selected in {name}"))
                             .unwrap_or_default(),
-                        icon: "selection".into(),
+                        icon: source_icon.clone(),
                         ..Default::default()
                     }, cx);
                 }
@@ -100,6 +152,15 @@ impl ScriptListApp {
     /// What "this" means in the line above the input.
     fn focus_slot_line(&mut self, subject: sk_one_window::Subject, cx: &mut Context<Self>) {
         self.one_window_handle(sk_one_window::Event::Focused(subject), cx);
+    }
+
+    /// The line names `app`'s front window as "this".
+    pub(crate) fn focus_front_window(
+        &mut self,
+        app: &crate::frontmost_app_tracker::TrackedApp,
+        cx: &mut Context<Self>,
+    ) {
+        self.focus_slot_line(front_window_subject(app), cx);
     }
 
     /// Header hint chip shown only while the main menu is up AND the passive

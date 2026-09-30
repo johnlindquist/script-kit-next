@@ -276,6 +276,9 @@ pub enum OneWindowFixtureCommand {
     /// Brings the window back the way the main hotkey does after a launch or a voice session
     /// let it go; evaluation windows stay hidden, so only the one-window state comes back.
     Summon {},
+    /// Stands in for the app the user came from, which evaluation never has: the line names this
+    /// app's front window the way it names the real one, so Space stages it.
+    FocusWindow { app: String, title: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

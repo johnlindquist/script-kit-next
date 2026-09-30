@@ -25,6 +25,7 @@ fn valid_fixture_controls() -> Vec<Value> {
         json!({"family": "oneWindow", "operation": "talkTo", "destination": "chat"}),
         json!({"family": "oneWindow", "operation": "talkTo", "destination": "note"}),
         json!({"family": "oneWindow", "operation": "summon"}),
+        json!({"family": "oneWindow", "operation": "focusWindow", "app": "Ghostty", "title": "~/dev · zsh"}),
         json!({"family": "fault", "operation": "suppressThemeNotification", "target": {"type": "instance", "id": "main", "generation": 3}}),
     ]
 }

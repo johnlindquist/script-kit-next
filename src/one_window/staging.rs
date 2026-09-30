@@ -3,13 +3,72 @@
 //! the reducer's rows under its header. Nothing opens: no popup, no second window.
 
 use gpui::{AppContext as _, Context};
-use sk_one_window::{Event, Key, Row, Subject};
+use sk_one_window::{Event, Key, Row, Subject, SubjectKind};
 
 use crate::scripts::SearchResult;
 use crate::{AppView, ScriptListApp};
 
 /// The key prefix of a row that runs an action on what's staged.
 pub(crate) const ACTION_KEY: &str = "action:";
+
+/// The action id of a window arrangement: `window/<op>@<app>`, the op's catalog id and the app
+/// whose front window it arranges.
+const WINDOW_ACTION_APP: char = '@';
+
+/// The arrangements a staged window lists first, in this order; the rest follow in the catalog's.
+const WINDOW_ACTIONS_FIRST: &[&str] = &[
+    "Tile Left Half",
+    "Tile Right Half",
+    "Maximize",
+    "Almost Maximize",
+    "Center",
+    "Move to Next Display",
+    "Minimize",
+    "Close Window",
+    "Quit App",
+];
+
+/// What a staged window can have done to it: asking the model about it, then every arrangement,
+/// each named for the window's app.
+fn window_action_rows(app: &str) -> Vec<Row> {
+    let mut ops = crate::intent::native_window_ops();
+    ops.sort_by_key(|op| {
+        WINDOW_ACTIONS_FIRST
+            .iter()
+            .position(|label| *label == op.label)
+            .unwrap_or(WINDOW_ACTIONS_FIRST.len())
+    });
+    std::iter::once(super::chat_entry::about_row())
+        .chain(ops.into_iter().map(|op| {
+            Row::new(
+                format!("{ACTION_KEY}{}{WINDOW_ACTION_APP}{app}", op.id),
+                op.title_for(app),
+            )
+            .with_enter_label(op.label)
+        }))
+        .collect()
+}
+
+/// The arrangement and app a window action id names.
+fn window_action(id: &str) -> Option<(crate::intent::WindowOp, String)> {
+    let (op_id, app) = id.split_once(WINDOW_ACTION_APP)?;
+    let op = crate::intent::native_window_ops()
+        .into_iter()
+        .find(|op| op.id == op_id)?;
+    Some((op, app.to_string()))
+}
+
+/// The app a front-window subject belongs to: the line names the window by its title and the
+/// app under it, or by the app alone when the window has no title of its own.
+fn subject_app(subject: &Subject) -> Option<&str> {
+    match subject.kind {
+        SubjectKind::Window if !subject.sub.trim().is_empty() => Some(subject.sub.trim()),
+        SubjectKind::Window | SubjectKind::App => {
+            Some(subject.title.trim()).filter(|app| !app.is_empty())
+        }
+        _ => None,
+    }
+}
 
 /// What was highlighted when something was staged: the words and the row, so an action runs on
 /// the row it was offered for.
@@ -47,6 +106,17 @@ impl ScriptListApp {
     pub(super) fn one_window_actions_for(&mut self, subject: &Subject) -> Event {
         if let Some(actions) = self.one_window_history_actions(subject) {
             return actions;
+        }
+        if let Some(app) = subject
+            .row_key
+            .is_none()
+            .then(|| subject_app(subject))
+            .flatten()
+        {
+            self.pending_root_unified_actions_subject = None;
+            self.pending_root_file_actions_file = None;
+            self.one_window_host.work.about = None;
+            return Event::Actions(window_action_rows(app));
         }
         self.pending_root_unified_actions_subject = None;
         self.pending_root_file_actions_file = None;
@@ -134,6 +204,11 @@ impl ScriptListApp {
             self.one_window_route_work(&super::chat_entry::about_row(), cx);
             return;
         }
+        if let Some((op, app)) = window_action(&id) {
+            self.one_window_host.staged_from = None;
+            self.one_window_arrange_window(op, app, cx);
+            return;
+        }
         let Some(handle) = self.one_window_host.window else {
             tracing::warn!(target: "script_kit::one_window", event = "action_without_window", id = %id);
             return;
@@ -155,6 +230,27 @@ impl ScriptListApp {
                 });
             });
         });
+    }
+
+    /// A staged window's arrangement. Quitting the app can't be taken back, so it waits in the
+    /// line first; everything else happens at once.
+    fn one_window_arrange_window(
+        &mut self,
+        op: crate::intent::WindowOp,
+        app: String,
+        cx: &mut Context<Self>,
+    ) {
+        if op.action() != Some(crate::intent::WindowAction::Quit) {
+            self.run_window_op(op, app, cx);
+            return;
+        }
+        let title = op.title_for(&app);
+        self.one_window_hold(
+            "power",
+            title,
+            Box::new(move |view, cx| view.run_window_op(op, app, cx)),
+            cx,
+        );
     }
 
     fn one_window_show_subject(&mut self, from: &StagedFrom, cx: &mut Context<Self>) {

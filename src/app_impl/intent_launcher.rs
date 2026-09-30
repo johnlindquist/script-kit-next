@@ -295,11 +295,37 @@ impl ScriptListApp {
         {
             self.close_and_reset_window(cx);
         }
+        self.run_desktop_steps(later, cx);
+        Ok(())
+    }
+
+    /// Carries out a window arrangement on `app`'s front window: the window steps back first so
+    /// the app's own window is the one in front.
+    pub(crate) fn run_window_op(
+        &mut self,
+        op: intent_engine::WindowOp,
+        app: String,
+        cx: &mut Context<Self>,
+    ) {
+        let step = Step::Window { op, app };
+        if needs_accessibility(&step)
+            && !crate::platform::accessibility::permissions::has_accessibility_permission()
+        {
+            self.ask_for_accessibility(std::slice::from_ref(&step), cx);
+            return;
+        }
+        self.close_and_reset_window(cx);
+        self.run_desktop_steps(vec![step], cx);
+    }
+
+    /// Menu, window and URL steps drive other apps, off the main thread; a step that fails says
+    /// why in the line and brings the window back to show it.
+    fn run_desktop_steps(&mut self, steps: Vec<Step>, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let failed = cx
                 .background_executor()
                 .spawn(async move {
-                    later.iter().find_map(|step| {
+                    steps.iter().find_map(|step| {
                         let error = run_desktop_step_with_retries(step).err()?;
                         tracing::warn!(
                             target: "script_kit::intent",
@@ -321,7 +347,6 @@ impl ScriptListApp {
             });
         })
         .detach();
-        Ok(())
     }
 
     /// Menu and window steps drive other apps through Accessibility; without it they can't run,
