@@ -137,6 +137,10 @@ fn tahoe_glass_backdrop_view_class(glass_class: id) -> Option<*const objc::runti
             sel!(finishOwnWindowEntry),
             tahoe_glass_backdrop_finish_coherent_entry as extern "C" fn(&Object, Sel),
         );
+        decl.add_method(
+            sel!(sampleOwnWindowEntryTrace),
+            tahoe_glass_backdrop_sample_entry_trace as extern "C" fn(&Object, Sel),
+        );
         decl.register() as *const Class as usize
     });
     if ptr == 0 {

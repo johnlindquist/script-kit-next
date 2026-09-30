@@ -251,6 +251,7 @@ extern "C" fn tahoe_glass_backdrop_hit_test(
 }
 
 include!("secondary_window_glass_animation.rs");
+include!("secondary_window_glass_entry_trace.rs");
 include!("secondary_window_glass_style.rs");
 /// Install (or reuse) a native macOS 26 Tahoe `NSGlassEffectView` as the
 /// backmost backdrop of the window's content view.

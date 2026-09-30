@@ -106,7 +106,11 @@ fn main_menu_theme_owns_header_context_and_section_geometry_defaults() {
     let def = MainMenuThemeVariant::InfoBarBase.def();
 
     assert_eq!(def.header_info_bar.context_edge_outset_x, 8.0);
-    assert_eq!(def.list.section_padding_x, 14.0);
+    assert_eq!(def.list.section_padding_x, 18.0);
+    assert_eq!(
+        def.list.section_padding_x,
+        def.row.outer_padding_x + def.row.inner_padding_x
+    );
     assert_eq!(def.list.section_padding_top, 12.0);
     assert_eq!(def.list.section_padding_bottom, 4.0);
     assert_eq!(def.list.section_gap, 6.0);

@@ -213,12 +213,22 @@ pub(crate) fn view_owned_native_footer_height() -> f32 {
     }
 }
 
-/// In-stage footer capsule container (GPUI top-left space): one `gap` inset
-/// from the window's sides and bottom, identical on every surface.
+/// Side inset of the in-stage capsule container: the same window edge the
+/// header context line, section headers, and row tiles use.
+pub(crate) fn main_window_footer_side_inset() -> f32 {
+    crate::components::main_view_chrome::main_view_edge_inset_x(
+        crate::designs::current_main_menu_theme().def(),
+    )
+}
+
+/// In-stage footer capsule container (GPUI top-left space): `side_inset` from
+/// the window's sides and one `gap` above the bottom, identical on every
+/// surface.
 pub(crate) fn main_window_footer_bounds_gpui(
     width: f32,
     host_height: f32,
     footer_height: f32,
+    side_inset: f32,
     gap: f32,
     backing_scale: f32,
 ) -> crate::protocol::LayoutBounds {
@@ -226,11 +236,12 @@ pub(crate) fn main_window_footer_bounds_gpui(
     let host_height = round_footer_region_value(host_height.max(0.0), backing_scale);
     let footer_height =
         round_footer_region_value(footer_height.max(0.0), backing_scale).min(host_height);
-    let inset = round_footer_region_value(gap.max(0.0), backing_scale).min(width / 2.0);
+    let side_inset = round_footer_region_value(side_inset.max(0.0), backing_scale).min(width / 2.0);
+    let bottom_inset = round_footer_region_value(gap.max(0.0), backing_scale);
     crate::protocol::LayoutBounds {
-        x: inset,
-        y: (host_height - inset - footer_height).max(0.0),
-        width: (width - inset * 2.0).max(0.0),
+        x: side_inset,
+        y: (host_height - bottom_inset - footer_height).max(0.0),
+        width: (width - side_inset * 2.0).max(0.0),
         height: footer_height,
     }
 }
@@ -358,6 +369,7 @@ unsafe fn ensure_main_window_footer_glass_container(gpui_view: id, ns_window: id
         content_bounds.size.width as f32,
         content_bounds.size.height as f32,
         footer_height() as f32,
+        main_window_footer_side_inset(),
         FLOAT_FOOTER_CONTAINER_GAP_PX,
         backing_scale as f32,
     );

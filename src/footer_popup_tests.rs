@@ -248,16 +248,23 @@ mod footer_layout_tests {
         );
     }
 
-    /// The in-stage capsule container sits one gap inside the window's sides
-    /// and bottom, whatever the surface, and never above the window top.
+    /// The in-stage capsule container sits on the shared window edge at the
+    /// sides and one gap above the bottom, whatever the surface, and never
+    /// above the window top.
     #[test]
-    fn in_stage_footer_sits_one_gap_inside_the_window_edges() {
-        let footer = super::main_window_footer_bounds_gpui(750.0, 480.0, 32.0, 8.0, 2.0);
-        assert_eq!((footer.x, footer.width), (8.0, 734.0));
+    fn in_stage_footer_sits_on_the_window_edge_and_one_gap_above_the_bottom() {
+        let footer = super::main_window_footer_bounds_gpui(750.0, 480.0, 32.0, 18.0, 8.0, 2.0);
+        assert_eq!((footer.x, footer.width), (18.0, 714.0));
         assert_eq!((footer.y, footer.height), (440.0, 32.0));
         assert_eq!(footer.y + footer.height + 8.0, 480.0);
-        let tiny = super::main_window_footer_bounds_gpui(750.0, 30.0, 32.0, 8.0, 2.0);
+        let tiny = super::main_window_footer_bounds_gpui(750.0, 30.0, 32.0, 18.0, 8.0, 2.0);
         assert_eq!(tiny.y, 0.0);
+        let def = crate::designs::current_main_menu_theme().def();
+        assert_eq!(
+            super::main_window_footer_side_inset(),
+            def.list.section_padding_x,
+            "footer capsules share the section header / row tile edge"
+        );
     }
 
     /// Every main-window surface shares one footer zone. The root reserves it

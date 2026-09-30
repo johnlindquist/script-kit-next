@@ -334,6 +334,7 @@ impl ScriptListApp {
                     window_width,
                     window_height,
                     footer_height,
+                    crate::footer_popup::main_window_footer_side_inset(),
                     crate::footer_popup::FLOAT_FOOTER_CONTAINER_GAP_PX,
                     1.0,
                 )

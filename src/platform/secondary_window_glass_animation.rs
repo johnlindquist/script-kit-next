@@ -31,6 +31,7 @@ unsafe fn animate_tahoe_glass_entry(
     backdrop_role: NativeGlassSurfaceRole,
 ) {
     use cocoa::foundation::NSRect;
+    let entry_started_ns = crate::platform::host_clock::host_time_ns();
     let spec = preset.spec();
     let is_main = crate::window_manager::get_main_window() == Some(window);
     if is_main {
@@ -111,10 +112,13 @@ unsafe fn animate_tahoe_glass_entry(
     let tint_supported: bool = msg_send![backdrop, respondsToSelector: sel!(setTintColor:)];
     let material_supported = style_supported && tint_supported;
     let duration = f64::from(spec.duration_ms) / 1000.0;
+    // Style and tint are not animatable: through an animator they land at the
+    // end of the group as a visible material snap. Install the settled
+    // material now; the alpha channels carry the reveal.
     if material_supported {
         state.capture_style(backdrop);
-        let _: () = msg_send![backdrop, setStyle: 1isize]; // Clear
-        let _: () = msg_send![backdrop, setTintColor: nil];
+        let _: () = msg_send![backdrop, setStyle: 0isize]; // Regular
+        let _: () = msg_send![backdrop, setTintColor: tint];
     }
     let backdrop_start_alpha = backdrop_natural_alpha * spec.material_start_alpha;
     let _: () = msg_send![backdrop, setAlphaValue: backdrop_start_alpha];
@@ -132,7 +136,7 @@ unsafe fn animate_tahoe_glass_entry(
     };
     let capsule_count = capsules.len();
     let mut capsule_blur_count = 0usize;
-    let mut capsule_material_count = 0usize;
+    let capsule_material_count = 0usize;
     let mut content_roots = 0usize;
     let mut foreground_blur_count = 0usize;
     let mut content_targets = Vec::new();
@@ -192,24 +196,11 @@ unsafe fn animate_tahoe_glass_entry(
     let mut capsule_targets = Vec::with_capacity(capsule_count);
     for &capsule in &capsules {
         let capsule_layer_captured = state.capture_layer(capsule);
-        let style_ok: bool = msg_send![capsule, respondsToSelector: sel!(setStyle:)];
-        let tint_ok: bool = msg_send![capsule, respondsToSelector: sel!(setTintColor:)];
-        let natural_style = if style_ok && tint_ok {
-            let style: isize = msg_send![capsule, style];
-            let tint: id = msg_send![capsule, tintColor];
-            state.capture_style(capsule);
-            let _: () = msg_send![capsule, setStyle: 1isize];
-            let _: () = msg_send![capsule, setTintColor: nil];
-            capsule_material_count += 1;
-            Some((style, tint))
-        } else {
-            None
-        };
         let natural_alpha = state.capture_alpha(capsule);
         if let Some(alpha) = natural_alpha {
             let _: () = msg_send![capsule, setAlphaValue: alpha * spec.material_start_alpha];
         }
-        capsule_targets.push((capsule, natural_style, natural_alpha));
+        capsule_targets.push((capsule, natural_alpha));
         if spec.blur_radius > 0.0 && capsule_layer_captured {
             let installed = ramp_entry_defocus(capsule, duration, spec.blur_radius, log_target);
             state.mark_owned_filter(capsule);
@@ -243,10 +234,19 @@ unsafe fn animate_tahoe_glass_entry(
             }
         }
     }
+    state.finish_deadline_ns = crate::platform::host_clock::host_time_ns()
+        .saturating_add(u64::from(spec.duration_ms) * 1_000_000)
+        .saturating_add(GLASS_ENTRY_FINISH_MAX_DEFER_NS);
     GLASS_COHERENT_ENTRY_STATES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(window as usize, state);
+
+    // AppKit animates alpha from the committed (presentation) value, not the
+    // model value seeded above. Without a commit here every fade runs 1 -> 1.
+    if let Some(transaction) = objc::runtime::Class::get("CATransaction") {
+        let _: () = msg_send![transaction, flush];
+    }
 
     // One grouped fade: material, capsules, content, and window alpha share
     // the duration and curve, so the surface arrives as one object.
@@ -264,19 +264,9 @@ unsafe fn animate_tahoe_glass_entry(
         }
     }
     let backdrop_animator: id = msg_send![backdrop, animator];
-    if material_supported {
-        let _: () = msg_send![backdrop_animator, setStyle: 0isize]; // Regular
-        if tint != nil {
-            let _: () = msg_send![backdrop_animator, setTintColor: tint];
-        }
-    }
     let _: () = msg_send![backdrop_animator, setAlphaValue: backdrop_natural_alpha];
-    for (capsule, natural_style, natural_alpha) in capsule_targets {
+    for (capsule, natural_alpha) in capsule_targets {
         let capsule_animator: id = msg_send![capsule, animator];
-        if let Some((style, tint)) = natural_style {
-            let _: () = msg_send![capsule_animator, setStyle: style];
-            let _: () = msg_send![capsule_animator, setTintColor: tint];
-        }
         if let Some(alpha) = natural_alpha {
             let _: () = msg_send![capsule_animator, setAlphaValue: alpha];
         }
@@ -365,6 +355,7 @@ unsafe fn animate_tahoe_glass_entry(
             u64::from(spec.duration_ms),
             std::sync::atomic::Ordering::Relaxed,
         );
+        begin_glass_entry_trace(window, backdrop, entry_started_ns);
     }
     if spec.foreground_blur_radius > 0.0 && content_roots > 0 && foreground_blur_count == 0 {
         logging::log(

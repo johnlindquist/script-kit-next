@@ -205,7 +205,19 @@ struct GlassCoherentEntryState {
     alpha_views: Vec<(usize, f64)>,
     layers: Vec<GlassEntryLayerSnapshot>,
     styles: Vec<GlassEntryStyleSnapshot>,
+    /// Host time after which a completed entry restores even while an owned
+    /// animation is still attached (a persistent one would never detach).
+    finish_deadline_ns: u64,
+    finish_deferrals: u32,
 }
+
+/// How long a completed entry may wait past its duration for animations
+/// whose CATransaction committed late (a busy show turn) to run out.
+#[cfg(target_os = "macos")]
+const GLASS_ENTRY_FINISH_MAX_DEFER_NS: u64 = 250_000_000;
+
+#[cfg(target_os = "macos")]
+const GLASS_ENTRY_FINISH_POLL_SECONDS: f64 = 1.0 / 60.0;
 
 #[cfg(target_os = "macos")]
 static GLASS_COHERENT_ENTRY_STATES: std::sync::LazyLock<
@@ -238,7 +250,23 @@ impl GlassCoherentEntryState {
             alpha_views: Vec::new(),
             layers: Vec::new(),
             styles: Vec::new(),
+            finish_deadline_ns: 0,
+            finish_deferrals: 0,
         }
+    }
+
+    unsafe fn owned_animations_in_flight(&self) -> usize {
+        let mut count = 0;
+        for snapshot in &self.layers {
+            let layer = snapshot.layer as id;
+            for &key in &snapshot.owned_animation_keys {
+                let animation: id = msg_send![layer, animationForKey: key as id];
+                if animation != nil {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 
     unsafe fn capture_alpha(&mut self, view: id) -> Option<f64> {
@@ -497,6 +525,7 @@ unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
     let Some(state) = state else {
         return;
     };
+    let finish_deferrals = state.finish_deferrals;
     let (actual_frame, actual_alpha, effects_restored) = state.restore(window);
     let now = crate::platform::host_clock::host_time_ns();
     let mut receipt = MAIN_GLASS_ENTRY_RUNTIME_RECEIPT
@@ -516,9 +545,10 @@ unsafe fn finish_coherent_glass_entry(window: id, outcome: &'static str) {
             }
             receipt.actual_end_host_time_ns = Some(now);
             logging::log("PANEL", &format!(
-                "event=main_glass_entry_end preset={} outcome={} actual_end_host_time_ns={} actual_frame={:.3},{:.3},{:.3},{:.3} actual_alpha={:.6} effects_restored={}",
+                "event=main_glass_entry_end preset={} outcome={} actual_end_host_time_ns={} actual_frame={:.3},{:.3},{:.3},{:.3} actual_alpha={:.6} effects_restored={} finish_deferrals={}",
                 receipt.preset_id, outcome, now, actual_frame[0], actual_frame[1],
                 actual_frame[2], actual_frame[3], actual_alpha, effects_restored,
+                finish_deferrals,
             ));
         }
     }
@@ -573,10 +603,38 @@ extern "C" fn tahoe_glass_backdrop_finish_coherent_entry(
         let window: id = msg_send![view, window];
         if window == nil {
             discard_closed_coherent_glass_entry(view);
-        } else {
+        } else if !defer_coherent_glass_entry_finish(window, view) {
             finish_coherent_glass_entry(window, "completed");
         }
     }
+}
+
+/// The entry's animations start when their CATransaction commits, which a
+/// busy show turn can push past the scheduled finish. Restoring then strips
+/// them mid-flight and the surface snaps to its settled material, so wait a
+/// frame at a time until they run out (bounded by the entry's deadline).
+#[cfg(target_os = "macos")]
+unsafe fn defer_coherent_glass_entry_finish(window: id, backdrop: id) -> bool {
+    {
+        let mut states = GLASS_COHERENT_ENTRY_STATES
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(state) = states.get_mut(&(window as usize)) else {
+            return false;
+        };
+        if crate::platform::host_clock::host_time_ns() >= state.finish_deadline_ns
+            || state.owned_animations_in_flight() == 0
+        {
+            return false;
+        }
+        state.finish_deferrals += 1;
+    }
+    let _: () = msg_send![backdrop,
+        performSelector: sel!(finishOwnWindowEntry)
+        withObject: nil
+        afterDelay: GLASS_ENTRY_FINISH_POLL_SECONDS
+    ];
+    true
 }
 
 /// Native bounds are authoritative for the foreground clip. Convert the

@@ -2242,7 +2242,7 @@ unsafe fn layout_footer_hints(
             continue;
         }
         let item_frame: NSRect = msg_send![item, frame];
-        let target_width = footer_hint_slot_width(button_cfg.action).max(item_frame.size.width);
+        let target_width = footer_hint_min_item_width(button_cfg.action).max(item_frame.size.width);
         let left_pinned = is_footer_left_pinned_button(button_cfg);
         if !left_pinned {
             if trailing_item_width > 0.0 {
@@ -2426,6 +2426,17 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::Tips => metrics.ai_slot_width,
     }
     .into()
+}
+
+/// Floor for a native footer item's width. Run hugs its label + keycap like
+/// the GPUI rail does; its slot width only budgets space for the others.
+#[cfg(target_os = "macos")]
+fn footer_hint_min_item_width(action: FooterAction) -> f64 {
+    if matches!(action, FooterAction::Run) {
+        0.0
+    } else {
+        footer_hint_slot_width(action)
+    }
 }
 
 fn footer_hint_content_layout(
@@ -2933,7 +2944,7 @@ unsafe fn make_footer_hint_item(
         + legacy_extra_padding;
     let content_width = label_group_width + gap_width + keys_view_width;
     let intrinsic_width = content_width + (edge_padding_x * 2.0);
-    let mut item_width = footer_hint_slot_width(button_cfg.action)
+    let mut item_width = footer_hint_min_item_width(button_cfg.action)
         .max(min_content_width)
         .max(intrinsic_width);
     if let Some(max_item_width) = max_item_width {
