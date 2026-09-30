@@ -160,8 +160,6 @@ export default {
   // mini UI. Change it if you need Xcode's Cmd+Ctrl+R.
   // rewriteHotkey: { modifiers: ["meta", "ctrl"], key: "KeyR" },
   // rewriteHotkeyEnabled: true,
-  // Disable the footer tips on the main menu.
-  // tips: { enabled: false },
   //
   // Runtime preferences also live here:
   // theme: { presetId: "nord" },

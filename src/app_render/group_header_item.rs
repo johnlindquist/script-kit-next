@@ -57,9 +57,9 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::DictationHistory => "Dictation History".to_string(),
         builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),
         builtins::BuiltInFeature::SdkReference => "SDK Reference".to_string(),
-        builtins::BuiltInFeature::Tips => "Tips".to_string(),
+        builtins::BuiltInFeature::Tips => "Help".to_string(),
         builtins::BuiltInFeature::RunHistory => "What You Ran Today".to_string(),
-        builtins::BuiltInFeature::DayPage => "Day Page".to_string(),
+        builtins::BuiltInFeature::DayPage => "Today".to_string(),
         builtins::BuiltInFeature::MigrateV1Scripts => "Migration".to_string(),
         builtins::BuiltInFeature::FlowUxVariant(_) => "Flow Launcher".to_string(),
         builtins::BuiltInFeature::BackgroundEffectNext

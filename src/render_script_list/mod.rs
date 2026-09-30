@@ -1713,6 +1713,12 @@ impl ScriptListApp {
                             this.toggle_logs(cx);
                             return;
                         }
+                        "t" if !has_shift && !this.one_window.in_view() => {
+                            logging::log("KEY", "Shortcut Cmd+T -> today");
+                            this.show_day_page_view(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
                         "1" | "2" | "3" if !has_shift && this.one_window_owns_list() => {
                             let digit = key_match.as_bytes()[0] - b'0';
                             this.one_window_key(sk_one_window::Key::CmdDigit(digit), cx);

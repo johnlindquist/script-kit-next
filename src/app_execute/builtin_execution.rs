@@ -2886,7 +2886,7 @@ impl ScriptListApp {
                         selected_index: 0,
                         entries,
                     },
-                    "Search tips…",
+                    "Search help…",
                     true,
                     cx,
                 );

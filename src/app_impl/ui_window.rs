@@ -167,7 +167,7 @@ impl ScriptListApp {
         }
 
         match action {
-            crate::footer_popup::FooterAction::Tips => self.open_help(cx),
+            crate::footer_popup::FooterAction::Today => self.show_day_page_view(window, cx),
             crate::footer_popup::FooterAction::Run => {
                 if let AppView::SettingsView {
                     filter,
@@ -246,7 +246,7 @@ impl ScriptListApp {
                 } else if matches!(self.current_view, AppView::ThemeChooserView { .. }) {
                     self.submit_theme_chooser_from_input_enter(window, cx);
                 } else if matches!(self.current_view, AppView::TipsView { .. }) {
-                    self.tips_copy_selected_example(cx);
+                    self.tips_try_selected(window, cx);
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.submit(cx));
@@ -1169,8 +1169,8 @@ impl ScriptListApp {
             return buttons;
         }
 
-        // Tips browser: Copy Example + Back, honestly disabled when the
-        // selected tip has no example to copy.
+        // Help: ↵ opens the selected tip's place or types its example, and says which; it's
+        // disabled when the tip has neither.
         if let AppView::TipsView {
             filter,
             selected_index,
@@ -1181,18 +1181,19 @@ impl ScriptListApp {
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let visible = script_kit_gpui::tips::visible_tip_indices(entries, filter);
-            let has_example = visible
+            let try_label = visible
                 .get(*selected_index)
                 .and_then(|index| entries.get(*index))
-                .is_some_and(|tip| tip.copyable_example().is_some());
+                .and_then(|tip| tip.try_it())
+                .map(script_kit_gpui::tips::TipTry::label);
             let secondary_label = if filter.trim().is_empty() {
                 "Back"
             } else {
                 "Clear Search"
             };
             let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", "Copy Example")
-                    .enabled(!footer_disabled && has_example),
+                FooterButtonConfig::new(FooterAction::Run, "↵", try_label.unwrap_or("Try It"))
+                    .enabled(!footer_disabled && try_label.is_some()),
                 FooterButtonConfig::new(FooterAction::Close, "Esc", secondary_label)
                     .enabled(!footer_disabled),
             ];
@@ -1311,24 +1312,19 @@ impl ScriptListApp {
         );
 
         let mut config = MainWindowFooterConfig::new(surface, buttons);
-        if matches!(self.current_view, AppView::ScriptList)
-            && self.filter_text.trim().is_empty()
-            && self.config.is_tips_enabled()
-        {
-            if let Some(tip) = script_kit_gpui::tips::current_footer_tip() {
-                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                    model_name: tip.hint.clone(),
-                    icon_token: Some("lightbulb".to_string()),
-                    keycap: tip.hint_key.clone(),
-                    action: Some(crate::footer_popup::FooterAction::Tips),
-                    ..Default::default()
-                });
-            }
+        if matches!(self.current_view, AppView::ScriptList) && !self.one_window.in_view() {
+            config.left_info = Some(crate::footer_popup::FooterLeftInfo {
+                model_name: TODAY_LABEL.to_string(),
+                icon_token: Some("calendar".to_string()),
+                keycap: Some(TODAY_KEY.to_string()),
+                action: Some(crate::footer_popup::FooterAction::Today),
+                ..Default::default()
+            });
         }
         // Main list slow-filling (explicit tabs:/history: fetch, visible
         // root file search): pair the constellation layer with a braille
-        // spinner + per-kind status label in the footer's left slot. Tips
-        // only render on an empty query, so this never clobbers them.
+        // spinner + per-kind status label in the footer's left slot while
+        // it lasts; Today comes back when the list has filled.
         if let Some(kind) = self.main_list_loading_kind() {
             config.left_info = Some(main_list_loading_left_info(
                 kind,

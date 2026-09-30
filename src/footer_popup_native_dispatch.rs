@@ -240,7 +240,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
         FooterAction::Cwd => sel!(cwdFooterAction:),
         FooterAction::AgentModel => sel!(agentModelFooterAction:),
-        FooterAction::Tips => sel!(tipsFooterAction:),
+        FooterAction::Today => sel!(todayFooterAction:),
     }
 }
 
@@ -318,8 +318,8 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             footer_agent_model_action as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
-            sel!(tipsFooterAction:),
-            footer_tips_action as extern "C" fn(&Object, Sel, id),
+            sel!(todayFooterAction:),
+            footer_today_action as extern "C" fn(&Object, Sel, id),
         );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
@@ -432,6 +432,6 @@ extern "C" fn footer_agent_model_action(
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_tips_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
-    send_footer_action_from_sender(sender, FooterAction::Tips);
+extern "C" fn footer_today_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::Today);
 }

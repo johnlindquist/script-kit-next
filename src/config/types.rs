@@ -1864,20 +1864,6 @@ impl BrainRemoteConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct TipsConfig {
-    pub enabled: bool,
-}
-
-impl Default for TipsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: crate::config::defaults::DEFAULT_TIPS_ENABLED,
-        }
-    }
-}
-
 // ============================================
 // MAIN CONFIG
 // ============================================
@@ -2106,9 +2092,6 @@ pub struct Config {
         rename = "brainRemote"
     )]
     pub brain_remote: Option<BrainRemoteConfig>,
-    /// Controls the rotating discoverability tip in the root main-menu footer.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tips: Option<TipsConfig>,
 }
 
 // --- merged from part_03.rs ---
@@ -2116,7 +2099,6 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             hotkey: default_main_hotkey(),
-            tips: None,
             bun_path: None,           // Will use system PATH if not specified
             editor: None,             // Will use $EDITOR or fallback to "code"
             padding: None,            // Will use ContentPadding::default() via getter
@@ -2177,12 +2159,6 @@ fn sanitize_process_limits(mut limits: ProcessLimits) -> ProcessLimits {
 }
 
 impl Config {
-    pub fn is_tips_enabled(&self) -> bool {
-        self.tips
-            .as_ref()
-            .map(|tips| tips.enabled)
-            .unwrap_or(crate::config::defaults::DEFAULT_TIPS_ENABLED)
-    }
     /// Returns the configured editor, falling back to $EDITOR env var or "code" (VS Code)
     /// Used by ActionsDialog "Open in Editor" action
     #[allow(dead_code)] // Will be used by ActionsDialog worker

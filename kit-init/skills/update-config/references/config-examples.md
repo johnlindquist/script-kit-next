@@ -77,12 +77,6 @@ suggested: {
 
 ## File Watcher
 
-## Main Menu Tips
-
-```typescript
-tips: { enabled: false } // hide footer tips; the Tips built-in remains available
-```
-
 ```typescript
 watcher: {
   debounceMs: 500,        // default: 500

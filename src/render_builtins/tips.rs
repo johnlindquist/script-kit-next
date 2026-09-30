@@ -1,8 +1,7 @@
 impl ScriptListApp {
-    /// Copy the selected tip's first example to the clipboard. Single action
-    /// authority shared by the Enter key handler and the native footer's
-    /// "Copy Example" button so the two can never drift.
-    pub(crate) fn tips_copy_selected_example(&mut self, cx: &mut Context<Self>) {
+    /// Tries the selected tip: opens the place it's about, or goes back to the main input
+    /// with its example typed. Single action authority shared by ↵ and the footer's ↵ button.
+    pub(crate) fn tips_try_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let AppView::TipsView {
             filter,
             selected_index,
@@ -12,21 +11,38 @@ impl ScriptListApp {
             return;
         };
         let visible = script_kit_gpui::tips::visible_tip_indices(entries, filter);
-        let Some(example) = visible
+        let Some(tip) = visible
             .get(*selected_index)
             .and_then(|index| entries.get(*index))
-            .and_then(|tip| tip.copyable_example())
+            .cloned()
         else {
             return;
         };
-        if let Err(error) = crate::platform::copy_text_to_clipboard(&example.input) {
-            tracing::warn!(%error, "tips copy-example failed");
-        } else {
-            self.one_window_notice(
-                crate::line_notice::INFO,
-                "Copied example — paste it in the main menu".to_string(),
-                cx,
-            );
+        match tip.try_it() {
+            Some(script_kit_gpui::tips::TipTry::Open(id)) => {
+                let entry = builtins::get_builtin_entries(&self.config.get_builtins())
+                    .into_iter()
+                    .find(|entry| entry.id == id);
+                match entry {
+                    Some(entry) => {
+                        // Help's search words belong to Help; the place opens as it would
+                        // from the launcher.
+                        self.reset_to_script_list(cx);
+                        self.execute_builtin(&entry, cx);
+                    }
+                    None => self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("{} isn't available here", tip.title),
+                        cx,
+                    ),
+                }
+            }
+            Some(script_kit_gpui::tips::TipTry::Type(words)) => {
+                let words = words.to_string();
+                self.reset_to_script_list(cx);
+                self.set_filter_text_immediate(words, window, cx);
+            }
+            None => {}
         }
     }
 
@@ -61,6 +77,10 @@ impl ScriptListApp {
             .get(selected)
             .and_then(|index| entries.get(*index))
             .cloned();
+        let try_hint = preview
+            .as_ref()
+            .and_then(|tip| tip.try_it())
+            .map_or("Try It", script_kit_gpui::tips::TipTry::label);
 
         let handle_key = cx.listener(
             move |this: &mut Self,
@@ -106,7 +126,7 @@ impl ScriptListApp {
                     cx.notify();
                     cx.stop_propagation();
                 } else if crate::ui_foundation::is_key_enter(key) {
-                    this.tips_copy_selected_example(cx);
+                    this.tips_try_selected(window, cx);
                     cx.stop_propagation();
                 } else {
                     cx.propagate();
@@ -149,7 +169,7 @@ impl ScriptListApp {
 
                                     let click_entity = click_entity_handle.clone();
                                     let click_handler = move |event: &gpui::ClickEvent,
-                                                      _window: &mut Window,
+                                                      window: &mut Window,
                                                       cx: &mut gpui::App| {
                                 if let Some(app) = click_entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -163,7 +183,7 @@ impl ScriptListApp {
                                         this.note_list_pointer_click(row, cx);
                                         if let gpui::ClickEvent::Mouse(mouse_event) = event {
                                             if mouse_event.down.click_count == 2 {
-                                                this.tips_copy_selected_example(cx);
+                                                this.tips_try_selected(window, cx);
                                             }
                                         }
                                         cx.notify();
@@ -246,7 +266,7 @@ impl ScriptListApp {
                 // the rows below it.
                 crate::list_item::render_section_header(
                     if filter.trim().is_empty() {
-                        "Tips"
+                        "Help"
                     } else {
                         "Results"
                     },
@@ -407,7 +427,7 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        let hints: Vec<SharedString> = vec!["↵ Copy Example".into(), "Esc Back".into()];
+        let hints: Vec<SharedString> = vec![format!("↵ {try_hint}").into(), "Esc Back".into()];
         crate::components::emit_prompt_hint_audit("tips", &hints);
         let footer =
             self.main_window_footer_slot(crate::components::render_simple_hint_strip(hints, None));

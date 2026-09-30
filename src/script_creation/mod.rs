@@ -926,7 +926,6 @@ mod tests {
             mcp: None,
             hidden_commands: None,
             brain_remote: None,
-            tips: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };
@@ -974,7 +973,6 @@ mod tests {
             mcp: None,
             hidden_commands: None,
             brain_remote: None,
-            tips: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };

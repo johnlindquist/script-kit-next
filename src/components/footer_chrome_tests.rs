@@ -86,7 +86,7 @@ mod tests {
             (FooterAction::PasteResponse, FooterActionSlot::PasteResponse),
             (FooterAction::Cwd, FooterActionSlot::Ai),
             (FooterAction::AgentModel, FooterActionSlot::Ai),
-            (FooterAction::Tips, FooterActionSlot::Ai),
+            (FooterAction::Today, FooterActionSlot::Ai),
         ] {
             assert_eq!(footer_config_action_slot(action), expected);
         }

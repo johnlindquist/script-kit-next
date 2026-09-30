@@ -545,9 +545,6 @@ pub fn install_main_window_visibility_transition_hook(hook: fn(bool)) {
 pub fn set_main_window_visible(visible: bool) {
     let previous = MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst);
     if previous != visible {
-        if visible {
-            crate::tips::advance_footer_tip();
-        }
         MAIN_WINDOW_VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
         if let Some(hook) = MAIN_WINDOW_VISIBILITY_TRANSITION_HOOK.get() {
             hook(visible);

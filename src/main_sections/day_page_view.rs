@@ -13,6 +13,12 @@ use script_kit_gpui::day_page::{
     parse_day_page_segments, resolve_fragment_path, DayPageBinding, DayPageSegment,
 };
 
+/// What the main window calls the Day Page wherever it offers it: the ⌘T key, the button in the
+/// footer's left corner, and ` typed into an empty input.
+const TODAY_LABEL: &str = "Today";
+/// Opens Today from the launcher.
+const TODAY_KEY: &str = "⌘T";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DayPageKitResourceSourceTarget {
     Note(crate::notes::NoteId),

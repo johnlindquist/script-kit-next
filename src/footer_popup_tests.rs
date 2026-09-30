@@ -370,15 +370,15 @@ mod footer_layout_tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn tips_keeps_a_distinct_native_action_selector() {
+    fn today_keeps_a_distinct_native_action_selector() {
         use objc::{sel, sel_impl};
 
         assert_eq!(
-            super::footer_action_selector(super::FooterAction::Tips),
-            sel!(tipsFooterAction:)
+            super::footer_action_selector(super::FooterAction::Today),
+            sel!(todayFooterAction:)
         );
         assert_ne!(
-            super::footer_action_selector(super::FooterAction::Tips),
+            super::footer_action_selector(super::FooterAction::Today),
             super::footer_action_selector(super::FooterAction::Actions)
         );
     }
@@ -1037,12 +1037,12 @@ mod footer_layout_tests {
     fn footer_dispatch_authorization_preserves_only_exact_live_left_affordances() {
         let mut config = super::MainWindowFooterConfig::new("script_list", Vec::new());
         config.left_info = Some(super::FooterLeftInfo {
-            model_name: "Discover tips".to_owned(),
-            action: Some(FooterAction::Tips),
+            model_name: "Today".to_owned(),
+            action: Some(FooterAction::Today),
             ..Default::default()
         });
         assert_eq!(
-            config.action_dispatch_authorization(FooterAction::Tips, false),
+            config.action_dispatch_authorization(FooterAction::Today, false),
             super::FooterActionDispatchAuthorization::PresentedLeftAffordance
         );
         assert_eq!(
@@ -1068,7 +1068,7 @@ mod footer_layout_tests {
             );
         }
         assert_eq!(
-            config.action_dispatch_authorization(FooterAction::Tips, false),
+            config.action_dispatch_authorization(FooterAction::Today, false),
             super::FooterActionDispatchAuthorization::NotPresented
         );
 

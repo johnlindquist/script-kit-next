@@ -127,7 +127,8 @@ pub(crate) enum FooterAction {
     /// picker so the user can change the agent (goose provider) and model used by
     /// the next launch.
     AgentModel,
-    Tips,
+    /// Click the left corner's Today button — opens today's note under the input.
+    Today,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -359,7 +360,7 @@ impl FooterAction {
             Self::PasteResponse => "pasteResponse",
             Self::Cwd => "cwd",
             Self::AgentModel => "agentModel",
-            Self::Tips => "tips",
+            Self::Today => "today",
         }
     }
 
@@ -2423,7 +2424,7 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::PasteResponse => metrics.paste_response_slot_width,
         FooterAction::Cwd => metrics.ai_slot_width,
         FooterAction::AgentModel => metrics.ai_slot_width,
-        FooterAction::Tips => metrics.ai_slot_width,
+        FooterAction::Today => metrics.ai_slot_width,
     }
     .into()
 }

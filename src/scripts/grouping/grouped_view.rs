@@ -10,7 +10,7 @@ use super::super::command_contract::{
     record_main_menu_ranking_sections, MainMenuRankingEvidence, MainMenuRankingEvidenceMap,
 };
 use super::super::types::SearchResult;
-use super::DEFAULT_SUGGESTED_ITEMS;
+use super::{DEFAULT_SUGGESTED_ITEMS, PLACES};
 
 /// A plugin-based section in the grouped launcher view.
 /// `key` is the stable identity (plugin_id or "main"); `label` is the display title.
@@ -467,6 +467,30 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
+    // Places: views you'd otherwise only find by name. A place already suggested stays there.
+    let suggested_set: HashSet<usize> = suggested_indices
+        .iter()
+        .map(|(idx, _)| *idx)
+        .chain(default_suggested_indices.iter().copied())
+        .collect();
+    let places_indices: Vec<usize> = PLACES
+        .iter()
+        .filter_map(|&id| {
+            results
+                .iter()
+                .position(|result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == id))
+        })
+        .filter(|idx| !suggested_set.contains(idx))
+        .collect();
+    if !places_indices.is_empty() {
+        let places_set: HashSet<usize> = places_indices.iter().copied().collect();
+        commands_indices.retain(|idx| !places_set.contains(idx));
+        apps_indices.retain(|idx| !places_set.contains(idx));
+        for section in plugin_groups.values_mut() {
+            section.indices.retain(|idx| !places_set.contains(idx));
+        }
+    }
+
     // Sort each section alphabetically by name (case-insensitive)
     let sort_alphabetically = |indices: &mut Vec<usize>| {
         indices.sort_by(|&a, &b| {
@@ -586,6 +610,14 @@ pub(super) fn build_grouped_view_results(
             for idx in &default_suggested_indices {
                 grouped.push(GroupedListItem::Item(*idx));
             }
+        }
+    }
+
+    // 1b. Places
+    if !places_indices.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader("Places".to_string(), None));
+        for idx in &places_indices {
+            grouped.push(GroupedListItem::Item(*idx));
         }
     }
 

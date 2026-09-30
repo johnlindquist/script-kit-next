@@ -1505,19 +1505,13 @@ export SK_PATH=~/Projects/my-app/.kit
 
 ## Getting Help
 
-### Main menu tips
+### Finding your way around
 
-Script Kit shows a rotating discoverability tip in the empty root main-menu footer. Disable only that footer line in `~/.scriptkit/config.ts` with:
+- **Help** (type `?`, or search "Help") lists every key, symbol and place in Script Kit. Press ↵ on one to try it: places open, and examples are typed into the input for you.
+- **Today** (`⌘T`, or the Today button in the footer's left corner) opens today's note. Words already typed in the input come along as the line to add.
+- With nothing typed, the list ends with **Places**: Today, your notes, past chats, dictation history, what you ran, and Help.
 
-```typescript
-tips: { enabled: false }
-```
-
-The **Tips** built-in remains available from the launcher.
-
-The catalog lives at `~/.scriptkit/tips.json` (user-owned). Tip text may use
-the `{mainHotkey}` placeholder, which resolves at load time to your registered
-main hotkey (e.g. `⌘;`).
+The Help catalog is written to `~/.scriptkit/tips.json` by the app on each start, so it always matches your version. Tip text may use `{mainHotkey}`, `{notesHotkey}` and `{dictationHotkey}`; each resolves to your registered hotkey (e.g. `⌘;`), and a tip about a hotkey you've turned off isn't listed.
 
 - **Documentation**: You're reading it!
 - **Source Code**: https://github.com/johnlindquist/script-kit-gpui

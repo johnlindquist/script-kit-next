@@ -54,6 +54,18 @@ pub const DEFAULT_SUGGESTED_ITEMS: &[&str] = &[
     "New Script",
 ];
 
+/// Built-in places the launcher lists under "Places" with nothing typed, in this order. They
+/// open views you'd otherwise only find by knowing their names: Today, your notes, past
+/// chats, dictation history, what ran, and Help.
+pub const PLACES: &[&str] = &[
+    "builtin/day-page",
+    "builtin/open-notes",
+    "builtin/agent_chat-history",
+    "builtin/dictation-history",
+    "builtin/run-history",
+    "builtin/tips",
+];
+
 /// Maximum number of menu bar items to show in search results
 /// This prevents menu bar actions from overwhelming the results
 pub const MAX_MENU_BAR_ITEMS: usize = 5;

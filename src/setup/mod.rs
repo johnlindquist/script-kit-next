@@ -753,8 +753,9 @@ pub fn ensure_kit_setup() -> SetupResult {
         "theme.json",
     );
 
-    // User-owned: local tips catalog (only create if missing).
-    write_string_if_missing(
+    // App-managed: the Help catalog. Its keys and places follow the app, so a copy written
+    // by an older version would describe keys that do something else now.
+    write_string_if_changed(
         &kit_dir.join("tips.json"),
         EMBEDDED_TIPS,
         &mut warnings,

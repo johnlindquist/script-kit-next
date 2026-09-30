@@ -128,33 +128,23 @@ fn migrated_footer_buttons_route_to_real_surface_actions() {
 }
 
 #[test]
-fn tips_view_keeps_native_footer_with_copy_example_primary_action() {
+fn tips_view_keeps_native_footer_with_try_it_primary_action() {
     let footer_map = function_body(APP_VIEW_STATE_SOURCE, "pub(crate) fn native_footer_surface");
     assert!(
         footer_map.contains("AppView::TipsView { .. } => Some(\"tips\")"),
         "TipsView must keep the main-window native footer active"
     );
 
-    let footer_buttons = function_body(
-        UI_WINDOW_SOURCE,
-        "fn main_window_footer_buttons_for_current_view",
-    );
-    assert!(
-        footer_buttons.contains("AppView::TipsView")
-            && footer_buttons
-                .contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Copy Example\")")
-            && footer_buttons.contains("FooterButtonConfig::new(FooterAction::Close, \"Esc\", secondary_label)"),
-        "TipsView footer must expose Copy Example and Back/Clear Search through the shared FooterButtonConfig components"
-    );
-
+    // The ↵ label and enabled state come from `Tip::try_it` (unit-tested in `src/tips.rs`);
+    // this lock only keeps the capsule's Run routed to the same try path as Enter.
     let footer_dispatch = function_body(
         UI_WINDOW_SOURCE,
         "pub(crate) fn dispatch_main_window_footer_action",
     );
     assert!(
         footer_dispatch.contains("AppView::TipsView { .. }")
-            && footer_dispatch.contains("self.tips_copy_selected_example(cx);"),
-        "TipsView footer Run must copy the selected example via the shared action authority"
+            && footer_dispatch.contains("self.tips_try_selected(window, cx);"),
+        "Help footer Run must try the selected tip through the same path as Enter"
     );
 }
 

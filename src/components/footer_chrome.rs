@@ -484,7 +484,7 @@ fn footer_config_action_slot(action: crate::footer_popup::FooterAction) -> Foote
     match action {
         FooterAction::Run => FooterActionSlot::Run,
         FooterAction::Actions => FooterActionSlot::Actions,
-        FooterAction::Ai | FooterAction::Cwd | FooterAction::AgentModel | FooterAction::Tips => {
+        FooterAction::Ai | FooterAction::Cwd | FooterAction::AgentModel | FooterAction::Today => {
             FooterActionSlot::Ai
         }
         FooterAction::Apply => FooterActionSlot::Apply,

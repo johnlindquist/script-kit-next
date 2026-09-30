@@ -680,9 +680,9 @@ impl BuiltInEntry {
             BuiltInFeature::AgentChatHistory => "History",
             BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
-            BuiltInFeature::Tips => "Tips",
-            BuiltInFeature::RunHistory => "Today",
-            BuiltInFeature::DayPage => "Day Page",
+            BuiltInFeature::Tips => "Help",
+            BuiltInFeature::RunHistory => "What Ran",
+            BuiltInFeature::DayPage => "Today",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
             BuiltInFeature::MigrateV1Scripts => "Migrate",
             BuiltInFeature::BackgroundEffectNext => "Next Effect",
@@ -885,8 +885,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/tips",
-            "Script Kit Tips",
-            "Learn Script Kit's hidden powers — sigils, gestures, and shortcuts",
+            "Help",
+            "Every key, symbol and place in Script Kit; ↵ on one tries it",
             vec![
                 "tips",
                 "help",
@@ -922,9 +922,11 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/day-page",
-            "Day Page",
-            "Today's page for notes, todos, and captures; type ` on an empty input to open it",
-            vec!["day", "today", "journal", "daily", "note", "page", "`"],
+            "Today",
+            "Today's page for notes, todos, and captures · ⌘T, or ` on an empty input",
+            vec![
+                "today", "day", "day page", "journal", "daily", "note", "page", "brain", "`",
+            ],
             BuiltInFeature::DayPage,
             "calendar",
         ));

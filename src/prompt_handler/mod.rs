@@ -6329,7 +6329,7 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::PasteResponse => "pasteResponse",
             crate::footer_popup::FooterAction::Cwd => "cwd",
             crate::footer_popup::FooterAction::AgentModel => "agentModel",
-            crate::footer_popup::FooterAction::Tips => "tips",
+            crate::footer_popup::FooterAction::Today => "today",
         }
         .to_string()
     }

@@ -76,7 +76,6 @@ fn test_config_serialization() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -147,7 +146,6 @@ fn test_config_with_bun_path() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -200,7 +198,6 @@ fn test_config_without_bun_path() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -253,7 +250,6 @@ fn test_config_serialization_skip_none_bun_path() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -311,7 +307,6 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -436,7 +431,6 @@ fn test_config_with_empty_modifiers_list() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -495,7 +489,6 @@ fn test_config_key_preservation() {
             mcp: None,
             hidden_commands: None,
             brain_remote: None,
-            tips: None,
             spine_styles: Vec::new(),
             spine_commands: Vec::new(),
         };
@@ -553,7 +546,6 @@ fn test_config_with_editor() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -611,7 +603,6 @@ fn test_config_without_editor() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -671,7 +662,6 @@ fn test_get_editor_from_config() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -736,7 +726,6 @@ fn test_get_editor_from_env() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -807,7 +796,6 @@ fn test_get_editor_default() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -878,7 +866,6 @@ fn test_config_editor_priority() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1014,7 +1001,6 @@ fn test_config_get_padding_custom() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1077,7 +1063,6 @@ fn test_config_get_editor_font_size_custom() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1148,7 +1133,6 @@ fn test_config_get_terminal_font_size_custom() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1280,7 +1264,6 @@ fn test_config_serialization_includes_set_ui_settings() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1409,7 +1392,6 @@ fn test_config_with_builtins() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1685,7 +1667,6 @@ fn test_config_serialization_includes_set_builtins() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -1858,7 +1839,6 @@ fn test_config_with_process_limits() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2006,7 +1986,6 @@ fn test_config_serialization_includes_set_process_limits() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2151,7 +2130,6 @@ fn test_requires_confirmation_user_override_disable() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2219,7 +2197,6 @@ fn test_requires_confirmation_user_override_enable() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };
@@ -2360,7 +2337,6 @@ fn test_requires_confirmation_with_partial_command_config() {
         mcp: None,
         hidden_commands: None,
         brain_remote: None,
-        tips: None,
         spine_styles: Vec::new(),
         spine_commands: Vec::new(),
     };

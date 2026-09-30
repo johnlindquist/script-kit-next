@@ -1,16 +1,10 @@
-//! Local Tips catalog. A future `refresh_tips_remote()` may follow
-//! `updates::check_now`: use a detached thread and `ureq` GET, validate the
-//! response, update shared state, then optionally `write_string_if_changed`.
-//! This module intentionally performs no network IO.
+//! The Help catalog: what each key, sigil and hidden place does. Help (`?`) lists it, and
+//! ↵ on a tip tries it: a tip with a place opens it, a tip with a typed example puts the
+//! example in the main input. The catalog ships inside the app and setup writes it to
+//! `~/.scriptkit/tips.json`. This module performs no network IO.
 
 use serde::{Deserialize, Serialize};
-use std::{
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        OnceLock,
-    },
-};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +20,9 @@ pub struct Tip {
     pub description: String,
     pub examples: Vec<TipExample>,
     pub keywords: Vec<String>,
+    /// Launcher command id (`builtin/…`) ↵ runs to open the place this tip is about.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open: Option<String>,
 }
 
 impl Tip {
@@ -58,11 +55,39 @@ impl Tip {
     }
 
     /// First example with typed text. Key-press-only examples have nothing to
-    /// copy, so Enter and the footer's Copy Example both resolve through here.
-    pub fn copyable_example(&self) -> Option<&TipExample> {
+    /// type, so they never become the tip's try.
+    pub fn typed_example(&self) -> Option<&TipExample> {
         self.examples
             .iter()
             .find(|example| !example.input.trim().is_empty())
+    }
+
+    /// What ↵ does on this tip in Help: open its place, or type its example into the input.
+    pub fn try_it(&self) -> Option<TipTry<'_>> {
+        if let Some(id) = self.open.as_deref().filter(|id| !id.trim().is_empty()) {
+            return Some(TipTry::Open(id));
+        }
+        self.typed_example()
+            .map(|example| TipTry::Type(example.input.as_str()))
+    }
+}
+
+/// What trying a tip does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipTry<'a> {
+    /// Runs this launcher command id.
+    Open(&'a str),
+    /// Goes back to the main input with these words typed.
+    Type(&'a str),
+}
+
+impl TipTry<'_> {
+    /// The ↵ label in Help's footer.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Open(_) => "Open It",
+            Self::Type(_) => "Try It",
+        }
     }
 }
 
@@ -99,30 +124,43 @@ pub fn example_syntax_ranges(input: &str) -> Vec<std::ops::Range<usize>> {
     ranges
 }
 
-static TIPS: OnceLock<Vec<Tip>> = OnceLock::new();
-static TIP_ROTATION: AtomicUsize = AtomicUsize::new(0);
-
-/// Placeholder resolved at load time to the registered main hotkey's display
-/// glyphs (e.g. "⌘;"), so tips about the hotkey always show the real binding.
+/// Placeholders resolved at load time to the registered hotkeys' display glyphs (e.g. "⌘;"),
+/// so tips about a hotkey always show the real binding.
 const MAIN_HOTKEY_PLACEHOLDER: &str = "{mainHotkey}";
+const NOTES_HOTKEY_PLACEHOLDER: &str = "{notesHotkey}";
+const DICTATION_HOTKEY_PLACEHOLDER: &str = "{dictationHotkey}";
 
-fn resolve_tip_placeholders(mut tips: Vec<Tip>, main_hotkey: &str) -> Vec<Tip> {
-    let substitute = |text: &mut String| *text = text.replace(MAIN_HOTKEY_PLACEHOLDER, main_hotkey);
-    for tip in &mut tips {
-        if let Some(hint_key) = tip.hint_key.as_mut() {
-            substitute(hint_key);
-        }
-        substitute(&mut tip.hint);
-        substitute(&mut tip.title);
-        substitute(&mut tip.description);
-        for example in &mut tip.examples {
-            substitute(&mut example.input);
-            if let Some(keys) = example.keys.as_mut() {
-                substitute(keys);
-            }
-            substitute(&mut example.note);
-        }
+/// Each placeholder with the binding it stands for; `None` when that hotkey is turned off.
+type Bindings<'a> = [(&'a str, Option<&'a str>)];
+
+fn tip_texts_mut(tip: &mut Tip) -> Vec<&mut String> {
+    let mut texts = vec![&mut tip.hint, &mut tip.title, &mut tip.description];
+    texts.extend(tip.hint_key.as_mut());
+    for example in &mut tip.examples {
+        texts.push(&mut example.input);
+        texts.push(&mut example.note);
+        texts.extend(example.keys.as_mut());
     }
+    texts
+}
+
+/// Fills in each hotkey placeholder; a tip about a hotkey that's turned off is left out.
+fn resolve_tip_placeholders(mut tips: Vec<Tip>, bindings: &Bindings<'_>) -> Vec<Tip> {
+    tips.retain_mut(|tip| {
+        let mut texts = tip_texts_mut(tip);
+        for (placeholder, binding) in bindings {
+            if !texts.iter().any(|text| text.contains(placeholder)) {
+                continue;
+            }
+            let Some(binding) = binding else {
+                return false;
+            };
+            for text in texts.iter_mut() {
+                **text = text.replace(placeholder, binding);
+            }
+        }
+        true
+    });
     tips
 }
 
@@ -148,9 +186,21 @@ pub fn load_tips() -> Vec<Tip> {
             embedded_tips()
         }
     };
+    let config = crate::config::load_config();
+    let main = config.hotkey.to_display_string();
+    let notes = config
+        .get_notes_hotkey()
+        .map(|hotkey| hotkey.to_display_string());
+    let dictation = config
+        .get_dictation_hotkey()
+        .map(|hotkey| hotkey.to_display_string());
     resolve_tip_placeholders(
         tips,
-        &crate::config::load_config().hotkey.to_display_string(),
+        &[
+            (MAIN_HOTKEY_PLACEHOLDER, Some(main.as_str())),
+            (NOTES_HOTKEY_PLACEHOLDER, notes.as_deref()),
+            (DICTATION_HOTKEY_PLACEHOLDER, dictation.as_deref()),
+        ],
     )
 }
 
@@ -177,14 +227,6 @@ pub fn visible_tip_indices(entries: &[Tip], filter: &str) -> Vec<usize> {
         .enumerate()
         .filter_map(|(index, tip)| tip_matches_filter(tip, &query).then_some(index))
         .collect()
-}
-
-pub fn current_footer_tip() -> Option<Tip> {
-    let tips = TIPS.get_or_init(load_tips);
-    (!tips.is_empty()).then(|| tips[TIP_ROTATION.load(Ordering::Relaxed) % tips.len()].clone())
-}
-pub fn advance_footer_tip() {
-    TIP_ROTATION.fetch_add(1, Ordering::Relaxed);
 }
 
 #[cfg(test)]
@@ -226,6 +268,7 @@ mod tests {
             description: description.into(),
             examples: Vec::new(),
             keywords: vec![keyword.into()],
+            open: None,
         };
         let entries = vec![
             tip("a", "Capture a thought", "hint-a", "desc-a", "brain"),
@@ -240,33 +283,48 @@ mod tests {
         assert!(visible_tip_indices(&entries, "no-match").is_empty());
     }
 
-    #[test]
-    fn resolve_tip_placeholders_substitutes_main_hotkey_everywhere() {
-        let tips = vec![Tip {
-            id: "double-tap-quick-ai".into(),
-            hint_key: Some(MAIN_HOTKEY_PLACEHOLDER.into()),
-            hint: "twice for Quick AI".into(),
-            title: "Quick AI question".into(),
-            description: format!("Tap {MAIN_HOTKEY_PLACEHOLDER} twice."),
+    fn tip_about(text: &str) -> Tip {
+        Tip {
+            id: text.into(),
+            hint_key: Some(text.into()),
+            hint: "h".into(),
+            title: "t".into(),
+            description: format!("Press {text}."),
             examples: vec![TipExample {
                 input: String::new(),
-                keys: Some(format!(
-                    "{MAIN_HOTKEY_PLACEHOLDER} {MAIN_HOTKEY_PLACEHOLDER}"
-                )),
-                note: format!("Tap {MAIN_HOTKEY_PLACEHOLDER} twice"),
+                keys: Some(format!("{text} {text}")),
+                note: format!("Press {text}"),
             }],
             keywords: Vec::new(),
-        }];
-        let resolved = resolve_tip_placeholders(tips, "⌘;");
-        assert_eq!(resolved[0].hint_key.as_deref(), Some("⌘;"));
-        assert_eq!(resolved[0].description, "Tap ⌘; twice.");
-        assert_eq!(resolved[0].examples[0].keys.as_deref(), Some("⌘; ⌘;"));
-        assert_eq!(resolved[0].examples[0].note, "Tap ⌘; twice");
-        assert_eq!(resolved[0].full_hint(), "⌘; twice for Quick AI");
+            open: None,
+        }
     }
 
     #[test]
-    fn copyable_example_skips_key_press_only_examples() {
+    fn placeholders_take_the_real_bindings_and_turned_off_hotkeys_drop_their_tips() {
+        let tips = vec![
+            tip_about(MAIN_HOTKEY_PLACEHOLDER),
+            tip_about(DICTATION_HOTKEY_PLACEHOLDER),
+            tip_about("⌘T"),
+        ];
+        let resolved = resolve_tip_placeholders(
+            tips,
+            &[
+                (MAIN_HOTKEY_PLACEHOLDER, Some("⌘;")),
+                (DICTATION_HOTKEY_PLACEHOLDER, None),
+            ],
+        );
+        let ids: Vec<&str> = resolved.iter().map(|tip| tip.id.as_str()).collect();
+        assert_eq!(ids, vec![MAIN_HOTKEY_PLACEHOLDER, "⌘T"]);
+        let main = &resolved[0];
+        assert_eq!(main.hint_key.as_deref(), Some("⌘;"));
+        assert_eq!(main.description, "Press ⌘;.");
+        assert_eq!(main.examples[0].keys.as_deref(), Some("⌘; ⌘;"));
+        assert_eq!(main.examples[0].note, "Press ⌘;");
+    }
+
+    #[test]
+    fn trying_a_tip_opens_its_place_first_then_types_its_first_typed_example() {
         let example = |input: &str, keys: Option<&str>| TipExample {
             input: input.into(),
             keys: keys.map(Into::into),
@@ -280,40 +338,31 @@ mod tests {
             description: "d".into(),
             examples: vec![example("", Some("⌘K")), example(";todo call mom", None)],
             keywords: Vec::new(),
+            open: None,
         };
-        assert_eq!(
-            tip.copyable_example().map(|e| e.input.as_str()),
-            Some(";todo call mom")
-        );
+        assert_eq!(tip.try_it(), Some(TipTry::Type(";todo call mom")));
         assert_eq!(tip.trigger_glyph().as_deref(), Some("␣"));
         assert_eq!(tip.hint_sentence(), "Uses what's focused");
+        tip.open = Some("builtin/day-page".into());
+        assert_eq!(tip.try_it(), Some(TipTry::Open("builtin/day-page")));
+        tip.open = None;
         tip.examples.truncate(1);
-        assert!(tip.copyable_example().is_none());
+        assert_eq!(tip.try_it(), None);
     }
 
     #[test]
-    fn embedded_catalog_examples_all_show_something() {
+    fn every_place_the_catalog_opens_is_a_real_launcher_command() {
+        let config = crate::config::BuiltInConfig::default();
+        let entries = crate::builtins::get_builtin_entries(&config);
         for tip in embedded_tips() {
-            assert!(!tip.examples.is_empty(), "{} needs an example", tip.id);
-            for example in &tip.examples {
+            if let Some(id) = tip.open.as_deref() {
                 assert!(
-                    !example.input.trim().is_empty() || example.keys.is_some(),
-                    "{} has an example with neither input nor keys",
+                    entries.iter().any(|entry| entry.id == id),
+                    "{} opens {id}, which isn't a launcher command",
                     tip.id
                 );
             }
         }
-    }
-
-    #[test]
-    fn embedded_catalog_quick_ai_tip_uses_main_hotkey_placeholder() {
-        let tips = embedded_tips();
-        let quick_ai = tips
-            .iter()
-            .find(|tip| tip.id == "double-tap-quick-ai")
-            .expect("embedded catalog should keep the quick AI tip");
-        assert_eq!(quick_ai.hint_key.as_deref(), Some(MAIN_HOTKEY_PLACEHOLDER));
-        assert_eq!(quick_ai.hint, "twice for Quick AI");
     }
 
     #[test]
