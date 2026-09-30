@@ -349,7 +349,14 @@ impl ListState {
         if !self.has_text() || self.owned {
             return out;
         }
-        let names = (0..self.names.len()).map(Item::Name);
+        // When something matched, the fallbacks go last, after Jev's rows; when nothing did, they
+        // stand where the names would.
+        let len = self.names.len();
+        let split = match self.names.iter().position(|r| r.fallback) {
+            Some(0) | None => len,
+            Some(at) => at,
+        };
+        let names = (0..split).map(Item::Name);
         let slots = (0..self.jev.len())
             .filter(|&i| self.slot_drawn(i))
             .map(Item::Slot);
@@ -360,6 +367,7 @@ impl ListState {
             out.extend(names);
             out.extend(slots);
         }
+        out.extend((split..len).map(Item::Name));
         out
     }
 
@@ -372,6 +380,21 @@ impl ListState {
     /// How many of Jev's places the list draws.
     pub fn drawn_slots(&self) -> usize {
         (0..self.jev.len()).filter(|&i| self.slot_drawn(i)).count()
+    }
+
+    /// Jev is still reading the current words: its places are in the list and it hasn't answered.
+    pub fn reading(&self) -> bool {
+        self.has_text() && !self.owned && !self.jev.settled_for(&self.text)
+    }
+
+    /// Jev's places the list doesn't draw yet but its reading may fill. The window keeps room for
+    /// them while Jev reads, so the reading lands in space already there instead of growing it.
+    pub fn rows_coming(&self) -> usize {
+        if self.reading() {
+            self.jev.len() - self.drawn_slots()
+        } else {
+            0
+        }
     }
 
     /// The list as drawn: headers in place. The first item is always a header.
@@ -560,7 +583,12 @@ impl ListState {
     pub fn keep(&mut self, item: Item, row: &Row) -> bool {
         if self.position_of(&row.key).is_none() {
             if let Item::Name(i) = item {
-                let at = i.min(self.names.len());
+                // A kept name goes back among the names, never among the fallbacks after them.
+                let names_end = match self.names.iter().position(|r| r.fallback) {
+                    Some(at) if !row.fallback => at,
+                    _ => self.names.len(),
+                };
+                let at = i.min(names_end);
                 self.names.insert(at, row.clone());
             }
         }
@@ -682,6 +710,26 @@ mod tests {
         assert_eq!(slots(&l).len(), JEV_ROWS);
         l.jev.assign(20, "open a new tab", jev(&["b"]), None);
         assert_eq!(slots(&l), [Item::Slot(0)]);
+    }
+
+    #[test]
+    fn room_is_kept_for_the_reading_until_jev_answers() {
+        let mut l = ListState::new(true, true);
+        assert_eq!(l.rows_coming(), 0, "no words, nothing to read");
+        l.on_text("open a new tab");
+        assert!(l.reading());
+        assert_eq!(l.rows_coming(), JEV_ROWS - 1);
+        l.jev.assign(0, "open a new tab", jev(&["a", "b"]), None);
+        assert!(!l.reading());
+        assert_eq!(l.rows_coming(), 0, "an answer takes the room it needs");
+        l.on_text("open a new tab now");
+        assert_eq!(
+            l.rows_coming(),
+            JEV_ROWS - 2,
+            "older readings keep their places"
+        );
+        l.jev.down(10, "open a new tab now", None);
+        assert_eq!(l.rows_coming(), 0);
     }
 
     #[test]

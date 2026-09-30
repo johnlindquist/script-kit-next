@@ -1,0 +1,64 @@
+[
+ {
+  "name": "empty"
+ },
+ {
+  "name": "typed-note-matches-and-fallbacks",
+  "type": "note",
+  "waitMs": 900
+ },
+ {
+  "name": "down-1",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "down-2",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "on-see-all",
+  "key": "down",
+  "waitMs": 150
+ },
+ {
+  "name": "all-results-view",
+  "key": "enter",
+  "waitMs": 900
+ },
+ {
+  "name": "view-down-names-file",
+  "key": "down",
+  "waitMs": 200
+ },
+ {
+  "name": "view-up-names-notes",
+  "key": "up",
+  "waitMs": 500
+ },
+ {
+  "name": "enter-runs-highlighted-open-notes",
+  "key": "enter",
+  "waitMs": 900
+ },
+ {
+  "name": "esc-to-all-results",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "back-to-note",
+  "key": "escape",
+  "waitMs": 600
+ },
+ {
+  "name": "select-all",
+  "key": "cmd-a"
+ },
+ {
+  "name": "typed-url",
+  "type": "https://example.com",
+  "waitMs": 900
+ }
+]

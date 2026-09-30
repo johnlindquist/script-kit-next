@@ -21,6 +21,8 @@ pub(crate) enum OwnView {
     DictationHistory,
     Script,
     Shortcut,
+    /// Every result the search found for the words, in its sections, under the same input.
+    AllResults,
 }
 
 impl OwnView {
@@ -31,6 +33,7 @@ impl OwnView {
             OwnView::DictationHistory => "dictation-history",
             OwnView::Script => "script",
             OwnView::Shortcut => "shortcut",
+            OwnView::AllResults => "all-results",
         }
     }
 
@@ -41,6 +44,7 @@ impl OwnView {
             OwnView::DictationHistory,
             OwnView::Script,
             OwnView::Shortcut,
+            OwnView::AllResults,
         ]
         .into_iter()
         .find(|view| view.name() == name)
@@ -146,6 +150,54 @@ impl ScriptListApp {
         self.one_window_republish_own(cx);
     }
 
+    /// Opens every result the search found for the words, in its sections, as a view under the
+    /// same input. The words stay; Esc comes back to the few rows with the same words.
+    pub(crate) fn one_window_open_all_results(&mut self, cx: &mut Context<Self>) {
+        let text = self.one_window.text().to_string();
+        self.one_window_handle(
+            Event::View(ViewOp::Open(ViewSpec {
+                name: OwnView::AllResults.name().to_string(),
+                label: "All results".to_string(),
+                enter: Some(sk_one_window::EnterTarget::new(
+                    OwnView::AllResults.name(),
+                    "Open",
+                )),
+                takes_input: true,
+                text: Some(text.clone()),
+                leave_text: Some(text),
+            })),
+            cx,
+        );
+        self.one_window_republish_own(cx);
+        let first = self
+            .main_menu_committed_rows()
+            .iter()
+            .find(|row| row.selectable_ordinal == Some(0))
+            .map(|row| row.grouped_index);
+        if let Some(first) = first.filter(|ix| *ix != self.selected_index) {
+            self.set_selected_index(first, "one_window_all_results", cx);
+        }
+        self.one_window_follow_host_selection(cx);
+    }
+
+    /// Enter in every result's view runs the highlighted result as the launcher would, once the
+    /// reducer lets the key through (its Enter guard still holds right after the list changed).
+    /// `None` when that view isn't open.
+    pub(crate) fn one_window_all_results_enter(
+        &mut self,
+        observation: Option<crate::MainMenuDispatchObservation>,
+        cx: &mut Context<Self>,
+    ) -> Option<anyhow::Result<crate::MainMenuDispatchResult>> {
+        if self.one_window_own_view() != Some(OwnView::AllResults) {
+            return None;
+        }
+        if self.one_window_key(Key::Enter, cx).ignored {
+            self.update_main_menu_dispatch_status("pendingConfirmation", Some("enter_guard"));
+            return Some(Ok(crate::MainMenuDispatchResult::PendingConfirmation));
+        }
+        Some(self.run_selected_row(observation, cx))
+    }
+
     /// The rows the list shows now when the reducer, not the launcher, owns them.
     fn one_window_own_rows(&self) -> Option<(String, Vec<Row>)> {
         if let Some(talk) = self.one_window.talk() {
@@ -155,6 +207,8 @@ impl ScriptListApp {
             return match view {
                 OwnView::Script => self.one_window_script_rows(),
                 OwnView::Shortcut => self.one_window_shortcut_rows(),
+                // The launcher's own list, unprojected.
+                OwnView::AllResults => None,
                 _ => Some((
                     self.one_window_host.learns.view_head.clone(),
                     self.one_window_own_view_rows(),
@@ -392,6 +446,26 @@ impl ScriptListApp {
     pub(crate) fn one_window_view_key(&mut self, key: Key, cx: &mut Context<Self>) {
         match self.one_window_own_view() {
             Some(OwnView::Shortcut) => self.one_window_shortcut_key(key, cx),
+            Some(OwnView::AllResults) => {
+                let delta: i32 = match key {
+                    Key::Up => -1,
+                    Key::Down => 1,
+                    _ => return,
+                };
+                let target = crate::scrolling::list_interaction::main_menu_navigation_target(
+                    self.main_menu_committed_rows()
+                        .iter()
+                        .filter(|row| row.eligibility.selectable)
+                        .map(|row| row.grouped_index),
+                    self.selected_index,
+                    delta,
+                    false,
+                );
+                if let Some(target) = target {
+                    self.set_selected_index(target, "one_window_all_results", cx);
+                }
+                self.one_window_follow_host_selection(cx);
+            }
             Some(OwnView::DictationHistory) => match key {
                 Key::Enter => self.one_window_history_enter(cx),
                 Key::CmdK => self.one_window_history_stage(cx),
@@ -402,7 +476,10 @@ impl ScriptListApp {
                     match view {
                         OwnView::Automations => self.one_window_automation_enter(&row, cx),
                         OwnView::Microphones => self.one_window_microphone_enter(&row, cx),
-                        OwnView::DictationHistory | OwnView::Script | OwnView::Shortcut => {}
+                        OwnView::DictationHistory
+                        | OwnView::Script
+                        | OwnView::Shortcut
+                        | OwnView::AllResults => {}
                     }
                 }
             }

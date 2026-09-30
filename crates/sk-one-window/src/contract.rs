@@ -45,6 +45,11 @@ pub const HOLD_TICK_MS: u64 = 200;
 pub const JEV_ROWS: usize = 3;
 /// Name rows shown above Jev's.
 pub const MAX_MATCHES: usize = 3;
+/// Fallbacks ("Search Google", "Search Files") listed after Jev's rows when something matched.
+/// When nothing matched, every fallback the host offers stands where the names would.
+pub const MAX_FALLBACKS_WITH_MATCHES: usize = 3;
+/// Key prefix of the row under the names that opens every result for the words.
+pub const ALL_RESULTS_KEY: &str = "all-results:";
 /// A name scoring below this is listed but never owns Enter.
 pub const WEAK_SCORE: u8 = 50;
 /// Jev's readings less likely than this don't get a row.
@@ -146,6 +151,24 @@ pub mod words {
     /// What ↵ says while it asks once: "Lunch with Sarah is at 1:00 PM — ↵ again".
     pub fn ask_again(title: &str) -> String {
         format!("{title} — ↵ again")
+    }
+
+    /// The header over the fallbacks listed under the matches: “Use “dash” with…”.
+    pub fn use_with(text: &str) -> String {
+        const MAX_CHARS: usize = 32;
+        let text = text.trim();
+        let shown: String = text.chars().take(MAX_CHARS).collect();
+        let more = if text.chars().count() > MAX_CHARS {
+            "…"
+        } else {
+            ""
+        };
+        format!("Use “{shown}{more}” with…")
+    }
+
+    /// The row under the names that opens every result for the words.
+    pub fn see_all(count: usize) -> String {
+        format!("See all {count} results")
     }
 
     /// The note beside Jev's header: the keys that run its rows, "⌘1" or "⌘1–3".

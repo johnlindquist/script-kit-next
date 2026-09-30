@@ -1,0 +1,67 @@
+{
+ "empty": {
+  "header": "NEEDS SETUP",
+  "enter": null,
+  "view": null
+ },
+ "typed-note-matches-and-fallbacks": {
+  "header": "MATCHES",
+  "enter": "↵ Open Notes",
+  "view": null
+ },
+ "down-1": {
+  "header": "MATCHES",
+  "enter": "↵ Open File",
+  "view": null
+ },
+ "down-2": {
+  "header": "MATCHES",
+  "enter": "↵ Open Note",
+  "view": null
+ },
+ "on-see-all": {
+  "header": "MATCHES",
+  "enter": "↵ See All",
+  "view": null
+ },
+ "all-results-view": {
+  "header": "MATCHES",
+  "enter": "↵ Open Notes",
+  "view": "all-results"
+ },
+ "view-down-names-file": {
+  "header": "MATCHES",
+  "enter": "↵ Open File",
+  "view": "all-results"
+ },
+ "view-up-names-notes": {
+  "header": "MATCHES",
+  "enter": "↵ Open Notes",
+  "view": "all-results"
+ },
+ "enter-runs-highlighted-open-notes": {
+  "header": "NOTE · Today",
+  "enter": "↵ Write a line first",
+  "view": "note"
+ },
+ "esc-to-all-results": {
+  "header": "MATCHES",
+  "enter": "↵ Open Notes",
+  "view": "all-results"
+ },
+ "back-to-note": {
+  "header": "MATCHES",
+  "enter": "↵ See All",
+  "view": null
+ },
+ "select-all": {
+  "header": "MATCHES",
+  "enter": "↵ See All",
+  "view": null
+ },
+ "typed-url": {
+  "header": "JEV · ⌘1–2",
+  "enter": "↵ Ask the model: “https://example.com”",
+  "view": null
+ }
+}

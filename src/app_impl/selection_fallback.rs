@@ -402,6 +402,9 @@ impl ScriptListApp {
             return Ok(MainMenuDispatchResult::Dispatched);
         }
 
+        if let Some(ran) = self.one_window_all_results_enter(observation.clone(), cx) {
+            return ran;
+        }
         if self.one_window_owns_list() {
             return self.one_window_enter(cx);
         }
