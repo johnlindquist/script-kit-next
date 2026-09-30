@@ -178,14 +178,36 @@ impl ScriptListApp {
         let Some(c) = self.one_window.chat() else {
             return;
         };
+        if c.acting.is_some() {
+            let (_, offered) = c.rows();
+            let mut heads = 0;
+            for (i, row) in offered.iter().enumerate() {
+                if let Some(head) = row.head.as_deref() {
+                    heads += 1;
+                    rows.push(self.one_window_header(heads, head, colors, head_h));
+                }
+                rows.push(self.one_window_row(
+                    format!("chat-next:{}", row.key),
+                    row.title.clone(),
+                    row.sub.clone(),
+                    row.icon.as_deref().unwrap_or("sparkles"),
+                    i == c.sel,
+                    colors,
+                ));
+            }
+            if offered.is_empty() {
+                rows.push(self.one_window_note(c.enter(&c.filter).label));
+            }
+            return;
+        }
         for (ix, t) in c.turns.iter().enumerate() {
             rows.push(self.one_window_turn(ix, t.who, &t.text, t.sub.as_deref()));
         }
-        if let Some(asks) = c.asks.as_ref().filter(|_| c.acting.is_none()) {
+        if let Some(asks) = c.asks.as_ref() {
             rows.push(
                 self.one_window_note(format!("The model asks to {}", lower_first(&asks.title))),
             );
-        } else if let Some(provider) = c.sign_in.as_ref().filter(|_| c.acting.is_none()) {
+        } else if let Some(provider) = c.sign_in.as_ref() {
             rows.push(self.one_window_note(format!(
                 "The model needs you to sign in to {provider} before it can answer"
             )));
@@ -497,17 +519,28 @@ impl ScriptListApp {
                 });
             }
         } else if let Some(c) = self.one_window.chat() {
-            for (i, t) in c.turns.iter().enumerate() {
-                let id = match t.who {
-                    Who::Tool => format!("chat:tool:{i}"),
-                    _ => format!("chat-turn:{i}"),
-                };
-                out.push(yours(id, i, &t.text, false));
+            let acting = c.acting.is_some();
+            if !acting {
+                for (i, t) in c.turns.iter().enumerate() {
+                    let id = match t.who {
+                        Who::Tool => format!("chat:tool:{i}"),
+                        _ => format!("chat-turn:{i}"),
+                    };
+                    out.push(yours(id, i, &t.text, false));
+                }
             }
             let (head, next) = c.rows();
-            if let Some(head) = head {
-                out.push(header(1, head));
+            if head.is_some() || acting {
+                let mut heads = 0;
+                if let Some(head) = head {
+                    heads += 1;
+                    out.push(header(heads, head));
+                }
                 for (i, row) in next.iter().enumerate() {
+                    if let Some(head) = row.head.as_deref().filter(|_| acting) {
+                        heads += 1;
+                        out.push(header(heads, head));
+                    }
                     out.push(product(
                         format!("chat-next:{}", row.key),
                         i,

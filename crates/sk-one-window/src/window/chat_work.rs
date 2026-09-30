@@ -26,7 +26,11 @@ impl OneWindow {
     /// The line above the input for the chat or past chats on top, when they have one.
     pub(super) fn work_line(&self) -> Option<SlotLine> {
         match self.views.top()?.name.as_str() {
-            chat::VIEW => self.work.chat.as_ref().and_then(crate::chat_with::line),
+            chat::VIEW => self
+                .work
+                .chat
+                .as_ref()
+                .and_then(|c| crate::chat_with::line(c, self.cfg.subject_chip)),
             past_chats::VIEW => self.work.past.as_ref().and_then(PastChats::line),
             _ => None,
         }
@@ -501,5 +505,56 @@ mod tests {
         assert_eq!(win.text(), "launch");
         assert_eq!(win.views().crumb(), past_chats::LABEL);
         assert_eq!(win.enter_target(0).label, "Reading past chats…");
+    }
+
+    #[test]
+    fn the_line_names_the_reply_and_cmd_k_puts_its_actions_in_place_of_the_chat() {
+        use crate::contract::{ENTER_GUARD_MS, words};
+        use crate::slot::SlotKind;
+        let mut win = OneWindow::default();
+        work(
+            &mut win,
+            0,
+            WorkEvent::AskModel {
+                sentence: "when is lebron's first game".into(),
+            },
+        );
+        work(
+            &mut win,
+            100,
+            WorkEvent::ModelWrote {
+                text: "October 21, when the Lakers open.".into(),
+                done: true,
+            },
+        );
+        work(&mut win, 200, WorkEvent::ModelNext(Vec::new()));
+        let reply = "“October 21, when the Lakers open.”";
+        let line = win.slot_line(200);
+        assert_eq!((line.kind, line.title.as_str()), (SlotKind::Focused, reply));
+        let before = win.enter_target(200).label;
+
+        key(&mut win, 300, Key::CmdK);
+        let line = win.slot_line(300);
+        assert_eq!(
+            (line.label.as_str(), line.title.as_str()),
+            (words::ACTING_ON, reply)
+        );
+        assert_eq!(
+            win.enter_target(300).label,
+            before,
+            "⌘K then ↵ does what ↵ did"
+        );
+
+        win.handle(400, Event::Text("note".into()));
+        assert_eq!(win.enter_target(400).label, "Add it to today's note");
+        let fx = key(&mut win, 400 + ENTER_GUARD_MS, Key::Enter);
+        assert!(
+            work_fx(&fx)
+                .iter()
+                .any(|w| matches!(w, WorkEffect::ChatStep { row, .. } if row.key == "chat:note"))
+        );
+        assert_eq!(win.text(), "", "the words that found it go");
+        assert!(win.chat().is_some_and(|c| c.acting.is_none()));
+        assert_eq!(win.slot_line(500).kind, SlotKind::Focused);
     }
 }

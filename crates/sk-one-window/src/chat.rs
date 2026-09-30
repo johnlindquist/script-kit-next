@@ -5,7 +5,9 @@
 //! What the chat was opened about (an error, the selection, a file) waits in the line above the
 //! input and goes with the next turn. The model's tools show as cards in its reply; when it asks
 //! before doing something, or needs you to sign in, those are rows under the reply: ↵ says yes,
-//! ⌘2 says no. ⌘K puts the chat in the line and lists what you can do to it.
+//! ⌘2 says no. ⌘K puts the latest reply in the line and the conversation gives way to what you
+//! can do with it, then with the whole chat; typing filters them, and words nothing matches go to
+//! the model.
 
 use crate::asks::Asks;
 use crate::enter::EnterTarget;
@@ -23,8 +25,9 @@ pub const WRITTEN_BY: &str = "Written by the model";
 pub const SHORTER_KEY: &str = "chat:shorter";
 pub const COPY_KEY: &str = "chat:copy";
 pub const EXPORT_KEY: &str = "chat:export";
-/// The list's head while ⌘K acts on the chat.
-pub const ACTING_HEAD: &str = "What to do with this chat";
+/// The heads over what ⌘K offers: the latest reply's next steps, then the whole chat's.
+pub const REPLY_HEAD: &str = "The reply";
+pub const CHAT_HEAD: &str = "This chat";
 /// The list's head while the model waits for you.
 pub const WAITING_HEAD: &str = "The model is waiting for you";
 
@@ -136,6 +139,8 @@ pub struct Chat {
     pub models: Models,
     /// ⌘K put the chat in the line; these are what you can do to it.
     pub acting: Option<Vec<Row>>,
+    /// What's typed, which filters what ⌘K offers.
+    pub filter: String,
 }
 
 /// Next steps for a reply when Jev hasn't ranked any.
@@ -161,6 +166,7 @@ impl Chat {
             sign_in: None,
             models: Models::default(),
             acting: None,
+            filter: String::new(),
         };
         let sentence = sentence.trim();
         if !sentence.is_empty() {
@@ -212,6 +218,7 @@ impl Chat {
         self.next.clear();
         self.asks = None;
         self.acting = None;
+        self.filter.clear();
         self.sel = 0;
         with
     }
@@ -293,7 +300,7 @@ impl Chat {
     /// question, or the next steps for its reply.
     pub fn rows(&self) -> (Option<&'static str>, Vec<Row>) {
         if let Some(rows) = &self.acting {
-            return (Some(ACTING_HEAD), rows.clone());
+            return (None, self.matching(rows));
         }
         if let Some(provider) = &self.sign_in {
             return (Some(WAITING_HEAD), sign_in_rows(provider));
@@ -307,12 +314,22 @@ impl Chat {
         }
     }
 
-    /// What ⌘K offers for the chat: its reply, the whole chat, another model, the chats before.
+    /// What ⌘K offers: the reply's next steps in Jev's order (so ⌘K then ↵ does what ↵ did), then
+    /// the whole chat, another model, the chats before. Each row carries its group's head.
     fn actions(&self) -> Vec<Row> {
+        let reply: Vec<Row> = match self.reply() {
+            None => Vec::new(),
+            Some(_) if self.next.is_empty() => {
+                vec![Row::new(COPY_KEY, "Copy it").with_icon("copy")]
+            }
+            Some(_) => self
+                .next
+                .iter()
+                .filter(|r| r.key != crate::past_chats::ROW_KEY)
+                .cloned()
+                .collect(),
+        };
         let mut rows = Vec::new();
-        if self.reply().is_some() {
-            rows.push(Row::new(COPY_KEY, "Copy the reply").with_icon("copy"));
-        }
         if !self.turns.is_empty() {
             rows.push(Row::new(EXPORT_KEY, "Export the chat as Markdown").with_icon("export"));
         }
@@ -325,7 +342,48 @@ impl Chat {
             .with_icon("sparkles")
         }));
         rows.push(Row::new(crate::past_chats::ROW_KEY, "See past chats").with_icon("history"));
-        rows
+        let mut all = Vec::with_capacity(reply.len() + rows.len());
+        for (group, head) in [(reply, REPLY_HEAD), (rows, CHAT_HEAD)] {
+            all.extend(group.into_iter().map(|r| r.with_head(head)));
+        }
+        all
+    }
+
+    /// ⌘K's rows whose titles have every typed word, with each group's head on its first row left.
+    fn matching(&self, rows: &[Row]) -> Vec<Row> {
+        let words: Vec<String> = self
+            .filter
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
+        let mut out: Vec<Row> = rows
+            .iter()
+            .filter(|r| {
+                let title = r.title.to_lowercase();
+                words.iter().all(|w| title.contains(w.as_str()))
+            })
+            .cloned()
+            .collect();
+        let mut last = None;
+        for r in &mut out {
+            let head = r.head.take();
+            if head != last {
+                r.head.clone_from(&head);
+                last = head;
+            }
+        }
+        out
+    }
+
+    /// What's typed while the chat is on top; while ⌘K has it, it filters what's offered.
+    pub fn filter(&mut self, typed: &str) {
+        let typed = typed.trim();
+        if self.filter != typed {
+            self.filter = typed.to_string();
+            if self.acting.is_some() {
+                self.sel = 0;
+            }
+        }
     }
 
     /// ⌘K: the chat goes in the line, or out of it again.
@@ -346,6 +404,17 @@ impl Chat {
     /// the reply or the chat's state.
     pub fn enter(&self, typed: &str) -> EnterTarget {
         let typed = typed.trim();
+        let turn = self.turns.iter().filter(|t| t.who == Who::You).count();
+        let (_, rows) = self.rows();
+        let target = |row: &Row| {
+            EnterTarget::new(
+                format!("chat:{}:{}", turn.saturating_sub(1), row.key),
+                row.enter_words(),
+            )
+        };
+        if let Some(row) = rows.get(self.sel).filter(|_| self.acting.is_some()) {
+            return target(row);
+        }
         if !typed.is_empty() {
             if let Some(model) = self.models.said(typed) {
                 return EnterTarget::new(
@@ -355,13 +424,8 @@ impl Chat {
             }
             return EnterTarget::new("chat:say", format!("Ask the model: “{typed}”"));
         }
-        let turn = self.turns.iter().filter(|t| t.who == Who::You).count();
-        let (_, rows) = self.rows();
         if let Some(row) = rows.get(self.sel) {
-            return EnterTarget::new(
-                format!("chat:{}:{}", turn.saturating_sub(1), row.key),
-                row.enter_words(),
-            );
+            return target(row);
         }
         match &self.phase {
             Phase::Idle if !self.with.is_empty() => {
@@ -388,13 +452,19 @@ impl Chat {
         true
     }
 
-    /// Enter: typed words are a new turn (or pick a model); otherwise the highlighted row.
+    /// Enter: while ⌘K has the chat, the highlighted row that matches what's typed; otherwise typed
+    /// words are a new turn (or pick a model), and with nothing typed the highlighted row.
     pub fn press_enter(&mut self, typed: &str) -> ChatKey {
         let typed = typed.trim();
-        if !typed.is_empty() {
+        let picked = self
+            .acting
+            .as_ref()
+            .and_then(|_| self.rows().1.get(self.sel).cloned());
+        if picked.is_none() && !typed.is_empty() {
             if let Some(model) = self.models.said(typed) {
                 let id = model.key.clone();
                 self.models.current = Some(id.clone());
+                self.acting = None;
                 return ChatKey::UseModel(id);
             }
             let with = self.ask(typed);
@@ -403,8 +473,7 @@ impl Chat {
                 with,
             };
         }
-        let (_, rows) = self.rows();
-        let Some(row) = rows.get(self.sel).cloned() else {
+        let Some(row) = picked.or_else(|| self.rows().1.get(self.sel).cloned()) else {
             return ChatKey::Nothing;
         };
         if self.acting.take().is_some() {
@@ -609,7 +678,7 @@ mod tests {
     }
 
     #[test]
-    fn cmd_k_lists_what_to_do_with_the_chat_and_a_model_you_can_say() {
+    fn cmd_k_lists_the_replys_next_steps_then_the_chats() {
         let mut chat = Chat::open("hello");
         chat.models = Models {
             list: vec![
@@ -624,26 +693,70 @@ mod tests {
             chat.enter("use opus for this").label,
             "Use Claude Opus for this chat"
         );
+        let before = chat.enter("");
         chat.toggle_acting();
+        assert_eq!(chat.enter(""), before, "⌘K then ↵ does what ↵ did");
         let (head, rows) = chat.rows();
-        assert_eq!(head, Some(ACTING_HEAD));
-        let titles: Vec<&str> = rows.iter().map(|r| r.title.as_str()).collect();
+        assert_eq!(head, None, "each group heads itself");
+        let listed: Vec<(Option<&str>, &str)> = rows
+            .iter()
+            .map(|r| (r.head.as_deref(), r.title.as_str()))
+            .collect();
         assert_eq!(
-            titles,
+            listed,
             [
-                "Copy the reply",
-                "Export the chat as Markdown",
-                "Use Claude Opus for this chat",
-                "See past chats"
+                (Some(REPLY_HEAD), "Copy it"),
+                (None, "Add it to today's note"),
+                (None, "Make it shorter"),
+                (Some(CHAT_HEAD), "Export the chat as Markdown"),
+                (None, "Use Claude Opus for this chat"),
+                (None, "See past chats"),
             ]
         );
-        chat.move_sel(true);
-        chat.move_sel(true);
+        for _ in 0..4 {
+            chat.move_sel(true);
+        }
         assert_eq!(
             chat.press_enter(""),
             ChatKey::UseModel("anthropic/opus".into())
         );
         assert!(chat.acting.is_none());
         assert_eq!(chat.models.current.as_deref(), Some("anthropic/opus"));
+    }
+
+    #[test]
+    fn typing_filters_what_cmd_k_offers_and_words_nothing_matches_go_to_the_model() {
+        let mut chat = Chat::open("brainstorm");
+        chat.wrote("Names", true);
+        chat.ranked(Vec::new());
+        chat.toggle_acting();
+        chat.filter("note");
+        let (_, rows) = chat.rows();
+        let titles: Vec<&str> = rows.iter().map(|r| r.title.as_str()).collect();
+        assert_eq!(titles, ["Add it to today's note"]);
+        assert_eq!(rows[0].head.as_deref(), Some(REPLY_HEAD));
+        assert_eq!(chat.enter("note").label, "Add it to today's note");
+        assert!(matches!(chat.press_enter("note"), ChatKey::Step(row) if row.key == "chat:note"));
+        assert!(chat.acting.is_none(), "running one lets go");
+
+        chat.toggle_acting();
+        chat.filter("past");
+        let (_, rows) = chat.rows();
+        assert_eq!(
+            rows[0].head.as_deref(),
+            Some(CHAT_HEAD),
+            "a group's head survives"
+        );
+        chat.filter("turn it into a table");
+        assert!(chat.rows().1.is_empty());
+        assert_eq!(
+            chat.enter("turn it into a table").label,
+            "Ask the model: “turn it into a table”"
+        );
+        assert!(matches!(
+            chat.press_enter("turn it into a table"),
+            ChatKey::Ask { text, .. } if text == "turn it into a table"
+        ));
+        assert!(chat.acting.is_none());
     }
 }
