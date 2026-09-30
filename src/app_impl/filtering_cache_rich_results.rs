@@ -52,6 +52,13 @@ impl FileSubsearchFlavor {
         }
     }
 
+    fn recent_matching_header(self, query: &str) -> String {
+        match self {
+            Self::Global => format!("Recent files matching \u{201c}{query}\u{201d}"),
+            Self::Project => format!("Recent project files matching \u{201c}{query}\u{201d}"),
+        }
+    }
+
     fn searching_header(self) -> &'static str {
         match self {
             Self::Global => "Searching files\u{2026}",
@@ -67,12 +74,22 @@ impl FileSubsearchFlavor {
     }
 }
 
+/// Rows for `@file:` / `@project:` colon mode.
+///
+/// Empty sub-query: the recents landing list. Typed sub-query: files the user
+/// has already seen (`recent_results` frecency picks plus `seen_recents`, the
+/// last recently-used list for this scope) are filtered and ranked first, in
+/// the same frame the key is typed, so a row that was on screen stays reachable
+/// at the top. Spotlight matches (`provider_results`) follow in their own
+/// section once they arrive, deduped against the seen rows and ranked.
 pub(crate) fn build_rich_file_subsearch_rows(
     flavor: FileSubsearchFlavor,
     query: &str,
     loading: bool,
     provider_results: &[crate::file_search::FileResult],
     recent_results: &[crate::file_search::FileResult],
+    seen_recents: &[crate::file_search::FileResult],
+    frecency_score: impl Fn(&str) -> f64,
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
     let query = query.trim();
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
@@ -120,29 +137,34 @@ pub(crate) fn build_rich_file_subsearch_rows(
                 None,
             ));
         }
-    } else if !provider_results.is_empty() {
-        grouped.push(GroupedListItem::SectionHeader(
-            flavor.matching_header(query),
-            Some(icon),
-        ));
-        for file in provider_results.iter().take(limit) {
-            let idx = flat.len();
-            flat.push(scripts::SearchResult::File(scripts::FileMatch {
-                file: file.clone(),
-                score: 0,
-            }));
-            grouped.push(GroupedListItem::Item(idx));
-        }
-    } else if loading {
-        grouped.push(GroupedListItem::SectionHeader(
-            flavor.searching_header().to_string(),
-            Some(icon),
-        ));
     } else {
-        grouped.push(GroupedListItem::SectionHeader(
-            flavor.no_match_header(query),
-            Some(icon),
-        ));
+        let (seen_ranked, provider_ranked) = crate::file_search::rank_file_subsearch_matches(
+            query,
+            recent_results.iter().chain(seen_recents.iter()),
+            provider_results,
+            limit,
+            &frecency_score,
+        );
+
+        let mut push_section = |header: String, matches: Vec<scripts::FileMatch>| {
+            grouped.push(GroupedListItem::SectionHeader(header, Some(icon.clone())));
+            for file_match in matches {
+                let idx = flat.len();
+                flat.push(scripts::SearchResult::File(file_match));
+                grouped.push(GroupedListItem::Item(idx));
+            }
+        };
+        let had_seen_matches = !seen_ranked.is_empty();
+        if had_seen_matches {
+            push_section(flavor.recent_matching_header(query), seen_ranked);
+        }
+        if !provider_ranked.is_empty() {
+            push_section(flavor.matching_header(query), provider_ranked);
+        } else if loading {
+            push_section(flavor.searching_header().to_string(), Vec::new());
+        } else if !had_seen_matches {
+            push_section(flavor.no_match_header(query), Vec::new());
+        }
     }
 
     (grouped, flat)

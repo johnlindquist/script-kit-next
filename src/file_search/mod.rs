@@ -172,6 +172,61 @@ pub fn is_noisy_recent_file_path(path: &str) -> bool {
         .any(|component| component.len() > 1 && component.starts_with('.'))
 }
 
+/// Drop typed-query Spotlight hits nobody means to pick from a file list:
+/// files inside hidden (dot) folders, app-bundle internals, installed
+/// package trees, and compiler intermediates (a short query like `ex` would
+/// otherwise fill the list with hash-named `.o` files from build folders).
+/// A dotfile itself (`~/.zshrc`) is kept: only its folders are checked.
+pub fn is_noisy_typed_file_path(path: &str) -> bool {
+    if path.contains(".app/") || path.contains("/node_modules/") {
+        return true;
+    }
+    let path = Path::new(path);
+    if path.parent().is_some_and(|parent| {
+        parent.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::Normal(name)
+                    if name.len() > 1 && name.to_string_lossy().starts_with('.')
+            )
+        })
+    }) {
+        return true;
+    }
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ["o", "d", "rlib", "rmeta", "pyc", "class"]
+                .iter()
+                .any(|noisy| ext.eq_ignore_ascii_case(noisy))
+        })
+}
+
+/// Spotlight query for a typed file search (`@file:` and the root Files
+/// section). Queries shorter than `ROOT_FILE_MIN_QUERY_CHARS` ask for names
+/// that *start* with the text, because "contains `ex`" matches thousands of
+/// unrelated names; longer queries keep the contains/word-match shape.
+pub fn typed_file_provider_query(user_query: &str) -> String {
+    let q = user_query.trim();
+    if !looks_like_advanced_mdquery(q) && q.chars().count() < ROOT_FILE_MIN_QUERY_CHARS {
+        return format!(r#"kMDItemFSName == "{}*"c"#, escape_md_string(q));
+    }
+    root_file_provider_query_for_user_query(q)
+}
+
+/// True when a file the user has already seen (a recent or frecency pick)
+/// should stay in the list for this typed sub-query: its name contains the
+/// text, its name words match in order, or its folders plus name do.
+pub fn file_subsearch_seen_file_matches_query(file: &FileResult, query: &str) -> bool {
+    let q = query.trim();
+    if q.is_empty() {
+        return false;
+    }
+    file.name.to_lowercase().contains(&q.to_lowercase())
+        || root_file_name_token_matches_query(&file.name, q)
+        || root_file_path_context_matches_query(file, q)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RootFilePromotionPolicy {
     #[default]
@@ -950,6 +1005,44 @@ fn find_next_root_file_token_match(
 /// Return true when a root recent-file seed is a high-confidence filename-side match.
 pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
     root_file_name_token_matches_query(name, query)
+}
+
+/// Order a typed `@file:` / `@project:` sub-query's rows: files the user has
+/// already seen (recents, frecency picks) that match come first and are
+/// available before Spotlight answers; Spotlight's matches follow, minus any
+/// path already listed. Both groups are ranked by name relevance, then
+/// frecency, and together stay within `limit`.
+pub fn rank_file_subsearch_matches<'a>(
+    query: &str,
+    seen: impl IntoIterator<Item = &'a FileResult>,
+    provider: &[FileResult],
+    limit: usize,
+    frecency_score: impl Fn(&str) -> f64,
+) -> (
+    Vec<crate::scripts::FileMatch>,
+    Vec<crate::scripts::FileMatch>,
+) {
+    let mut seen_paths = std::collections::HashSet::new();
+    let seen_matches: Vec<FileResult> = seen
+        .into_iter()
+        .filter(|file| root_global_file_result_is_eligible(file))
+        .filter(|file| file_subsearch_seen_file_matches_query(file, query))
+        .filter(|file| seen_paths.insert(file.path.clone()))
+        .cloned()
+        .collect();
+    let seen_ranked = rank_root_file_results(&seen_matches, query, limit, &frecency_score);
+    let provider_matches: Vec<FileResult> = provider
+        .iter()
+        .filter(|file| !seen_paths.contains(&file.path))
+        .cloned()
+        .collect();
+    let provider_ranked = rank_root_file_results(
+        &provider_matches,
+        query,
+        limit.saturating_sub(seen_ranked.len()),
+        &frecency_score,
+    );
+    (seen_ranked, provider_ranked)
 }
 
 /// Return true when a recent file can seed a non-empty global root Files section.

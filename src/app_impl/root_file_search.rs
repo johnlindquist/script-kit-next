@@ -3,6 +3,10 @@ use super::*;
 const ROOT_FILE_RESULT_CACHE_LIMIT: usize = 24;
 const ROOT_FILE_SEARCH_DEBOUNCE_MS: u64 = 60;
 const SPINE_FILE_SEARCH_DEBOUNCE_MS: u64 = 80;
+/// Spotlight hits collected for a typed `@file:`/`@project:` sub-query before
+/// noise filtering and ranking. Larger than the render limit so ranking has
+/// real choices and build-folder noise can't use up the whole batch.
+const SPINE_FILE_QUERY_SOURCE_LIMIT: usize = crate::file_search::ROOT_FILE_SOURCE_LIMIT * 4;
 
 enum MainFileWorkerEvent {
     Result(crate::file_search::FileResult),
@@ -721,6 +725,9 @@ impl ScriptListApp {
                         let mut emit = |event| {
                             let event = match event {
                                 crate::file_search::SearchEvent::Result(file) => {
+                                    if crate::file_search::is_noisy_typed_file_path(&file.path) {
+                                        return;
+                                    }
                                     MainFileWorkerEvent::Result(file)
                                 }
                                 crate::file_search::SearchEvent::Done(Ok(())) => {
@@ -736,7 +743,7 @@ impl ScriptListApp {
                             return;
                         }
                         let provider_query =
-                            crate::file_search::root_file_provider_query_for_user_query(&query);
+                            crate::file_search::typed_file_provider_query(&query);
                         crate::file_search::search_files_streaming_with_options(
                             &provider_query,
                             None,
@@ -1336,7 +1343,12 @@ impl SpineFileSearchRequest {
         let mut completion = Ok(());
         let mut emit = |event| match event {
             SearchEvent::Result(file) => {
-                if !self.recents() || !crate::file_search::is_noisy_recent_file_path(&file.path) {
+                let noisy = if self.recents() {
+                    crate::file_search::is_noisy_recent_file_path(&file.path)
+                } else {
+                    crate::file_search::is_noisy_typed_file_path(&file.path)
+                };
+                if !noisy {
                     hits += 1;
                     let _ = tx.send(MainFileWorkerEvent::Result(file));
                 }
@@ -1346,11 +1358,11 @@ impl SpineFileSearchRequest {
         match self {
             Self::GlobalQuery(query) => {
                 if !emit_root_file_search_test_fixture(query, &cancel, &mut emit) {
-                    let query = crate::file_search::root_file_provider_query_for_user_query(query);
+                    let query = crate::file_search::typed_file_provider_query(query);
                     crate::file_search::search_files_streaming_with_options(
                         &query,
                         None,
-                        crate::file_search::ROOT_FILE_SOURCE_LIMIT,
+                        SPINE_FILE_QUERY_SOURCE_LIMIT,
                         cancel.clone(),
                         SearchFilesStreamingOptions::root_search(),
                         &mut emit,
@@ -1361,7 +1373,7 @@ impl SpineFileSearchRequest {
                 crate::file_search::search_files_streaming_with_options(
                     query,
                     Some(scope),
-                    crate::file_search::ROOT_FILE_SOURCE_LIMIT,
+                    SPINE_FILE_QUERY_SOURCE_LIMIT,
                     cancel.clone(),
                     SearchFilesStreamingOptions {
                         skip_metadata: true,
@@ -1507,22 +1519,19 @@ impl ScriptListApp {
         let query = query.trim().to_string();
         let request = match (source, query.is_empty()) {
             (ContextSubsearchSource::File, false) => SpineFileSearchRequest::GlobalQuery(query),
-            (ContextSubsearchSource::File, true) => SpineFileSearchRequest::GlobalRecents(
-                self.spine_cwd
-                    .as_deref()
-                    .and_then(spotlight_indexable_scope)
-                    .or_else(|| dirs::home_dir().map(|home| home.to_string_lossy().to_string())),
-            ),
-            (ContextSubsearchSource::Project, empty) => {
+            (ContextSubsearchSource::File | ContextSubsearchSource::Project, true) => {
+                let Some(request) = self.spine_file_recents_request(source) else {
+                    self.clear_spine_file_subsearch_state(cx);
+                    return;
+                };
+                request
+            }
+            (ContextSubsearchSource::Project, false) => {
                 let Some(scope) = self.spine_project_scope_dir() else {
                     self.clear_spine_file_subsearch_state(cx);
                     return;
                 };
-                if empty {
-                    SpineFileSearchRequest::ProjectRecents(scope)
-                } else {
-                    SpineFileSearchRequest::ProjectQuery { query, scope }
-                }
+                SpineFileSearchRequest::ProjectQuery { query, scope }
             }
             _ => {
                 self.clear_spine_file_subsearch_state(cx);
@@ -1530,6 +1539,43 @@ impl ScriptListApp {
             }
         };
         self.start_spine_file_worker(request, force, cx);
+    }
+
+    /// The recently-used request an empty `@file:` / `@project:` sub-query
+    /// runs for the current scope.
+    fn spine_file_recents_request(
+        &self,
+        source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+    ) -> Option<SpineFileSearchRequest> {
+        use crate::spine::catalog_subsearch::ContextSubsearchSource;
+        match source {
+            ContextSubsearchSource::File => Some(SpineFileSearchRequest::GlobalRecents(
+                self.spine_cwd
+                    .as_deref()
+                    .and_then(spotlight_indexable_scope)
+                    .or_else(|| dirs::home_dir().map(|home| home.to_string_lossy().to_string())),
+            )),
+            ContextSubsearchSource::Project => self
+                .spine_project_scope_dir()
+                .map(SpineFileSearchRequest::ProjectRecents),
+            _ => None,
+        }
+    }
+
+    /// The recently-used files last shown for this source's scope, so a typed
+    /// sub-query can filter them in the same frame instead of waiting for a
+    /// fresh Spotlight search. Empty when the scope has changed since.
+    pub(crate) fn spine_file_recent_seed_for(
+        &self,
+        source: crate::spine::catalog_subsearch::ContextSubsearchSource,
+    ) -> &[crate::file_search::FileResult] {
+        match (
+            &self.spine_file_recent_seed,
+            self.spine_file_recents_request(source),
+        ) {
+            (Some((key, files)), Some(request)) if *key == request.key() => files,
+            _ => &[],
+        }
     }
 
     /// Directory the `@project:` subsearch is scoped to: the global cwd chip,
@@ -1627,6 +1673,7 @@ impl ScriptListApp {
                         )
                         .into()),
                         None,
+                        None,
                         cx,
                     );
                     return;
@@ -1715,9 +1762,16 @@ impl ScriptListApp {
                     }
                 }
             };
+            let recents_key = request.recents().then(|| request.key());
             if this
                 .update(cx, |app, cx| {
-                    app.finish_spine_file_worker(generation, result, owned_run.as_deref(), cx)
+                    app.finish_spine_file_worker(
+                        generation,
+                        result,
+                        recents_key,
+                        owned_run.as_deref(),
+                        cx,
+                    )
                 })
                 .is_err()
             {
@@ -1732,10 +1786,13 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// `recents_key` names the recently-used request this worker ran, if any;
+    /// its results become the seed a typed sub-query filters locally.
     fn finish_spine_file_worker(
         &mut self,
         generation: u64,
         result: MainSearchWorkerResult<crate::file_search::FileResult>,
+        recents_key: Option<String>,
         owned_run: Option<&crate::design_evaluation::search_fixtures::SearchRun>,
         cx: &mut Context<Self>,
     ) {
@@ -1769,7 +1826,11 @@ impl ScriptListApp {
                     app.spine_file_search_loading = false;
                     app.spine_file_search_cancel = None;
                     if let Ok(results) = result {
-                        app.spine_file_search_results = dedupe_root_file_results(results);
+                        let results = dedupe_root_file_results(results);
+                        if let Some(key) = recents_key {
+                            app.spine_file_recent_seed = Some((key, results.clone()));
+                        }
+                        app.spine_file_search_results = results;
                     }
                     true
                 },

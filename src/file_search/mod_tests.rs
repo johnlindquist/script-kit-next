@@ -66,6 +66,101 @@ mod tests {
     }
 
     #[test]
+    fn noisy_typed_path_filter_drops_build_intermediates_keeps_real_files() {
+        assert!(is_noisy_typed_file_path(
+            "/Volumes/SSD/target/debug/incremental/app-1x/s-abc/6ldb9b5n2exch1sc961swnq90.o"
+        ));
+        assert!(is_noisy_typed_file_path(
+            "/Users/me/dev/app/node_modules/ex/index.js"
+        ));
+        assert!(is_noisy_typed_file_path("/Users/me/dev/app/.git/index"));
+        assert!(is_noisy_typed_file_path(
+            "/Applications/Safari.app/Contents/Info.plist"
+        ));
+        assert!(!is_noisy_typed_file_path(
+            "/Users/me/Movies/extended-native-player.png"
+        ));
+        assert!(!is_noisy_typed_file_path("/Users/me/Documents/export.md"));
+        assert!(!is_noisy_typed_file_path("/Users/me/.zshrc"));
+    }
+
+    fn subsearch_file(path: &str) -> FileResult {
+        FileResult {
+            path: path.to_string(),
+            name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            size: 0,
+            modified: 0,
+            file_type: FileType::File,
+        }
+    }
+
+    fn names(matches: &[crate::scripts::FileMatch]) -> Vec<&str> {
+        matches.iter().map(|m| m.file.name.as_str()).collect()
+    }
+
+    #[test]
+    fn typed_file_subsearch_keeps_the_seen_match_before_spotlight_answers() {
+        let seen = [
+            subsearch_file("/Users/me/Desktop/AddPass_Icon@2x.png"),
+            subsearch_file("/Users/me/Desktop/no-npm.mp4"),
+            subsearch_file("/Users/me/Movies/extended-native-player.png"),
+            subsearch_file("/Users/me/Movies/reel.mp4"),
+        ];
+
+        let (seen_ranked, provider_ranked) =
+            rank_file_subsearch_matches("ex", seen.iter(), &[], 16, |_| 0.0);
+
+        assert_eq!(names(&seen_ranked), ["extended-native-player.png"]);
+        assert!(provider_ranked.is_empty());
+    }
+
+    #[test]
+    fn typed_file_subsearch_ranks_spotlight_below_seen_and_skips_duplicates() {
+        let seen = [subsearch_file(
+            "/Users/me/Movies/extended-native-player.png",
+        )];
+        let provider = [
+            subsearch_file("/Users/me/Downloads/complex.txt"),
+            subsearch_file("/Users/me/Movies/extended-native-player.png"),
+            subsearch_file("/Users/me/Documents/export.md"),
+        ];
+
+        let (seen_ranked, provider_ranked) =
+            rank_file_subsearch_matches("ex", seen.iter(), &provider, 16, |_| 0.0);
+
+        assert_eq!(names(&seen_ranked), ["extended-native-player.png"]);
+        assert_eq!(
+            names(&provider_ranked),
+            ["export.md", "complex.txt"],
+            "a name starting with the query outranks one containing it; a seen file is not listed twice"
+        );
+    }
+
+    #[test]
+    fn typed_file_subsearch_shares_one_row_limit() {
+        let seen = [subsearch_file("/a/exa.txt"), subsearch_file("/a/exb.txt")];
+        let provider = [subsearch_file("/b/exc.txt"), subsearch_file("/b/exd.txt")];
+
+        let (seen_ranked, provider_ranked) =
+            rank_file_subsearch_matches("ex", seen.iter(), &provider, 3, |_| 0.0);
+
+        assert_eq!(seen_ranked.len() + provider_ranked.len(), 3);
+        assert_eq!(seen_ranked.len(), 2, "seen files fill the limit first");
+    }
+
+    #[test]
+    fn typed_file_provider_query_asks_for_name_prefix_when_short() {
+        assert_eq!(
+            typed_file_provider_query("ex"),
+            r#"kMDItemFSName == "ex*"c"#
+        );
+        assert_eq!(
+            typed_file_provider_query("exten"),
+            root_file_provider_query_for_user_query("exten")
+        );
+    }
+
+    #[test]
     fn recent_file_hydration_skips_missing_paths() {
         let path = std::env::temp_dir()
             .join(format!("sk-missing-recent-file-{}", std::process::id()))

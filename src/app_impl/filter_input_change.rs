@@ -1478,13 +1478,27 @@ impl ScriptListApp {
             return;
         }
 
-        // Spotlight search path
+        // Spotlight search path. Rows already on screen stay, filtered by the
+        // new text, until Spotlight's first batch replaces them: a file you
+        // can see stays reachable while you type toward it instead of the
+        // list blanking on every keystroke.
         self.file_search_current_dir = None;
         self.file_search_current_dir_show_hidden = false;
         self.file_search_frozen_filter = None;
-        self.cached_file_results.clear();
-        self.file_search_display_indices.clear();
-        Self::resize_file_search_window_after_results_change(presentation, 0, true, false);
+        let keep_visible_rows =
+            !query.trim().is_empty() && !self.cached_file_results.is_empty();
+        if keep_visible_rows {
+            self.recompute_file_search_display_indices();
+        } else {
+            self.cached_file_results.clear();
+            self.file_search_display_indices.clear();
+        }
+        Self::resize_file_search_window_after_results_change(
+            presentation,
+            self.file_search_display_indices.len(),
+            true,
+            false,
+        );
 
         self.spawn_file_search_stream_task(
             gen,
@@ -1495,7 +1509,7 @@ impl ScriptListApp {
             FileSearchStreamPolicy {
                 debounce_ms: 75,
                 query_guard: Some(query),
-                clear_on_first_batch: false,
+                clear_on_first_batch: keep_visible_rows,
                 sort_on_done: false,
                 defer_batches_until_done: false,
             },

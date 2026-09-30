@@ -1327,6 +1327,10 @@ pub(crate) struct ScriptListApp {
     pub(crate) spine_file_search_loading: bool,
     pub(crate) spine_file_search_results: Vec<file_search::FileResult>,
     spine_file_search_cancel: Option<file_search::CancelToken>,
+    /// Last recently-used list shown for an empty `@file:` / `@project:`
+    /// sub-query, keyed by its request. Typing filters these in the same
+    /// frame so rows the user just saw stay on top.
+    spine_file_recent_seed: Option<(String, Vec<file_search::FileResult>)>,
     /// Which empty `@source:` colon mode the user has explicitly armed with
     /// Down/click. While the active subsearch has an empty sub-query and this
     /// does NOT name its source, the recents list renders with no selected

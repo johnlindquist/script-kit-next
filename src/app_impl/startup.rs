@@ -414,6 +414,7 @@ impl ScriptListApp {
             spine_file_search_loading: false,
             spine_file_search_results: Vec::new(),
             spine_file_search_cancel: None,
+            spine_file_recent_seed: None,
             spine_empty_subsearch_armed_for: None,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,
