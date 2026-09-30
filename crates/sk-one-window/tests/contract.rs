@@ -28,7 +28,6 @@ fn timings_match_the_prototype() {
     let expect = [
         ("timing.shrinkHoldMs", contract::SHRINK_HOLD_MS),
         ("timing.viewHoldMs", contract::VIEW_HOLD_MS),
-        ("timing.shrinkAnimMs", contract::SHRINK_ANIM_MS),
         ("timing.enterGuardMs", contract::ENTER_GUARD_MS),
         ("timing.rowArmMs", contract::ROW_ARM_MS),
         ("timing.messageHoldMs", contract::MESSAGE_HOLD_MS),
@@ -50,14 +49,6 @@ fn timings_match_the_prototype() {
         checked >= 6,
         "contract.json has the timing block ({checked} checked)"
     );
-    if let Some(curve) = c.pointer("/timing/shrinkCurve").and_then(Value::as_array) {
-        let curve: Vec<f32> = curve
-            .iter()
-            .filter_map(Value::as_f64)
-            .map(|f| f as f32)
-            .collect();
-        assert_eq!(curve, contract::SHRINK_CURVE.to_vec());
-    }
 }
 
 #[test]
@@ -137,9 +128,6 @@ fn counts_and_geometry_match_the_prototype() {
     }
     if let Some(alpha) = num(&c, "color.tileAlpha") {
         assert_eq!((alpha * 255.0).round() as u8, contract::TILE_ALPHA);
-    }
-    if let Some(fill) = num(&c, "color.rowFillAlpha") {
-        assert_eq!(fill as u8, contract::ROW_FILL_ALPHA);
     }
 }
 

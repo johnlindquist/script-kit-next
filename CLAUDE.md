@@ -20,8 +20,8 @@ Script Kit is one window that you tell what should happen. Every other section o
   in place; the sentence runs once the service connects.
 - **The input never moves.** Above it is always the 34 pt line (`sk_one_window::slot`): a staged subject,
   a waiting hold, the last thing that ran, or what "this" means. Every list starts with a 28 pt header.
-  Rows are 44 pt with a 24 pt icon tile that turns yellow (`#FBBF24`) when focused; there is no row fill,
-  accent bar or row keycap. ↵ and ⌘K live in the floating glass capsule, and ↵'s label never flips back
+  Rows are 44 pt; the focused one gets a soft fill (primary text at 0x20) and a 24 pt icon tile that
+  turns yellow (`#FBBF24`); there is no accent bar or row keycap. ↵ and ⌘K live in the floating glass capsule, and ↵'s label never flips back
   to an earlier one while a sentence is typed forward (`sk_one_window::steady`). The values live in
   `crates/sk-one-window/src/contract.rs`.
 - **Symbols and marks.** `@selection`, `@clipboard`, `@file:…`, `/command`, `.style`, `>:dev`, `todo;`,
@@ -314,7 +314,7 @@ third), and a new one is a design change, not a fix.
   window: `bash scripts/agentic/one-window/run.sh` builds once, captures every chapter in
   `scripts/agentic/one-window/chapters/` and the typing, fast-navigation and views stress runs
   through `scripts/agentic/one-window-frames.ts`, and grades each frame (input never moves, the
-  34 pt line, a 28 pt header first, no row fill or bar, the 24 pt yellow tile, zero popups, ↵
+  34 pt line, a 28 pt header first, the focused row's fill and no bar, the 24 pt yellow tile, zero popups, ↵
   never returning to an earlier label while the text grows). A chapter's `.expect.json` fails any
   step that now shows a different header, ↵ label or view.
 

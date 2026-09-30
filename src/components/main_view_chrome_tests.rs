@@ -39,13 +39,18 @@ mod tests {
 
         let slot = sk_one_window::contract::app::SLOT_LINE_PX;
         assert_eq!(slot, 34.0);
-        assert_eq!(canonical.header_height, 4.0 + slot + 2.0 + 26.0 + 4.0);
+        // The divided band: the input, 14 pt under it, a 1 pt rule, 2 pt before the list.
+        assert_eq!(
+            canonical.header_height,
+            4.0 + slot + 8.0 + 34.0 + 14.0 + 1.0 + 2.0
+        );
+        assert_eq!(canonical.header_height, 97.0);
         assert_eq!(canonical.context_x, -6.0);
         assert_eq!(canonical.context_y, 4.0);
         assert_eq!(canonical.context_height, slot);
         assert_eq!(canonical.input_x, 2.0);
-        assert_eq!(canonical.input_y, 4.0 + slot + 2.0);
-        assert_eq!(canonical.input_height, Some(26.0));
+        assert_eq!(canonical.input_y, 4.0 + slot + 8.0);
+        assert_eq!(canonical.input_height, Some(34.0));
         assert_eq!(context_only.header_height, 4.0 + slot + 4.0);
         assert_eq!(context_only.input_height, None);
     }

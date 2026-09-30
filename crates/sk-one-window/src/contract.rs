@@ -82,8 +82,10 @@ pub mod app {
 /// The focused row's tile color (0xRRGGBB) and alpha byte (95%).
 pub const TILE_RGB: u32 = 0xFB_BF_24;
 pub const TILE_ALPHA: u8 = 0xF2;
-/// Selected rows have no fill.
-pub const ROW_FILL_ALPHA: u8 = 0;
+/// The selected row's fill: the theme's primary text color at this alpha byte (12.5%), under the
+/// tile. The app's own number, not the prototype's (which draws no fill): an app icon's own
+/// colors hide the tile, so the tile alone can't show which row is focused.
+pub const ROW_FILL_ALPHA: u8 = 0x20;
 
 /// How strongly the line above the input is drawn.
 pub mod slot_opacity {

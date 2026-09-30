@@ -3,7 +3,7 @@
  * and re-run the exporter; Rust is the single authority.
  */
 :root {
-  /* bundleHash: sha256:aa79f41c2370822cdc9cb3344dd76264cb08ebd161f86d0af2252a00421700dd */
+  /* bundleHash: sha256:b55f1df36b1e60cb26ed531220de5d10fd41dd203b0e225f3f235223f4535f74 */
   --sk-actions-dialog-list-padding-bottom: 6px;
   --sk-actions-dialog-list-padding-top: 0px;
   --sk-actions-dialog-row-height: 36px;
@@ -166,7 +166,7 @@
   --sk-main-menu-section-icon-size: 10px;
   --sk-main-menu-section-padding-bottom: 4px;
   --sk-main-menu-section-padding-top: 12px;
-  --sk-main-menu-section-padding-x: 14px;
+  --sk-main-menu-section-padding-x: 18px;
   --sk-main-menu-content-inset-x: 16px;
   --sk-main-menu-header-gap: 2px;
   --sk-main-menu-header-padding-x: 2px;
@@ -274,7 +274,7 @@
   --sk-main-menu-icon-tile-background: rgb(251 191 36 / 0.9490196078);
   --sk-main-menu-icon-tile-radius: 8px;
   --sk-main-menu-row-hover-background: rgb(255 255 255 / 0.0705882353);
-  --sk-main-menu-row-selected-background: rgb(255 255 255 / 0.0000000000);
+  --sk-main-menu-row-selected-background: rgb(255 255 255 / 0.1254901961);
   --sk-main-view-content-right-inset-x: 2px;
   --sk-notes-editor-font-size: 16px;
   --sk-notes-caret-color: rgb(255 255 255);

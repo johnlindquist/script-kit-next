@@ -690,6 +690,8 @@ pub enum SectionPresentationFamily {
 pub enum SectionTextTier {
     Strong,
     Muted,
+    /// Counts beside a header: present, but under the header's own words.
+    Quiet,
 }
 
 impl SectionTextTier {
@@ -697,6 +699,7 @@ impl SectionTextTier {
         match self {
             Self::Strong => "strong",
             Self::Muted => "muted",
+            Self::Quiet => "quiet",
         }
     }
 }
@@ -734,7 +737,7 @@ pub fn resolve_section_header_presentation(
             SectionPresentationFamily::Launcher => SectionTextTier::Strong,
             SectionPresentationFamily::PreserveAuthored => SectionTextTier::Muted,
         },
-        count_tier: SectionTextTier::Muted,
+        count_tier: SectionTextTier::Quiet,
         icon_tier: SectionTextTier::Muted,
     }
 }
@@ -1128,7 +1131,7 @@ fn list_item_shortcut_tokens_for_render<'a>(
 
 /// Explicit policy for when row shortcut chrome is visible.
 ///
-/// Launcher-style rows carry no keycaps: the focused row shows only by its
+/// Launcher-style rows carry no keycaps: the focused row shows by its fill and
 /// icon tile and the footer's ↵ button names the action. The actions dialog
 /// lists what each key does, so its rows use `AllRows`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2320,6 +2323,7 @@ pub fn render_section_header(
     let tier_alpha = |tier| match tier {
         SectionTextTier::Strong => colors.alpha_strong,
         SectionTextTier::Muted => colors.alpha_muted,
+        SectionTextTier::Quiet => colors.alpha_placeholder,
     };
 
     // Launcher labels lead strongly; metadata remains quiet and never inherits label emphasis.
@@ -2363,7 +2367,7 @@ pub fn render_section_header(
             div()
                 .flex_none()
                 .text_xs()
-                .font_weight(metrics.section_weight)
+                .font_weight(gpui::FontWeight::MEDIUM)
                 .text_color(rgba(
                     (colors.text_primary << 8) | tier_alpha(presentation.count_tier),
                 ))

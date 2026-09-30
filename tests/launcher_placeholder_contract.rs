@@ -25,11 +25,9 @@ fn extract_placeholder(source: &str, path: &str) -> String {
     rest[..close].to_string()
 }
 
-/// WHY: the root launcher placeholder is the only always-visible teacher of
-/// the main-input sigil grammar. It exists as two constants (lib crate root +
-/// bin crate root via include!), and they historically drifted into three
-/// different sigil sets. The user-facing contract is: one copy, everywhere,
-/// and it must advertise the core sigil families that actually work.
+/// WHY: the root launcher placeholder exists as two constants (lib crate root +
+/// bin crate root via include!), and they historically drifted apart. The
+/// user-facing contract is: one copy, everywhere.
 #[test]
 fn root_launcher_placeholder_is_identical_in_lib_and_bin() {
     let lib = extract_placeholder(&read_source("src/lib.rs"), "src/lib.rs");
@@ -43,15 +41,18 @@ fn root_launcher_placeholder_is_identical_in_lib_and_bin() {
     );
 }
 
+/// The placeholder says what the input is for; the sigils live in help, which `?` on an empty
+/// input opens.
 #[test]
-fn root_launcher_placeholder_teaches_core_sigils() {
+fn root_launcher_placeholder_stays_short_and_points_to_help() {
     let placeholder = extract_placeholder(&read_source("src/lib.rs"), "src/lib.rs");
-    for sigil in ["@", "/", ";", ":"] {
-        assert!(
-            placeholder.contains(sigil),
-            "placeholder should advertise the `{sigil}` sigil family; got {placeholder:?}"
-        );
-    }
+    assert_eq!(placeholder, "Search or ask");
+
+    let routing = read_source("src/app_impl/filter_input_core.rs");
+    assert!(
+        routing.contains(r#""?" => Some(ScriptListSpecialEntry::Help)"#),
+        "`?` on an empty input must open help"
+    );
 }
 
 #[test]

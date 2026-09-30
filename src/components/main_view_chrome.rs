@@ -665,8 +665,12 @@ pub(crate) struct MainViewHeaderChrome {
     context: Option<AnyElement>,
     input: Option<AnyElement>,
     padding_x: f32,
-    padding_y: f32,
+    padding_top: f32,
+    padding_bottom: f32,
     gap: f32,
+    /// The rule under the input, drawn the window's full width: height, color (0xRRGGBBAA), and
+    /// the space left under it before the list.
+    rule: Option<(f32, u32, f32)>,
 }
 
 impl MainViewHeaderChrome {
@@ -674,12 +678,19 @@ impl MainViewHeaderChrome {
     /// from the active main-menu theme; surfaces only provide the two bodies.
     pub(crate) fn canonical(def: MainMenuThemeDef, context: AnyElement, input: AnyElement) -> Self {
         let metrics = main_view_header_metrics(def, Some(def.search.height));
+        let text = crate::theme::get_theme_snapshot().theme.colors.text.primary;
         Self {
             context: Some(context),
             input: Some(input),
             padding_x: metrics.padding_x,
-            padding_y: metrics.padding_y,
+            padding_top: metrics.padding_y,
+            padding_bottom: def.shell.input_gap_below,
             gap: metrics.gap,
+            rule: Some((
+                def.shell.input_rule_height,
+                (text << 8) | def.shell.divider_alpha,
+                def.shell.input_rule_gap_below,
+            )),
         }
     }
 
@@ -691,8 +702,10 @@ impl MainViewHeaderChrome {
             context: Some(context),
             input: None,
             padding_x: metrics.padding_x,
-            padding_y: metrics.padding_y,
+            padding_top: metrics.padding_y,
+            padding_bottom: metrics.padding_y,
             gap: metrics.gap,
+            rule: None,
         }
     }
 
@@ -704,8 +717,10 @@ impl MainViewHeaderChrome {
             context: None,
             input: None,
             padding_x: 0.0,
-            padding_y: 0.0,
+            padding_top: 0.0,
+            padding_bottom: 0.0,
             gap: 0.0,
+            rule: None,
         }
     }
 }
@@ -734,11 +749,19 @@ pub(crate) fn main_view_header_metrics(
     let context_height = def.slot_line.height_px;
     let input_height = input_height.map(|height| height.max(def.search.height));
     let input_y = shell.header_padding_y + context_height + shell.header_gap;
-    let header_height = shell.header_padding_y * 2.0
+    // With an input, the band under it is the gap, the rule, and the space before the list;
+    // a context-only header closes with the same padding it opened with.
+    let header_height = shell.header_padding_y
         + context_height
         + input_height
-            .map(|height| shell.header_gap + height)
-            .unwrap_or(0.0);
+            .map(|height| {
+                shell.header_gap
+                    + height
+                    + shell.input_gap_below
+                    + shell.input_rule_height
+                    + shell.input_rule_gap_below
+            })
+            .unwrap_or(shell.header_padding_y);
 
     MainViewHeaderMetrics {
         header_height,
@@ -1015,9 +1038,15 @@ pub(crate) fn render_main_view_header_with_context_outset(
     let mut header = div()
         .id(MAIN_VIEW_HEADER_ID)
         .debug_selector(|| MAIN_VIEW_HEADER_ID.to_string())
+        .relative()
         .w_full()
         .px(px(chrome.padding_x))
-        .py(px(chrome.padding_y))
+        .pt(px(chrome.padding_top))
+        .pb(px(chrome.padding_bottom
+            + chrome
+                .rule
+                .map(|(height, _, below)| height + below)
+                .unwrap_or(0.0)))
         .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
         .flex()
         .flex_col()
@@ -1030,6 +1059,19 @@ pub(crate) fn render_main_view_header_with_context_outset(
 
     if let Some(input) = chrome.input {
         header = header.child(input);
+    }
+
+    if let Some((height, color, below)) = chrome.rule {
+        header = header.child(
+            div()
+                .id(MAIN_VIEW_HEADER_DIVIDER_ID)
+                .absolute()
+                .left_0()
+                .right_0()
+                .bottom(px(below))
+                .h(px(height))
+                .bg(rgba(color)),
+        );
     }
 
     header.into_any_element()
@@ -1608,6 +1650,12 @@ pub(crate) fn main_view_input_text_inset_left(def: MainMenuThemeDef) -> f32 {
 
 pub(crate) fn main_view_row_leading_x(def: MainMenuThemeDef) -> f32 {
     def.row.outer_padding_x + def.row.inner_padding_x
+}
+
+/// Distance from the window's left and right sides to the header context
+/// line, section headers, row tiles, and floating footer capsules.
+pub(crate) fn main_view_edge_inset_x(def: MainMenuThemeDef) -> f32 {
+    main_view_row_leading_x(def)
 }
 
 pub(crate) fn main_view_text_column_x(def: MainMenuThemeDef) -> f32 {

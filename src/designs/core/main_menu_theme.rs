@@ -11,7 +11,9 @@ pub const MAIN_MENU_ACTION_BUTTON_RADIUS: f32 = crate::ui::chrome::ACTION_BUTTON
 /// Shared by the footer buttons and the header context chips.
 pub const MAIN_MENU_ACTION_BUTTON_HOVER_BORDER_ALPHA: u32 =
     crate::ui::chrome::ACTION_BUTTON_HOVER_BORDER_ALPHA;
-pub const MAIN_MENU_SECTION_PADDING_X: f32 = 14.0;
+/// Matches the row tile's leading edge (row outer + inner padding) so section
+/// labels, header content, and footer capsules share one window edge.
+pub const MAIN_MENU_SECTION_PADDING_X: f32 = 18.0;
 pub const MAIN_MENU_SECTION_PADDING_TOP: f32 = 12.0;
 pub const MAIN_MENU_SECTION_PADDING_BOTTOM: f32 = 4.0;
 pub const MAIN_MENU_SECTION_GAP: f32 = 6.0;
@@ -78,7 +80,7 @@ pub enum MainMenuRowKind {
 pub struct FooterButtonTheme {
     pub border_alpha: u32,
     pub hover_border_alpha: u32,
-    /// The pressed button's fill. Rows have none; their focus is the icon tile.
+    /// The pressed button's fill.
     pub active_fill_alpha: u32,
 }
 
@@ -88,7 +90,14 @@ pub struct MainMenuShellTokens {
     pub content_inset_bottom: f32,
     pub header_padding_x: f32,
     pub header_padding_y: f32,
+    /// Between the line above the input and the input.
     pub header_gap: f32,
+    /// Between the input and the rule that divides it from the list.
+    pub input_gap_below: f32,
+    /// The rule under the input; drawn with `divider_alpha`, the window's full width.
+    pub input_rule_height: f32,
+    /// Between the rule and the list.
+    pub input_rule_gap_below: f32,
     pub divider_margin_x: f32,
     pub divider_height: f32,
     pub divider_alpha: u32,
@@ -789,20 +798,23 @@ fn base_main_menu_theme_def(
             content_inset_bottom: 16.0 * 0.35,
             header_padding_x: 2.0,
             header_padding_y: 4.0,
-            header_gap: 2.0,
+            header_gap: 8.0,
+            input_gap_below: 14.0,
+            input_rule_height: 1.0,
+            input_rule_gap_below: 2.0,
             divider_margin_x: 16.0,
             divider_height: 0.0,
             divider_alpha: footer.divider_alpha,
         },
         search: MainMenuSearchTokens {
-            height: 26.0,
+            height: 34.0,
             radius: 9.0,
             text_inset_x: crate::ui::chrome::SEARCH_INPUT_TEXT_INSET_X_PX,
             text_inset_y: 0.0,
             surface_alpha: 0x00,
             border_alpha: 0x00,
             font_size: 20.0,
-            font_weight: FontWeight(430.0),
+            font_weight: FontWeight(400.0),
         },
         list: MainMenuListTokens {
             item_height: 44.0,

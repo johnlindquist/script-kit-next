@@ -82,10 +82,10 @@ mod tests {
             other => panic!("{id} is not a length: {other:?}"),
         };
 
-        // Selected row: no fill (sk_one_window::contract::ROW_FILL_ALPHA).
+        // Selected row: primary text at sk_one_window::contract::ROW_FILL_ALPHA (0x20).
         assert_eq!(
             rgba8("resolved.mainMenu.row.selectedBackground"),
-            "#FFFFFF00"
+            "#FFFFFF20"
         );
         // Hover: max(theme hover 0.06*255=15, component 0x12=18) = 0x12.
         assert_eq!(rgba8("resolved.mainMenu.row.hoverBackground"), "#FFFFFF12");
@@ -590,7 +590,7 @@ mod tests {
         let css = render_css(&bundle);
         assert_eq!(css.matches("--sk-main-menu-row-height:").count(), 1);
         assert!(css
-            .contains("--sk-main-menu-row-selected-background: rgb(255 255 255 / 0.0000000000);"));
+            .contains("--sk-main-menu-row-selected-background: rgb(255 255 255 / 0.1254901961);"));
         assert_eq!(
             css.matches("--sk-actions-dialog-row-selected-background:")
                 .count(),

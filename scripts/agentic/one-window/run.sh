@@ -3,7 +3,7 @@
 # stress run in stress/, each captured by scripts/agentic/one-window-frames.ts (hidden Metal windows, GPU
 # readback, owned GPUI key events only) and graded:
 #   check-frames.py   per frame: the input never moves, the 34 pt line above it, a 28 pt header leads every
-#                     list, 44 pt rows with no fill, bar or keycaps, the 24 pt yellow tile, zero popups, and
+#                     list, 44 pt rows with the focused row's fill and no bar or keycaps, the 24 pt yellow tile, zero popups, and
 #                     the ↵ label never returns to an earlier one while the text only grows
 #   check-marks.py    per frame: every word mark the app handed the input is painted as a bar in its
 #                     word's color under exactly its text, the text keeps its own color, and no other

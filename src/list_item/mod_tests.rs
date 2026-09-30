@@ -244,7 +244,7 @@ mod render_section_header_source_tests {
         assert_eq!(launcher.semantic_label.as_ref(), authored);
         assert_eq!(launcher.display_label.as_ref(), "STRASSE · RÉSUMÉ");
         assert_eq!(launcher.label_tier, SectionTextTier::Strong);
-        assert_eq!(launcher.count_tier, SectionTextTier::Muted);
+        assert_eq!(launcher.count_tier, SectionTextTier::Quiet);
         assert_eq!(launcher.icon_tier, SectionTextTier::Muted);
 
         let preserved = resolve_section_header_presentation(
