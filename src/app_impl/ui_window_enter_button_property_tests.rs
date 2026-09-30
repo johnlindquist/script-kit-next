@@ -602,6 +602,21 @@ fn names_never_wait_on_jev() {
 }
 
 #[test]
+fn a_busy_source_never_hides_the_others_that_matched() {
+    use crate::one_window::host::pick_across_sources;
+    // “dash”: two files, then a conversation, then a tab, in the search's order.
+    let sources = ["File", "File", "Agent Chat Conversation", "Browser Tab"];
+    assert_eq!(pick_across_sources(&sources, 3), [0, 2, 3]);
+    // One source fills every row in the search's order.
+    let commands = ["command", "command", "command", "command"];
+    assert_eq!(pick_across_sources(&commands, 3), [0, 1, 2]);
+    assert_eq!(pick_across_sources(&commands, 0), Vec::<usize>::new());
+    // Rows left after one per source go to the next best.
+    let mixed = ["command", "File", "command", "File"];
+    assert_eq!(pick_across_sources(&mixed, 3), [0, 1, 2]);
+}
+
+#[test]
 fn enter_runs_exactly_what_the_button_said() {
     assert_rule(
         "Enter on a name runs that name, and the ↵ button said so",
@@ -1001,3 +1016,6 @@ mod notes;
 
 #[path = "ui_window_enter_button_property_tests_staging.rs"]
 mod staging;
+
+#[path = "ui_window_enter_button_property_tests_chips.rs"]
+mod chips;

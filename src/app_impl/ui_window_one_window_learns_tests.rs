@@ -167,7 +167,10 @@ fn share_my_last_action_lists_copy_link_and_send() {
         wait(cx, 20);
         let (header, rows) = listed(&app, cx);
         let line = app.update(cx, |app, _| {
-            app.one_window.slot_line(app.one_window_clock()).label
+            app.one_window
+                .staged()
+                .map(|s| s.subject.label.clone())
+                .unwrap_or_default()
         });
         (header, rows, line)
     });

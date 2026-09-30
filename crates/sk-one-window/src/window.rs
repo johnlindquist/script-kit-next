@@ -5,6 +5,7 @@
 //! window's height moves, and what waits before it goes. Nothing here reads a clock.
 
 mod chat_work;
+mod chips;
 mod clipboard;
 mod finishing;
 mod keys;
@@ -23,7 +24,8 @@ mod work;
 
 use crate::Ms;
 use crate::contract::{
-    DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_MATCHES, ROW_ARM_MS, words,
+    DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_FALLBACKS_WITH_MATCHES, MAX_MATCHES,
+    ROW_ARM_MS, words,
 };
 use crate::enter::{EnterGuard, EnterTarget};
 use crate::height::{ContentCause, HeightDecision, HeightGovernor};
@@ -31,7 +33,7 @@ use crate::hold::{Held, HeldChange, HeldState, Holds};
 use crate::ledger::{Entry, EntryState, Ledger, NewEntry, Risk, risk_of};
 use crate::list::{Item, ListState};
 use crate::row::{Row, RowAct};
-use crate::slot::{SlotKind, SlotLine, SlotStyle};
+use crate::slot::{ContextChip, SlotKind, SlotLine, SlotStyle, SubjectChip};
 use crate::stage::{
     Staged, Subject, SubjectKind, default_actions, entry_rows, entry_subject, row_subject,
     script_name, share_rows,
@@ -50,6 +52,12 @@ pub struct Config {
     pub auto_save: bool,
     /// Launching an app hides the window.
     pub dismiss_on_launch: bool,
+    /// What you act on is a chip in the input: what's focused is offered at its end while it is
+    /// empty, and Space or ⌘K attach it at its start; ↑ attaches the last run. The line above the
+    /// input only reports what's waiting, news and the last run. In the model's chat the line
+    /// names its latest reply. The prototype's traces were recorded without it: one line shows
+    /// everything, including what's staged or focused.
+    pub subject_chip: bool,
 }
 
 impl Default for Config {
@@ -60,6 +68,7 @@ impl Default for Config {
             stale_holds: true,
             auto_save: true,
             dismiss_on_launch: true,
+            subject_chip: true,
         }
     }
 }
@@ -73,10 +82,18 @@ pub enum Key {
     Down,
     CmdK,
     CmdJ,
+    /// A space on an empty input.
+    Space,
+    /// The receipt of what just happened was clicked: it goes in play, or lets go if it is.
+    Recent,
     CmdZ,
     Tab,
     CmdDigit(u8),
     Right,
+    /// ← with the caret at the input's start: the chip before it is highlighted.
+    Left,
+    /// ⌫ with the caret at the input's start: the highlighted chip, or the last one, goes.
+    Backspace,
     Other(String),
 }
 
@@ -124,6 +141,11 @@ pub enum Event {
     /// The input's words changed because the user typed.
     Text(String),
     Key(Key),
+    /// `@` finished naming something: it becomes a chip after the subject. The host takes its
+    /// token out of the input's words and keeps it at the sentence's end.
+    Attach(ContextChip),
+    /// The input's words were replaced wholesale; what `@` attached goes with them.
+    DropChips,
     /// The user put the highlight on a row (a click or hover), by its place among the rows.
     Select(usize),
     /// Name matches for the list's words (fallback rows marked as such). While a view that takes
@@ -328,6 +350,8 @@ pub struct Snapshot {
     pub slot: SlotLine,
     /// 1 is live; below 1 the line reads as background.
     pub slot_opacity: f32,
+    /// What you act on, as a chip in the input.
+    pub chip: Option<SubjectChip>,
     pub header: String,
     pub view: Option<String>,
     pub crumb: String,
@@ -395,6 +419,13 @@ pub struct OneWindow {
     runs_held: Vec<u64>,
     /// ⇥ made the agent the Owner of what's typed.
     agent_owns: bool,
+    /// The user moved the highlight since the words last changed: ⌘K acts on that row rather
+    /// than on what the input's chip offers.
+    chose: bool,
+    /// What `@` attached, in order, as chips after the subject.
+    context: Vec<ContextChip>,
+    /// The chip ← highlighted, counted from the attached subject; ⌫ removes it.
+    chip_at: Option<usize>,
 }
 
 impl Default for OneWindow {
@@ -442,6 +473,9 @@ impl OneWindow {
             talks: 0,
             runs_held: Vec::new(),
             agent_owns: false,
+            chose: false,
+            context: Vec::new(),
+            chip_at: None,
         }
     }
 
@@ -553,13 +587,20 @@ impl OneWindow {
         };
         self.tick(now, &mut fx);
         let redraws = ev.redraws_list();
+        let applied = fx.len();
         let consumed = self.apply(now, ev, &mut fx);
         if let Some(focus) = focus {
             self.keep_focus(now, focus);
         }
-        if consumed && redraws {
+        // What a run opens (a view, the window going away) decides the height, not its redraw.
+        let ran = fx[applied..]
+            .iter()
+            .any(|e| matches!(e, Effect::Run { .. }));
+        if consumed && redraws && !ran {
             self.list_redrawn(now, &mut fx);
         }
+        self.height
+            .reading(now, !self.in_view() && self.list.reading());
         self.sync_pause(now, &mut fx);
         self.sync_staged(now);
         if self.line_from_view && !self.in_view() {
@@ -581,13 +622,17 @@ impl OneWindow {
                 if self.cause.is_some_and(|(_, at)| at < now) {
                     self.cause = None;
                 }
-                if let Some(d) = self.height.typed(now) {
-                    fx.push(Effect::Height(d));
-                }
+                self.height.typed(now);
                 self.on_text(now, text, true, fx);
                 true
             }
             Event::Key(key) => self.on_key(now, key, fx),
+            Event::Attach(chip) => self.attach(chip),
+            Event::DropChips => {
+                let had = !self.context.is_empty();
+                self.drop_chips();
+                had
+            }
             Event::Select(pos) => self.on_select(pos),
             Event::Names(rows) => {
                 if self.views.top().is_some_and(|top| top.takes_input) {

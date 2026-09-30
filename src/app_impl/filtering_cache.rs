@@ -2287,6 +2287,8 @@ impl ScriptListApp {
                                 self.spine_file_search_loading,
                                 &self.spine_file_search_results,
                                 &recent,
+                                self.spine_file_recent_seed_for(rich_source),
+                                |key| self.frecency_store.get_score(key),
                             )
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Project => {
@@ -2314,6 +2316,8 @@ impl ScriptListApp {
                                 self.spine_file_search_loading,
                                 &self.spine_file_search_results,
                                 &recent,
+                                self.spine_file_recent_seed_for(rich_source),
+                                |key| self.frecency_store.get_score(key),
                             )
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Clipboard => {
@@ -2449,6 +2453,16 @@ impl ScriptListApp {
                         }
                     }
 
+                    // File rows arrive asynchronously, and the builder already
+                    // orders them so rows seen before Spotlight answers stay on
+                    // top. Pinning displayed rows would keep the loading header
+                    // and "Open full File Search" above the late matches and
+                    // push every Spotlight match under a "More results" header.
+                    let keep_displayed_rows = !matches!(
+                        rich_source,
+                        crate::spine::catalog_subsearch::ContextSubsearchSource::File
+                            | crate::spine::catalog_subsearch::ContextSubsearchSource::Project
+                    );
                     self.main_menu_result_caches.store_grouped_results(
                         rich_cache_key,
                         grouped_items,
@@ -2457,7 +2471,7 @@ impl ScriptListApp {
                         query_stamp,
                         computed_filter_text,
                         Default::default(),
-                        true,
+                        keep_displayed_rows,
                     )?;
                     return Ok(true);
                 }

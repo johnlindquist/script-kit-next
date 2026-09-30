@@ -3,6 +3,16 @@
 use super::*;
 
 impl OneWindow {
+    /// Over a staged subject's actions. Once it is a chip the input's placeholder asks for the
+    /// words, so the list only offers the other way.
+    pub(super) fn staged_head(&self, head: &str) -> String {
+        if self.cfg.subject_chip && head == words::STAGED {
+            words::OR_PICK_ONE.to_string()
+        } else {
+            head.to_string()
+        }
+    }
+
     pub(super) fn stage(
         &mut self,
         now: Ms,
@@ -23,7 +33,7 @@ impl OneWindow {
         self.staged = Some(Staged {
             subject,
             rows,
-            head: head.to_string(),
+            head: self.staged_head(head),
             waiting_for_rows: waiting,
             entry_state: entry.map(|e| e.state),
         });

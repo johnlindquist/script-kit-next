@@ -4,11 +4,12 @@
 //! the comparison is per kind of output, in order, after dropping consecutive repeats. What the
 //! window shows (the line above the input, the first header, what ↵ says, the list) is compared as
 //! each page turn left it; what happened (what ran, ignored Enters, held messages) is compared
-//! event by event. Heights are compared as the window showed them each turn.
+//! event by event. Heights are compared by where the window rests after each pause and how often
+//! it moved before it.
 
 use std::path::{Path, PathBuf};
 
-use sk_one_window::contract::HOLD_TICK_MS;
+use sk_one_window::contract::{HOLD_TICK_MS, MIN_SHRINK_PX, READING_WAIT_MS};
 use sk_one_window::trace::{Ev, EvLine, Line, Observer, Out, OutLine, events_of, parse_line};
 use sk_one_window::window::{Config, Effect, Event, OneWindow, Outcome};
 use sk_one_window::{Row, Subject};
@@ -23,12 +24,23 @@ fn traces() -> Vec<PathBuf> {
     files
 }
 
+/// The rules the prototype's page recorded these traces with: its line kept the last run until
+/// something else ran and never named the chat's reply.
+fn prototype() -> Config {
+    Config {
+        subject_chip: false,
+        ..Config::default()
+    }
+}
+
 #[derive(Default)]
 struct Replay {
     /// What the page showed, each with the turn that showed it.
     expected: Vec<(OutLine, usize)>,
     got: Vec<OutLine>,
     turns: Vec<Turn>,
+    /// The last time the trace records.
+    end: u64,
     /// Lines this replay can't read, by their `ev`/`out` kind.
     unknown: Vec<String>,
 }
@@ -48,9 +60,10 @@ struct Player {
     listed: bool,
     outcomes: Vec<Outcome>,
     turns: Vec<Turn>,
-    /// The last height the page measured, and whether this turn changed the view or measured.
+    /// The last height the page measured, whether this turn changed the view or Jev's rows (the
+    /// host measures after both), and whether it measured.
     px: Option<f32>,
-    turn_view: bool,
+    turn_changed: bool,
     turn_content: bool,
 }
 
@@ -74,7 +87,7 @@ impl Player {
             outcomes: Vec::new(),
             turns: Vec::new(),
             px: None,
-            turn_view: false,
+            turn_changed: false,
             turn_content: false,
         }
     }
@@ -94,11 +107,11 @@ impl Player {
     fn close_turn(&mut self) {
         // The host measures after every change; the recorder only writes a height that changed.
         if let (Some(t), Some(px), true, false) =
-            (self.turn, self.px, self.turn_view, self.turn_content)
+            (self.turn, self.px, self.turn_changed, self.turn_content)
         {
             self.feed(t, Event::Content { px });
         }
-        self.turn_view = false;
+        self.turn_changed = false;
         self.turn_content = false;
         if let Some(t) = self.turn.take() {
             let outcomes = std::mem::take(&mut self.outcomes);
@@ -136,8 +149,8 @@ impl Player {
         if matches!(line.ev, Ev::Names { .. }) {
             self.listed = true;
         }
-        let (view, px) = match &line.ev {
-            Ev::View { .. } => (true, None),
+        let (changed, px) = match &line.ev {
+            Ev::View { .. } | Ev::Jev { .. } => (true, None),
             Ev::Content { px } => (false, Some(*px)),
             _ => (false, None),
         };
@@ -151,7 +164,7 @@ impl Player {
                 tick: false,
             });
         }
-        self.turn_view |= view;
+        self.turn_changed |= changed;
         if px.is_some() {
             self.px = px;
             self.turn_content = true;
@@ -200,7 +213,7 @@ fn replay(path: &Path) -> Replay {
                 {
                     let cfg = Config {
                         hold_ms: hold_ms.unwrap_or(Config::default().hold_ms),
-                        ..Config::default()
+                        ..prototype()
                     };
                     let history = history
                         .iter()
@@ -210,7 +223,7 @@ fn replay(path: &Path) -> Replay {
                     player = Some(Player::new(OneWindow::new(cfg).with_history(history)));
                 }
                 player
-                    .get_or_insert_with(|| Player::new(OneWindow::default()))
+                    .get_or_insert_with(|| Player::new(OneWindow::new(prototype())))
                     .input(ev);
             }
         }
@@ -223,6 +236,7 @@ fn replay(path: &Path) -> Replay {
         r.got = p.obs.drain();
         r.turns = std::mem::take(&mut p.turns);
     }
+    r.end = end;
     // An output is written after the input that caused it, so it belongs to the last input turn
     // before it in the file, or to a timer turn that followed that input and began before it.
     for (out, turn) in &mut r.expected {
@@ -345,33 +359,92 @@ fn settled(expected: &[(OutLine, usize)], k: &str) -> Vec<String> {
     seq(keep.map(|(_, (l, _))| l), k)
 }
 
-/// Heights as the window showed them: the last decision of each turn, since nothing paints between
-/// decisions made in the same turn (a key's hold and the grow its longer list asks for paint once, as
-/// the grow), without grows to the height it already had.
-fn heights<'a, G: PartialEq>(lines: impl Iterator<Item = (&'a OutLine, G)>) -> Vec<String> {
-    let mut shown: Vec<(G, &str, f32)> = Vec::new();
+/// How long after the last input both windows have settled: the longest wait is Jev's reading.
+const SETTLE_MS: u64 = READING_WAIT_MS + HOLD_TICK_MS;
+
+/// Where a window moved, as it showed it: the last grow or shrink of each turn (nothing paints
+/// between decisions made in the same turn), without holds, which stay where the window is, or
+/// moves of less than 2 px.
+fn moves<'a, G: PartialEq>(lines: impl Iterator<Item = (&'a OutLine, G)>) -> Vec<(u64, f32)> {
+    let mut turns: Vec<(G, u64, f32)> = Vec::new();
     for (l, group) in lines {
         let Out::Height { px, mode } = &l.out else {
             continue;
         };
-        if shown.last().is_some_and(|(g, ..)| *g == group) {
-            shown.pop();
-        }
-        shown.push((group, mode, *px));
-    }
-    let mut out: Vec<String> = Vec::new();
-    let mut at: Option<f32> = None;
-    for (_, mode, px) in shown {
-        let still = at.is_some_and(|was| (was - px).abs() < 2.0);
-        at = Some(px);
-        if mode == "grow" && still {
+        if mode == "hold" {
             continue;
         }
-        if out.last().map(String::as_str) != Some(mode) {
-            out.push(mode.to_string());
+        if turns.last().is_some_and(|(g, ..)| *g == group) {
+            turns.pop();
+        }
+        turns.push((group, l.t, *px));
+    }
+    let mut out: Vec<(u64, f32)> = Vec::new();
+    for (_, t, px) in turns {
+        if out.last().is_none_or(|(_, was)| (was - px).abs() >= 2.0) {
+            out.push((t, px));
         }
     }
     out
+}
+
+/// The app's height follows its own rules (it snaps instead of animating, leaves less than two
+/// rows of space, and waits for Jev), so it is compared with the page by outcome: it never moves
+/// more often than the page between two pauses, and at each pause it rests where the page did, up
+/// to [`MIN_SHRINK_PX`] taller.
+fn heights_differ(r: &Replay) -> Option<String> {
+    let want = moves(r.expected.iter().map(|(l, turn)| (l, *turn)));
+    let got = moves(r.got.iter().map(|l| (l, l.t)));
+    let inputs: Vec<u64> = r.turns.iter().filter(|t| !t.tick).map(|t| t.at).collect();
+    let mut pauses: Vec<u64> = inputs
+        .windows(2)
+        .filter(|w| w[1] - w[0] > SETTLE_MS)
+        .map(|w| w[0] + SETTLE_MS)
+        .collect();
+    pauses.extend(
+        inputs
+            .last()
+            .map(|at| at + SETTLE_MS)
+            .filter(|t| *t <= r.end),
+    );
+    let rests = |moves: &[(u64, f32)], t: u64| {
+        moves
+            .iter()
+            .take_while(|(at, _)| *at <= t)
+            .last()
+            .map(|(_, px)| *px)
+    };
+    let count = |moves: &[(u64, f32)], from: u64, to: u64| {
+        moves.iter().filter(|(t, _)| *t > from && *t <= to).count()
+    };
+    let mut from = 0;
+    for t in pauses.into_iter().chain([u64::MAX]) {
+        let (page, app) = (count(&want, from, t), count(&got, from, t));
+        if app > page {
+            return Some(format!(
+                "moved {app} times after {from} ms where the page moved {page}\n  want: {:?}\n  got:  {:?}",
+                want.iter()
+                    .filter(|(at, _)| *at > from && *at <= t)
+                    .collect::<Vec<_>>(),
+                got.iter()
+                    .filter(|(at, _)| *at > from && *at <= t)
+                    .collect::<Vec<_>>(),
+            ));
+        }
+        // A trace can end before either window settles; only its pauses show where they rest.
+        let rested = (t != u64::MAX)
+            .then(|| rests(&want, t).zip(rests(&got, t)))
+            .flatten();
+        if let Some((page, app)) = rested {
+            if app < page - 2.0 || app >= page + MIN_SHRINK_PX {
+                return Some(format!(
+                    "rests at {app} px at {t} ms where the page rests at {page} px"
+                ));
+            }
+        }
+        from = t;
+    }
+    None
 }
 
 /// Differences these traces can't settle, and why. Each one must still differ: once a trace
@@ -429,49 +502,24 @@ const KNOWN: &[(&str, &str, &str)] = &[
         "dictation records what it typed or set (win.record) and no input records it",
     ),
     (
-        "s02-before-you-type",
-        "height",
-        "the page's window follows a shorter strip or list through CSS auto height without \
-         calling resize(), so that instant shrink leaves no line; the reducer animates it",
-    ),
-    (
         "s05-no-menus",
         "height",
         "the page's window follows a shorter strip or list through CSS auto height without \
-         calling resize(), so that instant shrink leaves no line; the reducer animates it",
-    ),
-    (
-        "s08-answers",
-        "height",
-        "the page clears the input when it goes home, its input listener counts that as typing, \
-         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
-         once",
-    ),
-    (
-        "s09-model",
-        "height",
-        "the page clears the input when it goes home, its input listener counts that as typing, \
-         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
-         once",
+         calling resize(), so that instant shrink leaves no line; the reducer shrinks it at once",
     ),
     (
         "s12-take-it-back",
         "height",
-        "the page's window follows a shorter strip or list through CSS auto height without \
-         calling resize(), so that instant shrink leaves no line; the reducer animates it",
-    ),
-    (
-        "s13-history",
-        "height",
-        "the page clears the input when it goes home, its input listener counts that as typing, \
-         and it holds 300 ms before shrinking to the list that arrives; the reducer shrinks at \
-         once",
+        "the steps view is still loading when its 300 ms hold ends: the reducer shrinks to its \
+         first measure (307) and grows back as the rest arrives (360, 386); the page records no \
+         move until the view settles",
     ),
     (
         "s19-fast-hands",
         "height",
-        "the page's window follows a shorter strip or list through CSS auto height without \
-         calling resize(), so that instant shrink leaves no line; the reducer animates it",
+        "the steps view is still loading when its 300 ms hold ends: the reducer shrinks to its \
+         first measure (307) and grows back as the rest arrives (360, 386); the page records no \
+         move until the view settles",
     ),
     (
         "keys-s18-steady",
@@ -506,40 +554,39 @@ fn golden_traces_replay() {
         eprintln!("no traces in fixtures/traces yet");
         return;
     }
-    let strict = [
-        "slot", "header", "run", "ignored", "held", "enter", "list", "height",
-    ];
+    let strict = ["slot", "header", "run", "ignored", "held", "enter", "list"];
     let mut failures = Vec::new();
     let mut known_seen = Vec::new();
     for path in &files {
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
         let r = replay(path);
+        let mut differences: Vec<(&str, String)> = Vec::new();
         for k in &strict {
-            let (want, got) = if *k == "height" {
-                (
-                    heights(r.expected.iter().map(|(l, turn)| (l, *turn))),
-                    heights(r.got.iter().map(|l| (l, l.t))),
-                )
-            } else {
-                (settled(&r.expected, k), seq(r.got.iter(), k))
-            };
+            let (want, got) = (settled(&r.expected, k), seq(r.got.iter(), k));
             if want != got {
                 let first = want
                     .iter()
                     .zip(&got)
                     .position(|(a, b)| a != b)
                     .unwrap_or(want.len().min(got.len()));
-                let msg = format!(
-                    "{name} {k}: first difference at #{first}\n  want: {:?}\n  got:  {:?}",
-                    want.get(first..(first + 4).min(want.len())).unwrap_or(&[]),
-                    got.get(first..(first + 4).min(got.len())).unwrap_or(&[]),
-                );
-                if let Some(known) = KNOWN.iter().find(|(t, kk, _)| *t == name && kk == k) {
-                    eprintln!("(known: {}) {msg}", known.2);
-                    known_seen.push(known);
-                } else {
-                    failures.push(msg);
-                }
+                differences.push((
+                    k,
+                    format!(
+                        "first difference at #{first}\n  want: {:?}\n  got:  {:?}",
+                        want.get(first..(first + 4).min(want.len())).unwrap_or(&[]),
+                        got.get(first..(first + 4).min(got.len())).unwrap_or(&[]),
+                    ),
+                ));
+            }
+        }
+        differences.extend(heights_differ(&r).map(|msg| ("height", msg)));
+        for (k, msg) in differences {
+            let msg = format!("{name} {k}: {msg}");
+            if let Some(known) = KNOWN.iter().find(|(t, kk, _)| *t == name && *kk == k) {
+                eprintln!("(known: {}) {msg}", known.2);
+                known_seen.push(known);
+            } else {
+                failures.push(msg);
             }
         }
         if !r.unknown.is_empty() {

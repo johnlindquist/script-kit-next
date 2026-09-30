@@ -46,7 +46,7 @@ pub use ledger::{Entry, EntryState, Risk};
 pub use lessons::{Lesson, Lessons};
 pub use list::Item;
 pub use row::{Row, RowAct};
-pub use slot::{SlotKind, SlotLine, SlotStyle};
+pub use slot::{ContextChip, SlotKind, SlotLine, SlotStyle, SubjectChip};
 pub use stage::{Subject, SubjectKind};
 pub use talk::{Dest, Reading, TalkEvent};
 pub use window::{

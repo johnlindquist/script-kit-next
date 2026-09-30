@@ -255,6 +255,11 @@ impl OneWindow {
     /// Typing in a work view: new words for the steps read them again; the chat and agent say
     /// what Enter will send.
     pub(super) fn work_text(&mut self, now: Ms, fx: &mut Vec<Effect>) {
+        if self.views.top().is_some_and(|f| f.name == chat::VIEW) {
+            if let Some(c) = self.work.chat.as_mut() {
+                c.filter(&self.text);
+            }
+        }
         if self.views.top().is_some_and(|f| f.name == past_chats::VIEW) {
             if let Some(p) = self.work.past.as_mut() {
                 p.filter(&self.text);
@@ -324,11 +329,19 @@ impl OneWindow {
         let pressed = match key {
             Key::Up | Key::Down => return c.move_sel(key == Key::Down),
             Key::CmdK => {
+                c.filter(&self.text);
                 c.toggle_acting();
                 return true;
             }
             Key::CmdDigit(2) => c.say_no(),
-            Key::Enter => c.press_enter(&self.text),
+            Key::Enter => {
+                let acting = c.acting.is_some();
+                let pressed = c.press_enter(&self.text);
+                if acting && !matches!(pressed, chat::ChatKey::Ask { .. }) {
+                    self.clear_view_input(now, fx);
+                }
+                pressed
+            }
             _ => return false,
         };
         self.chat_pressed(now, pressed, fx)
@@ -701,7 +714,7 @@ mod tests {
         }));
         assert_eq!(win.views().crumb(), "Steps");
         assert_eq!(win.text(), S10);
-        let line = win.slot_line(2_000);
+        let line = win.recent_line(2_000).unwrap();
         assert_eq!(
             (line.label.as_str(), line.title.as_str()),
             ("Last", "Google Calendar connected")
@@ -721,7 +734,7 @@ mod tests {
             work(&mut win, 3_100 + i as Ms, WorkEvent::StepDone { index: i });
         }
         assert!(!win.in_view());
-        let line = win.slot_line(3_200);
+        let line = win.recent_line(3_200).unwrap();
         assert!(line.title.starts_with("Did 3 steps: move standup"));
         assert!(
             line.sub.contains("saved as"),
@@ -791,7 +804,7 @@ mod tests {
         ));
         assert!(!win.in_view());
         assert_eq!(
-            win.slot_line(1_100).title,
+            win.recent_line(1_100).unwrap().title,
             "Copied a message you can paste into Google Calendar"
         );
     }

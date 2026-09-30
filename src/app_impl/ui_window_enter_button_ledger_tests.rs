@@ -17,6 +17,16 @@ fn line(
     })
 }
 
+/// What the input's chip carries once attached.
+fn attached(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext) -> Option<String> {
+    app.update(cx, |app, _| {
+        app.one_window
+            .chip()
+            .filter(|chip| chip.attached)
+            .map(|chip| chip.title)
+    })
+}
+
 /// The drawn list's headers and row names, in order.
 fn drawn(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext) -> Vec<String> {
     app.update(cx, |app, _| {
@@ -124,7 +134,7 @@ fn what_ran_today_opens_history_and_enter_acts_on_the_entry() {
         let list = drawn(&app, cx);
         key(&app, cx, Key::Enter);
         wait(cx, 20);
-        (list, line(&app, cx))
+        (list, (line(&app, cx), attached(&app, cx)))
     });
     assert_eq!(
         list.first().map(|h| h.trim_start_matches("# ")),
@@ -135,9 +145,11 @@ fn what_ran_today_opens_history_and_enter_acts_on_the_entry() {
         Some("Copied the build log"),
         "{list:?}"
     );
-    assert_eq!(
-        (staged.kind, staged.title.as_str()),
-        (SlotKind::Staged, "Copied the build log")
+    let (line, chip) = staged;
+    assert_eq!(chip.as_deref(), Some("Copied the build log"));
+    assert!(
+        line.lit && line.title == "Copied the build log",
+        "the line lights the run it came from"
     );
 }
 
@@ -151,15 +163,14 @@ fn up_on_an_empty_input_stages_the_last_run_and_lists_what_to_do_with_it() {
         wait(cx, ENTER_GUARD_MS + 20);
         key(&app, cx, Key::Up);
         wait(cx, 20);
-        (line(&app, cx), drawn(&app, cx))
+        ((line(&app, cx), attached(&app, cx)), drawn(&app, cx))
     });
-    assert_eq!(
-        (staged.kind, staged.title.as_str()),
-        (SlotKind::Staged, "Copied the build log")
-    );
+    let (line, chip) = staged;
+    assert_eq!(chip.as_deref(), Some("Copied the build log"));
+    assert!(line.lit && line.title == "Copied the build log");
     assert_eq!(
         list.first().map(|h| h.trim_start_matches("# ")),
-        Some(words::STAGED),
+        Some(words::OR_PICK_ONE),
         "{list:?}"
     );
     assert!(list.iter().any(|row| row == "Run it again"), "{list:?}");

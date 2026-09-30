@@ -102,7 +102,7 @@ mod tests {
     fn a_notice_is_the_last_line_now_and_after_the_window_comes_back() {
         let mut w = OneWindow::default();
         w.handle(0, Event::Notice(Notice::new("check", "Copied")));
-        let line = w.slot_line(0);
+        let line = w.recent_line(0).unwrap();
         assert_eq!(
             (line.kind, line.title.as_str()),
             (SlotKind::Recent, "Copied")
@@ -112,7 +112,7 @@ mod tests {
         w.handle(10, Event::Dismissed);
         w.handle(20, Event::Notice(Notice::new("info", "Backup finished")));
         w.handle(9_000, Event::Summon);
-        let line = w.slot_line(9_000);
+        let line = w.recent_line(9_000).unwrap();
         assert_eq!(line.label, words::LAST);
         assert_eq!(line.title, "Backup finished");
     }
@@ -125,7 +125,7 @@ mod tests {
             Event::Irreversible(Irreversible::new("trash", "Empty Trash")),
         );
         w.handle(100, Event::Notice(Notice::new("check", "Copied")));
-        let line = w.slot_line(100);
+        let line = w.recent_line(100).unwrap();
         assert_eq!(line.kind, SlotKind::Holding);
         assert_eq!(line.title, "Empty Trash");
         assert_eq!(line.label, ledger_words::runs_in(8));
@@ -143,7 +143,7 @@ mod tests {
         assert!(held_ops(&out.effects).is_empty());
         let out = w.handle(MESSAGE_HOLD_MS, Event::Tick);
         assert_eq!(held_ops(&out.effects), vec![HeldOp::Sent]);
-        let line = w.slot_line(MESSAGE_HOLD_MS);
+        let line = w.recent_line(MESSAGE_HOLD_MS).unwrap();
         assert_eq!(line.title, "Empty Trash");
         assert!(line.sub.contains(ledger_words::RAN), "{:?}", line.sub);
         let out = w.handle(MESSAGE_HOLD_MS * 3, Event::Tick);
@@ -159,7 +159,10 @@ mod tests {
         );
         let out = w.handle(ENTER_GUARD_MS, Event::Key(Key::CmdZ));
         assert_eq!(held_ops(&out.effects), vec![HeldOp::Unsent]);
-        assert_eq!(w.slot_line(ENTER_GUARD_MS).title, "Didn't run: Empty Trash");
+        assert_eq!(
+            w.recent_line(ENTER_GUARD_MS).unwrap().title,
+            "Didn't run: Empty Trash"
+        );
         let out = w.handle(MESSAGE_HOLD_MS * 2, Event::Tick);
         assert!(
             held_ops(&out.effects).is_empty(),
@@ -178,7 +181,7 @@ mod tests {
             Event::Irreversible(Irreversible::new("trash", "Empty Trash")),
         );
         assert!(w.can_take_back());
-        assert_eq!(w.slot_line(10).icon, "trash");
+        assert_eq!(w.recent_line(10).unwrap().icon, "trash");
         w.handle(20, Event::Text("x".into()));
         assert!(!w.can_take_back(), "with words typed ⌘Z edits them");
     }
@@ -191,7 +194,7 @@ mod tests {
             Event::Irreversible(Irreversible::new("trash", "Empty Trash")),
         );
         w.handle(1_000, Event::Text("x".into()));
-        assert_eq!(w.slot_line(1_000).label, words::PAUSED);
+        assert_eq!(w.recent_line(1_000).unwrap().label, words::PAUSED);
         let out = w.handle(30_000, Event::Tick);
         assert!(held_ops(&out.effects).is_empty());
     }
@@ -208,7 +211,7 @@ mod tests {
                 ..Done::default()
             }),
         );
-        let line = w.slot_line(0);
+        let line = w.recent_line(0).unwrap();
         assert_eq!(
             line.hints[0],
             ("⌘Z".to_string(), ledger_words::UNDO.to_string())
@@ -224,7 +227,7 @@ mod tests {
             .collect();
         assert_eq!(undone, vec![1]);
         assert_eq!(
-            w.slot_line(ENTER_GUARD_MS).title,
+            w.recent_line(ENTER_GUARD_MS).unwrap().title,
             "Undid · Moved Notes.md to Trash"
         );
         let out = w.handle(ENTER_GUARD_MS * 3, Event::Key(Key::CmdZ));
@@ -260,13 +263,12 @@ mod tests {
             .clone();
         let out = w.handle(1_020, Event::Stage(entry_subject(&entry, words::ACTING_ON)));
         assert!(!out.effects.iter().any(|e| matches!(e, Effect::Run { .. })));
-        let line = w.slot_line(1_020);
-        assert_eq!(
-            (line.kind, line.title.as_str()),
-            (SlotKind::Staged, "Open Linear")
-        );
+        let line = w.recent_line(1_020).unwrap();
+        assert_eq!(line.title, "Open Linear");
+        assert!(line.lit, "the receipt it came from is what's in play");
         assert!(!w.in_view());
         assert!(w.text().is_empty());
-        assert_eq!(w.snapshot(1_020).header, words::STAGED);
+        assert_eq!(w.snapshot(1_020).header, words::OR_PICK_ONE);
+        assert_eq!(w.chip().map(|c| c.title), Some("Open Linear".to_string()));
     }
 }

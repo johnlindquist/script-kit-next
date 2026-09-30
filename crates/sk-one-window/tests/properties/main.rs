@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use proptest::prelude::*;
 use sk_one_window::contract::words;
-use sk_one_window::contract::{ENTER_GUARD_MS, SHRINK_HOLD_MS};
+use sk_one_window::contract::{ENTER_GUARD_MS, READING_WAIT_MS, SHRINK_HOLD_MS};
 use sk_one_window::list::Item;
 use sk_one_window::notice::{Irreversible, Notice};
 use sk_one_window::window::{
@@ -261,6 +261,12 @@ impl Run {
                             "shrank {}ms after a key",
                             now - at
                         );
+                        let reading = !self.win.in_view() && self.win.list().reading();
+                        assert!(
+                            went || !reading || now >= at + READING_WAIT_MS,
+                            "shrank {}ms after a key while Jev was still reading",
+                            now - at
+                        );
                     }
                 }
                 Effect::Held {
@@ -291,6 +297,13 @@ impl Run {
                 _ => {}
             }
         }
+        let height = self.win.height();
+        assert!(
+            height.displayed() + 2.0 >= height.natural(),
+            "the window ({}) is shorter than what it shows ({})",
+            height.displayed(),
+            height.natural()
+        );
         let snap = self.win.snapshot(now);
         if snap.view.is_none() {
             assert!(
@@ -312,14 +325,25 @@ impl Run {
             snap.view
         );
         assert!(
-            !snap.slot.label.is_empty(),
-            "the line above the input always says something"
+            !snap.slot.label.is_empty() || self.win.ledger().last().is_none(),
+            "once anything has happened, the line above the input says something"
         );
-        if snap.view.is_none() && self.win.staged().is_none() && self.win.holds().live_count() > 0 {
+        if snap.view.is_none() && self.win.holds().live_count() > 0 {
             assert_eq!(
                 snap.slot.kind,
                 SlotKind::Holding,
                 "nothing covers something waiting to go"
+            );
+        }
+        if let Some(chip) = &snap.chip {
+            assert_eq!(
+                chip.attached,
+                self.win.staged().is_some(),
+                "the chip is attached exactly while something is staged"
+            );
+            assert!(
+                chip.attached || snap.text.is_empty(),
+                "what's focused is only offered while the input is empty"
             );
         }
     }

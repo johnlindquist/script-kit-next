@@ -1,0 +1,13 @@
+[{"name": "focus-ghostty", "control": {"family": "oneWindow", "operation": "focusWindow", "app": "Ghostty", "title": "~/dev/script-kit-gpui — zsh"}, "waitMs": 400},
+ {"name": "typed-words", "type": "summarize ", "waitMs": 400},
+ {"name": "selection-chip", "append": "@selection ", "waitMs": 600},
+ {"name": "clip-typed", "append": "@clip", "waitMs": 600},
+ {"name": "tab-completes-chip", "key": "tab", "waitMs": 600},
+ {"name": "caret-to-start", "key": "cmd-left", "waitMs": 200},
+ {"name": "left-highlights-last", "key": "left", "waitMs": 200},
+ {"name": "right-back-to-words", "key": "right", "waitMs": 200},
+ {"name": "left-highlights-last-again", "key": "left", "waitMs": 200},
+ {"name": "left-again-first", "key": "left", "waitMs": 200},
+ {"name": "backspace-deletes-highlighted", "key": "backspace", "waitMs": 400},
+ {"name": "backspace-at-start", "key": "backspace", "waitMs": 400},
+ {"name": "esc-clears", "key": "escape", "waitMs": 300}]

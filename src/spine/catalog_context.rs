@@ -313,6 +313,31 @@ fn mention_slug(mention: &str) -> &str {
     mention.trim_start_matches('@')
 }
 
+/// How a built-in `@` context reads as a chip in the main input: its label and icon, the same
+/// ones its completion row shows.
+#[allow(dead_code)] // The binary's input chips read it.
+pub(crate) fn builtin_context_chip(token: &str) -> Option<(&'static str, &'static str)> {
+    let kind = ContextAttachmentKind::from_mention_line(token)?;
+    Some((kind.spec().label, icon_for_context_kind(kind)))
+}
+
+/// The icon for a chip that a `@source:` search attached (`@file:notes.md`, `@notes:groceries`).
+#[allow(dead_code)] // The binary's input chips read it.
+pub(crate) fn subsearch_chip_icon(token: &str) -> &'static str {
+    let prefix = token
+        .trim_start_matches('@')
+        .split(':')
+        .next()
+        .unwrap_or_default();
+    match prefix {
+        "file" | "project" => "file",
+        _ => CONTEXT_SUBSEARCH_SPECS
+            .iter()
+            .find(|spec| spec.prefix == prefix)
+            .map_or("paperclip", |spec| spec.icon),
+    }
+}
+
 fn icon_for_context_kind(kind: ContextAttachmentKind) -> &'static str {
     match kind {
         ContextAttachmentKind::Current => "scan-text",

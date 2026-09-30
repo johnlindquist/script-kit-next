@@ -1,21 +1,22 @@
-//! The line above the input.
+//! The line above the input, and the subject chip inside the input.
 //!
-//! It is always there and always one height. Its words swap in place; only its dimming eases.
-//! What it says, first match wins: an override a view set, the staged subject ("Acting on"),
-//! the newest message waiting to go ("Sending in 8s"), the last thing that ran ("Last", dimmed),
-//! and before anything ran, what "this" means ("Focused", dimmed). How dim it is depends on the
-//! window too, so the window decides it (`OneWindow::slot_style`).
+//! The line is always there and always one height. Its words swap in place; only its dimming
+//! eases. It reports: a message waiting to go, what a view or a notice says, and otherwise the
+//! last thing that ran. What you act on is a chip in the input: what's focused is offered at the
+//! input's end while it is empty, and what Space, ⌘K or ↑ staged sits at its start. How dim the
+//! line is depends on the window too, so the window decides it (`OneWindow::slot_style`). The
+//! prototype's traces show all of it in the one line.
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SlotKind {
-    /// Nothing has run yet: what `⌘K` would act on.
+    /// What Space would put in the line: the front app, its selection, the chat's latest reply.
     Focused,
     /// The last thing that ran.
     Recent,
-    /// A subject put there by `⌘K` or `↑`.
+    /// A subject put there by Space, `⌘K` or `↑`.
     Staged,
     /// A message waiting to go.
     Holding,
@@ -38,6 +39,58 @@ pub struct SlotLine {
     /// A held message's progress toward sending, 0..=1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<f32>,
+    /// It is what's in play: Space, ⌘K or ↑ staged it and Esc lets it go.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lit: bool,
+}
+
+/// What you act on, as a chip in the input.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubjectChip {
+    pub title: String,
+    pub icon: String,
+    /// Solid at the input's start once staged; dashed at its end while only offered.
+    pub attached: bool,
+    /// The key on the chip: `space` attaches an offer, `esc` lets go of what's attached.
+    pub key: String,
+    /// What the key does, while Space is still being learned ("use"); otherwise empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub word: String,
+}
+
+impl SubjectChip {
+    /// A front window reads as its app ("Ghostty"), everything else as its title.
+    pub fn of(s: &crate::stage::Subject, attached: bool) -> Self {
+        let title = if s.kind == crate::stage::SubjectKind::Window && !s.sub.is_empty() {
+            s.sub.clone()
+        } else {
+            s.title.clone()
+        };
+        Self {
+            title,
+            icon: match (s.icon.is_empty(), attached) {
+                (false, _) => s.icon.clone(),
+                (true, true) => "builtin".to_string(),
+                (true, false) => "window".to_string(),
+            },
+            attached,
+            word: String::new(),
+            key: if attached { "esc" } else { "space" }.to_string(),
+        }
+    }
+}
+
+/// Something `@` attached to what's said ("@selection", "@file:notes.md"), as a chip in the
+/// input after the subject. The input shows the chip; the sentence still carries its token, so
+/// everything that reads the words resolves it the way it resolves the typed token.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextChip {
+    /// The token the sentence carries: `@selection`, `@clipboard`, `@file:notes.md`.
+    pub token: String,
+    pub title: String,
+    pub icon: String,
 }
 
 impl SlotLine {
@@ -50,6 +103,7 @@ impl SlotLine {
             sub: String::new(),
             hints: Vec::new(),
             progress: None,
+            lit: false,
         }
     }
 
@@ -65,6 +119,11 @@ impl SlotLine {
 
     pub fn with_hint(mut self, key: impl Into<String>, label: impl Into<String>) -> Self {
         self.hints.push((key.into(), label.into()));
+        self
+    }
+
+    pub fn lit(mut self, lit: bool) -> Self {
+        self.lit = lit;
         self
     }
 

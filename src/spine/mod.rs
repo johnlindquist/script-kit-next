@@ -21,6 +21,8 @@ pub(crate) mod prompt_plan;
 pub(crate) mod text_preview;
 pub mod types;
 
+#[allow(unused_imports)] // The binary's input chips read them.
+pub(crate) use catalog_context::{builtin_context_chip, subsearch_chip_icon};
 #[allow(unused_imports)]
 pub use input_spans::*;
 pub use list::*;

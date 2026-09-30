@@ -151,6 +151,10 @@ impl ScriptListApp {
                         logging::log("STDIN", "SimulateKey: recorded by the shortcut view");
                         return DispatchOutcome::success();
                     }
+                    if view.one_window_chip_key(&keystroke.key, &keystroke.modifiers, window, ctx) {
+                        logging::log("STDIN", "SimulateKey: taken by the input's chips");
+                        return DispatchOutcome::success();
+                    }
                     if view.consume_return_to_script_list_enter_guard(
                         &key_lower,
                         &gpui::Modifiers {

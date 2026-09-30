@@ -114,6 +114,9 @@ pub mod slot_opacity {
 /// Words the window shows. Pages and the app use these and no others.
 pub mod words {
     pub const FOCUSED: &str = "Focused";
+    /// The line before anything has run: what's behind the window.
+    pub const BEHIND: &str = "Behind";
+    pub const THE_DESKTOP: &str = "The desktop";
     pub const LAST: &str = "Last";
     pub const ACTING_ON: &str = "Acting on";
     pub const SENDING: &str = "Sending";
@@ -122,6 +125,10 @@ pub mod words {
     pub const JUST_NOW: &str = "just now";
     pub const NOT_SENT: &str = "not sent";
     pub const SENT: &str = "sent";
+    /// The line's hint beside Space, until Space has staged what's focused a few times.
+    pub const USE: &str = "Use";
+    pub const LET_GO: &str = "Let go";
+    pub const UNDO: &str = "Undo";
 
     pub const SUGGESTED: &str = "Suggested";
     pub const MATCHES: &str = "Matches";
@@ -129,6 +136,12 @@ pub mod words {
     pub const PINNED: &str = "Pinned";
     pub const JEV: &str = "Jev";
     pub const STAGED: &str = "Say what to do with it, or pick one";
+    /// Over a staged subject's actions once it is a chip; the placeholder says the rest.
+    pub const OR_PICK_ONE: &str = "Or pick one";
+    /// The input's placeholder while a chip is attached.
+    pub const SAY_WHAT_TO_DO: &str = "Say what to do with it";
+    /// The input's placeholder in the model's chat.
+    pub const REPLY_TO_THE_MODEL: &str = "Reply to the model";
     pub const SHARE_HOW: &str = "Share it how?";
 
     /// ⇥ made the agent the Owner: the header over the one row that hands it the sentence.
@@ -185,6 +198,9 @@ pub mod words {
 
     pub const CLIPBOARD: &str = "Clipboard";
 }
+
+/// The Last line's glyph: it reports what ran, whatever kind of run it was.
+pub const RECENT_ICON: &str = "history";
 
 /// Icons whose runs can be undone (the rest either wait or just happen).
 pub const UNDOABLE_ICONS: &[&str] = &[

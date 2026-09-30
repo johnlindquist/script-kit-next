@@ -46,7 +46,7 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
                     .filter_map(|item| list.row(item).map(|row| row.title.clone()))
                     .collect();
                 (
-                    app.one_window.slot_line(now).title,
+                    app.one_window.chip().map(|chip| chip.title).unwrap_or_default(),
                     rows,
                     app.one_window_view_element().is_some(),
                     app.one_window.staged().map(|s| s.subject.kind),
@@ -61,7 +61,7 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
             (staged, slot, rows, drawn, typed_paste, typed_staged)
         });
     assert!(staged, "⌘V into the empty input is the window's");
-    assert_eq!(slot, LINK, "the line above the input names what was copied");
+    assert_eq!(slot, LINK, "the input's chip names what was copied");
     assert_eq!(
         rows,
         [

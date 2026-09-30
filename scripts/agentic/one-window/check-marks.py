@@ -19,7 +19,8 @@ decision the spec is checked against the bars instead.
 
 The Owner pill ⇥ puts ahead of the words (S04) shows exactly when the app says the agent owns the
 sentence (state.oneWindow.agentOwns), inside the input's row, left of the text, in the Owner's
-color; a step's "owner": true/false in the spec says which it must be. Text is read right of it.
+color; a step's "owner": true/false in the spec says which it must be. Text is read right of it,
+and beside the subject chip: right of it once attached, left of it while offered at the input's end.
 
 --evidence DIR writes a close-up of the input row per step with each bar boxed and named, a contact
 sheet of all of them, and report.md.
@@ -101,13 +102,21 @@ def owner_fails(img, m, s, want):
     return fails
 
 
-def right_of_pill(m):
-    """The frame with its input starting past the Owner pill, so only the typed words are read."""
-    pill = m.get("ownerPill")
-    if not pill:
-        return m
-    inp, cut = dict(m["input"]), pill["x"] + pill["w"] + 1
-    inp["w"], inp["x"] = inp["x"] + inp["w"] - cut, cut
+def words_only(m):
+    """The frame with its input narrowed to the typed words: past the Owner pill or the chips
+    attached at its start, and short of a subject chip offered at its end."""
+    inp = dict(m["input"])
+    end = inp["x"] + inp["w"]
+    chip = m.get("subjectChip")
+    for lead in (m.get("ownerPill"), chip):
+        if lead and lead["x"] + lead["w"] / 2 < inp["x"] + inp["w"] / 2:
+            inp["x"] = max(inp["x"], lead["x"] + lead["w"] + 1)
+    # The attached chips always lead the words, however wide they are.
+    if m.get("inputChips"):
+        inp["x"] = max(inp["x"], m["inputChips"]["x"] + m["inputChips"]["w"] + 1)
+    if chip and chip["x"] + chip["w"] / 2 >= m["input"]["x"] + m["input"]["w"] / 2:
+        end = min(end, chip["x"] - 1)
+    inp["w"] = max(0, end - inp["x"])
     return {**m, "input": inp}
 
 
@@ -270,7 +279,7 @@ def grade(m, expect):
     s = m.get("scale", 2)
     img = np.asarray(Image.open(m["_png"]).convert("RGB")).astype(int)
     pill_fails = owner_fails(img, m, s, (expect or {}).get("owner"))
-    m = right_of_pill(m)
+    m = words_only(m)
     geo = text_geometry(img, m, s)
     app = m.get("_app_marks")
     out = {"step": m["step"]["name"], "text": m.get("inputValue", ""), "bars": [], "fails": pill_fails, "warns": [],

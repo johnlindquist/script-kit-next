@@ -179,7 +179,7 @@ proptest! {
         if stages {
             let staged = win.staged().expect("staged");
             prop_assert_eq!(staged.subject.kind, SubjectKind::Clipboard);
-            prop_assert_eq!(win.slot_line(20).title, staged.subject.title.clone());
+            prop_assert_eq!(win.chip().map(|c| c.title), Some(staged.subject.title.clone()));
             prop_assert!(!win.enter_armed(20), "your own paste never guards Enter");
         } else {
             let passed = out.effects.iter().any(|e| matches!(e, Effect::PassKey(_)));

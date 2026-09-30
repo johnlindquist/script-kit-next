@@ -167,14 +167,7 @@ impl ScriptListApp {
         }
 
         match action {
-            crate::footer_popup::FooterAction::Tips => {
-                let builtins = self.config.get_builtins();
-                if let Some(entry) =
-                    crate::builtins::resolve_builtin_entry("builtin/tips", &builtins)
-                {
-                    let _outcome = self.execute_builtin(&entry, cx);
-                }
-            }
+            crate::footer_popup::FooterAction::Tips => self.open_help(cx),
             crate::footer_popup::FooterAction::Run => {
                 if let AppView::SettingsView {
                     filter,
@@ -1191,7 +1184,7 @@ impl ScriptListApp {
             let has_example = visible
                 .get(*selected_index)
                 .and_then(|index| entries.get(*index))
-                .is_some_and(|tip| !tip.examples.is_empty());
+                .is_some_and(|tip| tip.copyable_example().is_some());
             let secondary_label = if filter.trim().is_empty() {
                 "Back"
             } else {
@@ -1270,6 +1263,17 @@ impl ScriptListApp {
             "Resolved main-window native footer buttons"
         );
         buttons
+    }
+
+    /// The shortcuts and triggers, from `?` or the tip in the footer's left corner.
+    pub(crate) fn open_help(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.mark_opened_from_main_menu("help");
+        }
+        let builtins = self.config.get_builtins();
+        if let Some(entry) = crate::builtins::resolve_builtin_entry("builtin/tips", &builtins) {
+            let _outcome = self.execute_builtin(&entry, cx);
+        }
     }
 
     pub(crate) fn main_window_footer_config(

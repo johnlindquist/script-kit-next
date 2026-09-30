@@ -29,7 +29,9 @@ const MAX_WAIT_MS = 10_000;
 export interface TalkToControl { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
 /** The window coming back the way the main hotkey brings it, after a launch or a voice session let it go. */
 export interface SummonControl { family: "oneWindow"; operation: "summon" }
-export type OneWindowControl = TalkToControl | SummonControl;
+/** Stands in for the app the user came from: the line names its front window, so Space stages it. */
+export interface FocusWindowControl { family: "oneWindow"; operation: "focusWindow"; app: string; title: string }
+export type OneWindowControl = TalkToControl | SummonControl | FocusWindowControl;
 /** `click` names a painted node (its debug selector); the step clicks its center with an owned GPUI mouse event. */
 export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; control?: OneWindowControl; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
@@ -63,7 +65,10 @@ export function parseSteps(value: unknown): Step[] {
       const talkTo = keys === "destination,family,operation" && control!.operation === "talkTo" &&
         ["chat", "note"].includes(control!.destination as string);
       const summon = keys === "family,operation" && control!.operation === "summon";
-      if (control?.family !== "oneWindow" || !(talkTo || summon))
+      const focusWindow = keys === "app,family,operation,title" && control!.operation === "focusWindow" &&
+        [control!.app, control!.title].every(value =>
+          typeof value === "string" && value.trim().length > 0 && value.length <= 128);
+      if (control?.family !== "oneWindow" || !(talkTo || summon || focusWindow))
         throw new EvaluationContractError("invalid_step_control", [step.name]);
     }
     for (const text of [step.type, step.append])
@@ -251,6 +256,10 @@ export interface StepMeasurement {
   input: (Rect & { source: string }) | null;
   /** The Owner pill ⇥ puts ahead of the input's words (S04), when drawn. */
   ownerPill: Rect | null;
+  /** The subject chip: attached at the input's start, or offered at its end, when drawn. */
+  subjectChip: Rect | null;
+  /** The chips attached at the input's start (the subject's, then what `@` attached), when drawn. */
+  inputChips: Rect | null;
   aboveInput: { y: number; h: number; text: string | null; source: string } | null;
   aboveInputAll: { name: string; y: number; h: number; text: string | null }[];
   firstHeader: { y: number; h: number; text: string | null; groupedIndex: number } | null;
@@ -286,6 +295,10 @@ export function measureFrame(inputs: FrameInputs): StepMeasurement {
   if (!inputNode) issues.push("input_paint_bounds_missing");
   const pillNode = named("main-input-owner-pill");
   const ownerPill = pillNode ? round(pillNode.bounds) : null;
+  const chipNode = named("main-input-subject-chip");
+  const subjectChip = chipNode ? round(chipNode.bounds) : null;
+  const chipsNode = named("main-input-chips");
+  const inputChips = chipsNode ? round(chipsNode.bounds) : null;
 
   const containers = /^(main-view-shell|main-view-header|main-content-stage|main-view-main|main-view-overlay-clip|main-window-.*-boundary)$/;
   const aboveInputAll = input ? nodes.filter(node => isVisible(node) && !containers.test(node.name) && node.bounds.y + node.bounds.h <= input.y + 0.5)
@@ -349,7 +362,7 @@ export function measureFrame(inputs: FrameInputs): StepMeasurement {
   const footerSemantics = elements.filter(element => /^footer[-_:]/.test(String(element.semanticId ?? "")))
     .map(element => `${element.semanticId}${elementText(element) ? `=${elementText(element)}` : ""}`);
 
-  return { windowHeight, windowWidth, scale, input, ownerPill, aboveInput, aboveInputAll, firstHeader, firstRow, selectedRow, selectedIcon, selectedRowFill,
+  return { windowHeight, windowWidth, scale, input, ownerPill, subjectChip, inputChips, aboveInput, aboveInputAll, firstHeader, firstRow, selectedRow, selectedIcon, selectedRowFill,
     leftEdgeBar: bar ? bar.present : null, leftEdgeBarDetail: bar, rowKeycaps, rowKeycapRows: keycaps.length, capsules, footerSemantics,
     visibleRows: rows.length, issues };
 }
@@ -589,7 +602,7 @@ export async function runFrames(argv: string[]): Promise<number> {
   if (!["platform-default", "disabled"].includes(nativeGlass)) throw new EvaluationContractError("invalid_native_glass", [nativeGlass]);
   if (argv[0] !== "run" || argv.includes("--help") || argv.includes("-h") || !arg("--artifact") || !arg("--out") || !arg("--steps")) {
     console.log("one-window-frames run --artifact <app.reference.json> --out <new-or-empty-dir> --steps <steps.json> [--fixture <id>] [--native-glass disabled]\n" +
-      "steps: [{name, type?: text, append?: text, key?: 'cmd-k'|'escape'|'down'..., click?: <painted node>, control?: {family:'oneWindow', operation:'talkTo', destination:'chat'|'note'} | {family:'oneWindow', operation:'summon'}, waitMs?}].\n" +
+      "steps: [{name, type?: text, append?: text, key?: 'cmd-k'|'escape'|'down'..., click?: <painted node>, control?: {family:'oneWindow', operation:'talkTo', destination:'chat'|'note'} | {family:'oneWindow', operation:'summon'} | {family:'oneWindow', operation:'focusWindow', app, title}, waitMs?}].\n" +
       "type replaces the filter (cmd-a + one GPUI key per char); control starts a voice session to that destination or\n" +
       "brings the window back the way the main hotkey does,\n" +
       `default waitMs ${DEFAULT_TYPE_WAIT_MS} for type steps, 0 otherwise. Owned evaluator only: hidden windows, GPU readback, no OS input.`);

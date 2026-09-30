@@ -90,12 +90,12 @@ struct Staged {
 fn staged(app: &gpui::Entity<ScriptListApp>, cx: &mut gpui::TestAppContext) -> Option<Staged> {
     app.update(cx, |app, cx| {
         let (_, dialog) = app.one_window_view_staged()?;
-        let line = app.one_window.slot_line(app.one_window_clock());
+        let chip = app.one_window.chip().filter(|chip| chip.attached)?;
         let staged = app.one_window.staged();
         let drawn = staged_action_rows(dialog.read(cx));
         Some(Staged {
-            label: line.label,
-            title: line.title,
+            label: staged.map(|s| s.subject.label.clone()).unwrap_or_default(),
+            title: chip.title,
             head: staged.map(|staged| staged.head.clone()),
             rows: staged
                 .map(|staged| staged.rows.iter().map(|row| row.title.clone()).collect())
@@ -187,7 +187,7 @@ fn cmd_k_on_an_arg_prompt_stages_the_choice_and_its_sdk_actions_run_in_place() {
         opened.title, "Banana",
         "the highlighted choice is what's staged"
     );
-    assert_eq!(opened.head.as_deref(), Some(words::STAGED));
+    assert_eq!(opened.head.as_deref(), Some(words::OR_PICK_ONE));
     assert_eq!(opened.drawn, ["Copy Value", "Open Details", "Pin It"]);
     assert_eq!(
         opened.rows, opened.drawn,
@@ -223,7 +223,7 @@ fn cmd_k_on_an_arg_prompt_stages_the_choice_and_its_sdk_actions_run_in_place() {
 
 #[test]
 fn esc_gives_the_arg_prompt_back_with_its_selection() {
-    let (unstaged, line_label, view, selection, show_actions) =
+    let (unstaged, carried, view, selection, show_actions) =
         in_launcher("arg_esc_restores", 0, |cx| {
             let (app, window) = launcher(cx, Jev::Off);
             in_window(cx, window, &app, |app, window, cx| {
@@ -237,7 +237,7 @@ fn esc_gives_the_arg_prompt_back_with_its_selection() {
             app.update(cx, |app, _| {
                 (
                     unstaged,
-                    app.one_window.slot_line(app.one_window_clock()).label,
+                    app.one_window.chip().is_some_and(|chip| chip.attached),
                     matches!(app.current_view, AppView::ArgPrompt { .. }),
                     app.arg_selected_index,
                     app.show_actions_popup,
@@ -245,11 +245,7 @@ fn esc_gives_the_arg_prompt_back_with_its_selection() {
             })
         });
     assert!(unstaged, "Esc lets go");
-    assert_ne!(
-        line_label,
-        words::ACTING_ON,
-        "the line no longer acts on it"
-    );
+    assert!(!carried, "the input no longer carries it");
     assert!(view, "the arg prompt is still there");
     assert_eq!(selection, 1, "its selection is exactly as it was");
     assert!(!show_actions);
@@ -309,7 +305,7 @@ fn cmd_k_in_file_search_stages_the_file_and_its_actions_run_in_place() {
     let opened = opened.expect("⌘K staged the highlighted file");
     assert_eq!(opened.label, words::ACTING_ON);
     assert_eq!(opened.title, "beta.txt");
-    assert_eq!(opened.head.as_deref(), Some(words::STAGED));
+    assert_eq!(opened.head.as_deref(), Some(words::OR_PICK_ONE));
     assert!(
         opened.drawn.iter().any(|title| title == "Reveal in Finder"),
         "the rows are the file's actions: {:?}",
@@ -417,7 +413,7 @@ fn cmd_k_in_clipboard_history_stages_the_entry_and_esc_gives_the_list_back() {
     let opened = opened.expect("⌘K staged the highlighted entry");
     assert_eq!(opened.label, words::ACTING_ON);
     assert_eq!(opened.title, "github.com/script-kit/app/pull/812");
-    assert_eq!(opened.head.as_deref(), Some(words::STAGED));
+    assert_eq!(opened.head.as_deref(), Some(words::OR_PICK_ONE));
     assert!(
         opened.drawn.iter().any(|title| title.starts_with("Paste")),
         "the rows are the entry's actions: {:?}",

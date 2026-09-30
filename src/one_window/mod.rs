@@ -5,6 +5,7 @@ pub(crate) mod automations;
 pub(crate) mod capture;
 pub(crate) mod chat_entry;
 pub(crate) mod chat_host;
+pub(crate) mod chips;
 pub(crate) mod connections;
 pub(crate) mod height_host;
 pub(crate) mod host;

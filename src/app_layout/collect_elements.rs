@@ -176,6 +176,70 @@ impl ScriptListApp {
         }
     }
 
+    /// The subject chip in the main input, projected from the reducer the renderer draws from:
+    /// `value` is `attached` or `offered`, `kind` the key on it.
+    fn main_input_subject_chip_element(&self) -> Option<protocol::ElementInfo> {
+        let chip = self.one_window.chip()?;
+        if !chip.attached && !self.filter_text.is_empty() {
+            return None;
+        }
+        Some(protocol::ElementInfo {
+            semantic_id: crate::one_window::slot_line::SUBJECT_CHIP_ID.to_string(),
+            element_type: protocol::ElementType::Panel,
+            text: Some(chip.title),
+            value: Some(if chip.attached { "attached" } else { "offered" }.to_string()),
+            content: None,
+            selected: Some(false),
+            focused: Some(false),
+            index: None,
+            role: Some("subject-chip".to_string()),
+            kind: Some(chip.key),
+            source: Some("OneWindow::chip".to_string()),
+            source_name: (!chip.word.is_empty()).then_some(chip.word),
+            selectable: Some(false),
+            status_kind: None,
+            action_disabled: None,
+            style: None,
+        })
+    }
+
+    /// What `@` attached, as chips after the subject's in the main input, projected from the
+    /// reducer the renderer draws from: `text` is the chip's title, `value` its token, and
+    /// `selected` whether ← stands on it (so ⌫ deletes it).
+    fn main_input_context_chip_elements(&self) -> Vec<protocol::ElementInfo> {
+        if self.one_window.in_view() {
+            return Vec::new();
+        }
+        let offset = usize::from(self.one_window.chip().is_some_and(|chip| chip.attached));
+        let at = self.one_window.chip_at();
+        self.one_window
+            .context()
+            .iter()
+            .enumerate()
+            .map(|(index, chip)| protocol::ElementInfo {
+                semantic_id: format!(
+                    "{}{index}",
+                    crate::one_window::slot_line::CONTEXT_CHIP_ID_PREFIX
+                ),
+                element_type: protocol::ElementType::Panel,
+                text: Some(chip.title.clone()),
+                value: Some(chip.token.clone()),
+                content: None,
+                selected: Some(at == Some(index + offset)),
+                focused: Some(false),
+                index: Some(index),
+                role: Some("context-chip".to_string()),
+                kind: Some(chip.icon.clone()),
+                source: Some("OneWindow::context".to_string()),
+                source_name: None,
+                selectable: Some(false),
+                status_kind: None,
+                action_disabled: None,
+                style: None,
+            })
+            .collect()
+    }
+
     pub(crate) fn collect_visible_elements(
         &self,
         limit: usize,
@@ -199,7 +263,9 @@ impl ScriptListApp {
         }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let context = vec![self.main_view_slot_line_element()];
+                let mut context = vec![self.main_view_slot_line_element()];
+                context.extend(self.main_input_subject_chip_element());
+                context.extend(self.main_input_context_chip_elements());
                 let context_count = context.len();
                 let (list_elements, list_total) = if self.one_window_work_view_open() {
                     self.collect_one_window_work_elements(limit.saturating_sub(context_count))

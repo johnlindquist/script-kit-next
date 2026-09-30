@@ -448,6 +448,7 @@ impl ScriptListApp {
             return_to_script_list_key_guard: None,
             profile_search_return_input: None,
             pending_placeholder: None,
+            one_window_placeholder: None,
             last_output: None,
             focus_handle: cx.focus_handle(),
             show_logs: false,
@@ -905,6 +906,25 @@ impl ScriptListApp {
                             taken = this.one_window_view_takes_key(
                                 key,
                                 &event.keystroke.modifiers,
+                                cx,
+                            );
+                        });
+                    }
+                    if taken {
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
+                // ⌫ and ← at the input's start reach the chips before the input sees them.
+                {
+                    let mut taken = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            taken = this.one_window_chip_key(
+                                key,
+                                &event.keystroke.modifiers,
+                                window,
                                 cx,
                             );
                         });

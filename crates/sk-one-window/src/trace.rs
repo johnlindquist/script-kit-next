@@ -840,7 +840,7 @@ mod tests {
         let win = fed(&[
             r#"{"t":0,"ev":"line","kind":"voice","label":"Typing into","title":"Mail","sub":"To · Re: beta","icon":"type","hints":[["esc","drop"]]}"#,
         ]);
-        let slot = win.slot_line(1);
+        let slot = win.recent_line(1).unwrap();
         assert_eq!(slot.kind, SlotKind::Typing);
         assert_eq!(slot.label, "Typing into");
         assert_eq!(slot.hints, vec![("esc".to_string(), "drop".to_string())]);
@@ -848,17 +848,22 @@ mod tests {
             r#"{"t":0,"ev":"line","kind":"voice","label":"Typing into","title":"Mail"}"#,
             r#"{"t":1,"ev":"line","clear":true}"#,
         ]);
-        assert_eq!(win.slot_line(2).kind, SlotKind::Focused);
+        assert!(win.recent_line(2).is_none());
+        assert_eq!(
+            win.slot_line(2).label,
+            crate::contract::words::BEHIND,
+            "the line is never empty"
+        );
     }
 
     #[test]
-    fn focus_changes_what_the_line_calls_focused() {
+    fn focus_changes_what_the_chip_offers() {
         let win = fed(&[
             r#"{"t":0,"ev":"focused","kind":"selection","label":"Selected","title":"“the footer kept the old label”","sub":"in Chrome","icon":"type"}"#,
         ]);
-        let slot = win.slot_line(1);
-        assert_eq!(slot.title, "“the footer kept the old label”");
-        assert_eq!(slot.sub, "in Chrome");
+        let chip = win.chip().expect("offered");
+        assert_eq!(chip.title, "“the footer kept the old label”");
+        assert_eq!(chip.icon, "type");
     }
 
     #[test]
@@ -866,7 +871,7 @@ mod tests {
         let mut win = fed(&[
             r#"{"t":0,"ev":"focused","kind":"answer","label":"Focused","title":"Sarah, Mo, Priya","sub":"in Standup · the open answer","icon":"same-for"}"#,
         ]);
-        assert_eq!(win.slot_line(1).title, "Sarah, Mo, Priya");
+        assert_eq!(win.chip().unwrap().title, "Sarah, Mo, Priya");
         win.handle(2, Event::Key(Key::CmdK));
         let staged = win.staged().expect("⌘K stages the answer");
         assert_eq!(staged.subject.kind, SubjectKind::Answer);

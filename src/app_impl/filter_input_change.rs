@@ -12,7 +12,8 @@ impl ScriptListApp {
         let entry_kind = match &entry {
             ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
             ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
-            ScriptListSpecialEntry::ActionsHelp => "actions_help",
+            ScriptListSpecialEntry::Help => "help",
+            ScriptListSpecialEntry::Grab => "grab",
             ScriptListSpecialEntry::DayPage => "day_page",
         };
         let raw_filter_text_safe = logging::log_private_user_value(raw_filter_text);
@@ -44,13 +45,20 @@ impl ScriptListApp {
             ScriptListSpecialEntry::QuickTerminal => {
                 self.open_quick_terminal(None, cx);
             }
-            ScriptListSpecialEntry::ActionsHelp => {
-                self.one_window_stage(cx);
+            ScriptListSpecialEntry::Help => {
+                self.set_filter_text_immediate(String::new(), window, cx);
+                self.open_help(cx);
+            }
+            ScriptListSpecialEntry::Grab => {
+                // A bare space means what's focused, not content: it never stays in the input.
+                self.set_filter_text_immediate(String::new(), window, cx);
+                if self.one_window_owns_list() {
+                    self.one_window_key(sk_one_window::Key::Space, cx);
+                }
             }
             ScriptListSpecialEntry::DayPage => {
-                // A bare space is a launch trigger, not content: clear it before
-                // the swap so the Day Page editor starts clean and ScriptList
-                // has no stray space on return.
+                // The trigger is not content: clear it before the swap so the Day Page editor
+                // starts clean and ScriptList has no stray backtick on return.
                 self.set_filter_text_immediate(String::new(), window, cx);
                 self.show_day_page_view(window, cx);
             }
@@ -79,7 +87,28 @@ impl ScriptListApp {
             return;
         }
 
-        let new_text = self.gpui_input_state.read(cx).value().to_string();
+        let mut new_text = self.gpui_input_state.read(cx).value().to_string();
+        // A finished `@` token becomes a chip; the sentence keeps every chip's token after the
+        // words the input shows.
+        let caret = self.gpui_input_state.read(cx).cursor();
+        if let Some((visible, caret)) = self.one_window_take_chips(&new_text, caret, cx) {
+            self.suppress_filter_events = true;
+            self.gpui_input_state.update(cx, |state, cx| {
+                state.set_value(visible.clone(), window, cx);
+                state.set_selection_focused(caret, caret, window, cx);
+            });
+            self.suppress_filter_events = false;
+            new_text = visible;
+        }
+        // The spine reads the caret in the words, or after the chips' tokens once the words are
+        // finished, so an `@` being typed next to chips is still the segment it completes.
+        let visible_words = new_text.clone();
+        let new_text = self.one_window_sentence(&new_text);
+        let spine_caret = crate::one_window::chips::spine_caret(
+            &visible_words,
+            visible_words.len(),
+            &new_text,
+        );
         let shared_filter_view = self.current_view_uses_shared_filter_input();
 
         if self
@@ -719,10 +748,10 @@ impl ScriptListApp {
         self.set_menu_syntax_mode_from_filter(&new_text);
 
         // Spine: reparse alongside the existing menu syntax path.
-        // Cursor position is approximated as end-of-input for now; full cursor
+        // Cursor position is approximated as the end of the input's words; full cursor
         // tracking from GPUI selection events will come in a later step.
         if self.spine_enabled {
-            self.set_spine_parse_from_filter_and_cursor(&new_text, new_text.len());
+            self.set_spine_parse_from_filter_and_cursor(&new_text, spine_caret);
         }
 
         // Iter 019 D1 / iter 020 D2a — run the pure picker state machine on

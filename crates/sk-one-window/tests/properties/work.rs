@@ -197,7 +197,7 @@ proptest! {
         prop_assert!(win.views().top().is_none_or(|f| f.name != "connect"));
         prop_assert_eq!(win.work().connections().has("calendar"), true);
         if !from_steps {
-            prop_assert_eq!(win.slot_line(2_000).title, "Google Calendar connected");
+            prop_assert_eq!(win.recent_line(2_000).unwrap().title, "Google Calendar connected");
         }
         let out = win.handle(2_000 + gap, Event::Key(Key::Enter));
         prop_assert!(out.effects.contains(&Effect::EnterIgnored));

@@ -10,7 +10,7 @@ impl OneWindow {
         self.staged = Some(Staged {
             subject,
             rows,
-            head: words::STAGED.into(),
+            head: self.staged_head(words::STAGED),
             waiting_for_rows: false,
             entry_state: None,
         });
@@ -30,7 +30,6 @@ impl OneWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::slot::SlotKind;
 
     fn clipboard_entry() -> Subject {
         Subject {
@@ -68,13 +67,11 @@ mod tests {
             "the view already listed the actions and keeps its words: {:?}",
             out.effects
         );
-        let line = win.slot_line(10);
-        assert_eq!(line.kind, SlotKind::Staged);
-        assert_eq!(line.label, words::ACTING_ON);
-        assert_eq!(line.title, "github.com/script-kit/app/pull/812");
-        assert!(line.hints.iter().any(|(key, _)| key == "esc"));
+        let chip = win.chip().expect("attached");
+        assert_eq!(chip.title, "github.com/script-kit/app/pull/812");
+        assert_eq!((chip.attached, chip.key.as_str()), (true, "esc"));
         let staged = win.staged().expect("staged");
-        assert_eq!(staged.head, words::STAGED);
+        assert_eq!(staged.head, words::OR_PICK_ONE);
         assert_eq!(staged.rows, actions());
         assert_eq!(win.text(), "clip", "the view's words stay");
     }
@@ -112,6 +109,6 @@ mod tests {
         win.handle(10, Event::Actions(vec![Row::new("action:copy", "Copy")]));
         let staged = win.staged().expect("still staged");
         assert_eq!(staged.rows.len(), 1);
-        assert_eq!(staged.pinned()[0].head.as_deref(), Some(words::STAGED));
+        assert_eq!(staged.pinned()[0].head.as_deref(), Some(words::OR_PICK_ONE));
     }
 }

@@ -244,7 +244,10 @@ fn a_row_a_view_lists_can_be_staged() {
     };
     let out = win.handle(0, Event::Stage(subject.clone()));
     assert!(out.effects.contains(&Effect::ActionsFor(subject)));
-    assert_eq!(win.slot_line(0).title, "hi sarah thanks for checking in");
+    assert_eq!(
+        win.chip().map(|c| c.title).as_deref(),
+        Some("hi sarah thanks for checking in")
+    );
 }
 
 trait IntoEvent {
@@ -270,7 +273,11 @@ fn s17_replays_through_the_talk_rule() {
         .lines()
         .filter_map(|l| serde_json::from_str(l).ok())
         .collect();
-    let mut win = OneWindow::default();
+    // The page drew what's focused and what's staged in the line, as the prototype did.
+    let mut win = OneWindow::new(sk_one_window::Config {
+        subject_chip: false,
+        ..sk_one_window::Config::default()
+    });
     let (mut want_slot, mut want_enter, mut want_head) = (Vec::new(), Vec::new(), Vec::new());
     let (mut got_slot, mut got_enter, mut got_head) = (Vec::new(), Vec::new(), Vec::new());
     let push = |v: &mut Vec<String>, s: String| {

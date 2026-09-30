@@ -542,12 +542,15 @@ impl ScriptListApp {
             text
         };
         let cursor = self.clamp_filter_cursor_to_char_boundary(&text, cursor_position);
+        // The input shows the words; the sentence also carries the chips' tokens after them.
+        let (text, visible, visible_cursor) = self.one_window_split_set_text(text, cursor, cx);
+        let cursor = crate::one_window::chips::spine_caret(&visible, visible_cursor, &text);
 
         self.pending_menu_syntax_ai_proposal = None;
 
-        let input_already_matches = self.gpui_input_state.read(cx).value() == text;
-        let input_selection_matches =
-            self.gpui_input_state.read(cx).selected_range() == (cursor..cursor);
+        let input_already_matches = self.gpui_input_state.read(cx).value() == visible;
+        let input_selection_matches = self.gpui_input_state.read(cx).selected_range()
+            == (visible_cursor..visible_cursor);
         if matches!(self.current_view, AppView::ScriptList)
             && self.filter_text == text
             && self.computed_filter_text == text
@@ -576,9 +579,9 @@ impl ScriptListApp {
             state.set_highlight_ranges_with_roles(Vec::new());
             state.clear_mark_ranges();
             if !input_already_matches {
-                state.set_value(text.clone(), window, cx);
+                state.set_value(visible.clone(), window, cx);
             }
-            state.set_selection_focused(cursor, cursor, window, cx);
+            state.set_selection_focused(visible_cursor, visible_cursor, window, cx);
         });
         // Change events are queued; bind input authority before the publication can paint.
         self.note_main_input_changed(cx);
@@ -1015,6 +1018,10 @@ impl ScriptListApp {
         }
 
         if !self.gpui_input_state.read(cx).value().is_empty() {
+            return true;
+        }
+        // Chips from `@` are part of what was typed, so Esc clears them before it closes.
+        if !self.one_window.context().is_empty() {
             return true;
         }
 
@@ -1698,13 +1705,28 @@ impl ScriptListApp {
             self.gpui_input_state.update(cx, |state, cx| {
                 state.set_placeholder(placeholder, window, cx);
             });
+            self.one_window_placeholder = None;
+        }
+        // Over the list, the reducer asks for the words an attached chip needs or a reply in the
+        // model's chat; the launcher's own placeholder comes back when it stops asking.
+        if matches!(self.current_view, AppView::ScriptList) {
+            let want = self.one_window.placeholder();
+            if want != self.one_window_placeholder {
+                let text = want.unwrap_or(crate::ROOT_LAUNCHER_PLACEHOLDER);
+                self.gpui_input_state.update(cx, |state, cx| {
+                    state.set_placeholder(text, window, cx);
+                });
+                self.one_window_placeholder = want;
+            }
         }
 
         if !self.pending_filter_sync {
             return;
         }
 
-        let desired = self.filter_text.clone();
+        let desired = self
+            .one_window_visible_words(&self.filter_text, cx)
+            .unwrap_or_else(|| self.filter_text.clone());
         let current = self.gpui_input_state.read(cx).value().to_string();
         if current == desired {
             self.pending_filter_sync = false;

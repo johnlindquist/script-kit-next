@@ -1,0 +1,12 @@
+[{"name": "focus-ghostty", "control": {"family": "oneWindow", "operation": "focusWindow", "app": "Ghostty", "title": "~/dev/script-kit-gpui — zsh"}, "waitMs": 300},
+ {"name": "typed-hides-offer", "type": "tell", "waitMs": 300},
+ {"name": "select-all", "key": "cmd-a"},
+ {"name": "emptied-offer-back", "key": "backspace", "waitMs": 300},
+ {"name": "space-attaches", "key": "space", "waitMs": 400},
+ {"name": "typed-after-chip", "append": "tile", "waitMs": 1800},
+ {"name": "down-picks", "key": "down"},
+ {"name": "select-words", "key": "cmd-a"},
+ {"name": "words-cleared", "key": "backspace", "waitMs": 300},
+ {"name": "esc-lets-go", "key": "escape", "waitMs": 300},
+ {"name": "cmdk-attaches", "key": "cmd-k", "waitMs": 400},
+ {"name": "cmdk-esc", "key": "escape", "waitMs": 300}]

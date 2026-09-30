@@ -39,6 +39,9 @@ pub struct Lessons {
     /// Learned while words were typed; offered once the input is empty.
     #[serde(skip)]
     pending: Vec<Lesson>,
+    /// Times Space staged what's focused, counted up to when its hint stops teaching.
+    #[serde(default)]
+    grabs: u32,
 }
 
 impl Lessons {
@@ -46,7 +49,22 @@ impl Lessons {
         Self {
             learned,
             pending: Vec::new(),
+            grabs: 0,
         }
+    }
+
+    /// Space staged what's focused. Returns whether that's worth saving: the hint still teaches.
+    pub fn grabbed(&mut self) -> bool {
+        if self.grabs >= crate::contract::USE_HINT_GRABS {
+            return false;
+        }
+        self.grabs += 1;
+        true
+    }
+
+    /// Whether the hint beside Space still says what it does.
+    pub fn teaches_space(&self) -> bool {
+        self.grabs < crate::contract::USE_HINT_GRABS
     }
 
     /// Lessons the list can offer, newest first.
@@ -63,9 +81,16 @@ impl Lessons {
             || row.fallback
             || row.act != RowAct::Host
             || row.title.trim().is_empty()
-            || ["learned:", "down:", "act:", "talk:", "fallback-"]
-                .iter()
-                .any(|p| row.key.starts_with(p))
+            || [
+                "learned:",
+                "down:",
+                "act:",
+                "talk:",
+                "fallback-",
+                crate::contract::ALL_RESULTS_KEY,
+            ]
+            .iter()
+            .any(|p| row.key.starts_with(p))
         {
             return false;
         }

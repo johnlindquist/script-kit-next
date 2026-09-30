@@ -1407,6 +1407,8 @@ pub(crate) struct ScriptListApp {
     profile_search_return_input: Option<AgentChatInputReturnState>,
     /// Pending placeholder text to set on next render (needs Window access).
     pending_placeholder: Option<String>,
+    /// The placeholder the one-window reducer asked the main input for, while it asks.
+    one_window_placeholder: Option<&'static str>,
     last_output: Option<SharedString>,
     focus_handle: FocusHandle,
     show_logs: bool,
@@ -2003,8 +2005,7 @@ enum AliasMatch {
     App(Arc<app_launcher::AppInfo>),
 }
 
-pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str =
-    "Search • @ context • / commands • ; capture • : filters";
+pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str = "Search or ask";
 
 #[cfg(test)]
 mod backgrounded_session_store_tests {

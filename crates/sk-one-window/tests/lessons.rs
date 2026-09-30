@@ -91,7 +91,9 @@ fn share_my_last_action_offers_copy_link_send_in_the_list() {
     assert_eq!(staged.head, sk_one_window::contract::words::SHARE_HOW);
     let titles: Vec<&str> = staged.rows.iter().map(|r| r.title.as_str()).collect();
     assert_eq!(titles.len(), 3, "copy, link, send: {titles:?}");
-    assert_eq!(win.slot_line(1_100).label, "Sharing");
+    let receipt = win.recent_line(1_100).expect("the run being shared");
+    assert_eq!(receipt.title, "Did 2 steps");
+    assert!(receipt.lit, "what's being shared is what's in play");
 }
 
 /// The page learned each sentence that ran and listed it as a learned name the next time its

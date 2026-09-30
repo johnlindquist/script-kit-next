@@ -133,8 +133,13 @@ fn cmd_k_stages_the_row_and_lists_its_actions_in_place() {
             wait(cx, 20);
             let windows_after = cx.update(|cx| cx.windows().len());
             let staged = app.update(cx, |app, _| {
-                let line = app.one_window.slot_line(app.one_window_clock());
-                (line.label, line.title)
+                let label = app
+                    .one_window
+                    .staged()
+                    .map(|s| s.subject.label.clone())
+                    .unwrap_or_default();
+                let chip = app.one_window.chip().filter(|chip| chip.attached);
+                (label, chip.map(|chip| chip.title).unwrap_or_default())
             });
             let header = first_header(&app, cx);
             let rows = app.update(cx, |app, _| {
@@ -161,7 +166,7 @@ fn cmd_k_stages_the_row_and_lists_its_actions_in_place() {
         staged.1, "Play Next Track",
         "the highlighted row is what's staged"
     );
-    assert_eq!(header.as_deref(), Some(words::STAGED));
+    assert_eq!(header.as_deref(), Some(words::OR_PICK_ONE));
     assert!(
         !rows.is_empty()
             && rows.iter().all(|key| {
@@ -197,6 +202,49 @@ fn esc_after_cmd_k_highlights_the_reducers_row() {
         highlighted,
         Some(sel),
         "after Esc the list highlights the row Enter runs, not nothing"
+    );
+}
+
+#[test]
+fn space_on_the_front_window_lists_what_can_be_done_to_that_window() {
+    let rows = in_launcher("space_front_window", 0, |cx| {
+        let (app, _window) = launcher(cx, Jev::Off);
+        app.update(cx, |app, cx| {
+            app.one_window_handle(
+                sk_one_window::Event::Focused(sk_one_window::Subject {
+                    kind: sk_one_window::SubjectKind::Window,
+                    label: "Front window".into(),
+                    title: "~/dev · zsh".into(),
+                    sub: "Ghostty".into(),
+                    ..Default::default()
+                }),
+                cx,
+            );
+        });
+        wait(cx, 20);
+        key(&app, cx, Key::Space);
+        wait(cx, 20);
+        app.update(cx, |app, _| {
+            let list = app.one_window.list();
+            list.visible()
+                .iter()
+                .filter_map(|item| list.row(item).map(|row| row.title.clone()))
+                .collect::<Vec<_>>()
+        })
+    });
+    assert_eq!(
+        rows.first().map(String::as_str),
+        Some("Ask the model about it"),
+        "{rows:?}"
+    );
+    assert_eq!(
+        rows.get(1).map(String::as_str),
+        Some("Tile Ghostty Left Half"),
+        "{rows:?}"
+    );
+    assert!(
+        rows.iter().skip(1).all(|title| title.contains("Ghostty")),
+        "every action names the window's app, none are the launcher's own: {rows:?}"
     );
 }
 

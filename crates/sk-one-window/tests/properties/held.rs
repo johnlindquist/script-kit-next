@@ -49,7 +49,7 @@ proptest! {
         if hidden {
             win.handle(1 + later, Event::Summon);
         }
-        let line = win.slot_line(1 + later);
+        let line = win.recent_line(1 + later).unwrap();
         prop_assert_eq!(line.kind, SlotKind::Recent);
         prop_assert_eq!(line.title.as_str(), "Backup finished");
     }

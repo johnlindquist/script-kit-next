@@ -31,8 +31,6 @@ pub(crate) struct OneWindowHost {
     now: Ms,
     /// The one pending `Tick`; a timer for any other time is stale.
     wake_at: Option<Ms>,
-    /// Bumped by every height decision so an older shrink stops drawing.
-    pub(super) height_generation: u64,
     /// The main window's height as the reducer last placed it.
     pub(super) height: Option<f32>,
     pub(super) window: Option<gpui::AnyWindowHandle>,
@@ -117,21 +115,75 @@ fn name_strength(result: &SearchResult) -> u8 {
     }
 }
 
-/// The fallbacks the window offers when nothing matched, by the key prefix the reducer knows
-/// them by: search the web, or ask the model.
-fn offered_fallback(result: &SearchResult) -> Option<&'static str> {
+/// A fallback the window offers for the words: the key prefix the reducer knows it by and where
+/// it ranks. What the words' shape asks for comes first (a URL, a sum, a path), then the user's own
+/// fallback scripts, the web, the files and the model. The rest stay in the full results.
+fn offered_fallback(result: &SearchResult) -> Option<(String, u8)> {
     let SearchResult::Fallback(fallback) = result else {
         return None;
     };
-    match &fallback.fallback {
-        crate::fallbacks::FallbackItem::Builtin(item) if item.id == "search-google" => {
-            Some("fallback-google")
+    let item = match &fallback.fallback {
+        crate::fallbacks::FallbackItem::Builtin(item) => item,
+        crate::fallbacks::FallbackItem::Script(config) => {
+            return Some((
+                format!("fallback-script/{}", config.script.source_command_id()),
+                3,
+            ));
         }
-        crate::fallbacks::FallbackItem::Builtin(item) if item.id == "search-google-ai" => {
-            Some("fallback-ai")
-        }
-        _ => None,
+    };
+    let (prefix, rank) = match item.id {
+        "open-url" => ("fallback-open-url", 0),
+        "calculate" => ("fallback-calculate", 1),
+        "open-file" => ("fallback-open-file", 2),
+        "search-google" => ("fallback-google", 4),
+        crate::fallbacks::builtins::SEARCH_FILES_FALLBACK_ID => ("fallback-search-files", 5),
+        "search-google-ai" => ("fallback-ai", 6),
+        _ => return None,
+    };
+    Some((prefix.to_string(), rank))
+}
+
+/// Where a name comes from, for spreading the few name rows across sources: commands (scripts,
+/// apps, built-ins) are one source, and each passive source (files, tabs, conversations, notes,
+/// clipboard…) is its own.
+fn name_source(result: &SearchResult) -> &'static str {
+    match result {
+        SearchResult::Script(_)
+        | SearchResult::Scriptlet(_)
+        | SearchResult::Flow(_)
+        | SearchResult::Skill(_)
+        | SearchResult::BuiltIn(_)
+        | SearchResult::App(_)
+        | SearchResult::Agent(_) => "command",
+        other => other.type_label(),
     }
+}
+
+/// Which names, by their place in the search's order, fill `budget` rows: the best one, then the
+/// best of each source not shown yet, then the next best. One busy source (a folder of files)
+/// never hides the conversation or tab that also matched. Returned in the search's order.
+pub(crate) fn pick_across_sources(sources: &[&str], budget: usize) -> Vec<usize> {
+    let mut picked: Vec<usize> = Vec::with_capacity(budget);
+    let mut seen: Vec<&str> = Vec::new();
+    for (at, source) in sources.iter().enumerate() {
+        if picked.len() >= budget {
+            break;
+        }
+        if !seen.contains(source) {
+            seen.push(source);
+            picked.push(at);
+        }
+    }
+    for at in 0..sources.len() {
+        if picked.len() >= budget {
+            break;
+        }
+        if !picked.contains(&at) {
+            picked.push(at);
+        }
+    }
+    picked.sort_unstable();
+    picked
 }
 
 fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
@@ -361,6 +413,10 @@ impl ScriptListApp {
 
     /// The highlight moved by pointer, agent or a publication: the reducer's follows.
     pub(crate) fn one_window_follow_host_selection(&mut self, cx: &mut Context<Self>) {
+        if self.one_window_shows_every_result() {
+            self.one_window_name_every_results_enter(cx);
+            return;
+        }
         if !self.one_window_owns_list() || self.one_window_view_height().is_some() {
             return;
         }
@@ -372,8 +428,27 @@ impl ScriptListApp {
         }
     }
 
+    /// In every result's view, ↵ names what the highlighted result does, as it does in the
+    /// launcher.
+    fn one_window_name_every_results_enter(&mut self, cx: &mut Context<Self>) {
+        let Some(crate::ResolvedMainMenuSelection::SearchResult { result, .. }) =
+            self.painted_main_menu_selected_subject()
+        else {
+            return;
+        };
+        let label = crate::ui_window::main_window_result_action_label(
+            result,
+            crate::ui_window::footer_frontmost_app_name().as_deref(),
+        );
+        let target =
+            sk_one_window::EnterTarget::new(super::learns::OwnView::AllResults.name(), label);
+        if self.one_window.enter_target(self.one_window_clock()) != target {
+            self.one_window_handle(Event::ViewEnter(target), cx);
+        }
+    }
+
     fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
-        if self.one_window_view_height().is_some() {
+        if self.one_window_view_height().is_some() || self.one_window_shows_every_result() {
             return;
         }
         let position = self.one_window.list().sel;
@@ -388,6 +463,12 @@ impl ScriptListApp {
         if grouped_index != self.selected_index {
             self.set_selected_index(grouped_index, "one_window", cx);
         }
+    }
+
+    /// Every result for the words is listed as it came from the search, not the reducer's few
+    /// rows, so neither highlight follows the other.
+    pub(crate) fn one_window_shows_every_result(&self) -> bool {
+        self.one_window_own_view() == Some(super::learns::OwnView::AllResults)
     }
 
     /// The committed words changed. With Jev off there is nothing to wait for: its rows settle
@@ -477,6 +558,9 @@ impl ScriptListApp {
         if !self.one_window_owns(text) {
             return (grouped, flat, false);
         }
+        if self.one_window_shows_every_result() {
+            return (grouped, flat, false);
+        }
         if let Some((grouped, flat)) = self
             .one_window_own_list()
             .or_else(|| self.one_window_ledger_list(text))
@@ -556,8 +640,8 @@ impl ScriptListApp {
         (rows, results)
     }
 
-    /// The top name matches in the search's order, then the fallbacks the window offers when
-    /// nothing matched.
+    /// The name matches spread across their sources, a row that opens every result when more
+    /// matched than fit, then the fallbacks the window offers for the words, best first.
     fn one_window_names(
         &self,
         grouped: &[GroupedListItem],
@@ -567,7 +651,8 @@ impl ScriptListApp {
         let frontmost = crate::ui_window::footer_frontmost_app_name();
         let learned = self.input_history.preferred_result_key(text);
         let mut rows = Vec::new();
-        let mut fallbacks = Vec::new();
+        let mut names: Vec<(Row, &SearchResult)> = Vec::new();
+        let mut fallbacks: Vec<(u8, Row, &SearchResult)> = Vec::new();
         let mut results = HashMap::new();
         match self.one_window_capture_row(text) {
             Some((row, result)) => {
@@ -576,6 +661,7 @@ impl ScriptListApp {
             }
             None => super::work::steps_row(text, &mut rows, &mut results),
         }
+        let mut keys: std::collections::HashSet<String> = results.keys().cloned().collect();
         for item in grouped {
             let GroupedListItem::Item(index) = item else {
                 continue;
@@ -583,35 +669,70 @@ impl ScriptListApp {
             let Some(result) = flat.get(*index) else {
                 continue;
             };
-            let fallback = offered_fallback(result);
-            let key = match fallback {
-                Some(prefix) => format!("{prefix}:{text}"),
+            let offered = offered_fallback(result);
+            if offered.is_none() && matches!(result, SearchResult::Fallback(_)) {
+                continue;
+            }
+            let key = match &offered {
+                Some((prefix, _)) => format!("{prefix}:{text}"),
                 None => result
                     .stable_selection_key()
                     .unwrap_or_else(|| format!("name/{}", result.name())),
             };
-            if results.contains_key(&key) {
+            if !keys.insert(key.clone()) {
                 continue;
             }
-            let row = Row::new(key.clone(), result.name())
+            let row = Row::new(key, result.name())
                 .with_enter_label(crate::ui_window::main_window_result_action_label(
                     result,
                     frontmost.as_deref(),
                 ))
                 .with_score(name_strength(result));
-            if fallback.is_some() {
-                fallbacks.push(row.fallback());
-            } else if matches!(result, SearchResult::Fallback(_)) || rows.len() >= MAX_MATCHES {
-                continue;
-            } else {
-                rows.push(Row {
-                    learned: learned.is_some() && learned == result.history_result_key().as_deref(),
-                    ..row
-                });
+            match offered {
+                Some((_, rank)) => fallbacks.push((rank, row.fallback(), result)),
+                None => names.push((
+                    Row {
+                        learned: learned.is_some()
+                            && learned == result.history_result_key().as_deref(),
+                        ..row
+                    },
+                    result,
+                )),
             }
-            results.insert(key, result.clone());
         }
-        rows.extend(fallbacks);
+        let budget = MAX_MATCHES.saturating_sub(rows.len());
+        let sources: Vec<&str> = names
+            .iter()
+            .map(|(_, result)| name_source(result))
+            .collect();
+        let mut picked = pick_across_sources(&sources, budget);
+        if let Some(at) = names.iter().position(|(row, _)| row.learned) {
+            if !picked.contains(&at) && picked.pop().is_some() {
+                picked.push(at);
+                picked.sort_unstable();
+            }
+        }
+        for &at in &picked {
+            let (row, result) = &names[at];
+            results.insert(row.key.clone(), (*result).clone());
+            rows.push(row.clone());
+        }
+        if names.len() > picked.len() {
+            rows.push(
+                Row::new(
+                    format!("{}{text}", sk_one_window::contract::ALL_RESULTS_KEY),
+                    sk_one_window::contract::words::see_all(names.len()),
+                )
+                .with_icon("list")
+                .with_score(0)
+                .with_enter_label("See All"),
+            );
+        }
+        fallbacks.sort_by_key(|(rank, _, _)| *rank);
+        for (_, row, result) in fallbacks {
+            results.insert(row.key.clone(), result.clone());
+            rows.push(row);
+        }
         (rows, results)
     }
 
@@ -820,6 +941,13 @@ impl ScriptListApp {
     /// launcher row the list shows for it.
     fn one_window_run(&mut self, row: Row, cx: &mut Context<Self>) -> anyhow::Result<()> {
         tracing::info!(target: "script_kit::one_window", event = "run", key = %row.key);
+        if row
+            .key
+            .starts_with(sk_one_window::contract::ALL_RESULTS_KEY)
+        {
+            self.one_window_open_all_results(cx);
+            return Ok(());
+        }
         if self.one_window_route_work(&row, cx) {
             return Ok(());
         }
@@ -949,6 +1077,9 @@ impl ScriptListApp {
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
             "marks": marks,
+            "inputWords": self.gpui_input_state.read(cx).value().to_string(),
+            "context": self.one_window.context(),
+            "chipAt": self.one_window.chip_at(),
             "agentOwns": self.one_window.agent_owns(),
             "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
@@ -974,6 +1105,10 @@ impl ScriptListApp {
                 "key": row.key,
                 "title": row.title,
             })),
+            "placeholder": self.gpui_input_state.read(cx).presentation().placeholder().to_string(),
+            "line": self.one_window.slot_line(now),
+            "recent": self.one_window.recent_line(now),
+            "staged": self.one_window.staged().map(|staged| staged.subject.title.as_str()),
         })
     }
 

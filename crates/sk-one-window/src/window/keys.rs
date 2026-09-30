@@ -31,6 +31,9 @@ impl OneWindow {
         if self.away {
             return false;
         }
+        if let Some(taken) = self.chip_key(now, &key, fx) {
+            return taken;
+        }
         if key == Key::Enter && armed {
             fx.push(Effect::EnterIgnored);
             return true;
@@ -47,22 +50,13 @@ impl OneWindow {
                     return true;
                 }
             }
-            Key::Up if empty && self.staged.is_none() && self.list.sel == 0 => {
-                let target = self
-                    .holds
-                    .newest()
-                    .and_then(|h| h.entry)
-                    .or_else(|| self.ledger.last().map(|e| e.id));
-                if let Some(id) = target {
-                    let entry = self.ledger.get(id).expect("entry").clone();
-                    let label = if entry.state == EntryState::Holding {
-                        words::SENDING
-                    } else {
-                        words::LAST
-                    };
-                    self.stage(now, entry_subject(&entry, label), None, words::STAGED, fx);
-                    return true;
-                }
+            Key::Up
+                if empty
+                    && self.staged.is_none()
+                    && self.list.sel == 0
+                    && self.last_target().is_some() =>
+            {
+                return self.stage_last(now, fx);
             }
             Key::Tab if !self.text.trim().is_empty() => {
                 self.agent_owns = !self.agent_owns;
@@ -83,11 +77,36 @@ impl OneWindow {
             Key::CmdEnter if !self.text.trim().is_empty() => {
                 return self.on_key(now, Key::CmdDigit(1), fx);
             }
+            Key::Recent if self.cfg.subject_chip => {
+                if self
+                    .staged
+                    .as_ref()
+                    .is_some_and(|s| s.subject.entry.is_some())
+                {
+                    self.staged = None;
+                    self.home(now, String::new(), fx);
+                    return true;
+                }
+                return self.stage_last(now, fx);
+            }
+            Key::Space if empty && self.staged.is_none() && self.cfg.subject_chip => {
+                if self.focused.title.is_empty() {
+                    return false;
+                }
+                if self.lessons.grabbed() {
+                    fx.push(Effect::Learned);
+                }
+                self.stage(now, self.focused.clone(), None, words::STAGED, fx);
+                return true;
+            }
             Key::CmdK => {
-                let row = if self.text.trim().is_empty() {
-                    None
-                } else {
+                // With the input empty, ⌘K takes what the chip offers until you move the
+                // highlight; with words typed or a row chosen, it takes the highlighted row.
+                let offered = self.chip().is_some_and(|c| !c.attached) && !self.chose;
+                let row = if !offered && (self.cfg.subject_chip || !self.text.trim().is_empty()) {
                     self.list.current_row()
+                } else {
+                    None
                 };
                 let subject = row
                     .as_ref()
@@ -118,8 +137,14 @@ impl OneWindow {
             self.list.asking = false;
         }
         match key {
-            Key::Down => self.list.move_sel(1),
-            Key::Up => self.list.move_sel(-1),
+            Key::Down => {
+                self.chose = true;
+                self.list.move_sel(1);
+            }
+            Key::Up => {
+                self.chose = true;
+                self.list.move_sel(-1);
+            }
             Key::Enter => self.activate(now, fx),
             key if !cancels => {
                 fx.push(Effect::PassKey(key));
@@ -137,12 +162,36 @@ impl OneWindow {
             return false;
         }
         if pos != self.list.sel {
+            self.chose = true;
             self.list.held = None;
             self.list.asking = false;
         }
         self.list.sel = 0;
         self.list.move_sel(i32::try_from(pos).unwrap_or(i32::MAX));
         true
+    }
+
+    /// ↑: the newest waiting message, or else the last thing that ran, is put in play with what
+    /// can be done to it. Returns whether there was one.
+    fn stage_last(&mut self, now: Ms, fx: &mut Vec<Effect>) -> bool {
+        let Some(id) = self.last_target() else {
+            return false;
+        };
+        let entry = self.ledger.get(id).expect("entry").clone();
+        let label = if entry.state == EntryState::Holding {
+            words::SENDING
+        } else {
+            words::LAST
+        };
+        self.stage(now, entry_subject(&entry, label), None, words::STAGED, fx);
+        true
+    }
+
+    fn last_target(&self) -> Option<u64> {
+        self.holds
+            .newest()
+            .and_then(|h| h.entry)
+            .or_else(|| self.ledger.last().map(|e| e.id))
     }
 
     pub(super) fn activate(&mut self, now: Ms, fx: &mut Vec<Effect>) {

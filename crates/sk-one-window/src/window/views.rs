@@ -85,6 +85,7 @@ impl OneWindow {
 
     pub(super) fn home(&mut self, now: Ms, text: String, fx: &mut Vec<Effect>) {
         self.views.home();
+        self.drop_chips();
         self.guard.forget_view();
         let user = self.user_turn(now);
         self.guard.arm_unless_user(now, user);

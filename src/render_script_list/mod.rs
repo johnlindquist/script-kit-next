@@ -1913,7 +1913,10 @@ impl ScriptListApp {
         let text_primary = color_resolver.primary_text_color();
         let font_family = self.theme_font_family();
 
-        let highlight_text = filter_text_for_render.clone();
+        // Marks paint the input's words; the chips' tokens after them aren't in the input.
+        let highlight_text = self
+            .one_window_visible_words(&filter_text_for_render, cx)
+            .unwrap_or_else(|| filter_text_for_render.clone());
         if self.main_menu_render_diagnostics.last_input_highlight_text != highlight_text {
             let capture_targets =
                 crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
@@ -1952,7 +1955,8 @@ impl ScriptListApp {
                         &|token| self.spine_mention_aliases.contains_key(token),
                     );
                 let gpui_input_value = self.gpui_input_state.read(cx).value().to_string();
-                if gpui_input_value == self.spine_parse.input {
+                // Chips' tokens follow the input's words in the parse; only the words are marked.
+                if self.spine_parse.input.starts_with(gpui_input_value.as_str()) {
                     let input_len = gpui_input_value.len();
                     for (range, role) in spine_accent_ranges {
                         if range.end <= input_len
@@ -2138,6 +2142,21 @@ impl ScriptListApp {
                         .child(self.render_search_input_with_ghost(cx)),
                 )
                 .into_any_element()
+        } else if let Some(chips) = self.render_input_chips(menu_def) {
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(chips)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(self.render_search_input_with_ghost(cx)),
+                )
+                .into_any_element()
         } else {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
@@ -2147,7 +2166,20 @@ impl ScriptListApp {
             menu_def,
             crate::components::main_view_chrome::MainViewInputChrome {
                 body: input_body,
-                trailing: Vec::new(),
+                trailing: self
+                    .one_window
+                    .chip()
+                    .filter(|chip| !chip.attached && self.filter_text.is_empty())
+                    .map(|chip| {
+                        crate::one_window::slot_line::render_subject_chip(
+                            &self.theme,
+                            menu_def,
+                            &chip,
+                            false,
+                        )
+                    })
+                    .into_iter()
+                    .collect(),
             },
         );
 
