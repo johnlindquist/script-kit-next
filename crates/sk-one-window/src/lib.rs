@@ -14,7 +14,6 @@ pub mod connect;
 pub mod contract;
 pub mod enter;
 pub mod form;
-pub mod height;
 pub mod history;
 pub mod hold;
 pub mod ledger;
@@ -41,7 +40,6 @@ pub mod work;
 pub type Ms = u64;
 
 pub use enter::EnterTarget;
-pub use height::{HeightDecision, HeightMode};
 pub use ledger::{Entry, EntryState, Risk};
 pub use lessons::{Lesson, Lessons};
 pub use list::Item;

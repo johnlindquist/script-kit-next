@@ -8,7 +8,7 @@
 #   check-marks.py    per frame: every word mark the app handed the input is painted as a bar in its
 #                     word's color under exactly its text, the text keeps its own color, and no other
 #                     bar shows; chapters/<name>.marks.json is the spec for what each sentence is marked
-#   stress-report.py  per run: anchor, first row, header, pump, fidelity, rug, layout shift
+#   stress-report.py  per run: anchor, first row, header, steady height, fidelity, rug, layout shift
 #   marks-video.py    per run: <out>/<name>/run.mp4 and run.gif, every step in order (not a grade)
 # chapters/<name>.args holds extra one-window-frames.ts options (e.g. --fixture prompt.arg);
 # chapters/<name>.expect.json and stress/<name>.expect.json hold what each step showed when its frames were

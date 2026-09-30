@@ -11,14 +11,14 @@ mod work;
 use std::collections::{HashMap, HashSet};
 
 use proptest::prelude::*;
+use sk_one_window::contract::ENTER_GUARD_MS;
 use sk_one_window::contract::words;
-use sk_one_window::contract::{ENTER_GUARD_MS, READING_WAIT_MS, SHRINK_HOLD_MS};
 use sk_one_window::list::Item;
 use sk_one_window::notice::{Irreversible, Notice};
 use sk_one_window::window::{
     Done, Effect, Event, HeldOp, Key, OneWindow, Outcome, RunHow, ViewOp, ViewSpec,
 };
-use sk_one_window::{EnterTarget, HeightMode, Row, SlotKind};
+use sk_one_window::{EnterTarget, Row, SlotKind};
 
 /// What ↵ says while Enter runs Jev's reading, whichever it turns out to be.
 const JEV_RUNS: [&str; 3] = [
@@ -35,7 +35,6 @@ enum Step {
     Jev { current: bool, rows: Vec<usize> },
     JevDown,
     Done { message: bool, stay: bool },
-    Content(u16),
     Open,
     OpenUnprompted,
     Wait(u16),
@@ -85,7 +84,6 @@ fn step() -> impl Strategy<Value = Step> {
         3 => (any::<bool>(), prop::collection::vec(0..JEV.len(), 0..4)).prop_map(|(current, rows)| Step::Jev { current, rows }),
         1 => Just(Step::JevDown),
         1 => (any::<bool>(), any::<bool>()).prop_map(|(message, stay)| Step::Done { message, stay }),
-        2 => (120u16..600).prop_map(Step::Content),
         1 => Just(Step::Open),
         1 => Just(Step::OpenUnprompted),
         4 => (1u16..2_000).prop_map(Step::Wait),
@@ -97,10 +95,6 @@ fn step() -> impl Strategy<Value = Step> {
 struct Run {
     win: OneWindow,
     now: u64,
-    last_text_at: Option<u64>,
-    /// When the window last went somewhere (a view opened or closed, something staged, done):
-    /// back on the list the floor clears, so only typing since then holds the height.
-    nav_at: Option<u64>,
     guard_until: u64,
     sent: HashSet<u64>,
     unsent: HashSet<u64>,
@@ -132,8 +126,6 @@ impl Run {
         Self {
             win,
             now: 0,
-            last_text_at: None,
-            nav_at: None,
             guard_until: 0,
             sent: HashSet::new(),
             unsent: HashSet::new(),
@@ -204,10 +196,6 @@ impl Run {
     fn send(&mut self, ev: Event) {
         let before = self.win.snapshot(self.now);
         let is_enter = matches!(ev, Event::Key(Key::Enter));
-        let text_before = self.win.text().to_string();
-        let staged_before = self.win.staged().is_some();
-        let typed = matches!(ev, Event::Text(_));
-        let command = matches!(&ev, Event::Key(k) if !matches!(k, Key::Up | Key::Down));
         let user = matches!(
             ev,
             Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
@@ -218,13 +206,6 @@ impl Run {
         let was = self.highlight();
         let out = self.win.handle(self.now, ev);
         self.check_kept(was, &out);
-        let went = command
-            || before.view.is_some() != self.win.in_view()
-            || staged_before != self.win.staged().is_some()
-            || (!typed && text_before != self.win.text());
-        if went {
-            self.nav_at = Some(self.now);
-        }
         self.check(&out.effects, is_enter.then_some(before.enter));
     }
 
@@ -250,22 +231,6 @@ impl Run {
                             "Enter said “{}” but ran “{}”",
                             target.label,
                             row.title
-                        );
-                    }
-                }
-                Effect::Height(d) if d.mode == HeightMode::Shrink => {
-                    if let Some(at) = self.last_text_at {
-                        let went = self.nav_at.is_some_and(|n| n >= at);
-                        assert!(
-                            went || now >= at + SHRINK_HOLD_MS,
-                            "shrank {}ms after a key",
-                            now - at
-                        );
-                        let reading = !self.win.in_view() && self.win.list().reading();
-                        assert!(
-                            went || !reading || now >= at + READING_WAIT_MS,
-                            "shrank {}ms after a key while Jev was still reading",
-                            now - at
                         );
                     }
                 }
@@ -297,13 +262,6 @@ impl Run {
                 _ => {}
             }
         }
-        let height = self.win.height();
-        assert!(
-            height.displayed() + 2.0 >= height.natural(),
-            "the window ({}) is shorter than what it shows ({})",
-            height.displayed(),
-            height.natural()
-        );
         let snap = self.win.snapshot(now);
         if snap.view.is_none() {
             assert!(
@@ -353,7 +311,6 @@ impl Run {
             Step::Wait(ms) => self.advance(self.now + ms as u64),
             Step::Type(i) => {
                 self.advance(self.now + 1);
-                self.last_text_at = Some(self.now);
                 self.send(Event::Text(WORDS[i].to_string()));
             }
             Step::Key(k) => {
@@ -405,12 +362,9 @@ impl Run {
                     ..Done::default()
                 }));
                 if !stay {
-                    self.nav_at = Some(self.now);
                     self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
-                    self.nav_at = Some(self.now);
                 }
             }
-            Step::Content(px) => self.send(Event::Content { px: px as f32 }),
             Step::Notice => {
                 self.advance(self.now + 1);
                 self.send(Event::Notice(Notice::new("check", "Copied")));
@@ -421,7 +375,6 @@ impl Run {
                     "trash",
                     "Empty Trash",
                 )));
-                self.nav_at = Some(self.now);
                 self.guard_until = self.guard_until.max(self.now + ENTER_GUARD_MS);
             }
             Step::Open | Step::OpenUnprompted => {

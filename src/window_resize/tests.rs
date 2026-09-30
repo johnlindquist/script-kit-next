@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn height_is_full_until_the_one_window_reducer_places_it() {
+fn an_empty_launcher_keeps_the_fixed_height() {
     let height = f32::from(height_for_main_window(MainWindowSizing {
         selectable_items: 0,
         visible_section_headers: 0,
@@ -19,7 +19,7 @@ fn height_returns_fixed_height_regardless_of_content() {
         is_empty: false,
     }));
 
-    // Content doesn't size the window; the one-window reducer does
+    // Content doesn't size the main window
     assert_eq!(height, MAIN_WINDOW_MAX_HEIGHT);
 }
 

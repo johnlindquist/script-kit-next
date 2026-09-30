@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::Ms;
 use crate::enter::EnterTarget;
-use crate::height::HeightMode;
 use crate::ledger::{Entry, EntryState, Risk};
 use crate::list::Item;
 use crate::row::Row;
@@ -41,10 +40,6 @@ pub enum Out {
         label: String,
         armed: bool,
     },
-    Height {
-        px: f32,
-        mode: String,
-    },
     Run {
         key: String,
         title: String,
@@ -62,7 +57,8 @@ pub enum Out {
         #[serde(default)]
         sel: usize,
     },
-    /// Outputs the reducer doesn't produce (toasts, the page setting the input).
+    /// Outputs the reducer doesn't produce (toasts, the page setting the input, the page's
+    /// window height: the app's window keeps one height while it shows).
     #[serde(other)]
     Other,
 }
@@ -86,14 +82,6 @@ pub struct OutLine {
     pub t: Ms,
     #[serde(flatten)]
     pub out: Out,
-}
-
-fn mode_words(mode: HeightMode) -> &'static str {
-    match mode {
-        HeightMode::Grow => "grow",
-        HeightMode::Hold => "hold",
-        HeightMode::Shrink => "shrink",
-    }
 }
 
 fn held_words(op: HeldOp) -> &'static str {
@@ -164,10 +152,6 @@ impl Observer {
                 let out = match fx {
                     Effect::EnterIgnored => Out::Ignored {
                         key: "Enter".into(),
-                    },
-                    Effect::Height(d) => Out::Height {
-                        px: d.px,
-                        mode: mode_words(d.mode).into(),
                     },
                     Effect::Held { op, id, label, .. } => {
                         let was = self.held_labels.insert(*id, label.clone());
@@ -457,6 +441,7 @@ pub enum Ev {
     Unsend {
         label: String,
     },
+    /// The prototype's window measured its content; the app's height doesn't follow it.
     Content {
         px: f32,
     },
@@ -757,7 +742,7 @@ pub fn events_of(line: EvLine, turn_run: Option<&Row>, win: &OneWindow) -> Vec<E
         Ev::Unsend { label } => vec![Event::Unsend {
             target: (label != "all").then_some(label),
         }],
-        Ev::Content { px } => vec![Event::Content { px }],
+        Ev::Content { .. } => vec![],
         Ev::Dismiss { app } => match turn_run {
             Some(row) if by_key => vec![Event::Ran {
                 row: row.clone(),

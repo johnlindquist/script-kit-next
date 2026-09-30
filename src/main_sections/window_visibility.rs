@@ -371,20 +371,13 @@ fn show_main_window_helper(
         }
         view.one_window_summon(ctx);
         view.one_window_open_waiting_note(ctx);
+        view.prefetch_spine_file_recents(ctx);
 
-        if matches!(view.current_view, AppView::ScriptList)
-            && view.main_window_mode == MainWindowMode::Mini
-        {
-            let (grouped_items, _) = view.get_grouped_results_cached();
-            let sizing =
-                crate::window_resize::main_window_sizing_from_grouped_items(&grouped_items);
-            let target = crate::window_resize::MainMenuSizingTarget(sizing);
-            gpui::size(px(target.width()), target.height())
-        } else if matches!(view.current_view, AppView::ScriptList) {
-            let target = crate::window_resize::MainMenuSizingTarget(
-                crate::window_resize::MainWindowSizing::default(),
-            );
-            gpui::size(px(target.width()), target.height())
+        if matches!(view.current_view, AppView::ScriptList) {
+            gpui::size(
+                px(crate::window_resize::MAIN_WINDOW_WIDTH),
+                px(view.one_window_fixed_height()),
+            )
         } else if let Some((view_type, item_count)) =
             view.calculate_window_size_params_with_app(Some(&*ctx))
         {

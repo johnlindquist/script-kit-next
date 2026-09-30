@@ -1578,6 +1578,54 @@ impl ScriptListApp {
         }
     }
 
+    /// Fetches the recently-used files `@file:` lands on before it is typed, when this scope
+    /// has none cached yet, so the first `@file:` of a session shows them on its first frame.
+    /// Only the cache is filled; the list isn't touched. Evaluation runs keep their fixtures.
+    pub(crate) fn prefetch_spine_file_recents(&mut self, cx: &mut Context<Self>) {
+        use crate::spine::catalog_subsearch::ContextSubsearchSource;
+        if self.main_services.search_gate().is_some()
+            || self.main_services.owned_sources().is_some()
+            || !self
+                .spine_file_recent_seed_for(ContextSubsearchSource::File)
+                .is_empty()
+        {
+            return;
+        }
+        let Some(request) = self.spine_file_recents_request(ContextSubsearchSource::File) else {
+            return;
+        };
+        let key = request.key();
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let worker = request.clone();
+            cx.background_executor()
+                .spawn(async move { worker.emit(crate::file_search::new_cancel_token(), tx) })
+                .await;
+            let mut files: Vec<crate::file_search::FileResult> = rx
+                .try_iter()
+                .filter_map(|event| match event {
+                    MainFileWorkerEvent::Result(file) => Some(file),
+                    _ => None,
+                })
+                .collect();
+            files.sort_by_key(|file| std::cmp::Reverse(file.modified));
+            files.truncate(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
+            let files = dedupe_root_file_results(files);
+            let _ = this.update(cx, |app, _cx| {
+                if files.is_empty() || app.spine_file_recent_seed.is_some() {
+                    return;
+                }
+                tracing::info!(
+                    target: "script_kit::one_window",
+                    event = "file_recents_prefetched",
+                    files = files.len(),
+                );
+                app.spine_file_recent_seed = Some((key, files));
+            });
+        })
+        .detach();
+    }
+
     /// Directory the `@project:` subsearch is scoped to: the global cwd chip,
     /// falling back to home when no cwd is set.
     fn spine_project_scope_dir(&self) -> Option<String> {

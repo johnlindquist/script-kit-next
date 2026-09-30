@@ -2,9 +2,11 @@
 //!
 //! Handles window height for different view types in Script Kit GPUI.
 //!
-//! **Key Rules:**
-//! - MainWindow: the one-window reducer's height, up to 480px (`set_main_window_height`)
-//! - ArgPrompt with choices: Dynamic height based on choice count (capped at 500px)
+//! **Key Rules:** a surface's height is chosen when it opens, from what kind of surface it is;
+//! typing, filtering and results arriving never resize the window.
+//! - MainWindow: one fixed height (480px) for the launcher list and every view under its input
+//! - ArgPrompt/Select with choices: sized once from the choices the script declared (capped at
+//!   the standard height), never from what the filter leaves
 //! - ArgPrompt without choices (input only): Compact input-only height
 //! - Editor/Div/Term: Full height 700px
 
@@ -246,28 +248,9 @@ pub(crate) fn log_main_window_sizing(
     );
 }
 
-/// The main window's height as the one-window reducer last placed it; the full height until it
-/// has. Every path that sizes the launcher reads it, so the reducer is its one owner.
-static MAIN_WINDOW_HEIGHT_BITS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-/// Called only by the one-window host as it applies the reducer's height decisions.
-#[allow(dead_code)] // Called from the binary-only one-window host.
-pub(crate) fn set_main_window_height(height: f32) {
-    let height = height.max(MAIN_WINDOW_MIN_HEIGHT);
-    MAIN_WINDOW_HEIGHT_BITS.store(height.to_bits(), std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The reducer's height under a mode's ceiling; the ceiling until it has placed the window.
-fn governed_main_window_height(ceiling: f32) -> Pixels {
-    match MAIN_WINDOW_HEIGHT_BITS.load(std::sync::atomic::Ordering::Relaxed) {
-        0 => px(ceiling),
-        bits => px(f32::from_bits(bits).min(ceiling)),
-    }
-}
-
-/// Calculate the target height for the main window.
+/// The main window's height: fixed, whatever the list or a view under the input holds.
 pub(crate) fn height_for_main_window(_sizing: MainWindowSizing) -> Pixels {
-    governed_main_window_height(MAIN_WINDOW_MAX_HEIGHT)
+    px(MAIN_WINDOW_MAX_HEIGHT)
 }
 
 /// Canonical size target for the main menu.
@@ -639,9 +622,8 @@ fn height_for_view_with_layout(
     };
 
     match view_type {
-        // The full launcher follows the one-window reducer up to the standard height;
-        // DivPrompt keeps the standard height.
-        ViewType::ScriptList => governed_main_window_height(layout_config.standard_height),
+        // The full launcher keeps the standard height; DivPrompt keeps the standard height.
+        ViewType::ScriptList => standard_height,
         ViewType::DivPrompt => standard_height,
         ViewType::MicroPrompt => {
             px(main_layout::HEADER_PADDING_Y + ARG_INPUT_LINE_HEIGHT + WINDOW_BORDER_Y)
@@ -1602,7 +1584,7 @@ mod main_window_layout_tests {
             is_empty: false,
         });
 
-        // Content doesn't size the window; the one-window reducer does
+        // Content doesn't size the main window
         assert_eq!(f32::from(height), MAIN_WINDOW_MAX_HEIGHT);
     }
 

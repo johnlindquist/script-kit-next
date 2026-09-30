@@ -1,87 +1,44 @@
-//! The main window's height: how tall the list wants it, and where the reducer's height
-//! decisions put it.
+//! The main window's height: one height for the window's mode, kept while it shows. The list,
+//! the views under the input, and whatever arrives later all fill that height; typing,
+//! filtering, and results landing never resize the window.
 
 use gpui::{AppContext as _, Context};
-use sk_one_window::{HeightDecision, HeightMode};
 
 use crate::{AppView, MainWindowMode, ScriptListApp};
 
 impl ScriptListApp {
-    /// How tall the launcher may get in its current mode.
-    fn one_window_height_ceiling(&self) -> f32 {
+    /// The main window's one height in its current mode.
+    pub(crate) fn one_window_fixed_height(&self) -> f32 {
         match self.main_window_mode {
             MainWindowMode::Mini => crate::window_resize::main_window_full_height(),
             MainWindowMode::Full => crate::window_resize::current_standard_height(),
         }
     }
 
-    /// The line above the input, the input, the list as drawn, and the floating footer's zone.
-    pub(super) fn one_window_natural_height(&self) -> f32 {
-        if self.one_window_work_view_open() {
-            return self.one_window_height_ceiling();
-        }
-        if let Some(px) = self.one_window_view_height() {
-            return px.min(self.one_window_height_ceiling());
-        }
-        if self.menu_syntax_card_owns_list() {
-            return self.one_window_height_ceiling();
-        }
-        let (grouped, _) = self.get_grouped_results_cached();
-        let heights = crate::scrolling::list_geometry::GroupedListRowHeights::for_theme(
-            self.current_main_menu_theme,
-        );
-        let coming = if self.one_window_owns_list() {
-            self.one_window.list().rows_coming()
-        } else {
-            0
-        };
-        let list = crate::scrolling::list_geometry::content_height(grouped.len(), |ix| {
-            heights.row_height(&grouped[ix], ix)
-        }) + coming as f32 * heights.item;
-        let chrome = sk_one_window::contract::app::SLOT_LINE_PX
-            + f32::from(crate::main_list_header_overlay_height(
-                self.current_main_menu_theme.def(),
-            ))
-            + crate::footer_popup::main_window_footer_reservation_height();
-        (chrome + list + self.one_window_view_extra_height()).min(self.one_window_height_ceiling())
-    }
-
-    /// Whether a command composer or filter guide fills the list area in place of rows; it has no
-    /// rows to measure, so it gets the whole window. A typed capture is a row.
-    fn menu_syntax_card_owns_list(&self) -> bool {
-        let text = self.filter_text.as_str();
-        if self.menu_syntax_trigger_picker_state.owns_main_list()
-            || self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_mode.capture_composer_owns_input_for(text)
-        {
-            return false;
-        }
-        (self.menu_syntax_mode.command_owns_input_for(text)
-            && !self.spine_projection_owns_main_list())
-            || crate::menu_syntax::active_filter_head_owns_main_list(text)
-    }
-
-    pub(super) fn one_window_apply_height(
-        &mut self,
-        decision: HeightDecision,
-        cx: &mut Context<Self>,
-    ) {
-        if decision.mode == HeightMode::Hold && self.one_window_host.height == Some(decision.px) {
-            return;
-        }
-        self.one_window_set_height(decision.px, cx);
-    }
-
-    fn one_window_set_height(&mut self, height: f32, cx: &mut Context<Self>) {
-        self.one_window_host.height = Some(height);
-        crate::window_resize::set_main_window_height(height);
-        let Some(handle) = self.one_window_host.window else {
-            return;
-        };
+    /// Puts the window at its fixed height when what it draws in isn't. Runs on every render of
+    /// the main list, so a mode switch or a return from a prompt that left another height is
+    /// corrected before the next frame; one request is made per wrong height.
+    fn one_window_keep_fixed_height(&mut self, window: &gpui::Window, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::ScriptList) {
+            // A prompt sizes the window its own way; coming back must check again.
+            self.one_window_host.height = None;
             return;
         }
-        let height = height.min(self.one_window_height_ceiling());
+        let height = self.one_window_fixed_height();
+        let shown = f32::from(window.viewport_size().height);
+        if (shown - height).abs() < 1.0 || self.one_window_host.height == Some(height) {
+            self.one_window_host.height = Some(height);
+            return;
+        }
+        tracing::info!(
+            target: "script_kit::one_window",
+            event = "main_window_height",
+            height_px = height,
+            shown_px = shown,
+            mode = ?self.main_window_mode,
+        );
+        self.one_window_host.height = Some(height);
+        let handle = window.window_handle();
         cx.defer(move |cx| {
             let _ = cx.update_window(handle, |_, window, cx| {
                 if crate::runtime_policy::is_owned_evaluation() {
@@ -101,16 +58,13 @@ impl ScriptListApp {
         });
     }
 
-    /// The window the main list draws in, where its height is applied. A height the reducer
-    /// placed before the window first drew is applied now, or the first key would snap to it.
+    /// The window the main list draws in, where its height is kept.
     pub(crate) fn one_window_rendered_in(&mut self, window: &gpui::Window, cx: &mut Context<Self>) {
         let handle = window.window_handle();
-        if self.one_window_host.window == Some(handle) {
-            return;
+        if self.one_window_host.window != Some(handle) {
+            self.one_window_host.window = Some(handle);
+            self.one_window_host.height = None;
         }
-        self.one_window_host.window = Some(handle);
-        if let Some(height) = self.one_window_host.height {
-            self.one_window_set_height(height, cx);
-        }
+        self.one_window_keep_fixed_height(window, cx);
     }
 }

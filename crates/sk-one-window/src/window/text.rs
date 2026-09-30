@@ -16,7 +16,6 @@ impl OneWindow {
                 }
                 self.views.home();
                 self.guard.forget_view();
-                self.cause = Some((ContentCause::Home, now));
             }
         }
         if !typed && self.list.text == text {

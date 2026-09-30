@@ -372,29 +372,12 @@ impl ScriptListApp {
         Some((head, rows))
     }
 
-    /// The open view's natural height: the line above the input, the header, its rows and the
-    /// floating footer's zone.
-    pub(crate) fn one_window_view_height(&self) -> Option<f32> {
-        let rows = match self.one_window_hosted_view() {
-            Some(view) => view.rows(),
-            None if self.one_window.staged().is_some()
+    /// Whether an open view, or a staged subject's rows, is drawn in place of the list.
+    pub(crate) fn one_window_view_covers_list(&self) -> bool {
+        self.one_window_hosted_view().is_some()
+            || (self.one_window.staged().is_some()
                 && !self.one_window.in_view()
-                && self.filter_text.trim().is_empty() =>
-            {
-                self.one_window.list().visible().len()
-            }
-            None => return None,
-        };
-        let theme = self.current_main_menu_theme;
-        let row_h = crate::list_item::effective_list_item_height_for_theme(theme);
-        let header_h = crate::list_item::effective_first_section_header_height_for_theme(theme);
-        Some(
-            sk_one_window::contract::app::SLOT_LINE_PX
-                + f32::from(crate::main_list_header_overlay_height(theme.def()))
-                + header_h
-                + row_h * rows as f32
-                + crate::footer_popup::main_window_footer_reservation_height(),
-        )
+                && self.filter_text.trim().is_empty())
     }
 
     /// The first header the window draws: an open form, answer or note's words, a work view's

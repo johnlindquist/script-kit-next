@@ -25,7 +25,6 @@ impl OneWindow {
                         .enter
                         .clone()
                         .unwrap_or_else(|| EnterTarget::new(top.name.clone(), ""));
-                    self.cause = Some((ContentCause::ViewOpened, now));
                     self.guard.observe_view(now, &target.id, user);
                     let restore = popped.leave_text.unwrap_or(popped.saved_text);
                     fx.push(Effect::SetInput(restore.clone()));
@@ -33,7 +32,6 @@ impl OneWindow {
                 } else {
                     self.guard.forget_view();
                     self.guard.arm_unless_user(now, user);
-                    self.cause = Some((ContentCause::Home, now));
                     self.set_input(now, popped.leave_text.unwrap_or(popped.saved_text), fx);
                 }
             }
@@ -42,7 +40,6 @@ impl OneWindow {
                 self.views.home();
                 self.guard.forget_view();
                 self.guard.arm_unless_user(now, user);
-                self.cause = Some((ContentCause::Home, now));
                 self.set_input(now, String::new(), fx);
             }
             ViewOp::Label(label) => {
@@ -65,7 +62,6 @@ impl OneWindow {
     }
 
     pub(super) fn opened(&mut self, now: Ms, spec: ViewSpec, user: bool, fx: &mut Vec<Effect>) {
-        self.cause = Some((ContentCause::ViewOpened, now));
         self.list.held = None;
         let target = spec
             .enter
@@ -89,7 +85,6 @@ impl OneWindow {
         self.guard.forget_view();
         let user = self.user_turn(now);
         self.guard.arm_unless_user(now, user);
-        self.cause = Some((ContentCause::Home, now));
         self.set_input(now, text, fx);
     }
 }

@@ -26,8 +26,6 @@ fn text<'a>(v: &'a Value, path: &str) -> Option<&'a str> {
 fn timings_match_the_prototype() {
     let c = load();
     let expect = [
-        ("timing.shrinkHoldMs", contract::SHRINK_HOLD_MS),
-        ("timing.viewHoldMs", contract::VIEW_HOLD_MS),
         ("timing.enterGuardMs", contract::ENTER_GUARD_MS),
         ("timing.rowArmMs", contract::ROW_ARM_MS),
         ("timing.messageHoldMs", contract::MESSAGE_HOLD_MS),

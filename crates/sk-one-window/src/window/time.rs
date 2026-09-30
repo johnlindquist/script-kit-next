@@ -9,13 +9,6 @@ impl OneWindow {
                 self.sent(now, id, fx);
             }
         }
-        if let Some(d) = self.height.tick(now) {
-            fx.push(Effect::Height(d));
-        }
-        if self.redraws.first().is_some_and(|at| *at <= now) {
-            self.redraws.retain(|at| *at > now);
-            self.list_redrawn(now, fx);
-        }
         if let Some((at, text)) = self.jev_due.clone() {
             if now >= at {
                 self.jev_due = None;
@@ -32,16 +25,6 @@ impl OneWindow {
         }
         if !self.user_turn(now) {
             self.talk_decide(now, fx);
-        }
-    }
-
-    /// The list drew again: the height may start its pause over or stop holding.
-    pub(super) fn list_redrawn(&mut self, now: Ms, fx: &mut Vec<Effect>) {
-        if self.in_view() {
-            return;
-        }
-        if let Some(d) = self.height.redrawn(now) {
-            fx.push(Effect::Height(d));
         }
     }
 
@@ -88,11 +71,9 @@ impl OneWindow {
         let armed_end = self.guard.armed(now).then(|| self.guard.armed_until());
         let next = [
             self.holds.next_wake(now),
-            self.height.next_wake(),
             self.list.jev.next_wake(now),
             armed_end,
             self.jev_due.as_ref().map(|(at, _)| *at),
-            self.redraws.first().copied(),
             self.dismiss.as_ref().map(|d| d.at),
             self.list.reading_wake(now),
         ]

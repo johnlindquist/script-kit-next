@@ -101,11 +101,18 @@ pub(crate) fn build_rich_file_subsearch_rows(
     if query.is_empty() {
         // A3 recent-files decision (2026-06-09): the empty landing state
         // blends frecency picks (files chosen through Script Kit) with the
-        // provider's recently-used seed, deduped by path.
+        // provider's recently-used list, deduped by path. Until this entry's
+        // provider answer lands, the last one for this scope (`seen_recents`)
+        // stands in, so the landing list is whole on its first frame.
+        let provider_recents = if provider_results.is_empty() {
+            seen_recents
+        } else {
+            provider_results
+        };
         let mut seen = std::collections::HashSet::new();
         let combined: Vec<&crate::file_search::FileResult> = recent_results
             .iter()
-            .chain(provider_results.iter())
+            .chain(provider_recents.iter())
             .filter(|file| seen.insert(file.path.as_str()))
             .take(limit)
             .collect();
@@ -666,4 +673,63 @@ pub(crate) fn build_rich_cwd_subsearch_rows(
         grouped.push(GroupedListItem::Item(idx));
     }
     (grouped, flat)
+}
+
+#[cfg(test)]
+mod file_landing_tests {
+    use super::{build_rich_file_subsearch_rows, FileSubsearchFlavor};
+    use crate::file_search::{FileResult, FileType};
+    use crate::list_item::GroupedListItem;
+
+    fn file(path: &str) -> FileResult {
+        FileResult {
+            path: path.to_string(),
+            name: path.rsplit('/').next().unwrap_or(path).to_string(),
+            size: 0,
+            modified: 0,
+            file_type: FileType::File,
+        }
+    }
+
+    fn paths(flat: &[crate::scripts::SearchResult]) -> Vec<String> {
+        flat.iter()
+            .map(|result| match result {
+                crate::scripts::SearchResult::File(m) => m.file.path.clone(),
+                other => panic!("not a file row: {}", other.name()),
+            })
+            .collect()
+    }
+
+    /// The landing list is whole on the frame `@file:` is typed: while this entry's Spotlight
+    /// answer is on its way, the last answer for the scope stands in for it, instead of
+    /// showing only frecency picks and filling in ~350 ms later.
+    #[test]
+    fn landing_shows_the_last_recents_while_the_provider_is_loading() {
+        let picked = [file("/a/picked.png")];
+        let last = [file("/a/picked.png"), file("/a/one.mp4"), file("/a/two.html")];
+        let (grouped, flat) = build_rich_file_subsearch_rows(
+            FileSubsearchFlavor::Global,
+            "",
+            true,
+            &[],
+            &picked,
+            &last,
+            |_| 0.0,
+        );
+        assert_eq!(paths(&flat), ["/a/picked.png", "/a/one.mp4", "/a/two.html"]);
+        assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(h, _) if h == "Recent Files"));
+
+        // The fresh answer replaces the stand-in once it lands.
+        let fresh = [file("/a/new.txt")];
+        let (_, flat) = build_rich_file_subsearch_rows(
+            FileSubsearchFlavor::Global,
+            "",
+            false,
+            &fresh,
+            &picked,
+            &last,
+            |_| 0.0,
+        );
+        assert_eq!(paths(&flat), ["/a/picked.png", "/a/new.txt"]);
+    }
 }

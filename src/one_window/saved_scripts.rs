@@ -256,19 +256,6 @@ impl ScriptListApp {
         Some((SAVED_SCRIPT_FILE.to_string(), vec![row]))
     }
 
-    /// The height the saved entry's source takes under its row.
-    pub(crate) fn one_window_script_height(&self) -> f32 {
-        let Some(shown) = self.one_window_host.learns.script.as_ref() else {
-            return 0.;
-        };
-        let size = self.theme.get_fonts().mono_size;
-        let line = match gpui::phi() {
-            gpui::DefiniteLength::Fraction(ratio) => size * ratio,
-            gpui::DefiniteLength::Absolute(_) => size,
-        };
-        shown.source.lines().count() as f32 * line
-    }
-
     /// The saved entry's source, under the script view's row, in the mono font.
     pub(crate) fn one_window_script_element(&self, colors: ListItemColors) -> Option<AnyElement> {
         let shown = self.one_window_host.learns.script.as_ref()?;

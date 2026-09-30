@@ -6,19 +6,6 @@
 //! the prototype value times [`GEOMETRY_SCALE`], rounded, except where the app's existing Tahoe
 //! token is the reference the prototype copied (the list header and the floating buttons).
 
-/// Typing pauses this long before the window shrinks.
-pub const SHRINK_HOLD_MS: u64 = 300;
-/// A view that just opened keeps the window's height this long before it may shrink.
-pub const VIEW_HOLD_MS: u64 = 300;
-/// The window shrinks only when it would lose at least this much; a smaller drop leaves the
-/// space under the list. The app's own number, not the prototype's (it animated every shrink).
-pub const MIN_SHRINK_PX: f32 = 2.0 * app::ROW_PX;
-/// A list still waiting for Jev's reading keeps its height this long after the last key, so the
-/// window shrinks once for the words, when the reading lands, instead of once before and once after.
-pub const READING_WAIT_MS: u64 = 1_000;
-/// When Jev's reading lands while a shrink waits for it, the shrink waits this much longer for the
-/// list's next measure, so it lands once, on the list with the reading in it.
-pub const MEASURE_WAIT_MS: u64 = 16;
 /// Space has staged what's focused this many times, so the line's hint drops its word.
 pub const USE_HINT_GRABS: u32 = 3;
 /// Enter is ignored this long after its target changed without a keypress.

@@ -1552,30 +1552,23 @@ impl ScriptListApp {
                 Some((view_type, count))
             }
             AppView::About { .. } => Some((ViewType::DivPrompt, 0)),
+            // Choice prompts are sized from the choices the script declared, never from what
+            // the filter leaves, so typing never resizes them.
             AppView::ArgPrompt { choices, .. } => {
-                let filtered = self.get_filtered_arg_choices(choices);
-                if filtered.is_empty() && choices.is_empty() {
+                if choices.is_empty() {
                     Some((ViewType::ArgPromptNoChoices, 0))
                 } else {
-                    Some((ViewType::ArgPromptWithChoices, filtered.len()))
+                    Some((ViewType::ArgPromptWithChoices, choices.len()))
                 }
             }
-            AppView::MiniPrompt { choices, .. } => {
-                let filtered = self.get_filtered_arg_choices(choices);
-                if filtered.is_empty() && choices.is_empty() {
-                    Some((mini_prompt_view_type(), 0))
-                } else {
-                    Some((mini_prompt_view_type(), filtered.len()))
-                }
-            }
+            AppView::MiniPrompt { choices, .. } => Some((mini_prompt_view_type(), choices.len())),
             AppView::MicroPrompt { .. } => Some((ViewType::MicroPrompt, 0)),
             AppView::DivPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::FormPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Use DivPrompt size for forms
             AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::SelectPrompt { entity, .. } => Some((
                 ViewType::SelectPrompt,
-                cx.map(|cx| entity.read(cx).filtered_choices.len())
-                    .unwrap_or(1),
+                cx.map(|cx| entity.read(cx).choices.len()).unwrap_or(1),
             )),
             AppView::PathPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0)),

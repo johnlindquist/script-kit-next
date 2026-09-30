@@ -112,7 +112,6 @@ impl ScriptListApp {
             leave_text: None,
         };
         self.one_window_host.view = Some(view);
-        let px = self.one_window_natural_height();
         let op = if replaces {
             ViewOp::Replace(spec)
         } else {
@@ -124,7 +123,7 @@ impl ScriptListApp {
         if self.one_window.text() != typed {
             turn.push(Event::Text(typed));
         }
-        turn.extend([Event::View(op), Event::Content { px }]);
+        turn.push(Event::View(op));
         self.one_window_handle_turn(turn, cx);
     }
 
@@ -394,9 +393,7 @@ impl ScriptListApp {
         true
     }
 
-    /// After every turn: a view the reducer closed is gone here too, and when what's drawn in
-    /// place of the list changed size (a view opened or closed, a subject was staged or let go)
-    /// the reducer hears the window's new natural height.
+    /// After every turn: a view the reducer closed is gone here too.
     pub(crate) fn one_window_views_follow(&mut self, cx: &mut Context<Self>) {
         if self.one_window_host.view.is_some() && self.one_window_hosted_view().is_none() {
             self.one_window_host.view = None;
@@ -405,12 +402,6 @@ impl ScriptListApp {
         let covered = self.one_window.in_view();
         if covered != std::mem::replace(&mut self.one_window_host.covered, covered) {
             self.refresh_ghost_with_input(cx);
-        }
-        let drawn = self.one_window_view_height();
-        if drawn != self.one_window_host.view_px {
-            self.one_window_host.view_px = drawn;
-            let px = self.one_window_natural_height();
-            self.one_window_handle(Event::Content { px }, cx);
         }
     }
 
@@ -518,12 +509,11 @@ impl ScriptListApp {
             leave_text: None,
         };
         self.one_window_host.view = Some(view);
-        let px = self.one_window_natural_height();
         let mut turn = Vec::new();
         if self.one_window.text() != question {
             turn.push(Event::Text(question));
         }
-        turn.extend([Event::View(ViewOp::Open(spec)), Event::Content { px }]);
+        turn.push(Event::View(ViewOp::Open(spec)));
         self.one_window_handle_turn(turn, cx);
     }
 
@@ -558,8 +548,6 @@ impl ScriptListApp {
             *open = answer;
         }
         self.one_window_handle(Event::ViewEnter(target), cx);
-        let px = self.one_window_natural_height();
-        self.one_window_handle(Event::Content { px }, cx);
     }
 
     /// One of Jev's readings that fills in a form or a note instead of running at once.

@@ -1,8 +1,9 @@
 //! The one window as a reducer: events in, effects out, time passed in.
 //!
 //! The host owns pixels, processes and Jev; this owns every rule about what the line above the
-//! input says, which header leads the list, what Enter runs and when it is ignored, how the
-//! window's height moves, and what waits before it goes. Nothing here reads a clock.
+//! input says, which header leads the list, what Enter runs and when it is ignored, and what
+//! waits before it goes. The window's height is not one of them: it is fixed while the window
+//! shows. Nothing here reads a clock.
 
 mod chat_work;
 mod chips;
@@ -25,10 +26,9 @@ mod work;
 use crate::Ms;
 use crate::contract::{
     DISMISS_SETTLE_MS, ENTER_GUARD_MS, JEV_DEBOUNCE_MS, MAX_FALLBACKS_WITH_MATCHES, MAX_MATCHES,
-    ROW_ARM_MS, words,
+    words,
 };
 use crate::enter::{EnterGuard, EnterTarget};
-use crate::height::{ContentCause, HeightDecision, HeightGovernor};
 use crate::hold::{Held, HeldChange, HeldState, Holds};
 use crate::ledger::{Entry, EntryState, Ledger, NewEntry, Risk, risk_of};
 use crate::list::{Item, ListState};
@@ -197,10 +197,6 @@ pub enum Event {
         sentence: String,
         steps: Vec<String>,
     },
-    /// The window's natural height for what it shows now.
-    Content {
-        px: f32,
-    },
     /// The window went away without running anything (the user switched to another app); the
     /// host brings it home when it resets.
     Dismissed,
@@ -234,17 +230,6 @@ pub enum Event {
 }
 
 impl Event {
-    /// Whether handling it draws the list again at the height it had.
-    fn redraws_list(&self) -> bool {
-        matches!(
-            self,
-            Event::Key(Key::Up | Key::Down | Key::Enter | Key::CmdDigit(_))
-                | Event::Select(_)
-                | Event::Jev { .. }
-                | Event::JevDown { .. }
-        )
-    }
-
     fn is_user(&self) -> bool {
         matches!(
             self,
@@ -283,7 +268,6 @@ pub enum Effect {
     AskJev {
         text: String,
     },
-    Height(HeightDecision),
     WakeAt(Ms),
     /// A waiting message changed; on `Sent` the host sends it.
     Held {
@@ -396,14 +380,9 @@ pub struct OneWindow {
     focused: Subject,
     ledger: Ledger,
     holds: Holds,
-    height: HeightGovernor,
     guard: EnterGuard,
     user_at: Option<Ms>,
-    /// Why the next natural height changed, and when it was set.
-    cause: Option<(ContentCause, Ms)>,
     jev_due: Option<(Ms, String)>,
-    /// When rows Jev just gave stop arming and the list draws again.
-    redraws: Vec<Ms>,
     dismiss: Option<PendingDismiss>,
     away: bool,
     steps: Option<(String, Vec<String>)>,
@@ -455,12 +434,9 @@ impl OneWindow {
                 ..Subject::default()
             },
             ledger: Ledger::new(),
-            height: HeightGovernor::new(),
             guard: EnterGuard::new(),
             user_at: None,
-            cause: None,
             jev_due: None,
-            redraws: Vec::new(),
             dismiss: None,
             away: false,
             steps: None,
@@ -507,9 +483,6 @@ impl OneWindow {
     }
     pub fn holds(&self) -> &Holds {
         &self.holds
-    }
-    pub fn height(&self) -> &HeightGovernor {
-        &self.height
     }
     pub fn is_away(&self) -> bool {
         self.away
@@ -586,21 +559,10 @@ impl OneWindow {
             self.focus()
         };
         self.tick(now, &mut fx);
-        let redraws = ev.redraws_list();
-        let applied = fx.len();
         let consumed = self.apply(now, ev, &mut fx);
         if let Some(focus) = focus {
             self.keep_focus(now, focus);
         }
-        // What a run opens (a view, the window going away) decides the height, not its redraw.
-        let ran = fx[applied..]
-            .iter()
-            .any(|e| matches!(e, Effect::Run { .. }));
-        if consumed && redraws && !ran {
-            self.list_redrawn(now, &mut fx);
-        }
-        self.height
-            .reading(now, !self.in_view() && self.list.reading());
         self.sync_pause(now, &mut fx);
         self.sync_staged(now);
         if self.line_from_view && !self.in_view() {
@@ -619,10 +581,6 @@ impl OneWindow {
     fn apply(&mut self, now: Ms, ev: Event, fx: &mut Vec<Effect>) -> bool {
         match ev {
             Event::Text(text) => {
-                if self.cause.is_some_and(|(_, at)| at < now) {
-                    self.cause = None;
-                }
-                self.height.typed(now);
                 self.on_text(now, text, true, fx);
                 true
             }
@@ -664,7 +622,6 @@ impl OneWindow {
                 let on = self.list.current();
                 let keep = self.list.focused().map(|row| row.key.clone());
                 self.list.jev.assign(now, &text, rows, keep.as_deref());
-                self.redraws.push(now + ROW_ARM_MS);
                 self.list.reselect(on, keep.as_deref());
                 if let Some(i) = self.list.held.take() {
                     self.list.asking = false;
@@ -803,21 +760,6 @@ impl OneWindow {
             }
             Event::Steps { sentence, steps } => {
                 self.steps = Some((sentence, steps));
-                true
-            }
-            Event::Content { px } => {
-                let cause = self
-                    .cause
-                    .take()
-                    .map(|(c, _)| c)
-                    .unwrap_or(if self.in_view() {
-                        ContentCause::Other
-                    } else {
-                        ContentCause::List
-                    });
-                if let Some(d) = self.height.content(now, px, cause) {
-                    fx.push(Effect::Height(d));
-                }
                 true
             }
             Event::Dismissed => {

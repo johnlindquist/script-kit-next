@@ -4,12 +4,12 @@
 //! the comparison is per kind of output, in order, after dropping consecutive repeats. What the
 //! window shows (the line above the input, the first header, what ↵ says, the list) is compared as
 //! each page turn left it; what happened (what ran, ignored Enters, held messages) is compared
-//! event by event. Heights are compared by where the window rests after each pause and how often
-//! it moved before it.
+//! event by event. The page's window height isn't compared: the app's window keeps one height
+//! while it shows.
 
 use std::path::{Path, PathBuf};
 
-use sk_one_window::contract::{HOLD_TICK_MS, MIN_SHRINK_PX, READING_WAIT_MS};
+use sk_one_window::contract::HOLD_TICK_MS;
 use sk_one_window::trace::{Ev, EvLine, Line, Observer, Out, OutLine, events_of, parse_line};
 use sk_one_window::window::{Config, Effect, Event, OneWindow, Outcome};
 use sk_one_window::{Row, Subject};
@@ -60,11 +60,6 @@ struct Player {
     listed: bool,
     outcomes: Vec<Outcome>,
     turns: Vec<Turn>,
-    /// The last height the page measured, whether this turn changed the view or Jev's rows (the
-    /// host measures after both), and whether it measured.
-    px: Option<f32>,
-    turn_changed: bool,
-    turn_content: bool,
 }
 
 /// A page turn the replay observed: one started by an input, or by one of the reducer's timers.
@@ -86,9 +81,6 @@ impl Player {
             listed: false,
             outcomes: Vec::new(),
             turns: Vec::new(),
-            px: None,
-            turn_changed: false,
-            turn_content: false,
         }
     }
 
@@ -105,14 +97,6 @@ impl Player {
     }
 
     fn close_turn(&mut self) {
-        // The host measures after every change; the recorder only writes a height that changed.
-        if let (Some(t), Some(px), true, false) =
-            (self.turn, self.px, self.turn_changed, self.turn_content)
-        {
-            self.feed(t, Event::Content { px });
-        }
-        self.turn_changed = false;
-        self.turn_content = false;
         if let Some(t) = self.turn.take() {
             let outcomes = std::mem::take(&mut self.outcomes);
             self.obs.observe(t, &self.win, &outcomes);
@@ -149,11 +133,6 @@ impl Player {
         if matches!(line.ev, Ev::Names { .. }) {
             self.listed = true;
         }
-        let (changed, px) = match &line.ev {
-            Ev::View { .. } | Ev::Jev { .. } => (true, None),
-            Ev::Content { px } => (false, Some(*px)),
-            _ => (false, None),
-        };
         if starts_turn {
             self.ticks_before(line.t);
             self.close_turn();
@@ -163,11 +142,6 @@ impl Player {
                 at: line.t,
                 tick: false,
             });
-        }
-        self.turn_changed |= changed;
-        if px.is_some() {
-            self.px = px;
-            self.turn_content = true;
         }
         let t = self.turn.unwrap_or(line.t);
         for e in events_of(line, self.turn_run.as_ref(), &self.win) {
@@ -275,7 +249,6 @@ fn kind(out: &Out) -> &'static str {
         Out::Slot { .. } => "slot",
         Out::Header { .. } => "header",
         Out::Enter { .. } => "enter",
-        Out::Height { .. } => "height",
         Out::Run { .. } => "run",
         Out::Ignored { .. } => "ignored",
         Out::Held { .. } => "held",
@@ -303,7 +276,6 @@ fn key(out: &Out) -> String {
         }
         Out::Header { words, view } => format!("{words}|{}", view.as_deref().unwrap_or("")),
         Out::Enter { label, .. } => label.clone(),
-        Out::Height { mode, .. } => mode.clone(),
         Out::Run { key, .. } => key.clone(),
         Out::Ignored { key } => key.clone(),
         Out::Held { op, label } => format!("{op}|{label}"),
@@ -359,94 +331,6 @@ fn settled(expected: &[(OutLine, usize)], k: &str) -> Vec<String> {
     seq(keep.map(|(_, (l, _))| l), k)
 }
 
-/// How long after the last input both windows have settled: the longest wait is Jev's reading.
-const SETTLE_MS: u64 = READING_WAIT_MS + HOLD_TICK_MS;
-
-/// Where a window moved, as it showed it: the last grow or shrink of each turn (nothing paints
-/// between decisions made in the same turn), without holds, which stay where the window is, or
-/// moves of less than 2 px.
-fn moves<'a, G: PartialEq>(lines: impl Iterator<Item = (&'a OutLine, G)>) -> Vec<(u64, f32)> {
-    let mut turns: Vec<(G, u64, f32)> = Vec::new();
-    for (l, group) in lines {
-        let Out::Height { px, mode } = &l.out else {
-            continue;
-        };
-        if mode == "hold" {
-            continue;
-        }
-        if turns.last().is_some_and(|(g, ..)| *g == group) {
-            turns.pop();
-        }
-        turns.push((group, l.t, *px));
-    }
-    let mut out: Vec<(u64, f32)> = Vec::new();
-    for (_, t, px) in turns {
-        if out.last().is_none_or(|(_, was)| (was - px).abs() >= 2.0) {
-            out.push((t, px));
-        }
-    }
-    out
-}
-
-/// The app's height follows its own rules (it snaps instead of animating, leaves less than two
-/// rows of space, and waits for Jev), so it is compared with the page by outcome: it never moves
-/// more often than the page between two pauses, and at each pause it rests where the page did, up
-/// to [`MIN_SHRINK_PX`] taller.
-fn heights_differ(r: &Replay) -> Option<String> {
-    let want = moves(r.expected.iter().map(|(l, turn)| (l, *turn)));
-    let got = moves(r.got.iter().map(|l| (l, l.t)));
-    let inputs: Vec<u64> = r.turns.iter().filter(|t| !t.tick).map(|t| t.at).collect();
-    let mut pauses: Vec<u64> = inputs
-        .windows(2)
-        .filter(|w| w[1] - w[0] > SETTLE_MS)
-        .map(|w| w[0] + SETTLE_MS)
-        .collect();
-    pauses.extend(
-        inputs
-            .last()
-            .map(|at| at + SETTLE_MS)
-            .filter(|t| *t <= r.end),
-    );
-    let rests = |moves: &[(u64, f32)], t: u64| {
-        moves
-            .iter()
-            .take_while(|(at, _)| *at <= t)
-            .last()
-            .map(|(_, px)| *px)
-    };
-    let count = |moves: &[(u64, f32)], from: u64, to: u64| {
-        moves.iter().filter(|(t, _)| *t > from && *t <= to).count()
-    };
-    let mut from = 0;
-    for t in pauses.into_iter().chain([u64::MAX]) {
-        let (page, app) = (count(&want, from, t), count(&got, from, t));
-        if app > page {
-            return Some(format!(
-                "moved {app} times after {from} ms where the page moved {page}\n  want: {:?}\n  got:  {:?}",
-                want.iter()
-                    .filter(|(at, _)| *at > from && *at <= t)
-                    .collect::<Vec<_>>(),
-                got.iter()
-                    .filter(|(at, _)| *at > from && *at <= t)
-                    .collect::<Vec<_>>(),
-            ));
-        }
-        // A trace can end before either window settles; only its pauses show where they rest.
-        let rested = (t != u64::MAX)
-            .then(|| rests(&want, t).zip(rests(&got, t)))
-            .flatten();
-        if let Some((page, app)) = rested {
-            if app < page - 2.0 || app >= page + MIN_SHRINK_PX {
-                return Some(format!(
-                    "rests at {app} px at {t} ms where the page rests at {page} px"
-                ));
-            }
-        }
-        from = t;
-    }
-    None
-}
-
 /// Differences these traces can't settle, and why. Each one must still differ: once a trace
 /// records what's missing, its line comes off this list.
 const KNOWN: &[(&str, &str, &str)] = &[
@@ -500,26 +384,6 @@ const KNOWN: &[(&str, &str, &str)] = &[
         "s17-dictation",
         "slot",
         "dictation records what it typed or set (win.record) and no input records it",
-    ),
-    (
-        "s05-no-menus",
-        "height",
-        "the page's window follows a shorter strip or list through CSS auto height without \
-         calling resize(), so that instant shrink leaves no line; the reducer shrinks it at once",
-    ),
-    (
-        "s12-take-it-back",
-        "height",
-        "the steps view is still loading when its 300 ms hold ends: the reducer shrinks to its \
-         first measure (307) and grows back as the rest arrives (360, 386); the page records no \
-         move until the view settles",
-    ),
-    (
-        "s19-fast-hands",
-        "height",
-        "the steps view is still loading when its 300 ms hold ends: the reducer shrinks to its \
-         first measure (307) and grows back as the rest arrives (360, 386); the page records no \
-         move until the view settles",
     ),
     (
         "keys-s18-steady",
@@ -579,7 +443,6 @@ fn golden_traces_replay() {
                 ));
             }
         }
-        differences.extend(heights_differ(&r).map(|msg| ("height", msg)));
         for (k, msg) in differences {
             let msg = format!("{name} {k}: {msg}");
             if let Some(known) = KNOWN.iter().find(|(t, kk, _)| *t == name && *kk == k) {

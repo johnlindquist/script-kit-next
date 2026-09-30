@@ -34,12 +34,17 @@ Script Kit is one window that you tell what should happen. Every other section o
   the same input, and Esc goes back one step with that step's words. ⌘K stages the highlighted thing in
   the line and lists its actions; ↑ on an empty input stages the last run; pasting into an empty input
   stages the clipboard.
+- **One height.** While the window shows it keeps one height (480 pt; the configured standard height
+  in full mode): the list, every view under the input, and whatever results arrive later fill it, and
+  short lists leave glass below them. Typing, filtering and async data never resize the window
+  (`src/one_window/height_host.rs`). A script prompt is sized once when it opens, from the choices it
+  declared. Do not bring back content-sized heights, shrink holds or grow-on-arrival.
 - **It learns.** A sentence whose row ran becomes a learned match (`sk_one_window::lessons`), and runs
   that did several things are saved to `saved.ts` so they can become scripts with shortcuts.
 - **Rules live in the reducer.** `crates/sk-one-window` owns every rule with no GPUI and no clock:
-  headers, Jev's rows, what Enter runs, the 400 ms Enter guard, the 300 ms shrink hold, the view stack,
-  holds and undo. `src/one_window/**` connects it to `ScriptListApp`. Change behavior in the reducer and
-  prove it there first (see "Hold, Undo, and the Line" for the proof commands).
+  headers, Jev's rows, what Enter runs, the 400 ms Enter guard, the view stack, holds and undo.
+  `src/one_window/**` connects it to `ScriptListApp`. Change behavior in the reducer and prove it
+  there first (see "Hold, Undo, and the Line" for the proof commands).
 
 ## Oracle / Packx Bundle Context
 

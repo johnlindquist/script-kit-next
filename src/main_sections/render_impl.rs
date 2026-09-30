@@ -822,14 +822,12 @@ impl Render for ScriptListApp {
             _ => None,
         }
         .map(|mode| {
-            let choice_count = self.filtered_arg_choices().len();
-            let choice_count = if mode
-                == crate::window_resize::arg_layout::ArgPresentationMode::Full
-                && matches!(&self.current_view, AppView::ArgPrompt { choices, .. } if !choices.is_empty())
-            {
-                choice_count.max(1)
-            } else {
-                choice_count
+            // Sized from the declared choices, not the filtered ones: typing never resizes.
+            let choice_count = match &self.current_view {
+                AppView::ArgPrompt { choices, .. } | AppView::MiniPrompt { choices, .. } => {
+                    choices.len()
+                }
+                _ => 0,
             };
             (mode, choice_count)
         });

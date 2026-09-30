@@ -31,7 +31,8 @@ pub(crate) struct OneWindowHost {
     now: Ms,
     /// The one pending `Tick`; a timer for any other time is stale.
     wake_at: Option<Ms>,
-    /// The main window's height as the reducer last placed it.
+    /// The fixed height the main list's window is at or was last asked to take; cleared while a
+    /// prompt sizes the window its own way.
     pub(super) height: Option<f32>,
     pub(super) window: Option<gpui::AnyWindowHandle>,
     /// Words the reducer put in the input; their echo from the input isn't typing.
@@ -52,8 +53,6 @@ pub(crate) struct OneWindowHost {
     pub(super) view_text: Option<String>,
     /// What was staged when this turn began: the subject a staged row that ran acts on.
     pub(super) acting_on: Option<sk_one_window::Subject>,
-    /// The height last reported for what's drawn in place of the list, while something is.
-    pub(super) view_px: Option<f32>,
     /// Whether a view covered the list after the last turn. The input's ghost words belong to
     /// the list, so they go when a view opens and come back when it closes.
     pub(super) covered: bool,
@@ -292,7 +291,6 @@ impl ScriptListApp {
                         tracing::info!(target: "script_kit::one_window", event = "enter_ignored");
                     }
                     Effect::AskJev { text } => self.one_window_ask_jev(text, &mut queue, cx),
-                    Effect::Height(decision) => self.one_window_apply_height(decision, cx),
                     Effect::WakeAt(at) => self.one_window_wake_at(at, cx),
                     Effect::SetInput(text) => self.one_window_set_input(text, cx),
                     Effect::Hide { .. } => self.close_and_reset_window(cx),
@@ -417,7 +415,7 @@ impl ScriptListApp {
             self.one_window_name_every_results_enter(cx);
             return;
         }
-        if !self.one_window_owns_list() || self.one_window_view_height().is_some() {
+        if !self.one_window_owns_list() || self.one_window_view_covers_list() {
             return;
         }
         let Some(position) = self.one_window_host_position() else {
@@ -448,7 +446,7 @@ impl ScriptListApp {
     }
 
     fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
-        if self.one_window_view_height().is_some() || self.one_window_shows_every_result() {
+        if self.one_window_view_covers_list() || self.one_window_shows_every_result() {
             return;
         }
         let position = self.one_window.list().sel;
@@ -813,9 +811,8 @@ impl ScriptListApp {
     }
 
     /// After every publication: the highlight takes the reducer's row, which it kept through
-    /// whatever arrived, and the reducer hears how tall the list wants the window. The list
-    /// re-anchors by place (Jev's rows keep one key per place), so its own pick can name a
-    /// different reading than the one the user was on.
+    /// whatever arrived. The list re-anchors by place (Jev's rows keep one key per place), so its
+    /// own pick can name a different reading than the one the user was on.
     pub(crate) fn one_window_published(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::ScriptList) {
             return;
@@ -823,8 +820,6 @@ impl ScriptListApp {
         if self.one_window_owns_list() {
             self.one_window_show_selection(cx);
         }
-        let px = self.one_window_natural_height();
-        self.one_window_handle(Event::Content { px }, cx);
         self.one_window_follow_own_selection(cx);
     }
 
@@ -1094,10 +1089,8 @@ impl ScriptListApp {
                 }))
                 .collect::<Vec<_>>(),
             "jevSettled": list.jev.settled_for(&list.text),
-            "heightPx": self.one_window_host.height,
+            "heightPx": self.one_window_fixed_height(),
             "nowMs": now,
-            "typedAtMs": self.one_window.height().typed_at(),
-            "sinceTypedMs": self.one_window.height().typed_at().map(|at| now.saturating_sub(at)),
             "view": self.one_window.views().top().map(|top| top.name.as_str()),
             "crumb": self.one_window.views().crumb(),
             "strip": super::work_view::strip_snapshot(self),

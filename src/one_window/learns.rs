@@ -434,14 +434,6 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// How much taller than its rows a view wants the window: the saved script's source.
-    pub(crate) fn one_window_view_extra_height(&self) -> f32 {
-        match self.one_window_own_view() {
-            Some(OwnView::Script) => self.one_window_script_height(),
-            _ => 0.,
-        }
-    }
-
     /// Keys the reducer gave to the open view.
     pub(crate) fn one_window_view_key(&mut self, key: Key, cx: &mut Context<Self>) {
         match self.one_window_own_view() {
