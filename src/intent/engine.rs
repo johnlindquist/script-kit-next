@@ -260,6 +260,9 @@ pub enum Step {
         body: String,
         when: Option<String>,
         handler: Option<Command>,
+        /// A note's screen context, read when the plan runs: "selection", "clipboard" or "page".
+        #[serde(skip_serializing_if = "Option::is_none")]
+        subject: Option<String>,
     },
     Remember {
         text: String,
@@ -1462,8 +1465,24 @@ pub fn reading_for(
                         .flatten()
                         .filter(|u| !u.is_empty())
                 });
+            // A note can take what's on screen along: the words become its title.
+            let note_subject =
+                (target == "note")
+                    .then_some(subject)
+                    .filter(|subject| match *subject {
+                        "selection" | "clipboard" => {
+                            subject_text.is_some() || ctx.subject_read_at_run
+                        }
+                        "page" => {
+                            ctx.url.as_deref().is_some_and(|url| !url.is_empty())
+                                || ctx.subject_read_at_run
+                        }
+                        _ => false,
+                    });
             let text = if target == "link" {
                 url.unwrap_or_default()
+            } else if let (Some(subject), None) = (note_subject, body) {
+                format!("the {subject}")
             } else {
                 body.unwrap_or_default().to_string()
             };
@@ -1494,9 +1513,13 @@ pub fn reading_for(
             };
             let shown_when = when.filter(|_| target != "link");
             let mut reading = base(format!(
-                "Add {noun}: {}{}",
+                "Add {noun}: {}{}{}",
                 if text.is_empty() { "…" } else { &text },
-                shown_when.map_or(String::new(), |w| format!(" ({w})"))
+                shown_when.map_or(String::new(), |w| format!(" ({w})")),
+                match (note_subject, body) {
+                    (Some(subject), Some(_)) => format!(" + the {subject}"),
+                    _ => String::new(),
+                }
             ));
             if !text.is_empty() {
                 reading.steps = vec![Step::Capture {
@@ -1504,6 +1527,7 @@ pub fn reading_for(
                     body: text.clone(),
                     when: when.map(str::to_string),
                     handler,
+                    subject: note_subject.map(str::to_string),
                 }];
             }
             reading.typed = Some(typed);

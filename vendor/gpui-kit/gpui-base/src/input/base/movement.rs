@@ -369,6 +369,15 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     pub(super) fn end(&mut self, _: &MoveEnd, window: &mut Window, cx: &mut Context<Self>) {
+        // Script Kit: while an editor shows ghost text, ⌘→ belongs to its host, which takes the
+        // suggestion's next word (VS Code's rule). Moving here would only drop the suggestion.
+        if !self.is_single_line()
+            && M::has_inline_completion(self)
+            && self.selected_range().is_empty()
+        {
+            cx.propagate();
+            return;
+        }
         self.move_all_cursors(
             |s, sel| {
                 let offset = s.end_of_line_at(sel.cursor_offset(), s.line_end_affinity_for(sel));

@@ -231,18 +231,8 @@ pub(crate) fn day_page_host_actions_section(
         );
     }
 
-    if view.session.is_viewing_note()
-        || (!view.session.is_viewing_fragment() && view.session.bound_date().is_some())
-    {
-        actions.push(
-            Action::new(
-                "day_page:open_as_note",
-                "Open as a Note",
-                Some("Open this document as a note under the input".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_section(DAY_PAGE_ACTIONS_SECTION_TITLE),
-        );
+    if !viewing_fragment {
+        actions.extend(day_page_note_actions(view));
     }
 
     if view.is_dirty() {
@@ -898,31 +888,9 @@ impl ScriptListApp {
                 });
                 true
             }
-            "day_page:open_as_note" => {
-                let (note_id, day_date) = {
-                    let view = entity.read(cx);
-                    (
-                        view.session.viewing_note_id().map(str::to_string),
-                        view.session.bound_date(),
-                    )
-                };
-                let target = match (
-                    note_id.and_then(|id| crate::notes::NoteId::parse(&id)),
-                    day_date,
-                ) {
-                    (Some(note_id), _) => crate::notes::NoteTarget::Note(note_id),
-                    (None, Some(date)) => crate::notes::NoteTarget::Day(date),
-                    (None, None) => return false,
-                };
-                if let Err(error) = self.one_window_open_note_target(target, cx) {
-                    tracing::warn!(
-                        target: "script_kit::day_page",
-                        error = %error,
-                        "day_page_open_as_note_failed"
-                    );
-                }
-                true
-            }
+            _ if action_id.starts_with(DAY_PAGE_NOTE_ACTION_PREFIX) => self
+                .execute_day_page_note_action(entity.clone(), action_id, window, cx)
+                .unwrap_or(false),
             DAY_PAGE_ASK_AGENT_CHAT_ACTION_ID => {
                 entity.update(cx, |view, cx| view.open_agent_chat_about_today(window, cx));
                 true

@@ -392,6 +392,7 @@ impl ScriptListApp {
             owned_surface_subscriptions: Vec::new(),
             owned_observed_surface_generation: None,
             owned_child_semantic_value: None,
+            owned_child_revision_seen: 0,
             main_inline_semantic_token: None,
             scripts,
             scriptlets,

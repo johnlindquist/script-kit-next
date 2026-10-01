@@ -259,6 +259,7 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
             body,
             when,
             handler,
+            ..
         } => {
             out.use_helper("capture");
             let when = when

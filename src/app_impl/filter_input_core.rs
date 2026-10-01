@@ -2,6 +2,8 @@ use super::*;
 
 /// Typed first on an empty input, opens today's Day Page. Quotes start an exact phrase.
 pub(crate) const DAY_PAGE_TRIGGER: &str = "`";
+/// Typed first on an empty input, starts a new note: a Markdown heading, so the title comes next.
+pub(crate) const NEW_NOTE_TRIGGER: &str = "#";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ScriptListSpecialEntry {
@@ -13,13 +15,18 @@ pub(crate) enum ScriptListSpecialEntry {
     Grab,
     /// A backtick: today's Day Page.
     DayPage,
+    /// `#`: a new note, its title typed next.
+    NewNote,
 }
 
 impl ScriptListApp {
     /// Transient first-character launch triggers should not persist when the
     /// user returns to the ScriptList surface.
     pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
-        matches!(new_text, "~" | "!" | "?" | " " | DAY_PAGE_TRIGGER)
+        matches!(
+            new_text,
+            "~" | "!" | "?" | " " | DAY_PAGE_TRIGGER | NEW_NOTE_TRIGGER
+        )
     }
 
     /// Parse `raw` through the menu-syntax classifier and store the result in
@@ -136,6 +143,7 @@ impl ScriptListApp {
             "?" => Some(ScriptListSpecialEntry::Help),
             " " => Some(ScriptListSpecialEntry::Grab),
             DAY_PAGE_TRIGGER => Some(ScriptListSpecialEntry::DayPage),
+            NEW_NOTE_TRIGGER => Some(ScriptListSpecialEntry::NewNote),
             _ => None,
         }
     }
@@ -747,6 +755,14 @@ mod tests {
         assert_eq!(
             ScriptListApp::special_entry_from_script_list_filter("`"),
             Some(ScriptListSpecialEntry::DayPage)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("#"),
+            Some(ScriptListSpecialEntry::NewNote)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("#launch"),
+            None
         );
         for phrase in ["'", "\"", "'lunch", "\"lunch with sarah\""] {
             assert_eq!(

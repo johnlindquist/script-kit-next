@@ -271,6 +271,7 @@ pub(crate) fn build_rich_browser_history_rows(
 pub(crate) fn build_rich_notes_rows(
     query: &str,
     hits: &[crate::notes::RootNoteSearchHit],
+    days: Vec<scripts::FileMatch>,
 ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
     let limit = crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT;
     let mut grouped = Vec::new();
@@ -284,7 +285,7 @@ pub(crate) fn build_rich_notes_rows(
         header,
         Some("notebook-text".to_string()),
     ));
-    if hits.is_empty() {
+    if hits.is_empty() && days.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
             if query.trim().is_empty() {
                 "No notes".to_string()
@@ -293,15 +294,26 @@ pub(crate) fn build_rich_notes_rows(
             },
             None,
         ));
-    } else {
-        for hit in hits.iter().take(limit) {
+        return (grouped, flat);
+    }
+    for hit in hits.iter().take(limit) {
+        let idx = flat.len();
+        flat.push(scripts::SearchResult::Note(scripts::NoteMatch {
+            hit: hit.clone(),
+            title: hit.title.clone(),
+            subtitle: format!("{} chars", hit.char_count),
+            score: 0,
+        }));
+        grouped.push(GroupedListItem::Item(idx));
+    }
+    if !days.is_empty() {
+        grouped.push(GroupedListItem::SectionHeader(
+            "Day Pages".to_string(),
+            Some("calendar".to_string()),
+        ));
+        for day in days.into_iter().take(limit) {
             let idx = flat.len();
-            flat.push(scripts::SearchResult::Note(scripts::NoteMatch {
-                hit: hit.clone(),
-                title: hit.title.clone(),
-                subtitle: format!("{} chars", hit.char_count),
-                score: 0,
-            }));
+            flat.push(scripts::SearchResult::File(day));
             grouped.push(GroupedListItem::Item(idx));
         }
     }
@@ -706,7 +718,11 @@ mod file_landing_tests {
     #[test]
     fn landing_shows_the_last_recents_while_the_provider_is_loading() {
         let picked = [file("/a/picked.png")];
-        let last = [file("/a/picked.png"), file("/a/one.mp4"), file("/a/two.html")];
+        let last = [
+            file("/a/picked.png"),
+            file("/a/one.mp4"),
+            file("/a/two.html"),
+        ];
         let (grouped, flat) = build_rich_file_subsearch_rows(
             FileSubsearchFlavor::Global,
             "",

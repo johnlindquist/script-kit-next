@@ -120,6 +120,15 @@ impl Render for DayPageView {
                     this.return_to_day_page(window, cx);
                 }),
             ))
+        } else if let Some(label) = self.back_label() {
+            Some(crate::components::render_back_affordance(
+                "day-page-note-back".into(),
+                label.into(),
+                &theme,
+                cx.listener(|this, _, window, cx| {
+                    this.escape_back(window, cx);
+                }),
+            ))
         } else if viewing_past_day {
             let label = self
                 .session
@@ -131,23 +140,7 @@ impl Render for DayPageView {
                 label.into(),
                 &theme,
                 cx.listener(|this, _, window, cx| {
-                    this.bind_today(window, cx);
-                    this.focus_editor(window, cx);
-                }),
-            ))
-        } else if self.session.is_viewing_note() {
-            let label = self
-                .session
-                .viewing_note_title()
-                .map(|title| format!("Back to Today · viewing {title}"))
-                .unwrap_or_else(|| "Back to Today".to_string());
-            Some(crate::components::render_back_affordance(
-                "day-page-note-back".into(),
-                label.into(),
-                &theme,
-                cx.listener(|this, _, window, cx| {
-                    this.return_to_day_page(window, cx);
-                    this.focus_editor(window, cx);
+                    this.escape_back(window, cx);
                 }),
             ))
         } else {

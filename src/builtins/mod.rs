@@ -453,7 +453,7 @@ impl BuiltInEntry {
             BuiltInFeature::WindowSwitcher => "Open Window Switcher",
             BuiltInFeature::BrowserTabs => "Open Browser Tabs",
             BuiltInFeature::AiChat | BuiltInFeature::AiChatVariant(_) => "Open Agent Chat",
-            BuiltInFeature::Notes => "Open Notes",
+            BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Open Emoji Picker",
             BuiltInFeature::SyncToGithub => "Sync to GitHub",
             BuiltInFeature::MenuBarAction(_) => "Execute Menu Item",
@@ -618,7 +618,7 @@ impl BuiltInEntry {
                 SystemActionType::OpenNotificationsSettings => "Notifications",
             },
             BuiltInFeature::NotesCommand(action) => match action {
-                NotesCommandType::OpenNotes => "Open Notes",
+                NotesCommandType::OpenNotes => "Notes",
                 NotesCommandType::NewNote => "New Note",
                 NotesCommandType::SearchNotes => "Search Notes",
                 NotesCommandType::QuickCapture => "Quick Capture",
@@ -1301,8 +1301,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/open-notes",
-            "Open Notes",
-            "Open today's note under the input",
+            "Notes",
+            "Every note and day page, pinned notes first",
             vec![
                 "open",
                 "notes",
@@ -1326,7 +1326,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/new-note",
             "Create Note",
-            "Start a new note under the input",
+            "Start a new note",
             vec!["new", "create", "note", "notes", "add", "write"],
             BuiltInFeature::NotesCommand(NotesCommandType::NewNote),
             "file-plus",
@@ -1344,7 +1344,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/quick-capture",
             "Quick Note Capture",
-            "Add a line to today's note",
+            "Open today's page to write",
             vec!["quick", "capture", "note", "fast"],
             BuiltInFeature::NotesCommand(NotesCommandType::QuickCapture),
             "zap",

@@ -199,6 +199,9 @@ impl DayPageView {
             clipboard_shelf_expanded: false,
             last_agent_chat_handoff_receipt: None,
             last_context_round_trip_receipt: None,
+            back: DayPageBack::Leave,
+            trail: Vec::new(),
+            ghost_generation: 0,
             read_mode: false,
         };
         view.note_switcher.set_host_policy(initial.host_policy);
@@ -565,6 +568,7 @@ impl DayPageView {
         self.schedule_autosave_flush(window, cx);
         self.sync_footer(window, cx);
         self.maybe_begin_day_page_context_round_trip_from_edit(previous_len, &content, window, cx);
+        self.schedule_ghost_suggestion(cx);
         cx.notify();
     }
 
@@ -680,6 +684,11 @@ impl DayPageView {
                 }
                 if !crate::runtime_policy::is_owned_evaluation() {
                     wake_indexer();
+                }
+                if self.session.is_viewing_note() {
+                    // The note was saved through the library's store; the launcher searches
+                    // through this one, so drop what it remembers.
+                    crate::notes::invalidate_root_notes_search_cache();
                 }
                 true
             }
@@ -1434,27 +1443,22 @@ impl DayPageView {
         }
 
         if exact_plain && crate::ui_foundation::is_key_escape(key) {
-            if self.session.is_viewing_fragment() || self.session.is_viewing_note() {
-                self.return_to_day_page(window, cx);
-                return;
-            }
-            // Escape from a past day returns to today before closing the
-            // window, keeping the dismissal ladder predictable.
-            let today = self
-                .now()
-                .with_timezone(&self.session.substrate().timezone())
-                .date_naive();
-            if self.session.bound_date().is_some_and(|date| date != today) {
-                self.bind_today(window, cx);
-                self.focus_editor(window, cx);
-                return;
-            }
-            if let Some(app) = self.app.upgrade() {
-                window.defer(cx, move |_window, cx| {
-                    app.update(cx, |app, cx| {
-                        app.close_and_reset_window(cx);
-                    });
-                });
+            self.escape_back(window, cx);
+            return;
+        }
+
+        if exact_cmd && key == "right" && self.accept_ghost_word(window, cx) {
+            return;
+        }
+
+        if exact_cmd && (key == "n" || key == "t") {
+            let target = if key == "n" {
+                crate::notes::NoteTarget::New
+            } else {
+                crate::notes::NoteTarget::Today
+            };
+            if let Err(error) = self.follow_to_note_target(target, window, cx) {
+                crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
             }
             return;
         }
@@ -1470,7 +1474,9 @@ impl DayPageView {
         }
 
         if exact_cmd && key == "." {
-            self.activate_deeplink_under_cursor(window, cx);
+            if !self.activate_wiki_link_under_cursor(window, cx) {
+                self.activate_deeplink_under_cursor(window, cx);
+            }
             return;
         }
 
@@ -1531,7 +1537,9 @@ impl DayPageView {
                     return;
                 }
 
-                this.activate_deeplink_under_cursor(window, cx);
+                if !this.activate_wiki_link_under_cursor(window, cx) {
+                    this.activate_deeplink_under_cursor(window, cx);
+                }
             });
         });
     }
@@ -1715,7 +1723,7 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match crate::notes::open_note(cx, crate::notes::NoteTarget::Note(note_id)) {
+        match self.follow_to_note_target(crate::notes::NoteTarget::Note(note_id), window, cx) {
             Ok(()) => {
                 tracing::info!(event = "day_page_deeplink_note_opened", note_id = %note_id);
                 self.sync_footer(window, cx);
@@ -1935,6 +1943,11 @@ impl ScriptListApp {
             });
             entity
         } else {
+            // Opened from the launcher (⌘T, the Today button, a row), Esc comes back to it.
+            // Routes that open onto a hidden window mark themselves direct afterwards.
+            if matches!(self.current_view, AppView::ScriptList) {
+                self.mark_opened_from_main_menu("note_editor_opened");
+            }
             let day_page = cx.new(|cx| DayPageView::new(app_entity, substrate, window, cx));
             day_page.update(cx, |view, cx| view.bind_today(window, cx));
             day_page

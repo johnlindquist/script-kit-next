@@ -41,6 +41,7 @@ impl ScriptListApp {
         let next = self.owned_child_semantic_token(cx);
         if self.owned_child_semantic_value != Some(next) {
             self.owned_child_semantic_value = Some(next);
+            self.owned_child_revision_seen = self.owned_child_semantic_revision(cx);
             self.mark_main_data_changed();
             cx.notify();
         }
@@ -57,6 +58,7 @@ impl ScriptListApp {
         self.owned_surface_subscriptions.clear();
         self.owned_observed_surface_generation = Some(generation);
         self.owned_child_semantic_value = Some(self.owned_child_semantic_token(cx));
+        self.owned_child_revision_seen = self.owned_child_semantic_revision(cx);
         let prompt_instance = self
             .prompt_completion
             .as_ref()

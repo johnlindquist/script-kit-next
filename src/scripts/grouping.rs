@@ -50,7 +50,7 @@ pub const DEFAULT_SUGGESTED_ITEMS: &[&str] = &[
     "Search Browser Tabs",
     "Window Switcher",
     "Quick Terminal",
-    "Open Notes",
+    "Notes",
     "New Script",
 ];
 
@@ -433,6 +433,59 @@ pub(crate) fn prepend_root_brain_inbox_section(
             items.len()
         ),
         Some("inbox".to_string()),
+    ));
+    section.extend((0..shift).map(GroupedListItem::Item));
+    grouped.splice(0..0, section);
+    record_main_menu_ranking_sections(ranking, grouped, flat_results);
+}
+
+/// Pins a "Pinned Notes" section at the top of the empty-query launcher, the same way
+/// [`prepend_root_brain_inbox_section`] does. No-op with something typed or nothing pinned.
+pub(crate) fn prepend_root_pinned_notes_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    pinned: &[crate::notes::RootNoteSearchHit],
+    mut ranking: Option<&mut MainMenuRankingEvidenceMap>,
+) {
+    if !filter_text.trim().is_empty() || pinned.is_empty() {
+        return;
+    }
+    let rows: Vec<SearchResult> = pinned
+        .iter()
+        .enumerate()
+        .map(|(rank, hit)| {
+            SearchResult::Note(crate::scripts::NoteMatch {
+                hit: hit.clone(),
+                title: if hit.title.trim().is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    hit.title.clone()
+                },
+                subtitle: "Pinned note".to_string(),
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect();
+    record_passive_ranking(
+        ranking.as_deref_mut(),
+        &rows,
+        Some(rows.len()),
+        Some("pinned-notes"),
+    );
+    let shift = rows.len();
+    for entry in grouped.iter_mut() {
+        if let GroupedListItem::Item(idx) = entry {
+            *idx += shift;
+        }
+    }
+    for (offset, row) in rows.into_iter().enumerate() {
+        flat_results.insert(offset, row);
+    }
+    let mut section = Vec::with_capacity(shift + 1);
+    section.push(GroupedListItem::SectionHeader(
+        "Pinned Notes".to_string(),
+        Some("star".to_string()),
     ));
     section.extend((0..shift).map(GroupedListItem::Item));
     grouped.splice(0..0, section);

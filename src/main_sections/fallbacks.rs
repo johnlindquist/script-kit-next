@@ -2,7 +2,7 @@
 ///
 /// This handles the various fallback action types:
 /// - run-in-terminal: Open terminal with command
-/// - add-to-notes: Open Notes window with quick capture
+/// - add-to-notes: Add the text to today's page
 /// - copy-to-clipboard: Copy text to clipboard
 /// - search-google/search-duckduckgo: Open browser with search URL
 /// - open-url: Open the input as a URL

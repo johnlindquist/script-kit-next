@@ -254,24 +254,31 @@ A fresh launcher always highlights a real row (`first_selectable_index` — a Br
 - Only entries where the user deliberately targeted a row (⌘K then "Ask the model about it", actions payloads, explicit handoffs) may add the row's part with `ChatEntry::with`.
 - The contract is locked by `a_quick_question_takes_nothing_along_from_the_launcher` in `src/app_impl/ui_window_one_window_chat_tests.rs`; keep new entry points honest against it rather than weakening the test.
 
-## Notes Live Under the Main Input
+## Notes: One Editor, Every Note
 
-There is no Notes window. Every way into a note — the Notes hotkey, tray, deeplink, stdin/SDK `openNotes`, MCP note tools, the
-Notes built-ins, root note results, the day page's "Open as a Note", the Add Note fallback, and
-"Add it to today's note" — calls `crate::notes::open_note(cx, NoteTarget)`, or
-`ScriptListApp::one_window_show_note` from inside the app entity. The binary's hook shows the main
-window first when it is hidden, then opens the note view (`src/one_window/notes.rs`) under the
-same input.
+There is no Notes window and no line-by-line note view. Every note — today's page, a past day, a
+named note, a new one — opens in the Day Page editor (`AppView::DayPage`,
+`src/main_sections/day_page_*.rs`), which fills the main window. Every way in — the Notes hotkey
+(today), tray, deeplink, stdin/SDK `openNotes`, MCP note tools, the Notes built-ins, root note
+results, the Notes list, `#` and `/note` — calls `crate::notes::open_note(cx, NoteTarget)`, or
+`ScriptListApp::open_note_in_editor[_soon]` from inside the app entity
+(`src/main_sections/day_page_notes.rs`).
 
-- A note's lines are rows under a `NOTE · <name>` header and scroll inside the list; the input
-  never moves. Typing + ↵ appends a line, ↵ on a line puts its words in the input and ↵ saves
-  them in place (its time and bullet are kept), ⌘⌫ deletes a line through the 8 s hold with ⌘Z in
-  the line above the input, ⌘P lists notes by name under `NOTES`, and ⌘↵ hands the note to the
-  model's chat view.
-- Storage is unchanged: day notes are `brain/days/<date>.md` (appends go through the substrate),
-  other notes stay in the notes database.
-- Do not bring back a Notes window, a Notes-only editor host, or a confirm dialog for deleting a
-  line.
+- Every named note is a Markdown file under `brain/notes/`; day pages are `brain/days/<date>.md`.
+  `db/notes.sqlite` is the search index over them (title, FTS, pins, links).
+- The editor keeps a trail of notes opened from inside it (`[[link]]`, ⌘P, "Linked from", ⌘T,
+  ⌘N); Esc dismisses ghost text, then walks the trail back, then leaves (to the Notes list when
+  the note came from there). A named note left blank is removed when you leave it.
+- ⌘K note rows (pin, copy link, copy deep link, duplicate, show in Finder, move to trash through
+  the 8 s hold, "Linked from") live in `day_page_note_actions`.
+- `[[Note title]]` links notes; `@` stays "attach context for the model". Typing `[[` offers the
+  rest of a matching title as ghost text (`day_page_ghost_suffix`): VS Code rules — after a short
+  pause, only with nothing selected at the end of a line, Tab accepts, ⌘→ takes one word, Esc
+  dismisses. Line prediction will plug into the same seam.
+- The Notes list (`src/one_window/notes.rs`) is a view under the input: pinned first, Tab changes
+  the order, a title nobody has yet offers "New Note". With nothing typed the launcher lists
+  pinned notes; `@notes:` attaches notes and day pages.
+- Do not bring back a Notes window, a second note editor, or a confirm dialog for deleting.
 
 ## Hold, Undo, and the Line
 

@@ -980,18 +980,12 @@ impl ScriptListApp {
         note_id: crate::notes::NoteId,
         cx: &mut Context<Self>,
     ) -> Result<(), &'static str> {
-        match self.one_window_open_note_target(crate::notes::NoteTarget::Note(note_id), cx) {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                logging::log("ERROR", &format!("Failed to open root note: {error}"));
-                self.one_window_notice(
-                    crate::line_notice::FAILED,
-                    "Failed to open note".to_string(),
-                    cx,
-                );
-                Err("main_menu_note_open_failed")
-            }
-        }
+        self.open_note_in_editor_soon(
+            crate::notes::NoteTarget::Note(note_id),
+            crate::DayPageBack::Leave,
+            cx,
+        );
+        Ok(())
     }
 
     /// Enter on a "From Your Brain" passive row. Routes by document source:

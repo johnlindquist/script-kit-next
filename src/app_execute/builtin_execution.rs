@@ -3564,10 +3564,10 @@ impl ScriptListApp {
         self.pending_focus = None;
 
         let target = match action {
-            NotesCommandBuiltinAction::OpenNotes | NotesCommandBuiltinAction::QuickCapture => {
-                notes::NoteTarget::Today
+            NotesCommandBuiltinAction::QuickCapture => notes::NoteTarget::Today,
+            NotesCommandBuiltinAction::OpenNotes | NotesCommandBuiltinAction::SearchNotes => {
+                notes::NoteTarget::Search
             }
-            NotesCommandBuiltinAction::SearchNotes => notes::NoteTarget::Search,
             NotesCommandBuiltinAction::NewNote => notes::NoteTarget::New,
         };
         let result = self.one_window_show_note(target, cx);
@@ -7438,13 +7438,13 @@ impl ScriptListApp {
     /// Determine the delivery target for a new dictation session based on
     /// which Script Kit surface is currently active.
     ///
-    /// Priority: an open note or the chat (both type into the main input) > active prompt >
+    /// Priority: the chat (it types into the main input) > active prompt >
     /// tracked frontmost app > launcher main filter fallback > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
         let has_frontmost_app_target = Self::has_dictation_frontmost_target();
         let target = if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             crate::dictation::DictationTarget::TabAiHarness
-        } else if self.one_window_note_open() || self.one_window.chat().is_some() {
+        } else if self.one_window.chat().is_some() {
             crate::dictation::DictationTarget::MainWindowFilter
         } else if self.can_accept_dictation_into_prompt() {
             crate::dictation::DictationTarget::MainWindowPrompt
@@ -7459,7 +7459,6 @@ impl ScriptListApp {
             category = "DICTATION",
             ?target,
             current_view = ?std::mem::discriminant(&self.current_view),
-            note_open = self.one_window_note_open(),
             agent_chat_open = self.one_window.chat().is_some(),
             has_frontmost_app_target,
             accepts_main_filter = self.can_accept_dictation_into_main_filter(),

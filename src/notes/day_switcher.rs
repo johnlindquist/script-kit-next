@@ -24,6 +24,59 @@ pub(crate) fn parse_day_note_action_id(id: &str) -> Option<NaiveDate> {
         .and_then(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
 }
 
+/// Day pages whose date or words match `query`, newest first, as files the chat can attach.
+/// Today's page is called "Today".
+pub(crate) fn day_page_file_matches(query: &str, limit: usize) -> Vec<crate::scripts::FileMatch> {
+    let today = crate::brain::substrate::BrainSubstrate::default_kit()
+        .capture_day_destination(Utc::now())
+        .0;
+    day_page_file_matches_in(
+        &load_day_note_switcher_entries(&crate::notes::notes_brain_days_dir()),
+        today,
+        query,
+        limit,
+    )
+}
+
+fn day_page_file_matches_in(
+    entries: &[DayNoteSwitcherEntry],
+    today: NaiveDate,
+    query: &str,
+    limit: usize,
+) -> Vec<crate::scripts::FileMatch> {
+    let query = query.trim().to_lowercase();
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let name = if entry.date == today {
+                format!("Today · {}", entry.title)
+            } else {
+                entry.title.clone()
+            };
+            let matches = query.is_empty()
+                || name.to_lowercase().contains(&query)
+                || entry
+                    .date
+                    .format("%b %-d")
+                    .to_string()
+                    .to_lowercase()
+                    .contains(&query)
+                || entry.content.to_lowercase().contains(&query);
+            matches.then(|| crate::scripts::FileMatch {
+                file: crate::file_search::FileResult {
+                    path: entry.path.to_string_lossy().into_owned(),
+                    name,
+                    size: entry.content.len() as u64,
+                    modified: entry.updated_at.timestamp().max(0) as u64,
+                    file_type: crate::file_search::FileType::Document,
+                },
+                score: 0,
+            })
+        })
+        .take(limit)
+        .collect()
+}
+
 pub(crate) fn load_day_note_switcher_entries(days_dir: &Path) -> Vec<DayNoteSwitcherEntry> {
     load_day_note_switcher_entries_result(days_dir).unwrap_or_default()
 }

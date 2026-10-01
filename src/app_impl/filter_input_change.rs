@@ -15,6 +15,7 @@ impl ScriptListApp {
             ScriptListSpecialEntry::Help => "help",
             ScriptListSpecialEntry::Grab => "grab",
             ScriptListSpecialEntry::DayPage => "day_page",
+            ScriptListSpecialEntry::NewNote => "new_note",
         };
         let raw_filter_text_safe = logging::log_private_user_value(raw_filter_text);
 
@@ -61,6 +62,20 @@ impl ScriptListApp {
                 // starts clean and ScriptList has no stray backtick on return.
                 self.set_filter_text_immediate(String::new(), window, cx);
                 self.show_day_page_view(window, cx);
+            }
+            ScriptListSpecialEntry::NewNote => {
+                self.set_filter_text_immediate(String::new(), window, cx);
+                let opened = crate::notes::new_note_to_edit(Some("# ")).and_then(|id| {
+                    self.open_note_in_editor(
+                        crate::notes::NoteTarget::Note(id),
+                        crate::DayPageBack::Leave,
+                        window,
+                        cx,
+                    )
+                });
+                if let Err(error) = opened {
+                    self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                }
             }
         }
 

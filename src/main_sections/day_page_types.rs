@@ -186,4 +186,11 @@ pub struct DayPageView {
     /// Last Today `@context` round-trip receipt exposed to automation.
     /// Redacted: carries counts/ranges/hashes only, never raw context text.
     pub(crate) last_context_round_trip_receipt: Option<serde_json::Value>,
+    /// Where Esc goes from the document that is open now.
+    pub(crate) back: DayPageBack,
+    /// Documents opened from inside the editor with their names, most recent last; Esc walks back
+    /// through them.
+    pub(crate) trail: Vec<(crate::notes::NoteTarget, String)>,
+    /// Bumped on every edit; a ghost suggestion computed for an older edit is dropped.
+    pub(crate) ghost_generation: u64,
 }

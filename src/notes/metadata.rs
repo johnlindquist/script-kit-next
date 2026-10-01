@@ -416,6 +416,22 @@ fn scan_wiki_links(content: &str) -> Vec<ParsedNoteLink> {
     links
 }
 
+/// The target of the `[[link]]` the cursor is in, if any.
+pub(crate) fn wiki_link_target_at(content: &str, cursor: usize) -> Option<String> {
+    scan_wiki_links(content)
+        .into_iter()
+        .find(|link| cursor > link.byte_start && cursor < link.byte_end)
+        .map(|link| link.target_ref)
+}
+
+/// The title typed so far after an unclosed `[[` on the cursor's line.
+pub(crate) fn open_wiki_link_prefix(content: &str, cursor: usize) -> Option<&str> {
+    let before = content.get(..cursor)?;
+    let line = &before[before.rfind('\n').map_or(0, |at| at + 1)..];
+    let typed = &line[line.rfind("[[")? + 2..];
+    (!typed.contains(']') && !typed.contains('|')).then_some(typed)
+}
+
 fn dedupe_by<T, F>(items: Vec<T>, key_fn: F) -> Vec<T>
 where
     F: Fn(&T) -> String,

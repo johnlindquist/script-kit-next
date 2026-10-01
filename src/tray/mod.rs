@@ -426,7 +426,7 @@ impl TrayManager {
     /// Creates the tray menu with standard items.
     ///
     /// Sections (Raycast-style):
-    ///   • Open Script Kit (configured launcher hotkey) / Current App Commands… / Open Notes / Open Agent Chat
+    ///   • Open Script Kit (configured launcher hotkey) / Current App Commands… / Open Today / Open Agent Chat
     ///   • Manual / Send Feedback…
     ///   • Follow Us / GitHub / Discord
     ///   • Settings ⌘, / Reload Scripts / Check for Updates… / Version (or Update Available) / About
@@ -480,11 +480,11 @@ impl TrayManager {
                 )
             }
         };
-        // Open Notes — lucide notepad-text glyph, white-on-template via menu_icon_from_svg.
+        // Today — the notes hotkey's page. Lucide notepad-text glyph, white-on-template.
         let open_notes_item = match menu_icon_from_svg(ICON_NOTES_SVG) {
             Ok(icon) => IconMenuItem::with_id(
                 TrayMenuAction::OpenNotes.id(),
-                "Open Notes",
+                "Open Today",
                 true,
                 Some(icon),
                 shortcuts.notes,
@@ -493,7 +493,7 @@ impl TrayManager {
                 tracing::warn!(error = %e, "tray.notes_icon_fallback");
                 IconMenuItem::with_id_and_native_icon(
                     TrayMenuAction::OpenNotes.id(),
-                    "Open Notes",
+                    "Open Today",
                     true,
                     Some(NativeIcon::Bookmarks),
                     shortcuts.notes,
@@ -900,7 +900,7 @@ pub(crate) fn tray_menu_observation_snapshot(
                     ),
                     tray_menu_item(
                         TrayMenuAction::OpenNotes,
-                        "Open Notes".to_string(),
+                        "Open Today".to_string(),
                         true,
                         shortcut_flags.notes.then_some(TrayMenuShortcutObservation {
                             display: None,

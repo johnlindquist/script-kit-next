@@ -15,14 +15,14 @@ use gpui::{
     fill, point, px, size,
 };
 
+use super::state::{MoveLeft, MoveRight};
 use super::{
     EditorMode, InputBaseState, InputModeKind,
     layout::LastLayout,
     state::{Backspace, Delete, DeleteToNextWordEnd, DeleteToPreviousWordStart, Paste, Redo, Undo},
 };
-use crate::input::display_map::{LineLayout, MarkSegment};
 use crate::actions::{SelectLeft, SelectRight};
-use super::state::{MoveLeft, MoveRight};
+use crate::input::display_map::{LineLayout, MarkSegment};
 
 /// Script Kit input events, emitted alongside gpui-kit's `InputEvent` (kept
 /// separate so the upstream enum — matched exhaustively by gpui-ai — is
@@ -165,7 +165,9 @@ impl<M: InputModeKind> InputBaseState<M> {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let offset = self.deferred_scroll_offset.unwrap_or(self.scroll_handle.offset());
+        let offset = self
+            .deferred_scroll_offset
+            .unwrap_or(self.scroll_handle.offset());
         self.set_value(value, window, cx);
         let cursor = cursor.min(self.text.len());
         self.set_selected_range(cursor..cursor, cx);
@@ -182,7 +184,9 @@ impl<M: InputModeKind> InputBaseState<M> {
     ) {
         let selection = self.selected_range();
         let reversed = self.active_selection().reversed;
-        let offset = self.deferred_scroll_offset.unwrap_or(self.scroll_handle.offset());
+        let offset = self
+            .deferred_scroll_offset
+            .unwrap_or(self.scroll_handle.offset());
         self.set_value(value, window, cx);
         let len = self.text.len();
         self.set_selected_range(selection.start.min(len)..selection.end.min(len), cx);
@@ -224,7 +228,12 @@ impl<M: InputModeKind> InputBaseState<M> {
         self.sk.highlight_ranges = ranges;
         self.sk.highlight_range_roles = roles;
         if let Some((hovered, _)) = self.sk.hovered_highlight_range.as_ref() {
-            if !self.sk.highlight_ranges.iter().any(|(range, _)| range == hovered) {
+            if !self
+                .sk
+                .highlight_ranges
+                .iter()
+                .any(|(range, _)| range == hovered)
+            {
                 self.sk.hovered_highlight_range = None;
             }
         }
@@ -317,7 +326,11 @@ impl<M: InputModeKind> InputBaseState<M> {
         &self,
         visible: &Range<usize>,
     ) -> Vec<(Range<usize>, HighlightStyle)> {
-        let hovered = self.sk.hovered_highlight_range.as_ref().map(|(r, _)| r.clone());
+        let hovered = self
+            .sk
+            .hovered_highlight_range
+            .as_ref()
+            .map(|(r, _)| r.clone());
         let mut styles: Vec<(Range<usize>, HighlightStyle)> = self
             .sk
             .highlight_ranges
@@ -335,7 +348,10 @@ impl<M: InputModeKind> InputBaseState<M> {
                         wavy: false,
                     });
                 }
-                (range.start.max(visible.start)..range.end.min(visible.end), style)
+                (
+                    range.start.max(visible.start)..range.end.min(visible.end),
+                    style,
+                )
             })
             .collect();
         styles.sort_by_key(|(range, _)| range.start);
@@ -403,11 +419,7 @@ impl<M: InputModeKind> InputBaseState<M> {
 
 impl InputBaseState<EditorMode> {
     /// Show `text` as ghost-text inline completion at the cursor (Tab accepts).
-    pub fn set_inline_completion_text(
-        &mut self,
-        text: impl Into<String>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_inline_completion_text(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
         let text = text.into();
         if text.is_empty() {
             self.clear_inline_completion(cx);
@@ -423,6 +435,14 @@ impl InputBaseState<EditorMode> {
         cx.notify();
     }
 
+    /// The ghost text shown now, if any.
+    pub fn inline_completion_text(&self) -> Option<&str> {
+        self.extras
+            .inline_completion
+            .item
+            .as_ref()
+            .map(|item| item.insert_text.as_str())
+    }
 }
 
 impl InputBaseState<EditorMode> {
@@ -481,6 +501,14 @@ impl InputBaseState<super::InputMode> {
         self.extras.inline_completion.is_some()
     }
 
+    /// The ghost text shown now, if any.
+    pub fn inline_completion_text(&self) -> Option<&str> {
+        self.extras
+            .inline_completion
+            .as_ref()
+            .map(|item| item.insert_text.as_str())
+    }
+
     /// Drop the ghost text.
     pub fn clear_inline_completion(&mut self, cx: &mut Context<Self>) {
         if self.extras.inline_completion.take().is_some() {
@@ -489,7 +517,11 @@ impl InputBaseState<super::InputMode> {
     }
 
     /// Insert the ghost text at the cursor. Returns false when there was none.
-    pub fn accept_inline_completion(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub fn accept_inline_completion(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(item) = self.extras.inline_completion.take() else {
             return false;
         };
@@ -503,7 +535,9 @@ impl InputBaseState<super::InputMode> {
 impl<M: InputModeKind> InputBaseState<M> {
     /// Window-relative caret bounds from the most recent paint, if any.
     pub fn last_cursor_bounds(&self) -> Option<Bounds<Pixels>> {
-        self.last_layout.as_ref().and_then(|layout| layout.cursor_bounds)
+        self.last_layout
+            .as_ref()
+            .and_then(|layout| layout.cursor_bounds)
     }
 
     /// Select `start..end` (UTF-8 byte offsets, clamped), scroll it into view
@@ -568,8 +602,7 @@ pub(crate) fn fidelity_line_evidence(
         f32::from(line_height),
         scale_factor,
     ));
-    let grapheme_count =
-        unicode_segmentation::UnicodeSegmentation::graphemes(text, true).count();
+    let grapheme_count = unicode_segmentation::UnicodeSegmentation::graphemes(text, true).count();
     let metadata = serde_json::json!({
         "schemaVersion": 1,
         "measurementId": format!("text:{base_scope}:line:{row}:{wrapped_index}"),

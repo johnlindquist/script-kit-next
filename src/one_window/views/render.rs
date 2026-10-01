@@ -112,23 +112,11 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 word: None,
             }],
         },
-        HostedView::Note(note) => note
-            .rows()
-            .into_iter()
-            .map(|row| ViewRow {
-                icon: if row.new_line { "edit" } else { "file" },
-                id: row.id,
-                title: row.title,
-                description: row.description,
-                selected: row.selected,
-                word: None,
-            })
-            .collect(),
         HostedView::Notes(list) if list.found.is_empty() => vec![ViewRow {
             id: "notes-row:none".into(),
-            title: "No note by that name".into(),
-            description: Some("Type part of a note's name".into()),
-            icon: "search",
+            title: "No notes yet".into(),
+            description: Some("Type a title to start one".into()),
+            icon: "plus",
             selected: true,
             word: None,
         }],
@@ -140,7 +128,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 id: format!("notes-row:{i}"),
                 title: found.title.clone(),
                 description: Some(found.sub.clone()),
-                icon: "file",
+                icon: found.icon(),
                 selected: list.sel == i,
                 word: None,
             })

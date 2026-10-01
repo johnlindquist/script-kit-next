@@ -131,19 +131,8 @@ impl ScriptListApp {
                         crate::notes::NoteTarget::Day(date)
                     }
                 };
-                match self.one_window_open_note_target(target, cx) {
-                    Ok(()) => true,
-                    Err(error) => {
-                        tracing::warn!(
-                            target: "script_kit::notes",
-                            error = %error,
-                            destination = destination.as_str(),
-                            "notes_browse_open_note_failed"
-                        );
-                        self.notice_failed("The selected note couldn’t be opened.".to_string(), cx);
-                        false
-                    }
-                }
+                self.open_note_in_editor_soon(target, crate::DayPageBack::Leave, cx);
+                true
             }
             crate::notes::search_model::NoteSearchDestination::OpenInNotes
             | crate::notes::search_model::NoteSearchDestination::OpenHere => false,

@@ -60,6 +60,8 @@ pub(crate) use self::grouping::prepend_root_brain_inbox_section;
 #[allow(unused_imports)]
 pub(crate) use self::grouping::prepend_root_conversations_section;
 #[allow(unused_imports)]
+pub(crate) use self::grouping::prepend_root_pinned_notes_section;
+#[allow(unused_imports)]
 pub use self::loader::{read_scripts, read_scripts_report};
 pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file, ScriptletCatalogue};

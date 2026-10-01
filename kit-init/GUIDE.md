@@ -1211,23 +1211,33 @@ aiHotkey: {
 
 ## Notes
 
-Notes open in the main window, under the same input. There is no separate Notes window.
+Every note and every day page opens in one editor that fills the main window. There is no separate Notes window.
 
 ### Opening a Note
 
-- **Hotkey**: `Cmd+Ctrl+N` opens today's note — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`
-- **From the launcher**: search "Notes"
-- **From automation**: the `openNotes` protocol command
+- **Hotkey**: `Cmd+Ctrl+N` opens Today — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`
+- **Today**: `Cmd+T` in the main window, or the Today button in the footer's left corner
+- **A new note**: type `#` on an empty input; the editor opens with the cursor after `# `, ready for the title
+- **Every note**: search "Notes" for the Notes list — pinned notes first, then notes and day pages; `Tab` changes the sort (changed, title, created) and typing filters
+- **From search**: notes match what you type in the main window, and pinned notes lead the list when nothing is typed
+- **From automation**: the `openNotes` protocol command, or the deep link `scriptkit://notes/<id>`
+
+### Capturing a Note
+
+- `;` followed by a line adds it to today's page
+- `/note` followed by a title saves a new note with whatever you attached with `@` (the clipboard, a selection, a file) under the title
+- Saying "note this", "save the clipboard as a note" or similar offers an "Add note" row that brings the clipboard, selection or browser page along
 
 ### Working in a Note
 
-A note's lines are rows under a `NOTE · <name>` header; the input never moves.
+- `[[Note title]]` links to another note. `Cmd+.` or a click on the link opens it; a title with no note yet starts one. `Esc` returns to the note you came from.
+- Typing `[[` offers a matching title as ghost text after a short pause: `Tab` accepts it, `Cmd+→` takes the next word, `Esc` dismisses it.
+- `Cmd+K` lists the note's actions: New Note, Pin, Copy Link, Copy Deep Link, Duplicate, Show in Finder, Move to Trash, and the notes linking to this one.
+- `Cmd+N` starts a note, `Cmd+P` switches notes in place, `Cmd+S` saves.
+- Move to Trash waits 8 s in the line above the input; `Cmd+Z` stops it. A new note left empty is removed when you leave it.
+- `@notes:` in the main window or the chat input attaches a note or a day page as context for the model.
 
-- Type and press `Enter` — add a line
-- `Enter` on a line — put its words in the input; `Enter` again saves them in place (its time and bullet are kept)
-- `Cmd+Backspace` — delete a line; it waits 8 s in the line above the input, and `Cmd+Z` stops it
-- `Cmd+P` — list notes by name
-- `Cmd+Enter` — ask the model about the note; the chat opens under the same input with the note attached
+The first note you create comes with a pinned welcome note that explains the basics.
 
 ### Configuring the Hotkey
 
@@ -1241,7 +1251,7 @@ notesHotkey: {
 
 ### Storage
 
-Day notes are markdown files at `~/.scriptkit/brain/days/<date>.md`. Other notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`, and every active note is mirrored as a read-only markdown file under `~/.scriptkit/notes/`.
+Every note is a Markdown file under `~/.scriptkit/brain/notes/`, and day pages are `~/.scriptkit/brain/days/<date>.md`. Any editor can open them. `~/.scriptkit/db/notes.sqlite` is an index the app rebuilds from those files to keep search instant.
 
 ### Notes Automation
 

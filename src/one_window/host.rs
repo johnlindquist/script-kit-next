@@ -56,8 +56,6 @@ pub(crate) struct OneWindowHost {
     /// Whether a view covered the list after the last turn. The input's ghost words belong to
     /// the list, so they go when a view opens and come back when it closes.
     pub(super) covered: bool,
-    /// Lines of notes waiting to be deleted: note views leave them out.
-    pub(super) note_deletes: Vec<super::notes::PendingDelete>,
     /// A note asked for while the window was hidden, opened once it's shown.
     pub(super) note_waiting: Option<crate::notes::NoteTarget>,
     /// Scrolls a long view's rows so the highlighted one stays in sight.
@@ -309,7 +307,6 @@ impl ScriptListApp {
                             if [
                                 super::views::FORM,
                                 super::views::ANSWER,
-                                super::views::NOTE,
                                 super::notes::NOTES,
                                 super::reading::READING,
                             ]

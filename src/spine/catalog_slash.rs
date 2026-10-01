@@ -10,6 +10,11 @@ struct SlashCommandSpec {
 
 const SPINE_SLASH_COMMANDS: &[SlashCommandSpec] = &[
     SlashCommandSpec {
+        name: "note",
+        description: "Save the words and attached context as a note",
+        icon: "notebook-text",
+    },
+    SlashCommandSpec {
         name: "rewrite",
         description: "Rewrite the prompt or selected context",
         icon: "pencil",

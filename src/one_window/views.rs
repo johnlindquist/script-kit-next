@@ -17,13 +17,11 @@ pub(crate) use render::header_element;
 
 pub(crate) const FORM: &str = "form";
 pub(crate) const ANSWER: &str = "answer";
-pub(crate) const NOTE: &str = "note";
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum HostedView {
     Form(Form),
     Answer(Answer),
-    Note(super::notes::NoteView),
     Notes(super::notes::NotesList),
     Reading(super::reading::ReadingView),
 }
@@ -33,7 +31,6 @@ impl HostedView {
         match self {
             HostedView::Form(_) => FORM,
             HostedView::Answer(_) => ANSWER,
-            HostedView::Note(_) => NOTE,
             HostedView::Notes(_) => super::notes::NOTES,
             HostedView::Reading(_) => super::reading::READING,
         }
@@ -51,8 +48,7 @@ impl HostedView {
                 Verb::Other(_) => "Form".into(),
             },
             HostedView::Answer(_) => "Answer".into(),
-            HostedView::Note(note) => format!("Note · {}", note.title),
-            HostedView::Notes(_) => "Notes".into(),
+            HostedView::Notes(list) => list.label(),
             HostedView::Reading(_) => "How Jev reads it".into(),
         }
     }
@@ -61,7 +57,6 @@ impl HostedView {
         match self {
             HostedView::Form(form) => form.enter(),
             HostedView::Answer(answer) => answer.enter(),
-            HostedView::Note(note) => note.enter(),
             HostedView::Notes(list) => list.enter(),
             HostedView::Reading(reading) => reading.enter(),
         }
@@ -76,7 +71,6 @@ impl HostedView {
                 Some(sk_one_window::answer::Shape::Card { facts, .. }) => 1 + facts.len(),
                 _ => 1,
             },
-            HostedView::Note(note) => note.row_count(),
             HostedView::Notes(list) => list.found.len().max(1),
             HostedView::Reading(reading) => reading.rows.len(),
         }
@@ -155,7 +149,6 @@ impl ScriptListApp {
                 vec![Event::View(ViewOp::Back), Event::Key(Key::Enter)]
             }
             super::reading::READING => Vec::new(),
-            NOTE => self.one_window_note_key(key, cx),
             super::notes::NOTES => self.one_window_notes_list_key(key, cx),
             _ => {
                 tracing::info!(
@@ -205,10 +198,7 @@ impl ScriptListApp {
                 })
                 .map_err(|_| "one_window_copy_failed")
             }),
-            HostedView::Answer(_)
-            | HostedView::Note(_)
-            | HostedView::Notes(_)
-            | HostedView::Reading(_) => None,
+            HostedView::Answer(_) | HostedView::Notes(_) | HostedView::Reading(_) => None,
         };
         let mut events = Vec::new();
         if let Some(words) = caret_words {
@@ -288,7 +278,6 @@ impl ScriptListApp {
                     sk_one_window::form::FieldState::Filled
                 };
             }
-            HostedView::Note(note) => note.typed(text),
             HostedView::Notes(list) => list.typed(text),
             HostedView::Reading(view) => {
                 let words = reading.as_deref().map(|plan| plan.words.as_slice());
@@ -306,8 +295,7 @@ impl ScriptListApp {
     }
 
     /// Keys an open view uses that the input or the launcher would otherwise take: Tab and ← → in a
-    /// form (fields and their other values), and in a note ⌘⌫ on a highlighted line, ⌘P, and ⌘Z
-    /// while one of its lines waits to be deleted.
+    /// form (fields and their other values), and Tab in the Notes list (its order).
     /// Enter, Esc and the arrows up and down reach the reducer through the list's own paths.
     pub(crate) fn one_window_view_takes_key(
         &mut self,
@@ -337,22 +325,10 @@ impl ScriptListApp {
                 "left" | "arrowleft" => Key::Other("left".into()),
                 _ => return false,
             },
-            Some(HostedView::Note(note)) if modifiers.platform && !modifiers.shift => {
-                match key.as_str() {
-                    "backspace" if note.editing.is_none() && note.sel < note.row_count() - 1 => {
-                        Key::Other(super::notes::DELETE_LINE_KEY.into())
-                    }
-                    "p" => Key::Other(super::notes::FIND_NOTE_KEY.into()),
-                    "z" if self
-                        .one_window_host
-                        .note_deletes
-                        .iter()
-                        .any(|delete| delete.doc == note.doc) =>
-                    {
-                        Key::CmdZ
-                    }
-                    _ => return false,
-                }
+            Some(HostedView::Notes(_))
+                if !modifiers.platform && !modifiers.shift && key == "tab" =>
+            {
+                Key::Tab
             }
             _ => return false,
         };
@@ -477,13 +453,13 @@ impl ScriptListApp {
         Some(Ok(()))
     }
 
-    /// Today's note under the input, with `line` ready to add.
+    /// Adds `line` to today's page and opens it.
     pub(crate) fn one_window_open_note(&mut self, line: String, cx: &mut Context<Self>) {
-        if let Err(error) =
-            self.one_window_open_note_target(crate::notes::NoteTarget::Append(line), cx)
-        {
-            self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
-        }
+        self.open_note_in_editor_soon(
+            crate::notes::NoteTarget::Append(line),
+            crate::DayPageBack::Leave,
+            cx,
+        );
     }
 
     /// The calculator's answer, in place: the number it came to.
@@ -557,7 +533,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let [crate::intent::Step::Capture {
-            target, body, when, ..
+            target,
+            body,
+            when,
+            subject,
+            ..
         }] = plan.steps.as_slice()
         else {
             return false;
@@ -573,7 +553,10 @@ impl ScriptListApp {
         let verb = match target.as_str() {
             "todo" | "reminder" => Verb::Remind,
             "note" => {
-                self.one_window_open_note(body.clone(), cx);
+                match subject {
+                    Some(subject) => self.capture_note_with_screen(body, subject, cx),
+                    None => self.one_window_open_note(body.clone(), cx),
+                }
                 return true;
             }
             _ => return false,

@@ -8,7 +8,9 @@ pub(crate) mod telemetry;
 #[cfg(test)]
 mod tests;
 
-pub use document::{DayPageBinding, DayPageDocumentSession};
+pub use document::{
+    delete_note_permanently, set_note_pinned, trash_note, DayPageBinding, DayPageDocumentSession,
+};
 pub use render::render_fragment_back_bar;
 pub use sediment::{
     context_parts_from_day_page_markdown_links, day_page_markdown_reference_for_context_part,

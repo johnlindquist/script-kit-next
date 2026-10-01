@@ -401,8 +401,10 @@ impl DayPageDocumentSession {
         if let Some(note_id_text) = note_binding_id {
             let note_id = crate::notes::NoteId::parse(&note_id_text)
                 .with_context(|| format!("parsing day page note id {note_id_text}"))?;
-            // The note switcher initializes storage before loading this binding.
-            // Saving must not repeat schema checks and whole-corpus metadata backfill.
+            // The binary and the library each keep their own copy of the notes store, and only
+            // this one remembers what the editor last wrote. Open it here, cheaply, instead of
+            // relying on whoever opened the note.
+            crate::notes::ensure_notes_db_open()?;
             let mut note = crate::notes::get_note(note_id)?
                 .with_context(|| format!("loading note before day page save {note_id}"))?;
             note.set_content(content);
@@ -611,8 +613,15 @@ impl DayPageDocumentSession {
             return Ok(None);
         }
 
-        let content = io::read_private_document(&path)
+        let raw = io::read_private_document(&path)
             .with_context(|| format!("re-reading day page {}", path.display()))?;
+        // A note's file carries the store's front matter; the editor holds only its words.
+        let content = if matches!(self.binding, DayPageBinding::Note { .. }) {
+            crate::notes::note_editor_content_from_file(&raw)
+                .with_context(|| format!("reading note {}", path.display()))?
+        } else {
+            raw
+        };
         self.disk_content = content.clone();
         self.base_disk_content = content.clone();
         self.last_mtime = mtime;
@@ -692,6 +701,35 @@ fn merge_editor_with_external_appends(content: &str, suffix: &str, disk_now: &st
         merged.push('\n');
     }
     merged
+}
+
+/// Changes to a note that may be open in the editor go through the same store its saves use, so
+/// that store's record of what is on disk stays true and the next save writes over the file
+/// instead of setting it aside as someone else's edit.
+fn change_note(note_id: &str, change: impl FnOnce(&mut crate::notes::Note)) -> Result<String> {
+    crate::notes::ensure_notes_db_open()?;
+    let id = crate::notes::NoteId::parse(note_id).with_context(|| format!("note id {note_id}"))?;
+    let mut note = crate::notes::get_note(id)?.with_context(|| format!("note {note_id}"))?;
+    change(&mut note);
+    crate::notes::save_note(&note)?;
+    Ok(note.title)
+}
+
+/// Pins or unpins a note. Returns its title.
+pub fn set_note_pinned(note_id: &str, pinned: bool) -> Result<String> {
+    change_note(note_id, |note| note.is_pinned = pinned)
+}
+
+/// Moves a note to the trash. Returns its title.
+pub fn trash_note(note_id: &str) -> Result<String> {
+    change_note(note_id, crate::notes::Note::soft_delete)
+}
+
+/// Removes a note for good, file and all.
+pub fn delete_note_permanently(note_id: &str) -> Result<()> {
+    crate::notes::ensure_notes_db_open()?;
+    let id = crate::notes::NoteId::parse(note_id).with_context(|| format!("note id {note_id}"))?;
+    crate::notes::delete_note_permanently(id)
 }
 
 #[cfg(test)]

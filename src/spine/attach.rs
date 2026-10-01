@@ -129,11 +129,13 @@ pub(crate) fn attach_outcome_for_result(
     segment_byte_range: Range<usize>,
 ) -> Option<SpineAttachOutcome> {
     match (source, result) {
-        // Project rows are files too: a `@project:` pick resolves into the
+        // Project rows and `@notes:` day pages are files too: picking one resolves into the
         // same compact `@file:basename` token + "file" resolution source so
         // alias dedup and the prompt plan treat it identically.
         (
-            ContextSubsearchSource::File | ContextSubsearchSource::Project,
+            ContextSubsearchSource::File
+            | ContextSubsearchSource::Project
+            | ContextSubsearchSource::Notes,
             SearchResult::File(file_match),
         ) => {
             // Alias registration owned by the ResolveSegment apply arm

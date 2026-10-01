@@ -41,6 +41,11 @@ impl ScriptListApp {
                 self.filter_coalescer.reset();
             }
             self.main_revision_route = (variant, id.to_owned(), entity, session);
+            // The departed child's revision leaves the identity with it; keep
+            // its contribution so the main data generation only moves forward.
+            let departed = std::mem::take(&mut self.owned_child_revision_seen);
+            self.main_revisions.data_generation =
+                self.main_revisions.data_generation.strict_add(departed);
             self.mark_main_surface_changed();
         }
     }

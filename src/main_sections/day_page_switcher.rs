@@ -75,58 +75,31 @@ impl DayPageView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let is_local_switch_target =
-            action_id.starts_with("daypage_") || action_id.starts_with("note_");
-        if is_local_switch_target
-            && self.session.is_dirty()
-            && !self.save_and_sync_footer(window, cx)
+        self.note_switcher.close(cx);
+        let target = if let Some(date) = action_id
+            .strip_prefix("daypage_")
+            .and_then(|date| chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
         {
+            crate::notes::NoteTarget::Day(date)
+        } else if let Some(note_id_text) = action_id.strip_prefix("note_") {
+            if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_text) {
+                crate::notes::NoteTarget::Day(date)
+            } else if let Some(note_id) = crate::notes::NoteId::parse(note_id_text) {
+                crate::notes::NoteTarget::Note(note_id)
+            } else {
+                return;
+            }
+        } else {
+            return;
+        };
+        if let Err(error) = self.follow_to_note_target(target, window, cx) {
             tracing::warn!(
                 target: "script_kit::day_page",
                 action_id,
-                "day_page_note_switcher_dirty_save_failed"
+                error = %error,
+                "day_page_note_switcher_open_failed"
             );
-            cx.notify();
-            return;
-        }
-        self.note_switcher.close(cx);
-        if let Some(date) = action_id.strip_prefix("daypage_") {
-            if let Ok(date) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
-                self.bind_day(date, window, cx);
-                self.focus_editor(window, cx);
-            }
-            return;
-        }
-        let Some(note_id_text) = action_id.strip_prefix("note_") else {
-            return;
-        };
-        if let Some(date) = crate::notes::day_switcher::parse_day_note_action_id(note_id_text) {
-            self.bind_day(date, window, cx);
-            self.focus_editor(window, cx);
-            return;
-        }
-        if let Some(note_id) = crate::notes::NoteId::parse(note_id_text) {
-            let Ok(Some(note)) = crate::notes::get_note(note_id) else {
-                return;
-            };
-            let path = crate::notes::note_file_path(note.id).ok().flatten();
-            if let Err(error) = self.session.bind_note_content(
-                note.id.as_str().to_string(),
-                note.title.clone(),
-                note.content.clone(),
-                path,
-                self.now(),
-            ) {
-                tracing::error!(
-                    target: "script_kit::day_page",
-                    error = %error,
-                    "day_page_note_switcher_bind_note_failed"
-                );
-                return;
-            }
-            self.apply_loaded_content_to_editor(window, cx);
-            self.focus_editor(window, cx);
-            cx.notify();
+            crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
         }
     }
 

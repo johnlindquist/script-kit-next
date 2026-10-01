@@ -1,8 +1,8 @@
 //! Notes: storage for day notes and named notes, and how the app opens one.
 //!
-//! Notes open in the main window, under its input, as the note view (`src/one_window/notes.rs`):
-//! a note's lines are rows, the input adds or changes a line, ⌘P lists the notes by name, and ⌘↵
-//! asks the model about the note. There is no separate Notes window.
+//! Every note is a Markdown file and opens in the one note editor, which fills the main window
+//! under its input (`src/main_sections/day_page_*.rs`). The Notes list (`src/one_window/notes.rs`)
+//! finds them. There is no separate Notes window.
 //!
 //! # API Visibility
 //!
@@ -49,12 +49,13 @@ pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 #[allow(unused_imports)]
 pub(crate) use storage::{
     count_active_notes_with_tag, delete_note_cart_item, delete_note_cart_items,
-    delete_note_permanently, discard_root_notes_search_refresh, finish_root_notes_search_refresh,
-    get_all_notes, get_deleted_notes, get_note, get_note_aliases, get_note_backlink_count,
-    get_note_backlinks, get_note_outbound_link_count, get_note_tags, init_notes_db,
-    invalidate_owned_root_notes_search_freshness, list_note_cart_items,
-    list_note_cart_items_deduped, note_file_path, notes_brain_days_dir, notes_substrate,
-    owned_root_notes_search_snapshot, read_root_notes_search_snapshot,
+    delete_note_permanently, discard_root_notes_search_refresh, ensure_notes_db_open,
+    finish_root_notes_search_refresh, get_all_notes, get_deleted_notes, get_note, get_note_aliases,
+    get_note_backlink_count, get_note_backlinks, get_note_outbound_link_count, get_note_tags,
+    init_notes_db, invalidate_owned_root_notes_search_freshness,
+    invalidate_root_notes_search_cache, list_note_cart_items, list_note_cart_items_deduped,
+    note_editor_content_from_file, note_file_path, notes_brain_days_dir, notes_substrate,
+    owned_root_notes_search_snapshot, pinned_root_notes, read_root_notes_search_snapshot,
     reset_owned_root_notes_search, root_notes_query_is_eligible, root_notes_search_cache_is_fresh,
     root_notes_search_fresh_cache_status, save_note, save_note_cart_item, search_notes,
     search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
@@ -83,3 +84,8 @@ pub fn agent_chat_thread_source(ui_thread_id: &str) -> String {
 
 pub use mcp_mutations::apply_mcp_notes_mutation_on_main_thread;
 pub use open::{open_note, register_open_note_hook, save_note_with_content, NoteTarget};
+// The note editor lives in the binary; the library build doesn't use these.
+#[allow(unused_imports)]
+pub(crate) use open::new_note_to_edit;
+#[allow(unused_imports)]
+pub(crate) use storage::{resolve_note_ref, NoteRefResolution};

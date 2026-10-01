@@ -260,6 +260,28 @@ impl ScriptListApp {
                     .flatten()
             },
         );
+        if plan
+            .slash_commands
+            .iter()
+            .any(|command| command.name == "note")
+        {
+            let words = parse
+                .segments
+                .iter()
+                .filter(|segment| matches!(segment.kind, crate::spine::SpineSegmentKind::FreeText))
+                .map(|segment| segment.raw.trim())
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if reset_launcher_filter {
+                self.reset_spine_launcher_filter_after_submit();
+            }
+            if clear_aliases_after_submit {
+                self.spine_mention_aliases.clear();
+            }
+            self.save_typed_note(&words, &parts, cx);
+            return true;
+        }
         let selected_profile_name = if let Some(profile) = plan.selected_profile.as_ref() {
             let mut prefs = crate::config::load_user_preferences();
             let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();

@@ -209,6 +209,8 @@ fn dispatch_main_gesture_event(
             let _ = window.update(cx, |_root, window, cx| {
                 app_entity.update(cx, |view, cx| {
                     view.show_day_page_view(window, cx);
+                    // Shown from a closed window: Esc closes it again.
+                    view.mark_opened_directly("gesture_hold_today");
                 });
             });
         }

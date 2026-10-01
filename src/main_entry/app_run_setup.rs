@@ -1113,8 +1113,8 @@ app.run(move |cx: &mut App| {
 
                 // Handle special deeplink types
                 if command_id.starts_with("notes/") {
-                    // Notes deeplink - open the specific note when a valid id is present,
-                    // otherwise just toggle the notes window.
+                    // Notes deeplink - open the note when a valid id is present, otherwise
+                    // today's page.
                     let note_id = command_id.strip_prefix("notes/").unwrap_or("");
                     logging::log("DEEPLINK", &format!("Opening notes (note_id: {})", note_id));
                     let parsed_note_id = notes::NoteId::parse(note_id);

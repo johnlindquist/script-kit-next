@@ -19,6 +19,8 @@ use rich_results::{
 
 const INLINE_CALCULATOR_SECTION_LABEL: &str = "Calculator";
 const ROOT_PASSIVE_SEARCH_NEEDLE_MAX_CHARS: usize = 256;
+/// How many pinned notes the launcher lists with nothing typed.
+const ROOT_PINNED_NOTES_LIMIT: usize = 5;
 
 struct RootPassiveFrameOptions {
     advanced_query_active: bool,
@@ -2362,7 +2364,11 @@ impl ScriptListApp {
                             };
                             let hits =
                                 crate::notes::search_root_notes_meta_direct(&rich_query, options);
-                            build_rich_notes_rows(&rich_query, &hits)
+                            let days = crate::notes::day_switcher::day_page_file_matches(
+                                &rich_query,
+                                crate::spine::catalog_subsearch::SUBSEARCH_RENDER_LIMIT,
+                            );
+                            build_rich_notes_rows(&rich_query, &hits, days)
                         }
                         crate::spine::catalog_subsearch::ContextSubsearchSource::Dictation => {
                             let options = crate::dictation::RootDictationHistorySectionOptions {
@@ -3010,6 +3016,28 @@ impl ScriptListApp {
                         );
                     }
                 }
+            }
+            (grouped_items, flat_results)
+        };
+        // Pinned notes sit under the Brain Inbox with nothing typed. Fixture launchers without a
+        // search gate keep their rows to the fixtures.
+        let (grouped_items, flat_results) = {
+            let (mut grouped_items, mut flat_results) = (grouped_items, flat_results);
+            if !menu_syntax_owns_main_list
+                && !spine_owns_for_computed
+                && raw_filter_text.trim().is_empty()
+                && (self.main_services.is_production()
+                    || self.main_services.search_gate().is_some())
+            {
+                let pinned =
+                    crate::notes::pinned_root_notes(ROOT_PINNED_NOTES_LIMIT).unwrap_or_default();
+                crate::scripts::prepend_root_pinned_notes_section(
+                    &mut grouped_items,
+                    &mut flat_results,
+                    raw_filter_text,
+                    &pinned,
+                    Some(&mut ranking_evidence),
+                );
             }
             (grouped_items, flat_results)
         };

@@ -1004,9 +1004,33 @@ impl gpui::Render for MainMenuSelectionTestHost {
     }
 }
 
+/// The note editor saves through the library's copy of the notes store, which is not built for
+/// tests and would otherwise open the real `~/.scriptkit` notes. Point it at the files this test
+/// process's own copy uses.
+#[cfg(test)]
+pub(crate) fn sandbox_library_notes_store() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let root = std::env::temp_dir()
+            .join("script-kit-gpui-tests")
+            .join(std::process::id().to_string());
+        if std::env::var_os("SCRIPT_KIT_TEST_NOTES_DB_PATH").is_none() {
+            std::env::set_var(
+                "SCRIPT_KIT_TEST_NOTES_DB_PATH",
+                root.join("db").join("notes.sqlite"),
+            );
+        }
+        if std::env::var_os("SCRIPT_KIT_TEST_NOTES_BRAIN_PATH").is_none() {
+            std::env::set_var("SCRIPT_KIT_TEST_NOTES_BRAIN_PATH", root.join("brain"));
+        }
+    });
+}
+
 #[cfg(test)]
 fn main_menu_selection_test_app(cx: &mut gpui::TestAppContext) -> gpui::Entity<ScriptListApp> {
     use gpui::AppContext as _;
+
+    sandbox_library_notes_store();
 
     let app = std::sync::Arc::new(std::sync::Mutex::new(None));
     let app_for_window = app.clone();
@@ -1287,6 +1311,10 @@ pub(crate) struct ScriptListApp {
     owned_surface_subscriptions: Vec<Subscription>,
     owned_observed_surface_generation: Option<u64>,
     owned_child_semantic_value: Option<(u64, u64, u64)>,
+    /// The data revision the current child view last added to the main
+    /// identity. A route change banks it so leaving the child never moves
+    /// `data_generation` backwards.
+    owned_child_revision_seen: u64,
     main_inline_semantic_token: Option<u64>,
     /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
     scripts: Vec<std::sync::Arc<scripts::Script>>,

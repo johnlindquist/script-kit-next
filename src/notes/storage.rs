@@ -140,7 +140,7 @@ fn root_notes_search_cache_key(
     }
 }
 
-fn invalidate_root_notes_search_cache() {
+pub(crate) fn invalidate_root_notes_search_cache() {
     ROOT_NOTES_SEARCH_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
     NOTES_STORAGE_GENERATION.fetch_add(1, Ordering::Relaxed);
     if let Some(cache) = ROOT_NOTES_SEARCH_CACHE.get() {
@@ -300,6 +300,13 @@ fn note_body_for_file(content: &str) -> String {
 
 fn user_facing_content(frontmatter: &BrainFrontmatter, body: &str) -> Result<String> {
     frontmatter.merge_into_body(body)
+}
+
+/// What the editor shows for a note file read from disk: its words, without the store's own
+/// front matter (id, dates, pinned), and keeping any front matter the person wrote.
+pub(crate) fn note_editor_content_from_file(raw: &str) -> Result<String> {
+    let (frontmatter, body) = notes_substrate()?.parse_document(raw)?;
+    user_facing_content(&frontmatter, &body)
 }
 
 fn brain_frontmatter_from_note(
@@ -1086,6 +1093,15 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
         .ok_or_else(|| anyhow::anyhow!("Notes database not initialized"))
 }
 
+/// Opens the notes store if nothing has yet. Cheap once it is open: saves call this on every
+/// keystroke's autosave, so it never repeats `init_notes_db`'s schema checks.
+pub(crate) fn ensure_notes_db_open() -> Result<()> {
+    if NOTES_DB.get().is_some() {
+        return Ok(());
+    }
+    init_notes_db()
+}
+
 /// Save a note (insert or update)
 pub fn save_note(note: &Note) -> Result<()> {
     let substrate = notes_substrate()?;
@@ -1521,7 +1537,7 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
             FROM notes n
             INNER JOIN notes_fts fts ON n.rowid = fts.rowid
             WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
-            ORDER BY bm25(notes_fts)
+            ORDER BY n.is_pinned DESC, bm25(notes_fts)
             LIMIT 200
             "#,
         )?;
@@ -2080,7 +2096,7 @@ fn search_root_notes_meta_result(
                 FROM notes n
                 INNER JOIN notes_fts fts ON n.rowid = fts.rowid
                 WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
-                ORDER BY bm25(notes_fts, 8.0, 1.0), n.is_pinned DESC, n.updated_at DESC
+                ORDER BY n.is_pinned DESC, bm25(notes_fts, 8.0, 1.0), n.updated_at DESC
                 LIMIT ?2
                 "#,
             )
@@ -2126,13 +2142,13 @@ fn search_root_notes_meta_like(
             FROM notes
             WHERE deleted_at IS NULL AND (title LIKE ?1 OR content LIKE ?1)
             ORDER BY
+                is_pinned DESC,
                 CASE
                     WHEN lower(title) = ?2 THEN 0
                     WHEN lower(title) LIKE ?3 THEN 1
                     WHEN lower(title) LIKE ?1 THEN 2
                     ELSE 3
                 END,
-                is_pinned DESC,
                 updated_at DESC
             LIMIT ?4
             "#,
@@ -2145,12 +2161,12 @@ fn search_root_notes_meta_like(
             FROM notes
             WHERE deleted_at IS NULL AND title LIKE ?1
             ORDER BY
+                is_pinned DESC,
                 CASE
                     WHEN lower(title) = ?2 THEN 0
                     WHEN lower(title) LIKE ?3 THEN 1
                     ELSE 2
                 END,
-                is_pinned DESC,
                 updated_at DESC
             LIMIT ?4
             "#,
@@ -2166,6 +2182,30 @@ fn search_root_notes_meta_like(
         .context("Failed to execute root notes LIKE query")?
         .collect::<Result<Vec<_>, _>>()
         .context("Failed to collect root notes LIKE results")?;
+    Ok(hits)
+}
+
+/// Pinned notes, most recently changed first, for the launcher with nothing typed.
+pub(crate) fn pinned_root_notes(limit: usize) -> Result<Vec<RootNoteSearchHit>> {
+    init_notes_db()?;
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, title, updated_at, is_pinned, length(content)
+            FROM notes
+            WHERE deleted_at IS NULL AND is_pinned = 1
+            ORDER BY updated_at DESC
+            LIMIT ?1
+            "#,
+        )
+        .context("Failed to prepare pinned notes query")?;
+    let hits = stmt
+        .query_map(params![limit as i64], row_to_root_note_hit)
+        .context("Failed to execute pinned notes query")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect pinned notes")?;
     Ok(hits)
 }
 

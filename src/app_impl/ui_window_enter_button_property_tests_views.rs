@@ -46,7 +46,10 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
                     .filter_map(|item| list.row(item).map(|row| row.title.clone()))
                     .collect();
                 (
-                    app.one_window.chip().map(|chip| chip.title).unwrap_or_default(),
+                    app.one_window
+                        .chip()
+                        .map(|chip| chip.title)
+                        .unwrap_or_default(),
                     rows,
                     app.one_window_view_element().is_some(),
                     app.one_window.staged().map(|s| s.subject.kind),
@@ -267,23 +270,4 @@ fn an_answer_that_arrives_later_does_not_take_an_enter_meant_for_before() {
         "after the guard Enter goes to the answer"
     );
     assert!(closed, "which copies it and closes");
-}
-
-#[test]
-fn a_note_opens_in_the_main_window_with_the_words_as_its_new_line() {
-    let (view, label, windows) = in_launcher("note_view", 0, |cx| {
-        let (app, window) = launcher(cx, Jev::Off);
-        type_into_launcher(cx, window, &app, "buy oat milk");
-        wait(cx, 400);
-        key(&app, cx, Key::CmdDigit(3));
-        wait(cx, 20);
-        let windows = cx.update(|cx| cx.windows().len());
-        (hosted(&app, cx), enter_label(&app, cx), windows)
-    });
-    let Some(HostedView::Note(note)) = view else {
-        panic!("Add it to today's note opens the note in place: {view:?}");
-    };
-    assert_eq!(note.line, "buy oat milk");
-    assert_eq!(label, "Add it to “Today”");
-    assert_eq!(windows, 1, "no Notes window opens");
 }

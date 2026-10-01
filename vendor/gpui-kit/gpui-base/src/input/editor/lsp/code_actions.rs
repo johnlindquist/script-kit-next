@@ -46,6 +46,11 @@ impl InputBaseState<EditorMode> {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.extras.lsp.code_action_providers.is_empty() {
+            // Nothing to offer here, so the key goes on to whatever holds the editor.
+            cx.propagate();
+            return;
+        }
         self.handle_code_action_trigger(window, cx)
     }
 

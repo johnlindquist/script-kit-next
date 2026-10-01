@@ -335,6 +335,7 @@ include!("main_sections/day_page_layout.rs");
 include!("main_sections/day_page_view_helpers.rs");
 include!("main_sections/day_page_view.rs");
 include!("main_sections/day_page_switcher.rs");
+include!("main_sections/day_page_notes.rs");
 include!("main_sections/day_page_actions.rs");
 include!("main_sections/day_page_context_round_trip.rs");
 include!("main_sections/gesture_routing.rs");
