@@ -130,14 +130,9 @@ impl Render for DayPageView {
                 }),
             ))
         } else if viewing_past_day {
-            let label = self
-                .session
-                .bound_date()
-                .map(|date| format!("Back to Today · viewing {date}"))
-                .unwrap_or_else(|| "Back to Today".to_string());
             Some(crate::components::render_back_affordance(
                 "day-page-past-day-back".into(),
-                label.into(),
+                "Back to Today".into(),
                 &theme,
                 cx.listener(|this, _, window, cx| {
                     this.escape_back(window, cx);
@@ -146,6 +141,36 @@ impl Render for DayPageView {
         } else {
             None
         };
+
+        let heading = self
+            .heading(cx)
+            .filter(|_| self.kit_resource_preview.is_none())
+            .map(|heading| {
+                let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+                div()
+                    .id(DAY_PAGE_HEADING_ID)
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(crate::components::INFO_SPACING.xxs))
+                    .px(px(editor_layout.padding_x))
+                    .pt(px(crate::components::INFO_SPACING.xs))
+                    .when_some(heading.title, |block, title| {
+                        block.child(
+                            div()
+                                .text_xl()
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgb(text_primary))
+                                .child(title),
+                        )
+                    })
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgba(chrome.text_muted_rgba))
+                            .child(heading.context),
+                    )
+            });
 
         let editor_content = if self.kit_resource_preview.is_some() {
             self.render_kit_resource_preview(cx)
@@ -179,6 +204,7 @@ impl Render for DayPageView {
             .flex()
             .flex_col()
             .when_some(back_bar, |parent, bar| parent.child(bar))
+            .when_some(heading, |parent, heading| parent.child(heading))
             .child(
                 div()
                     // GPUI divs are display:block by default; without .flex()

@@ -17,6 +17,125 @@ pub(crate) enum DayPageBack {
 /// How long typing has to pause before a ghost suggestion shows.
 const DAY_PAGE_GHOST_PAUSE: std::time::Duration = std::time::Duration::from_millis(150);
 
+/// What the space above the editor says about the open document, so it's clear what typing
+/// goes into before and after the first keystroke.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DayPageHeading {
+    /// Shown large, when the document's own text doesn't already start by naming it.
+    pub(crate) title: Option<String>,
+    /// One short line naming what's open. It sits outside the text, so it stays while the text
+    /// scrolls.
+    pub(crate) context: String,
+}
+
+/// The heading for the open document. Days get their date, which their file doesn't hold. A
+/// note's first `# ` line is its title, so only a note without one gets its title shown here.
+/// `first_line` is the document's first non-blank line.
+pub(crate) fn day_page_heading(
+    binding: &script_kit_gpui::day_page::DayPageBinding,
+    bound_date: Option<chrono::NaiveDate>,
+    today: chrono::NaiveDate,
+    pinned: bool,
+    new_note: bool,
+    first_line: Option<&str>,
+) -> Option<DayPageHeading> {
+    use script_kit_gpui::day_page::DayPageBinding;
+    match binding {
+        DayPageBinding::Day => {
+            let date = bound_date?;
+            Some(DayPageHeading {
+                title: Some(day_heading_title(date, today)),
+                context: day_heading_relative(date, today),
+            })
+        }
+        DayPageBinding::Note { title, .. } => {
+            let names_itself = first_line
+                .and_then(|line| line.trim_start().strip_prefix("# "))
+                .is_some_and(|rest| !rest.trim().is_empty());
+            let kind = if pinned {
+                "Pinned note"
+            } else if new_note {
+                "New note"
+            } else {
+                "Note"
+            };
+            let title = if title.trim().is_empty() {
+                "Untitled Note"
+            } else {
+                title.trim()
+            };
+            Some(if names_itself {
+                DayPageHeading {
+                    title: None,
+                    context: if new_note {
+                        kind.to_string()
+                    } else {
+                        format!("{kind} · {title}")
+                    },
+                }
+            } else {
+                DayPageHeading {
+                    title: Some(title.to_string()),
+                    context: kind.to_string(),
+                }
+            })
+        }
+        DayPageBinding::Fragment { .. } => None,
+    }
+}
+
+/// "Thursday, October 1", with the year when it isn't this year's.
+fn day_heading_title(date: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+    use chrono::Datelike;
+    if date.year() == today.year() {
+        date.format("%A, %B %-d").to_string()
+    } else {
+        date.format("%A, %B %-d, %Y").to_string()
+    }
+}
+
+/// "Today", "Yesterday", "4 days ago", "Tomorrow", "In 3 days".
+fn day_heading_relative(date: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+    match (date - today).num_days() {
+        0 => "Today".to_string(),
+        -1 => "Yesterday".to_string(),
+        1 => "Tomorrow".to_string(),
+        days if days < 0 => format!("{} days ago", -days),
+        days => format!("In {days} days"),
+    }
+}
+
+/// The title a new note starts with: when it was made, like "Oct 1, 9:42 PM".
+pub(crate) fn new_note_time_title(at: chrono::DateTime<chrono_tz::Tz>) -> String {
+    at.format("%b %-d, %-I:%M %p").to_string()
+}
+
+/// ↵ after a title that is the whole document leaves a blank line under it, the way Markdown
+/// sets a heading apart, and puts the cursor below that. With a new note's time-stamp title still
+/// selected, ↵ keeps the title rather than typing over it. Returns the new text and cursor.
+pub(crate) fn heading_enter_fixup(
+    previous: &str,
+    content: &str,
+    cursor: usize,
+    new_note_title: Option<&str>,
+) -> Option<(String, usize)> {
+    let kept_title = new_note_title
+        .filter(|title| previous == format!("# {title}") && content == "# \n")
+        .map(|_| previous);
+    let title = kept_title.or_else(|| {
+        let title = content.strip_suffix('\n')?;
+        let is_lone_title = title == previous
+            && !title.contains('\n')
+            && title
+                .strip_prefix("# ")
+                .is_some_and(|rest| !rest.trim().is_empty());
+        (is_lone_title && cursor == content.len()).then_some(title)
+    })?;
+    let fixed = format!("{title}\n\n");
+    let end = fixed.len();
+    Some((fixed, end))
+}
+
 const DAY_PAGE_NOTE_ACTION_PREFIX: &str = "day_page:note:";
 const DAY_PAGE_NOTES_SECTION_TITLE: &str = "Note";
 const DAY_PAGE_LINKED_FROM_SECTION_TITLE: &str = "Linked from";
@@ -63,8 +182,36 @@ impl DayPageView {
             self.now(),
         )?;
         self.apply_loaded_content_to_editor(window, cx);
+        self.open_note_pinned = note.is_pinned;
         cx.notify();
         Ok(())
+    }
+
+    /// Makes a new note titled with the time and opens it with that title selected.
+    fn bind_new_note(&mut self, window: &mut Window, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        let title = new_note_time_title(
+            self.now()
+                .with_timezone(&self.session.substrate().timezone()),
+        );
+        let id = crate::notes::new_note_to_edit(Some(&format!("# {title}")))?;
+        self.bind_note(id, window, cx)?;
+        self.new_note_title = Some(title);
+        Ok(())
+    }
+
+    /// What the space above the editor says about the open document.
+    pub(crate) fn heading(&self, cx: &App) -> Option<DayPageHeading> {
+        let input = self.notes_editor.read(cx).input_state();
+        let value = input.read(cx).value();
+        let first_line = value.lines().find(|line| !line.trim().is_empty());
+        day_page_heading(
+            self.session.binding(),
+            self.session.bound_date(),
+            self.local_today(),
+            self.open_note_pinned,
+            self.new_note_title.is_some(),
+            first_line,
+        )
     }
 
     /// Saves what's open, then shows `target`. `back` says where Esc goes once the trail is empty.
@@ -117,10 +264,7 @@ impl DayPageView {
             NoteTarget::Today => self.bind_today(window, cx),
             NoteTarget::Day(date) => self.bind_day(date, window, cx),
             NoteTarget::Note(id) => self.bind_note(id, window, cx)?,
-            NoteTarget::New => {
-                let id = crate::notes::new_note_to_edit(None)?;
-                self.bind_note(id, window, cx)?;
-            }
+            NoteTarget::New => self.bind_new_note(window, cx)?,
             NoteTarget::Append(line) => {
                 let substrate = self.session.substrate();
                 let (date, _) = substrate.capture_day_destination(self.now());
@@ -148,7 +292,11 @@ impl DayPageView {
         self.clear_ghost(cx);
         if let Some(id) = self.current_note_id() {
             let content = self.notes_editor.read(cx).content(cx);
-            if content.trim().trim_start_matches('#').trim().is_empty() {
+            let only_its_time_title = self
+                .new_note_title
+                .as_ref()
+                .is_some_and(|title| content.trim() == format!("# {title}"));
+            if only_its_time_title || content.trim().trim_start_matches('#').trim().is_empty() {
                 script_kit_gpui::day_page::delete_note_permanently(&id.as_str())?;
                 return Ok(false);
             }
@@ -578,15 +726,21 @@ impl ScriptListApp {
             "pin" => {
                 let pinned = !note.is_pinned;
                 match script_kit_gpui::day_page::set_note_pinned(&note.id.as_str(), pinned) {
-                    Ok(_) => self.one_window_notice(
-                        crate::line_notice::DONE,
-                        if pinned {
-                            format!("Pinned “{title}”")
-                        } else {
-                            format!("Unpinned “{title}”")
-                        },
-                        cx,
-                    ),
+                    Ok(_) => {
+                        entity.update(cx, |view, cx| {
+                            view.open_note_pinned = pinned;
+                            cx.notify();
+                        });
+                        self.one_window_notice(
+                            crate::line_notice::DONE,
+                            if pinned {
+                                format!("Pinned “{title}”")
+                            } else {
+                                format!("Unpinned “{title}”")
+                            },
+                            cx,
+                        )
+                    }
                     Err(error) => {
                         self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx)
                     }

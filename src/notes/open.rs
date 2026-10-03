@@ -82,7 +82,7 @@ Every note is a Markdown file in `~/.scriptkit/brain/notes`, so any editor can o
 - `⌘T` opens today's page. Start a line in the main window with `;` to add it to today.
 - Link one note to another with [[Note title]]. Type `[[` and a few letters, then Tab to finish the title. `⌘.` opens the link under the cursor.
 - `⌘K` lists what you can do with the open note: pin it, copy its link, duplicate it, see which notes link to it.
-- `⌘↵` asks the model about the line you're on. In the chat, `@notes:` attaches a note or a day page.
+- `⌘↵` asks the model about the line you're on. In the main window, `@notes:` attaches a note or a day page to what you ask.
 
 This note stays pinned until you unpin it from `⌘K`.
 ";

@@ -102,7 +102,11 @@ impl DayPageView {
                 session: DayPageDocumentSession::new(substrate),
                 now: None,
                 shelf_previews: None,
-                host_policy: crate::runtime_policy::WindowHostPolicy::Interactive,
+                host_policy: if crate::runtime_policy::is_owned_evaluation() {
+                    crate::runtime_policy::WindowHostPolicy::OwnedHidden
+                } else {
+                    crate::runtime_policy::WindowHostPolicy::Interactive
+                },
             },
             window,
             cx,
@@ -121,7 +125,7 @@ impl DayPageView {
             window,
             cx,
             NotesEditorMarkdownConfig::new("")
-                .placeholder("Today...")
+                .placeholder("Start writing")
                 .measurement_surface("day-page-editor")
                 .layout(NotesEditorLayout::new(
                     metrics.editor_padding_x,
@@ -202,6 +206,8 @@ impl DayPageView {
             back: DayPageBack::Leave,
             trail: Vec::new(),
             ghost_generation: 0,
+            new_note_title: None,
+            open_note_pinned: false,
             read_mode: false,
         };
         view.note_switcher.set_host_policy(initial.host_policy);
@@ -441,6 +447,7 @@ impl DayPageView {
             self.document_revision = self.document_revision.saturating_add(1);
             self.loaded_document = Some(identity);
         }
+        self.new_note_title = None;
         let full = self.session.disk_content().to_string();
         let content = self.adopt_clipboard_shelf_from(&full);
         self.reset_day_page_spine_handoff_state(true, true);
@@ -543,6 +550,14 @@ impl DayPageView {
                         &previous,
                         &content,
                         &self.spine_handoff.mention_aliases,
+                    )
+                })
+                .or_else(|| {
+                    heading_enter_fixup(
+                        &previous,
+                        &content,
+                        selection.end,
+                        self.new_note_title.as_deref(),
                     )
                 })
         {
@@ -987,6 +1002,18 @@ impl DayPageView {
     }
 
     fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = self.notes_editor.read(cx).input_state();
+        let title = self
+            .new_note_title
+            .as_deref()
+            .filter(|title| input.read(cx).value() == format!("# {title}").as_str())
+            .map(|title| 2..2 + title.len());
+        if let Some(title) = title {
+            input.update(cx, |state, cx| {
+                state.set_selection_focused(title.start, title.end, window, cx);
+            });
+            return;
+        }
         self.notes_editor.update(cx, |editor, cx| {
             editor.focus_with_cursor_at_end(window, cx);
         });

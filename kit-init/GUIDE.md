@@ -1217,7 +1217,7 @@ Every note and every day page opens in one editor that fills the main window. Th
 
 - **Hotkey**: `Cmd+Ctrl+N` opens Today — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`
 - **Today**: `Cmd+T` in the main window, or the Today button in the footer's left corner
-- **A new note**: type `#` on an empty input; the editor opens with the cursor after `# `, ready for the title
+- **A new note**: type `#` on an empty input (or `Cmd+N` in a note). It starts titled with the time, like `# Oct 1, 9:42 PM`, with the title selected: type to rename it, or press `Return` to keep it and start writing two lines below
 - **Every note**: search "Notes" for the Notes list — pinned notes first, then notes and day pages; `Tab` changes the sort (changed, title, created) and typing filters
 - **From search**: notes match what you type in the main window, and pinned notes lead the list when nothing is typed
 - **From automation**: the `openNotes` protocol command, or the deep link `scriptkit://notes/<id>`
@@ -1230,12 +1230,13 @@ Every note and every day page opens in one editor that fills the main window. Th
 
 ### Working in a Note
 
+- Above the text, the editor always says what's open: a day page shows its date and "Today", "Yesterday" or "4 days ago"; a note shows "Note" or "Pinned note" and its title.
 - `[[Note title]]` links to another note. `Cmd+.` or a click on the link opens it; a title with no note yet starts one. `Esc` returns to the note you came from.
 - Typing `[[` offers a matching title as ghost text after a short pause: `Tab` accepts it, `Cmd+→` takes the next word, `Esc` dismisses it.
 - `Cmd+K` lists the note's actions: New Note, Pin, Copy Link, Copy Deep Link, Duplicate, Show in Finder, Move to Trash, and the notes linking to this one.
 - `Cmd+N` starts a note, `Cmd+P` switches notes in place, `Cmd+S` saves.
 - Move to Trash waits 8 s in the line above the input; `Cmd+Z` stops it. A new note left empty is removed when you leave it.
-- `@notes:` in the main window or the chat input attaches a note or a day page as context for the model.
+- `@notes:` in the main window attaches a note or a day page as context for the model; `Cmd+Return` then asks about it.
 
 The first note you create comes with a pinned welcome note that explains the basics.
 

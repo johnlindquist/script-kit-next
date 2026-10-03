@@ -433,6 +433,233 @@ fn a_new_note_left_empty_is_removed_when_you_leave_it() {
     );
 }
 
+fn set_text(
+    view: &mut DayPageView,
+    text: &str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::Context<DayPageView>,
+) {
+    view.notes_editor.update(cx, |editor, cx| {
+        editor.set_value_preserving_scroll(text.to_string(), text.len(), window, cx)
+    });
+    view.on_editor_change(window, cx);
+}
+
+fn text_of(view: &DayPageView, cx: &gpui::App) -> String {
+    view.notes_editor.read(cx).content(cx)
+}
+
+#[test]
+fn a_new_note_starts_titled_with_the_time_selected_and_return_keeps_it() {
+    let (opened, selected, heading, kept, saved) = in_launcher("notes_new_time_title", 0, |cx| {
+        let _brain = OneBrain::new();
+        seed_note(
+            "Heron keeps the store from being empty",
+            "- so New skips the welcome note",
+        );
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::New);
+        let (opened, selected, heading) = in_editor(&app, window, cx, |view, _, cx| {
+            let text = text_of(view, cx);
+            let selection = view.notes_editor.read(cx).selection(cx);
+            let selected = text[selection].to_string();
+            (text, selected, view.heading(cx))
+        });
+        let title = opened.trim_start_matches("# ").to_string();
+        // Return with the title still selected replaces it with a line break, as an editor does.
+        let kept = in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, "# \n", window, cx);
+            text_of(view, cx)
+        });
+        let id = open_note_id(&app, cx);
+        in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, &format!("# {title}\n\nHeron sighting"), window, cx);
+            view.escape_back(window, cx)
+        });
+        let saved = id
+            .and_then(|id| crate::notes::get_note(id).unwrap())
+            .map(|note| note.content);
+        (opened, selected, heading, kept, saved)
+    });
+    let title = opened.trim_start_matches("# ");
+    assert!(
+        opened.starts_with("# ") && title.contains(", ") && title.ends_with('M'),
+        "a new note starts titled with the time: {opened:?}"
+    );
+    assert_eq!(
+        selected, title,
+        "the time title is selected so typing renames the note"
+    );
+    assert_eq!(
+        heading.map(|heading| (heading.title, heading.context)),
+        Some((None, "New note".to_string())),
+        "the line above says it's a new note; its title is in the text"
+    );
+    assert_eq!(
+        kept,
+        format!("# {title}\n\n"),
+        "Return keeps the title and starts two lines below"
+    );
+    assert!(
+        saved.is_some_and(|content| content.contains("Heron sighting")),
+        "a new note with words in it is kept"
+    );
+}
+
+#[test]
+fn return_after_a_typed_title_starts_two_lines_below_it() {
+    let text = in_launcher("notes_title_return", 0, |cx| {
+        let _brain = OneBrain::new();
+        seed_note(
+            "Heron keeps the store from being empty",
+            "- so New skips the welcome note",
+        );
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::New);
+        in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, "# Trip ideas", window, cx);
+        });
+        in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, "# Trip ideas\n", window, cx);
+            text_of(view, cx)
+        })
+    });
+    assert_eq!(text, "# Trip ideas\n\n");
+}
+
+#[test]
+fn today_names_its_date_above_the_text() {
+    let (heading, today) = in_launcher("notes_today_heading", 0, |cx| {
+        let _brain = OneBrain::new();
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::Today);
+        in_editor(&app, window, cx, |view, _, cx| {
+            (view.heading(cx), view.local_today())
+        })
+    });
+    let heading = heading.expect("Today has a heading");
+    assert_eq!(heading.title, Some(today.format("%A, %B %-d").to_string()));
+    assert_eq!(heading.context, "Today");
+}
+
+#[test]
+fn the_heading_names_each_kind_of_document() {
+    use script_kit_gpui::day_page::DayPageBinding;
+    let date = |y, m, d| chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap();
+    let today = date(2026, 10, 1);
+    let day =
+        |on| crate::day_page_heading(&DayPageBinding::Day, Some(on), today, false, false, None);
+    let said = |heading: Option<crate::DayPageHeading>| {
+        heading.map(|heading| (heading.title.unwrap_or_default(), heading.context))
+    };
+    assert_eq!(
+        said(day(today)),
+        Some(("Thursday, October 1".into(), "Today".into()))
+    );
+    assert_eq!(
+        said(day(date(2026, 9, 30))),
+        Some(("Wednesday, September 30".into(), "Yesterday".into()))
+    );
+    assert_eq!(
+        said(day(date(2026, 9, 27))),
+        Some(("Sunday, September 27".into(), "4 days ago".into()))
+    );
+    assert_eq!(
+        said(day(date(2025, 12, 31))),
+        Some(("Wednesday, December 31, 2025".into(), "274 days ago".into()))
+    );
+
+    let note = DayPageBinding::Note {
+        note_id: "id".into(),
+        title: "Trip ideas".into(),
+        return_day_path: std::path::PathBuf::new(),
+        return_day_date: today,
+    };
+    let note_heading = |pinned, first_line| {
+        said(crate::day_page_heading(
+            &note, None, today, pinned, false, first_line,
+        ))
+    };
+    assert_eq!(
+        note_heading(false, Some("# Trip ideas")),
+        Some((String::new(), "Note · Trip ideas".into())),
+        "a note whose text starts with its title gets only the line naming it"
+    );
+    assert_eq!(
+        note_heading(true, Some("# Trip ideas")),
+        Some((String::new(), "Pinned note · Trip ideas".into()))
+    );
+    assert_eq!(
+        said(crate::day_page_heading(
+            &note,
+            None,
+            today,
+            true,
+            true,
+            Some("# Trip ideas")
+        )),
+        Some((String::new(), "Pinned note".into())),
+        "pinning a new note says so at once"
+    );
+    assert_eq!(
+        note_heading(false, Some("- packing list")),
+        Some(("Trip ideas".into(), "Note".into())),
+        "a note without a title line gets its title shown above the text"
+    );
+}
+
+#[test]
+fn return_on_a_lone_title_leaves_a_blank_line_and_nothing_else_changes() {
+    use crate::heading_enter_fixup as fixup;
+    assert_eq!(
+        fixup("# Trip", "# Trip\n", 7, None),
+        Some(("# Trip\n\n".into(), 8))
+    );
+    assert_eq!(
+        fixup("# Oct 1, 9:42 PM", "# \n", 3, Some("Oct 1, 9:42 PM")),
+        Some(("# Oct 1, 9:42 PM\n\n".into(), 18)),
+        "Return on the selected time title keeps it"
+    );
+    assert_eq!(
+        fixup("# Trip\n- a", "# Trip\n- a\n", 11, None),
+        None,
+        "only a title that is the whole note"
+    );
+    assert_eq!(
+        fixup("# Tr", "# T\nr", 4, None),
+        None,
+        "a break inside the title is the person's"
+    );
+    assert_eq!(
+        fixup("plain", "plain\n", 6, None),
+        None,
+        "only a `# ` title"
+    );
+    assert_eq!(
+        fixup("# ", "# \n", 3, None),
+        None,
+        "an empty title isn't one"
+    );
+}
+
+#[test]
+fn cmd_p_on_today_opens_the_switcher() {
+    let open = in_launcher("notes_cmd_p_switcher", 0, |cx| {
+        let _brain = OneBrain::new();
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::Today);
+        in_editor(&app, window, cx, |view, window, cx| {
+            let modifiers = gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            };
+            view.handle_key_parts("p", modifiers, window, cx);
+            view.is_day_switcher_open()
+        })
+    });
+    assert!(open, "⌘P opens the switcher");
+}
+
 #[test]
 fn a_link_being_typed_completes_to_the_first_matching_title() {
     let titles = |_: &str| vec!["Launch plan".to_string(), "Launch".to_string()];

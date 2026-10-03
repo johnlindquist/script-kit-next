@@ -8,6 +8,7 @@ use crate::components::notes_editor::NotesEditor;
 use script_kit_gpui::day_page::DayPageDocumentSession;
 
 pub(crate) const DAY_PAGE_EDITOR_ID: &str = "day-page-editor";
+pub(crate) const DAY_PAGE_HEADING_ID: &str = "day-page-heading";
 
 /// Minimal Day Page state for accepted `@` mention aliases. It intentionally
 /// does not carry list rows, selection, hover, submit anchors, or dismissed-cache
@@ -193,4 +194,9 @@ pub struct DayPageView {
     pub(crate) trail: Vec<(crate::notes::NoteTarget, String)>,
     /// Bumped on every edit; a ghost suggestion computed for an older edit is dropped.
     pub(crate) ghost_generation: u64,
+    /// The time-stamp title a new note started with, while that note is open. It's selected on
+    /// open so typing names the note, and a note still holding only it is removed on leaving.
+    pub(crate) new_note_title: Option<String>,
+    /// Whether the open note is pinned, for the line above the editor.
+    pub(crate) open_note_pinned: bool,
 }
