@@ -12,8 +12,9 @@ Create and automate notes. A note opens in Script Kit's main window, under the s
 Notes are a plain folder of Markdown files, laid out the way Obsidian and other Markdown apps expect. The folder is `~/.scriptkit/brain` unless `notesFolder` in `config.ts` names another (read when Script Kit starts):
 
 - `days/YYYY-MM-DD.md` — one page per day. Captures are list items that start with their time: `- 14:32 called Sam`, tasks `- [ ] 14:32 book flights`. A note started that day is listed as `- 14:32 [[Trip ideas]]`.
-- `notes/<Title>.md` — one file per note, named after its `# Heading`; renaming the heading renames the file, and `[[links]]` to it in other notes and day pages follow. A taken name gets a number (`Trip ideas 2.md`).
-- `[[Title]]` links name files; `[[Title|words]]` and `[[Title#Heading]]` work too. YAML front matter is kept; Script Kit adds `id`, `created` and `updated`.
+- `notes/<Title>.md` — one file per note, named after its `# Heading`; renaming the heading renames the file, and `[[links]]` to it in other notes and day pages follow (links written as code stay as written). A taken name gets a number (`Trip ideas 2.md`). Notes may sit in folders (`notes/Travel/Lisbon.md`); a renamed note stays in its folder.
+- `[[Title]]` links name files: the note with that file name first, then a title or alias. `[[Title|words]]` and `[[Title#Heading]]` work too. YAML front matter is kept (a block that isn't valid YAML is kept as typed); Script Kit adds `id`, `created` and `updated`. A copied note file gets its own `id`.
+- Files can be edited elsewhere while open in Script Kit: saves merge line by line, and lines changed in both places are kept in both versions.
 
 `~/.scriptkit/db/notes.sqlite` is a search index rebuilt from the files. Scripts and agents change notes through the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`); never write the database.
 

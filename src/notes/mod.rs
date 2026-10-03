@@ -30,12 +30,16 @@ pub(crate) mod markdown;
 pub(crate) mod markdown_highlighting;
 mod mcp_mutations;
 pub(crate) mod menu_syntax_capture;
+pub(crate) mod merge;
 pub(crate) mod metadata;
 mod model;
 mod open;
 pub(crate) mod search_model;
 mod storage;
 pub(crate) mod style;
+// Used by the library's day page editor; the binary's copy of this module doesn't call it.
+#[allow(unused_imports)]
+pub(crate) use storage::save_note_from_editor;
 pub(crate) use storage::verify_saved_note_content;
 
 // Re-export notes action catalog for CommandBar action builders

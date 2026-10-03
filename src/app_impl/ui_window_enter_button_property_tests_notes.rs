@@ -403,6 +403,117 @@ fn a_note_keeps_saving_after_it_is_pinned_from_its_actions() {
     assert_eq!(conflicts, 0, "no copy is set aside as someone else's edit");
 }
 
+/// Types into the open editor without saving, as a person does between autosaves.
+fn type_into(
+    app: &gpui::Entity<ScriptListApp>,
+    window: gpui::AnyWindowHandle,
+    cx: &mut gpui::TestAppContext,
+    text: &str,
+) {
+    let text = text.to_string();
+    in_editor(app, window, cx, |view, window, cx| {
+        view.notes_editor
+            .update(cx, |editor, cx| editor.set_value(text, window, cx));
+        let content = view.notes_editor.read(cx).content(cx);
+        view.session.apply_editor_content(&content);
+    });
+}
+
+/// Whether Esc took the window out of the editor.
+fn esc_leaves(
+    app: &gpui::Entity<ScriptListApp>,
+    window: gpui::AnyWindowHandle,
+    cx: &mut gpui::TestAppContext,
+) -> bool {
+    in_editor(app, window, cx, |view, window, cx| {
+        view.escape_back(window, cx)
+    });
+    editor(app, cx).is_none()
+}
+
+#[test]
+fn a_line_added_in_another_app_while_typing_lands_in_the_note() {
+    let (shown, on_disk, left) = in_launcher("notes_outside_edit_merges", 0, |cx| {
+        let _brain = OneBrain::new();
+        let id = seed_note("Plover plan", "- start");
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::Note(id));
+        type_into(&app, window, cx, "# Plover plan\n- start, typed here");
+        let path = crate::notes::note_file_path(id)
+            .unwrap()
+            .expect("the note's file");
+        let outside = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("- start", "- start\n- added in Obsidian");
+        std::fs::write(&path, outside).unwrap();
+        let shown = in_editor(&app, window, cx, |view, window, cx| {
+            view.last_external_poll = None;
+            view.poll_external_disk_changes(window, cx);
+            view.save(window, cx);
+            view.notes_editor.read(cx).content(cx)
+        });
+        let on_disk = std::fs::read_to_string(&path).unwrap_or_default();
+        (shown, on_disk, esc_leaves(&app, window, cx))
+    });
+    assert_eq!(
+        shown, "# Plover plan\n- start, typed here\n- added in Obsidian",
+        "the editor shows both people's lines"
+    );
+    assert!(
+        on_disk.contains("- added in Obsidian") && on_disk.contains("typed here"),
+        "the file keeps both: {on_disk:?}"
+    );
+    assert!(left, "Esc leaves the editor");
+}
+
+#[test]
+fn a_note_with_unreadable_front_matter_saves_and_esc_leaves() {
+    let (on_disk, left) = in_launcher("notes_broken_front_matter", 0, |cx| {
+        let _brain = OneBrain::new();
+        let id = seed_note("Sandpiper plan", "- start");
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::Note(id));
+        type_into(
+            &app,
+            window,
+            cx,
+            "---\ntags: [unclosed\n---\n# Sandpiper plan\n- start",
+        );
+        let left = esc_leaves(&app, window, cx);
+        let path = crate::notes::note_file_path(id)
+            .unwrap()
+            .expect("the note's file");
+        (std::fs::read_to_string(&path).unwrap_or_default(), left)
+    });
+    assert!(left, "Esc leaves the editor");
+    assert!(
+        on_disk.contains("tags: [unclosed"),
+        "the block is kept as typed: {on_disk:?}"
+    );
+}
+
+#[test]
+fn a_note_deleted_elsewhere_while_open_is_saved_again_when_you_leave() {
+    let (left, kept) = in_launcher("notes_deleted_while_open", 0, |cx| {
+        let _brain = OneBrain::new();
+        let id = seed_note("Curlew plan", "- start");
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::Note(id));
+        script_kit_gpui::day_page::delete_note_permanently(&id.as_str())
+            .expect("deleted elsewhere");
+        type_into(&app, window, cx, "# Curlew plan\n- start\n- still here");
+        let left = esc_leaves(&app, window, cx);
+        let kept = crate::notes::note_file_path(id)
+            .ok()
+            .flatten()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        (left, kept)
+    });
+    assert!(left, "Esc leaves the editor");
+    assert!(kept.contains("- still here"), "the note is back: {kept:?}");
+}
+
 #[test]
 fn moving_a_note_to_the_trash_waits_in_the_line_and_then_runs() {
     let (line, kept, trashed) = in_launcher("notes_trash_hold", 0, |cx| {

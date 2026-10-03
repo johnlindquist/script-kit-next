@@ -1263,9 +1263,11 @@ Notes are a plain folder of Markdown files, laid out the way Obsidian and other 
 ```
 
 - **File names follow titles.** A note's title is its first `# Heading` (or its file name when it has none). Renaming the heading renames the file; a taken name gets a number (`Trip ideas 2.md`). A file you named yourself keeps its name.
-- **Links name files.** `[[Trip ideas]]` opens `notes/Trip ideas.md`; `[[Trip ideas|the plan]]` shows other words, and `[[Trip ideas#Dates]]` points at a heading. When you rename a note in Script Kit, links to it in other notes and day pages follow the new name.
+- **Links name files.** `[[Trip ideas]]` opens `notes/Trip ideas.md`; `[[Trip ideas|the plan]]` shows other words, and `[[Trip ideas#Dates]]` points at a heading. A link reaches the note with that file name first, then a note with that title or alias. When you rename a note in Script Kit, links to it in other notes and day pages follow the new name; links written as code (`` `[[Trip ideas]]` `` or inside a fenced block) are left alone.
+- **Folders work.** Notes filed in folders under `notes/` (`notes/Travel/Lisbon.md`) are listed and linked by their name (`[[Lisbon]]`), and a renamed note stays in its folder. Hidden folders such as `.obsidian` are ignored.
 - **Day pages are lists.** Captures land as list items that start with their time: `- 14:32 called Sam`, tasks as `- [ ] 14:32 book flights`.
-- **Front matter stays.** YAML between `---` lines at the top of a file is kept as it is; Script Kit adds its own `id`, `created` and `updated` fields. Markdown files another app made, without any front matter, appear as notes too.
+- **Front matter stays.** YAML between `---` lines at the top of a file is kept as it is; Script Kit adds its own `id`, `created` and `updated` fields. A block that isn't valid YAML is kept exactly as typed. Markdown files another app made, without any front matter, appear as notes too. A copied note file becomes a note of its own.
+- **Editing in two places.** Change a note or day page in Obsidian, Finder or on your phone while it's open in Script Kit, and nothing is lost: a page you aren't typing in shows the change, and one you are typing in takes it in when it saves, line by line. When the same line changed in both places, both versions are kept, Script Kit's first, and the line above the input says so. A note renamed, moved or deleted elsewhere while open keeps saving to its file, or comes back if it was deleted.
 
 `~/.scriptkit/db/notes.sqlite` is an index the app rebuilds from those files to keep search instant.
 

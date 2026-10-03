@@ -763,6 +763,13 @@ impl DayPageView {
                 });
                 cx.notify();
             }
+            if self.session.last_save_kept_both() {
+                crate::line_notice::say(
+                    cx,
+                    crate::line_notice::INFO,
+                    "Kept both versions of lines changed in another app",
+                );
+            }
         }
         true
     }

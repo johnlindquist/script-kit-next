@@ -1,14 +1,13 @@
 //! Bind, save, and external-refresh rules for `brain/days/YYYY-MM-DD.md`.
 //!
-//! ## External append while the Day Page is open
+//! ## Changes made elsewhere while the editor is open
 //!
-//! When another writer appends to today's file (for example `;todo`), this
-//! session polls the on-disk modification time on [`maybe_refresh_from_disk`].
-//! If the editor buffer is **clean** (`!dirty`), the file is re-read and the
-//! editor content is replaced. If the buffer is **dirty**, the append still
-//! lands in the file but the open editor keeps the in-progress edit; the file
-//! on disk is refreshed on the next [`bind_today`] (re-entry or day rollover),
-//! which saves any dirty buffer first then reloads from disk.
+//! Other writers change the bound file too: `;todo` and dictation append to today, and
+//! Obsidian, Finder or a phone edit any line. This session polls the file's modification time
+//! on [`maybe_refresh_from_disk`]. A **clean** buffer simply takes the new text. A **dirty**
+//! buffer keeps typing; the next save merges line by line against the text both sides started
+//! from (`crate::notes::merge`), so edits to different lines all land and lines changed on both
+//! sides are kept in both versions. The host adopts the merged text from [`last_save_merged`].
 
 use std::fs;
 use std::path::PathBuf;
@@ -56,6 +55,8 @@ pub struct DayPageDocumentSession {
     /// the content actually written to disk so a host can adopt it into the
     /// editor; left `None` for a clean save.
     last_save_merged: Option<String>,
+    /// The last save found lines changed both here and elsewhere and kept both versions.
+    last_save_kept_both: bool,
     /// True only for the today-following `Day` binding — one bound to the local
     /// date as it was at bind time (`bind_today`, or `return_to_day` back onto
     /// today). Explicitly-opened past days, notes, and fragments are never
@@ -76,6 +77,7 @@ impl DayPageDocumentSession {
             base_disk_content: String::new(),
             last_mtime: None,
             last_save_merged: None,
+            last_save_kept_both: false,
             follows_today: false,
         }
     }
@@ -131,6 +133,12 @@ impl DayPageDocumentSession {
     /// editor. `None` after a clean save.
     pub fn last_save_merged(&self) -> Option<&str> {
         self.last_save_merged.as_deref()
+    }
+
+    /// Whether the last save found lines changed both here and in another app, and kept both
+    /// versions of them.
+    pub fn last_save_kept_both(&self) -> bool {
+        self.last_save_kept_both
     }
 
     /// Bind to today's day page for `now` (timezone from substrate). Creates an
@@ -405,30 +413,32 @@ impl DayPageDocumentSession {
             // this one remembers what the editor last wrote. Open it here, cheaply, instead of
             // relying on whoever opened the note.
             crate::notes::ensure_notes_db_open()?;
-            let mut note = crate::notes::get_note(note_id)?
-                .with_context(|| format!("loading note before day page save {note_id}"))?;
-            note.set_content(content);
-            crate::notes::save_note(&note)
-                .with_context(|| format!("saving note from day page {note_id}"))?;
-            crate::notes::verify_saved_note_content(note.id, content)?;
-            let saved_path = crate::notes::note_file_path(note.id)?
-                .with_context(|| format!("resolving saved note path {note_id}"))?;
+            let saved =
+                crate::notes::save_note_from_editor(note_id, &self.base_disk_content, content)
+                    .with_context(|| format!("saving note from day page {note_id}"))?;
             if let DayPageBinding::Note { title, .. } = &mut self.binding {
-                *title = note.title.clone();
+                *title = saved.title.clone();
             }
-            self.path = Some(saved_path.clone());
+            let adopted = saved.content != content;
+            self.path = Some(saved.path.clone());
             self.dirty = false;
-            self.disk_content = content.to_string();
-            self.base_disk_content = content.to_string();
-            self.last_save_merged = None;
-            self.last_mtime = fs::metadata(&saved_path)
-                .and_then(|meta| meta.modified())
-                .ok();
+            self.disk_content = saved.content.clone();
+            self.base_disk_content = saved.content.clone();
+            self.last_save_kept_both = saved.kept_both;
+            if adopted {
+                self.last_mtime = None;
+                self.last_save_merged = Some(saved.content);
+            } else {
+                self.last_mtime = fs::metadata(&saved.path)
+                    .and_then(|meta| meta.modified())
+                    .ok();
+                self.last_save_merged = None;
+            }
             super::telemetry::log_document_saved(
                 "document::save_content",
                 "note",
                 content.len(),
-                false,
+                adopted,
             );
             let _ = now;
             return Ok(());
@@ -463,36 +473,25 @@ impl DayPageDocumentSession {
                 return Ok(Written::clean(content.to_string()));
             }
 
-            if let Some(suffix) = external_append_suffix(&disk_now, &self.base_disk_content) {
-                let merged = merge_editor_with_external_appends(content, suffix, &disk_now);
-                write_verified_document(&path, &merged)
-                    .with_context(|| format!("writing merged day page {}", path.display()))?;
-                return Ok(Written::merged(merged));
+            // Another writer changed the file since the editor last saw it (`;todo`, dictation,
+            // Obsidian, a phone). Merge line by line: changes to different lines all land, and
+            // lines both sides changed are kept in both versions.
+            let merged =
+                crate::notes::merge::merge_lines(&self.base_disk_content, content, &disk_now);
+            if merged.text == content {
+                write_verified_document(&path, content)
+                    .with_context(|| format!("writing day page {}", path.display()))?;
+                return Ok(Written::clean(content.to_string()));
             }
-
-            // Non-append divergence (an external edit rewrote earlier content).
-            // Keep both versions: the editor buffer wins the bound file, and the
-            // on-disk version is copied to the brain trash for recovery.
-            let conflict_path = io::preserve_private_conflict_copy(&path, &disk_now)?;
-            let safe_path = crate::logging::log_private_user_value(&path.display().to_string());
-            let safe_conflict =
-                crate::logging::log_private_user_value(&conflict_path.display().to_string());
-            tracing::warn!(
-                target: "script_kit::brain",
-                path_bytes = safe_path.raw_bytes,
-                path_sha256 = %safe_path.sha256,
-                conflict_bytes = safe_conflict.raw_bytes,
-                conflict_sha256 = %safe_conflict.sha256,
-                "day page diverged on disk in a non-append way; kept editor buffer and copied the disk version to trash"
-            );
-            write_verified_document(&path, content)
-                .with_context(|| format!("writing day page {}", path.display()))?;
-            Ok(Written::merged(content.to_string()))
+            write_verified_document(&path, &merged.text)
+                .with_context(|| format!("writing merged day page {}", path.display()))?;
+            Ok(Written::merged(merged.text, merged.kept_both))
         })?;
 
         self.dirty = false;
         self.disk_content = written.content.clone();
         self.base_disk_content = written.content.clone();
+        self.last_save_kept_both = written.kept_both;
         if written.adopted {
             // The editor buffer no longer matches disk. Force the next disk poll
             // to re-read and adopt the written content by clearing the mtime
@@ -657,11 +656,11 @@ impl DayPageDocumentSession {
 }
 
 /// Outcome of a day-file save: the bytes actually written to disk, and whether
-/// they diverge from the editor buffer (a merge or conflict) so the editor must
-/// re-adopt them.
+/// they diverge from the editor buffer (a merge) so the editor must re-adopt them.
 struct Written {
     content: String,
     adopted: bool,
+    kept_both: bool,
 }
 
 impl Written {
@@ -669,38 +668,17 @@ impl Written {
         Self {
             content,
             adopted: false,
+            kept_both: false,
         }
     }
 
-    fn merged(content: String) -> Self {
+    fn merged(content: String, kept_both: bool) -> Self {
         Self {
             content,
             adopted: true,
+            kept_both,
         }
     }
-}
-
-/// If `disk_now` is `base` followed by extra appended content, return that
-/// suffix. Returns `None` when disk is not a pure append over the baseline
-/// (an external edit, truncation, or no real added content).
-fn external_append_suffix<'a>(disk_now: &'a str, base: &str) -> Option<&'a str> {
-    let suffix = disk_now.strip_prefix(base.trim_end())?;
-    if suffix.trim().is_empty() {
-        return None;
-    }
-    Some(suffix)
-}
-
-/// Combine the editor buffer with external appends detected on disk, preserving
-/// a single joining newline and the trailing newline if the disk file had one.
-fn merge_editor_with_external_appends(content: &str, suffix: &str, disk_now: &str) -> String {
-    let mut merged = content.trim_end().to_string();
-    merged.push('\n');
-    merged.push_str(suffix.trim_start_matches('\n'));
-    if disk_now.ends_with('\n') && !merged.ends_with('\n') {
-        merged.push('\n');
-    }
-    merged
 }
 
 /// Changes to a note that may be open in the editor go through the same store its saves use, so
@@ -1309,89 +1287,54 @@ mod tests {
         );
     }
 
-    /// When the disk diverged in a non-append way (an external edit rewrote
-    /// earlier content), neither version is destroyed: the editor buffer wins
-    /// the bound file and the on-disk version is copied to the brain trash.
+    /// A line corrected elsewhere (a phone, Obsidian) while a new line is typed here: both land
+    /// where they belong, instead of the outside text being glued on as if it were appended.
     #[test]
-    fn save_preserves_disk_on_non_append_divergence() {
+    fn save_merges_a_line_corrected_elsewhere_with_a_line_typed_here() {
         let (_dir, mut session) = test_session();
         let now = utc("2026-06-11T09:42:00Z");
         session.bind_today(now).expect("bind creates");
         let path = session.path().expect("path").clone();
+        session.apply_editor_content("- 09:00 first\n");
+        session.save_content("- 09:00 first\n", now).expect("seed");
 
-        // Establish a non-empty baseline on disk.
+        let typed = "- 09:00 first\n- 09:05 typed here\n";
+        session.apply_editor_content(typed);
+        io::atomic_write(&path, "- 09:00 first, corrected on phone\n").expect("phone edit");
+        session.save_content(typed, now).expect("save merges");
+
+        let merged = "- 09:00 first, corrected on phone\n- 09:05 typed here\n";
+        assert_eq!(fs::read_to_string(&path).expect("read day file"), merged);
+        assert_eq!(session.last_save_merged(), Some(merged));
+        assert!(!session.last_save_kept_both());
+    }
+
+    /// The same line changed here and elsewhere: both versions stay in the file, the editor's
+    /// first, and the session says so, so nothing anyone typed disappears.
+    #[test]
+    fn save_keeps_both_versions_of_a_line_changed_on_both_sides() {
+        let (_dir, mut session) = test_session();
+        let now = utc("2026-06-11T09:42:00Z");
+        session.bind_today(now).expect("bind creates");
+        let path = session.path().expect("path").clone();
         session.apply_editor_content("line one\nline two");
         session
             .save_content("line one\nline two", now)
             .expect("seed save");
 
-        // User edits; meanwhile an external writer REWRITES the file wholesale.
         session.apply_editor_content("line one edited\nline two");
         io::atomic_write(&path, "completely different disk content").expect("external rewrite");
-
         session
             .save_content("line one edited\nline two", now)
-            .expect("save resolves conflict");
+            .expect("save keeps both");
 
         let disk = fs::read_to_string(&path).expect("read day file");
         assert_eq!(
-            disk, "line one edited\nline two",
-            "editor buffer wins bound path"
+            disk,
+            "line one edited\nline two\ncompletely different disk content"
         );
-
-        let trash_dir = session.substrate().paths().trash_dir();
-        let conflict = fs::read_dir(&trash_dir)
-            .expect("trash dir")
-            .filter_map(|entry| entry.ok())
-            .find(|entry| entry.file_name().to_string_lossy().contains(".conflict-"))
-            .expect("a conflict copy should exist in trash");
-        let conflict_body = fs::read_to_string(conflict.path()).expect("read conflict copy");
-        assert_eq!(
-            conflict_body, "completely different disk content",
-            "conflict copy preserves the diverged disk version"
-        );
-        assert_eq!(
-            session.last_save_merged(),
-            Some("line one edited\nline two"),
-            "conflict save exposes the written editor content for adoption"
-        );
-    }
-
-    #[test]
-    fn day_page_private_conflicts_preserve_every_repeated_external_version() {
-        let (_fixture, mut session) = test_session();
-        let now = utc("2026-06-11T09:42:00Z");
-        session.bind_today(now).expect("bind owned day");
-        let path = session.path().expect("day path").clone();
-        session.apply_editor_content("initial private day");
-        session
-            .save_content("initial private day", now)
-            .expect("seed nonempty private baseline");
-
-        for index in 0..3 {
-            let external = format!("external private rewrite {index}");
-            let editor = format!("editor private version {index}");
-            io::atomic_write(&path, &external).expect("simulate private external edit");
-            session.apply_editor_content(&editor);
-            session
-                .save_content(&editor, now)
-                .expect("preserve private conflicting version");
-            assert_eq!(io::read_private_document(&path).unwrap(), editor);
-        }
-
-        let mut conflicts = fs::read_dir(session.substrate().paths().trash_dir())
-            .expect("private trash")
-            .map(|entry| io::read_private_document(&entry.expect("owned entry").path()).unwrap())
-            .collect::<Vec<_>>();
-        conflicts.sort();
-        assert_eq!(
-            conflicts,
-            vec![
-                "external private rewrite 0".to_string(),
-                "external private rewrite 1".to_string(),
-                "external private rewrite 2".to_string(),
-            ]
-        );
+        assert!(session.last_save_kept_both());
+        assert_eq!(session.last_save_merged(), Some(disk.as_str()));
     }
 
     #[test]

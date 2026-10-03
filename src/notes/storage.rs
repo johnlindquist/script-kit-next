@@ -289,13 +289,82 @@ fn slug_from_path(path: &Path) -> Option<String> {
         .filter(|slug| !slug.is_empty())
 }
 
+/// A note file's name relative to the notes folder, without `.md`: `Lisbon`, or `Travel/Lisbon`
+/// for a note filed in a folder. Files outside the notes folder (the trash) go by their name.
+fn note_slug_for_path(substrate: &BrainSubstrate, path: &Path) -> Option<String> {
+    let Ok(relative) = path.strip_prefix(substrate.paths().notes_dir()) else {
+        return slug_from_path(path);
+    };
+    let relative = relative.with_extension("");
+    let parts = relative
+        .components()
+        .map(|component| match component {
+            std::path::Component::Normal(part) => part.to_str(),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let slug = parts.join("/");
+    (!slug.is_empty()).then_some(slug)
+}
+
 fn is_conflict_copy_path(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.contains(".conflict-"))
 }
 
+/// Whether `path` is a note the notes folder lists: a `.md` file under it, in any folder that
+/// is not hidden (`.obsidian`, `.trash`), and not a kept conflict copy.
+fn is_listed_note_path(notes_dir: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(notes_dir) else {
+        return false;
+    };
+    path.extension().and_then(|ext| ext.to_str()) == Some("md")
+        && !is_conflict_copy_path(path)
+        && relative.components().all(|component| {
+            matches!(component, std::path::Component::Normal(part)
+                if !part.to_string_lossy().starts_with('.'))
+        })
+}
+
+/// Every note file under the notes folder, folders included, in a stable order. Hidden folders
+/// and links to elsewhere are left alone.
+fn note_files(notes_dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    let mut folders = vec![notes_dir.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let entries = match fs::read_dir(&folder) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("reading notes dir {}", folder.display()))
+            }
+        };
+        for entry in entries {
+            let entry = entry.context("reading notes dir entry")?;
+            let path = entry.path();
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let file_type = entry.file_type().context("reading notes dir entry type")?;
+            if file_type.is_dir() {
+                folders.push(path);
+            } else if file_type.is_file() && is_listed_note_path(notes_dir, &path) {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// The body written below the store's front matter. A front matter block the person wrote that
+/// isn't YAML stays in the body exactly as written, so it reads back unchanged.
 fn note_body_for_file(content: &str) -> String {
+    if crate::brain::substrate::frontmatter_is_unreadable(content) {
+        return content.to_string();
+    }
     metadata::strip_frontmatter(content).to_string()
 }
 
@@ -317,6 +386,21 @@ fn brain_frontmatter_from_note(
     note: &Note,
     preserved: Option<BrainFrontmatter>,
 ) -> Result<BrainFrontmatter> {
+    if crate::brain::substrate::frontmatter_is_unreadable(&note.content) {
+        // The person's own block is unreadable and stays in the body as written; the store adds
+        // nothing that would have to be merged into it.
+        return Ok(BrainFrontmatter {
+            id: note.id,
+            created: note.created_at,
+            updated: note.updated_at,
+            tags: Vec::new(),
+            aliases: Vec::new(),
+            pinned: note.is_pinned,
+            source: None,
+            why: None,
+            extra: Default::default(),
+        });
+    }
     let parsed = metadata::parse_note_metadata(&note.title, &note.content);
     let (preserved_source, extra) = preserved
         .map(|frontmatter| (frontmatter.source, frontmatter.extra))
@@ -383,7 +467,7 @@ fn load_note_from_file(
     let raw = brain_io::read_private_document(path)
         .with_context(|| format!("reading note file {}", path.display()))?;
     let hash = content_hash(&raw);
-    let slug = slug_from_path(path).context("note file missing slug stem")?;
+    let slug = note_slug_for_path(substrate, path).context("note file missing slug stem")?;
     // A note another app wrote has none of the store's front matter: it is still a note, with
     // an identity from its name and its words exactly as written.
     let (frontmatter, body) = match substrate.parse_document(&raw) {
@@ -391,7 +475,7 @@ fn load_note_from_file(
         Err(_) => (unmanaged_note_frontmatter(path, &slug), raw.clone()),
     };
     let mut note = note_from_brain_document(frontmatter, &body, deleted_at, sort_order)?;
-    note.title = file_names::title_for_file(&note.content, &slug);
+    note.title = file_names::title_for_file(&note.content, file_names::split_folder(&slug).1);
     Ok((note, slug, hash))
 }
 
@@ -428,19 +512,28 @@ fn allocate_note_stem(substrate: &BrainSubstrate, title: &str) -> Result<String>
 }
 
 /// Renames a note's file when its title changed and the file was named after the old one. A
-/// file someone named themselves keeps its name. Returns the name the file has now.
+/// file someone named themselves keeps its name, and a note filed in a folder stays in it.
+/// Returns the name the file has now.
 fn name_note_file_after_title(
     substrate: &BrainSubstrate,
     stem: &str,
     previous_title: &str,
     title: &str,
 ) -> Result<String> {
-    if file_names::stem_follows_title(stem, title)
-        || !file_names::stem_follows_title(stem, previous_title)
+    let (folder, own) = file_names::split_folder(stem);
+    if file_names::stem_follows_title(own, title)
+        || !file_names::stem_follows_title(own, previous_title)
     {
         return Ok(stem.to_string());
     }
-    let next = allocate_note_stem_keeping(substrate, title, stem)?;
+    let folder_dir = substrate.paths().notes_dir().join(folder);
+    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+        policy.require_owned_path(&folder_dir)?;
+    }
+    let next = format!(
+        "{folder}{}",
+        file_names::unused_stem(&folder_dir, &file_names::stem_for_title(title), Some(own))
+    );
     if next == stem {
         return Ok(next);
     }
@@ -451,22 +544,6 @@ fn name_note_file_after_title(
             .with_context(|| format!("renaming note file to {}", to.display()))?;
     }
     Ok(next)
-}
-
-fn allocate_note_stem_keeping(
-    substrate: &BrainSubstrate,
-    title: &str,
-    own: &str,
-) -> Result<String> {
-    let notes_dir = substrate.paths().notes_dir();
-    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
-        policy.require_owned_path(&notes_dir)?;
-    }
-    Ok(file_names::unused_stem(
-        &notes_dir,
-        &file_names::stem_for_title(title),
-        Some(own),
-    ))
 }
 
 /// Notes named the way they used to be (`launch-plan.md`) take their title as their name
@@ -780,7 +857,79 @@ fn rebuild_index_from_files_with_conn(conn: &Connection) -> Result<()> {
     }
 }
 
+fn indexed_note_slugs_with_conn(conn: &Connection) -> Result<HashMap<NoteId, String>> {
+    let mut stmt = conn
+        .prepare("SELECT id, file_slug FROM notes WHERE file_slug IS NOT NULL")
+        .context("Failed to prepare indexed note files query")?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .context("Failed to query indexed note files")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to read indexed note files")?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id, slug)| NoteId::parse(&id).map(|id| (id, slug)))
+        .collect())
+}
+
+/// Files that carry the same note id — a copy made in Finder or Obsidian keeps the original's
+/// front matter — each become a note of their own. The file the index already knew keeps the
+/// id (else the first by name); every other copy gets a new id written into its front matter.
+/// A copy whose new id can't be written is left out of the index rather than replacing the
+/// original.
+fn give_duplicates_their_own_ids(
+    substrate: &BrainSubstrate,
+    loaded: &mut Vec<(PathBuf, (Note, String, String))>,
+    indexed_slugs: &HashMap<NoteId, String>,
+) {
+    let mut holders: HashMap<NoteId, usize> = loaded
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, (note, slug, _)))| indexed_slugs.get(&note.id) == Some(slug))
+        .map(|(index, (_, (note, _, _)))| (note.id, index))
+        .collect();
+    let mut unwritable = Vec::new();
+    for index in 0..loaded.len() {
+        let id = loaded[index].1 .0.id;
+        match holders.get(&id) {
+            None => {
+                holders.insert(id, index);
+            }
+            Some(&holder) if holder == index => {}
+            Some(_) => match give_note_file_its_own_id(substrate, &loaded[index].0) {
+                Ok(reloaded) => {
+                    holders.insert(reloaded.0.id, index);
+                    loaded[index].1 = reloaded;
+                }
+                Err(error) => {
+                    warn!(path = %loaded[index].0.display(), %error, "Could not give a copied note its own id");
+                    unwritable.push(index);
+                }
+            },
+        }
+    }
+    for index in unwritable.into_iter().rev() {
+        loaded.remove(index);
+    }
+}
+
+fn give_note_file_its_own_id(
+    substrate: &BrainSubstrate,
+    path: &Path,
+) -> Result<(Note, String, String)> {
+    brain_io::with_brain_write_lock(|| -> Result<()> {
+        let raw = brain_io::read_private_document(path)?;
+        let (mut frontmatter, body) = substrate.parse_document(&raw)?;
+        frontmatter.id = NoteId::new();
+        substrate.write_document(path, &frontmatter, &body)
+    })?;
+    load_note_from_file(substrate, path, None, 0)
+}
+
 fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
+    let indexed_slugs = indexed_note_slugs_with_conn(conn)?;
     clear_index_tables(conn)?;
 
     let substrate = notes_substrate()?;
@@ -789,37 +938,25 @@ fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
         Ok(renamed) => info!(renamed, "Named note files after their titles"),
         Err(error) => warn!(%error, "Could not name every note file after its title"),
     }
-    let notes_dir = substrate.paths().notes_dir();
-    if notes_dir.exists() {
-        for entry in fs::read_dir(&notes_dir)
-            .with_context(|| format!("reading notes dir {}", notes_dir.display()))?
-        {
-            let entry = entry.context("reading notes dir entry")?;
-            let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
-                continue;
-            }
-            if is_conflict_copy_path(&path) {
-                continue;
-            }
-            // Skip-and-log a single malformed/newer note file rather than
-            // aborting the whole rebuild — one hand-edited or version-skewed
-            // file must not be able to wedge the entire notes index (which
-            // rebuilds on init after a corrupt-DB recovery).
-            let (note, slug, hash) = match load_note_from_file(&substrate, &path, None, 0) {
-                Ok(loaded) => loaded,
-                Err(error) => {
-                    warn!(
-                        path = %path.display(),
-                        %error,
-                        "Skipping unreadable note during index rebuild"
-                    );
-                    continue;
-                }
-            };
-            upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
-            remember_note_hash(note.id, hash);
+    let mut loaded = Vec::new();
+    for path in note_files(&substrate.paths().notes_dir())? {
+        // Skip-and-log a single malformed/newer note file rather than
+        // aborting the whole rebuild — one hand-edited or version-skewed
+        // file must not be able to wedge the entire notes index (which
+        // rebuilds on init after a corrupt-DB recovery).
+        match load_note_from_file(&substrate, &path, None, 0) {
+            Ok(note) => loaded.push((path, note)),
+            Err(error) => warn!(
+                path = %path.display(),
+                %error,
+                "Skipping unreadable note during index rebuild"
+            ),
         }
+    }
+    give_duplicates_their_own_ids(&substrate, &mut loaded, &indexed_slugs);
+    for (_, (note, slug, hash)) in loaded {
+        upsert_note_index_with_conn(conn, &note, &slug, &hash)?;
+        remember_note_hash(note.id, hash);
     }
 
     let trash_dir = substrate.paths().trash_dir();
@@ -988,6 +1125,7 @@ fn delete_trashed_note_file(substrate: &BrainSubstrate, slug: &str) -> Result<()
     }
     crate::atomic_file::ensure_private_directory(&trash_dir)
         .context("Failed to prepare private Notes trash directory")?;
+    let slug = file_names::split_folder(slug).1;
     let suffix = format!("{slug}.md");
     for entry in fs::read_dir(&trash_dir)
         .with_context(|| format!("reading trash dir {}", trash_dir.display()))?
@@ -1007,21 +1145,14 @@ fn delete_trashed_note_file(substrate: &BrainSubstrate, slug: &str) -> Result<()
 }
 
 fn reindex_external_note_file(path: &Path) -> Result<()> {
-    if is_conflict_copy_path(path) {
-        return Ok(());
-    }
-    if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
-        return Ok(());
-    }
-
     let substrate = notes_substrate()?;
     let notes_dir = substrate.paths().notes_dir();
-    if !substrate.paths().contains(path) || path.parent() != Some(notes_dir.as_path()) {
+    if !substrate.paths().contains(path) || !is_listed_note_path(&notes_dir, path) {
         return Ok(());
     }
 
     let Some(raw) = brain_io::read_private_document_if_present(path)? else {
-        if let Some(slug) = slug_from_path(path) {
+        if let Some(slug) = note_slug_for_path(&substrate, path) {
             let db = get_db()?;
             let conn = db.lock().map_err(db_lock_err)?;
             if let Some(note_id) = conn
@@ -1043,15 +1174,30 @@ fn reindex_external_note_file(path: &Path) -> Result<()> {
         }
         return Ok(());
     };
-    let hash = content_hash(&raw);
-    let (note, slug, _) = load_note_from_file(&substrate, path, None, 0)?;
+    let mut hash = content_hash(&raw);
+    let (mut note, mut slug, _) = load_note_from_file(&substrate, path, None, 0)?;
+
+    // A copy made in Finder or Obsidian carries the original's id. While the original's file
+    // is still there, the copy becomes a note of its own; when it isn't, the note moved.
+    let indexed_slug = {
+        let db = get_db()?;
+        let conn = db.lock().map_err(db_lock_err)?;
+        indexed_note_slugs_with_conn(&conn)?.remove(&note.id)
+    };
+    if indexed_slug.as_ref().is_some_and(|indexed| {
+        indexed != &slug
+            && file_has_note_id(&substrate, &substrate.paths().note_file(indexed), note.id)
+    }) {
+        let (copy, copy_slug, copy_hash) = give_note_file_its_own_id(&substrate, path)?;
+        (note, slug, hash) = (copy, copy_slug, copy_hash);
+    }
 
     let known_hash = note_content_hashes()
         .lock()
         .map_err(db_lock_err)?
         .get(&note.id)
         .cloned();
-    if known_hash.as_deref() == Some(hash.as_str()) {
+    if known_hash.as_deref() == Some(hash.as_str()) && indexed_slug.as_deref() == Some(&slug) {
         return Ok(());
     }
 
@@ -1067,10 +1213,96 @@ fn reindex_external_note_file(path: &Path) -> Result<()> {
     let mut indexed = note;
     indexed.sort_order = sort_order;
     upsert_note_index_with_conn(&conn, &indexed, &slug, &hash)?;
-    // Indexing an external version does not mean an open editor adopted it.
+    // Indexing an external version does not mean a writer adopted it: a save that starts from
+    // older text still keeps this version (the editor merges it; others keep a copy).
     invalidate_root_notes_search_cache();
     debug!(note_id = %indexed.id, file = %path.display(), "Reindexed externally edited note");
     Ok(())
+}
+
+fn file_has_note_id(substrate: &BrainSubstrate, path: &Path, id: NoteId) -> bool {
+    brain_io::read_private_document_if_present(path)
+        .ok()
+        .flatten()
+        .and_then(|raw| substrate.parse_document(&raw).ok())
+        .is_some_and(|(frontmatter, _)| frontmatter.id == id)
+}
+
+/// The file that holds note `id` now, wherever it went: the indexed file when it still has the
+/// note, else any note file carrying that id (renamed or moved in Finder or Obsidian before the
+/// index caught up). `None` when no file holds it.
+fn locate_note_file(substrate: &BrainSubstrate, id: NoteId) -> Result<Option<PathBuf>> {
+    if let Some(path) = note_file_path(id)? {
+        if file_has_note_id(substrate, &path, id) {
+            return Ok(Some(path));
+        }
+    }
+    Ok(note_files(&substrate.paths().notes_dir())?
+        .into_iter()
+        .find(|path| file_has_note_id(substrate, path, id)))
+}
+
+/// What an editor save left on disk.
+#[derive(Debug, Clone)]
+pub(crate) struct SavedNote {
+    pub(crate) path: PathBuf,
+    pub(crate) title: String,
+    /// The note's text now, which differs from the editor's when changes made elsewhere were
+    /// merged in.
+    pub(crate) content: String,
+    /// Lines changed both in the editor and elsewhere were kept in both versions.
+    pub(crate) kept_both: bool,
+}
+
+/// Saves the editor's text for note `id`. `base` is the text the editor last loaded or saved.
+///
+/// The save follows the note's file if another app renamed or moved it, recreates it if it was
+/// deleted, and merges line by line with any change made to it elsewhere since `base`: edits
+/// to different lines all land, and lines both sides changed are kept in both versions.
+pub(crate) fn save_note_from_editor(id: NoteId, base: &str, content: &str) -> Result<SavedNote> {
+    let substrate = notes_substrate()?;
+    let located = locate_note_file(&substrate, id)?;
+    if let Some(path) = &located {
+        if note_file_path(id)?.as_deref() != Some(path.as_path()) {
+            reindex_external_note_file(path)?;
+        }
+    }
+
+    let mut text = content.to_string();
+    let mut kept_both = false;
+    if let Some(path) = &located {
+        if let Some(raw) = brain_io::read_private_document_if_present(path)? {
+            let theirs = note_editor_content_from_file(&raw)?;
+            if theirs != base && theirs != content {
+                let merged = super::merge::merge_lines(base, content, &theirs);
+                text = merged.text;
+                kept_both = merged.kept_both;
+            }
+            // The file's current version is part of what gets written.
+            remember_note_hash(id, content_hash(&raw));
+        }
+    }
+
+    let mut note = match get_note(id)? {
+        Some(note) => note,
+        // Deleted elsewhere and already dropped from the index: bring it back under its id.
+        None => {
+            let mut note = Note::with_content(text.clone());
+            note.id = id;
+            note
+        }
+    };
+    note.set_content(&text);
+    save_note(&note)?;
+    verify_saved_note_content(id, &text)?;
+    let saved = get_note(id)?.context("saved note missing from the index")?;
+    let path = note_file_path(id)?.context("saved note file missing")?;
+    Ok(SavedNote {
+        path,
+        title: saved.title,
+        content: text,
+        kept_both,
+    })
 }
 
 fn start_notes_dir_watcher() {
@@ -1115,7 +1347,7 @@ fn notes_dir_watcher_loop(notes_dir: PathBuf) {
         }
     };
 
-    if let Err(error) = watcher.watch(&notes_dir, RecursiveMode::NonRecursive) {
+    if let Err(error) = watcher.watch(&notes_dir, RecursiveMode::Recursive) {
         warn!(
             %error,
             dir = %notes_dir.display(),
@@ -1132,7 +1364,9 @@ fn notes_dir_watcher_loop(notes_dir: PathBuf) {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(Ok(event)) => {
                 for path in event.paths {
-                    if path.extension().and_then(|ext| ext.to_str()) == Some("md") {
+                    // A folder moved, renamed or removed in Finder reports only the folder.
+                    let is_note = path.extension().and_then(|ext| ext.to_str()) == Some("md");
+                    if is_note || path.extension().is_none() {
                         pending.insert(path, Instant::now() + debounce);
                     }
                 }
@@ -1151,11 +1385,47 @@ fn notes_dir_watcher_loop(notes_dir: PathBuf) {
             .collect();
         for path in ready {
             pending.remove(&path);
-            if let Err(error) = reindex_external_note_file(&path) {
+            let result = if path.extension().is_none() {
+                reindex_external_note_folder(&notes_dir, &path)
+            } else {
+                reindex_external_note_file(&path)
+            };
+            if let Err(error) = result {
                 warn!(%error, file = %path.display(), "Failed to reindex external note edit");
             }
         }
     }
+}
+
+/// Reindexes every note in a folder that appeared, moved or disappeared under the notes folder.
+fn reindex_external_note_folder(notes_dir: &Path, folder: &Path) -> Result<()> {
+    let Ok(relative) = folder.strip_prefix(notes_dir) else {
+        return Ok(());
+    };
+    if relative.as_os_str().is_empty() {
+        return Ok(());
+    }
+    if folder.is_dir() {
+        for path in note_files(folder)? {
+            if is_listed_note_path(notes_dir, &path) {
+                reindex_external_note_file(&path)?;
+            }
+        }
+        return Ok(());
+    }
+    let prefix = format!("{}/", relative.to_string_lossy());
+    let gone: Vec<String> = {
+        let db = get_db()?;
+        let conn = db.lock().map_err(db_lock_err)?;
+        indexed_note_slugs_with_conn(&conn)?
+            .into_values()
+            .filter(|slug| slug.starts_with(&prefix))
+            .collect()
+    };
+    for slug in gone {
+        reindex_external_note_file(&notes_dir.join(format!("{slug}.md")))?;
+    }
+    Ok(())
 }
 
 include!("storage_schema.rs");
@@ -1600,7 +1870,8 @@ pub(crate) enum NoteRefResolution {
     NotFound,
 }
 
-/// Resolve a `[[wiki link]]` target (title or alias text) to a note.
+/// Resolve a `[[wiki link]]` target to a note: a note's file name first (`Lisbon`, or
+/// `Travel/Lisbon` for one in a folder), as Obsidian does, then a title or alias.
 pub(crate) fn resolve_note_ref(target: &str) -> Result<NoteRefResolution> {
     let slug = metadata::slugify_note_ref(target);
     if slug.is_empty() {
@@ -1609,6 +1880,27 @@ pub(crate) fn resolve_note_ref(target: &str) -> Result<NoteRefResolution> {
 
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
+
+    let mut by_file = conn
+        .prepare(
+            "SELECT id, file_slug FROM notes WHERE deleted_at IS NULL AND file_slug IS NOT NULL",
+        )
+        .context("Failed to prepare note file name query")?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .context("Failed to query note file names")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note file names")?
+        .into_iter()
+        .filter(|(_, file)| {
+            metadata::slugify_note_ref(file) == slug
+                || metadata::slugify_note_ref(file_names::split_folder(file).1) == slug
+        })
+        .filter_map(|(id, _)| NoteId::parse(&id));
+    if let (Some(id), None) = (by_file.next(), by_file.next()) {
+        return Ok(NoteRefResolution::Unique(id));
+    }
 
     let mut stmt = conn
         .prepare(

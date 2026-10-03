@@ -1840,4 +1840,223 @@ mod tests {
 
         assert!(results.iter().any(|note| note.id == source_id));
     }
+
+    fn notes_dir() -> PathBuf {
+        notes_substrate()
+            .expect("notes substrate")
+            .paths()
+            .notes_dir()
+    }
+
+    /// A line added in Obsidian while the note is being typed in Script Kit lands in the note;
+    /// it is not set aside in a hidden copy.
+    #[test]
+    fn an_editor_save_merges_a_line_added_elsewhere_while_typing() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("editor_merge");
+        let base = format!("# {token}\nfirst line\n");
+        let note = Note::with_content(base.clone());
+        save_note(&note).expect("save baseline");
+        let path = note_file_path(note.id).unwrap().unwrap();
+        let elsewhere = brain_io::read_private_document(&path)
+            .unwrap()
+            .replace("first line\n", "first line\n- added in Obsidian\n");
+        brain_io::atomic_write(&path, &elsewhere).expect("outside edit");
+
+        let typed = format!("# {token}\nfirst line typed here\n");
+        let saved = save_note_from_editor(note.id, &base, &typed).expect("editor save");
+
+        assert_eq!(
+            saved.content,
+            format!("# {token}\nfirst line typed here\n- added in Obsidian\n")
+        );
+        assert!(!saved.kept_both);
+        assert_eq!(get_note(note.id).unwrap().unwrap().content, saved.content);
+        let leftovers = fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with(&token))
+            .count();
+        delete_note_permanently(note.id).unwrap();
+        assert_eq!(leftovers, 1, "no conflict copy beside the note");
+    }
+
+    /// Front matter that isn't YAML (an unclosed `tags: [`) still saves, reads back exactly as
+    /// typed, and keeps the note's identity.
+    #[test]
+    fn a_note_with_unreadable_front_matter_saves_and_reads_back_as_typed() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("broken_yaml");
+        let base = format!("# {token}\nbody\n");
+        let note = Note::with_content(base.clone());
+        save_note(&note).expect("save baseline");
+
+        let typed = format!("---\ntags: [unclosed\n---\n# {token}\nbody\n");
+        let saved = save_note_from_editor(note.id, &base, &typed).expect("save broken yaml");
+        let path = note_file_path(note.id).unwrap().unwrap();
+        let reread =
+            note_editor_content_from_file(&brain_io::read_private_document(&path).unwrap())
+                .unwrap();
+        rebuild_index_from_files().expect("rebuild");
+        let rebuilt = get_note(note.id).unwrap();
+        delete_note_permanently(note.id).unwrap();
+
+        assert_eq!(saved.content, typed);
+        assert_eq!(reread, typed);
+        assert_eq!(rebuilt.map(|note| note.content), Some(typed));
+    }
+
+    /// The open note's file was deleted in Finder and the index already forgot it: saving brings
+    /// the note back under the same id instead of failing.
+    #[test]
+    fn an_editor_save_recreates_a_note_deleted_elsewhere() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("deleted_open");
+        let base = format!("# {token}\nbody\n");
+        let note = Note::with_content(base.clone());
+        save_note(&note).expect("save baseline");
+        let path = note_file_path(note.id).unwrap().unwrap();
+        fs::remove_file(&path).unwrap();
+        reindex_external_note_file(&path).expect("watcher sees the delete");
+        assert!(get_note(note.id).unwrap().is_none());
+
+        let typed = format!("# {token}\nbody kept\n");
+        let saved = save_note_from_editor(note.id, &base, &typed).expect("save recreates");
+        let on_disk = brain_io::read_private_document(&saved.path).unwrap();
+        let indexed = get_note(note.id).unwrap().map(|note| note.content);
+        delete_note_permanently(note.id).unwrap();
+
+        assert!(on_disk.contains("body kept"));
+        assert_eq!(indexed, Some(typed));
+    }
+
+    /// The open note's file was renamed in Finder before the index noticed: the save follows it
+    /// instead of writing a second file under the old name.
+    #[test]
+    fn an_editor_save_follows_a_note_renamed_elsewhere() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("renamed_open");
+        let base = format!("# {token}\nbody\n");
+        let note = Note::with_content(base.clone());
+        save_note(&note).expect("save baseline");
+        let old = note_file_path(note.id).unwrap().unwrap();
+        let moved = notes_dir().join(format!("Moved {token}.md"));
+        fs::rename(&old, &moved).unwrap();
+
+        let typed = format!("# {token}\nbody typed\n");
+        let saved = save_note_from_editor(note.id, &base, &typed).expect("save follows");
+        let old_exists = old.exists();
+        let moved_text = brain_io::read_private_document(&moved).unwrap();
+        delete_note_permanently(note.id).unwrap();
+
+        assert_eq!(saved.path, moved);
+        assert!(!old_exists, "no second file under the old name");
+        assert!(moved_text.contains("body typed"));
+    }
+
+    /// Notes filed in folders, as Obsidian does, are listed, found by their file name, and
+    /// renamed in place when their title changes.
+    #[test]
+    fn notes_in_folders_are_listed_linked_and_renamed_in_place() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("foldered");
+        let note = Note::with_content(format!("# {token}\nbody\n"));
+        save_note(&note).expect("save");
+        let top = note_file_path(note.id).unwrap().unwrap();
+        let folder = notes_dir().join(format!("Travel {token}"));
+        fs::create_dir_all(&folder).unwrap();
+        let filed = folder.join(top.file_name().unwrap());
+        fs::rename(&top, &filed).unwrap();
+        rebuild_index_from_files().expect("rebuild");
+
+        let listed = get_all_notes()
+            .unwrap()
+            .iter()
+            .any(|listed| listed.id == note.id);
+        let resolved = resolve_note_ref(&token).unwrap();
+        let mut renamed = get_note(note.id).unwrap().unwrap();
+        renamed.set_content(format!("# {token} renamed\nbody\n"));
+        save_note(&renamed).expect("rename");
+        let after = note_file_path(note.id).unwrap().unwrap();
+        delete_note_permanently(note.id).unwrap();
+        let _ = fs::remove_dir(&folder);
+
+        assert!(listed);
+        assert_eq!(resolved, NoteRefResolution::Unique(note.id));
+        assert_eq!(after.parent(), Some(folder.as_path()));
+        assert_eq!(
+            after.file_name().and_then(|name| name.to_str()),
+            Some(format!("{token} renamed.md").as_str())
+        );
+    }
+
+    /// A copy made in Finder carries the original's id. It becomes a note of its own; the
+    /// original keeps its id and its file.
+    #[test]
+    fn a_copied_note_file_becomes_its_own_note() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("duplicated");
+        let note = Note::with_content(format!("# {token}\nbody\n"));
+        save_note(&note).expect("save");
+        let original = note_file_path(note.id).unwrap().unwrap();
+        let copy = notes_dir().join(format!("{token} copy.md"));
+        fs::copy(&original, &copy).unwrap();
+
+        reindex_external_note_file(&copy).expect("watcher sees the copy");
+        let after_watch = note_file_path(note.id).unwrap();
+        rebuild_index_from_files().expect("rebuild");
+        let after_rebuild = note_file_path(note.id).unwrap();
+        let copy_id = brain_io::read_private_document(&copy)
+            .ok()
+            .and_then(|raw| notes_substrate().unwrap().parse_document(&raw).ok())
+            .map(|(frontmatter, _)| frontmatter.id);
+        let copy_listed = copy_id.and_then(|id| get_note(id).ok().flatten()).is_some();
+        if let Some(id) = copy_id.filter(|id| *id != note.id) {
+            delete_note_permanently(id).unwrap();
+        }
+        delete_note_permanently(note.id).unwrap();
+        let _ = fs::remove_file(&copy);
+
+        assert_eq!(after_watch.as_deref(), Some(original.as_path()));
+        assert_eq!(after_rebuild.as_deref(), Some(original.as_path()));
+        assert!(copy_id.is_some_and(|id| id != note.id));
+        assert!(copy_listed);
+    }
+
+    /// A note renamed to a title another note has gets the next free file name; links by file
+    /// name still reach each note.
+    #[test]
+    fn a_link_reaches_the_note_with_that_file_name_before_a_title_match() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db");
+        let token = unique_test_token("same_title");
+        let alpha = Note::with_content(format!("# {token}\nalpha\n"));
+        save_note(&alpha).expect("save alpha");
+        let beta = Note::with_content(format!("# {token} beta\nbeta\n"));
+        save_note(&beta).expect("save beta");
+        let mut renamed = get_note(beta.id).unwrap().unwrap();
+        renamed.set_content(format!("# {token}\nbeta\n"));
+        save_note(&renamed).expect("rename beta onto alpha's title");
+        let beta_name = note_file_path(beta.id)
+            .unwrap()
+            .unwrap()
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map(str::to_string)
+            .unwrap();
+
+        let by_title = resolve_note_ref(&token).unwrap();
+        let by_beta_name = resolve_note_ref(&beta_name).unwrap();
+        delete_note_permanently(alpha.id).unwrap();
+        delete_note_permanently(beta.id).unwrap();
+
+        assert_eq!(by_title, NoteRefResolution::Unique(alpha.id));
+        assert_eq!(by_beta_name, NoteRefResolution::Unique(beta.id));
+    }
 }

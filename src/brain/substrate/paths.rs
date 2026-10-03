@@ -61,7 +61,8 @@ impl BrainPaths {
     }
 
     /// Returns true when `path` is inside this brain tree (days, fragments,
-    /// notes, or trash).
+    /// notes, or trash). Notes may sit in folders under `notes/`, as other
+    /// Markdown apps file them; the other directories are flat.
     pub fn contains(&self, path: &Path) -> bool {
         let Ok(relative) = path.strip_prefix(&self.base) else {
             return false;
@@ -70,12 +71,16 @@ impl BrainPaths {
         let Some(Component::Normal(directory)) = components.next() else {
             return false;
         };
-        if !matches!(
-            directory.to_str(),
-            Some("days" | "fragments" | "notes" | "trash")
-        ) {
-            return false;
-        }
-        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+        let nested = match directory.to_str() {
+            Some("notes") => true,
+            Some("days" | "fragments" | "trash") => false,
+            _ => return false,
+        };
+        let rest: Vec<Component<'_>> = components.collect();
+        !rest.is_empty()
+            && (nested || rest.len() == 1)
+            && rest
+                .iter()
+                .all(|component| matches!(component, Component::Normal(_)))
     }
 }

@@ -167,6 +167,9 @@ impl BrainFrontmatter {
         let Some(raw) = parse_frontmatter_block(content) else {
             return Ok(());
         };
+        if raw.trim().is_empty() {
+            return Ok(());
+        }
         let fields: serde_yaml::Mapping =
             serde_yaml::from_str(&raw).context("parsing user note frontmatter")?;
         self.extra.extend(fields.into_iter().filter(|(key, _)| {
@@ -179,6 +182,15 @@ impl BrainFrontmatter {
         }));
         Ok(())
     }
+}
+
+/// Whether `content` starts with a front matter block that is not a YAML mapping, such as an
+/// unclosed `tags: [` list. Such a block belongs to whoever wrote it and is kept exactly as
+/// written rather than parsed and rewritten.
+pub fn frontmatter_is_unreadable(content: &str) -> bool {
+    parse_frontmatter_block(content).is_some_and(|raw| {
+        !raw.trim().is_empty() && serde_yaml::from_str::<serde_yaml::Mapping>(&raw).is_err()
+    })
 }
 
 #[derive(Debug, Deserialize)]

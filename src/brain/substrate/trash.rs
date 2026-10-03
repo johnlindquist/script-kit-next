@@ -102,6 +102,11 @@ pub fn restore_file(paths: &BrainPaths, trashed: &Path, destination: &Path) -> R
             destination.display()
         );
     }
+    if let Some(parent) = destination.parent() {
+        // A note filed in a folder goes back to that folder, even if it was removed since.
+        crate::atomic_file::ensure_private_directory(parent)
+            .with_context(|| format!("preparing restore folder {}", parent.display()))?;
+    }
 
     fs::rename(trashed, destination).with_context(|| {
         format!(

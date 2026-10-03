@@ -88,6 +88,15 @@ pub(crate) fn title_for_file(content: &str, stem: &str) -> String {
     heading_title(content).unwrap_or_else(|| stem.to_string())
 }
 
+/// A note's file name split into its folder (`Travel/`, or nothing for the top of the notes
+/// folder) and its own name (`Lisbon`).
+pub(crate) fn split_folder(stem: &str) -> (&str, &str) {
+    match stem.rfind('/') {
+        Some(slash) => (&stem[..=slash], &stem[slash + 1..]),
+        None => ("", stem),
+    }
+}
+
 /// The identity of a Markdown file another app wrote, which has none of the store's front
 /// matter. It comes from the file name, so it stays the same each time the folder is read; the
 /// first save from Script Kit writes it into the file.
@@ -101,12 +110,15 @@ pub(crate) fn note_id_for_unmanaged_file(stem: &str) -> NoteId {
 
 /// `content` with every `[[old]]` link (also `[[old|label]]` and `[[old#Heading]]`) pointing at
 /// `new` instead, or `None` when nothing links to `old`. Names match the way links resolve:
-/// case, spaces and punctuation aside.
+/// case, spaces and punctuation aside. Text in code (`` `spans` `` and fenced blocks) is left
+/// exactly as written.
 pub(crate) fn rewrite_wiki_links(content: &str, old: &str, new: &str) -> Option<String> {
     let old_ref = super::metadata::slugify_note_ref(old);
     if old_ref.is_empty() {
         return None;
     }
+    let code = code_ranges(content);
+    let in_code = |at: usize| code.iter().any(|range| range.contains(&at));
     let mut rewritten = String::with_capacity(content.len());
     let mut changed = false;
     let mut cursor = 0;
@@ -119,7 +131,7 @@ pub(crate) fn rewrite_wiki_links(content: &str, old: &str, new: &str) -> Option<
         let target_len = inner.find(['|', '#']).unwrap_or(inner.len());
         let target = &inner[..target_len];
         rewritten.push_str(&content[cursor..inner_start]);
-        if super::metadata::slugify_note_ref(target) == old_ref {
+        if !in_code(inner_start - 2) && super::metadata::slugify_note_ref(target) == old_ref {
             rewritten.push_str(new);
             rewritten.push_str(&inner[target_len..]);
             changed = true;
@@ -130,6 +142,42 @@ pub(crate) fn rewrite_wiki_links(content: &str, old: &str, new: &str) -> Option<
     }
     rewritten.push_str(&content[cursor..]);
     changed.then_some(rewritten)
+}
+
+/// Byte ranges of `content` that are code: fenced blocks (```` ``` ```` or `~~~`, fences
+/// included) and inline `` `spans` ``.
+fn code_ranges(content: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut fence_start: Option<usize> = None;
+    let mut offset = 0;
+    for line in content.split_inclusive('\n') {
+        let line_start = offset;
+        offset += line.len();
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            match fence_start.take() {
+                Some(start) => ranges.push(start..offset),
+                None => fence_start = Some(line_start),
+            }
+            continue;
+        }
+        if fence_start.is_some() {
+            continue;
+        }
+        let mut span_start = None;
+        for (index, ch) in line.char_indices() {
+            if ch == '`' {
+                match span_start.take() {
+                    Some(start) => ranges.push(line_start + start..line_start + index + 1),
+                    None => span_start = Some(index),
+                }
+            }
+        }
+    }
+    if let Some(start) = fence_start {
+        ranges.push(start..content.len());
+    }
+    ranges
 }
 
 #[cfg(test)]
@@ -189,6 +237,16 @@ mod tests {
         );
         assert_eq!(rewrite_wiki_links(day, "Trip", "Trip ideas"), None);
         assert_eq!(rewrite_wiki_links("[[unclosed", "unclosed", "x"), None);
+    }
+
+    #[test]
+    fn links_written_as_code_are_left_as_written() {
+        let note =
+            "See [[Old]].\n```\n[[Old]] in a fence\n```\nand `[[Old]]` inline, then [[Old|again]]";
+        assert_eq!(
+            rewrite_wiki_links(note, "Old", "New").as_deref(),
+            Some("See [[New]].\n```\n[[Old]] in a fence\n```\nand `[[Old]]` inline, then [[New|again]]")
+        );
     }
     #[test]
     fn a_note_without_a_heading_is_titled_by_its_file_name() {
