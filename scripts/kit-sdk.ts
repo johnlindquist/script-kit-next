@@ -2197,6 +2197,17 @@ export interface Config {
   notesHotkeyEnabled?: boolean;
 
   /**
+   * Folder that holds your notes: `days/YYYY-MM-DD.md` for each day and
+   * `notes/<Title>.md` for named notes, plain Markdown that Obsidian and other
+   * Markdown apps can open. `~` and paths relative to ~/.scriptkit work.
+   * Takes effect the next time Script Kit starts.
+   *
+   * @default "~/.scriptkit/brain"
+   * @example "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault"
+   */
+  notesFolder?: string;
+
+  /**
    * Hotkey for opening Agent Chat.
    * Falls back to Cmd+Shift+Space when enabled and unset.
    *

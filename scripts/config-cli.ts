@@ -338,6 +338,7 @@ interface Config {
   suggested?: SuggestedConfig;
   notesHotkey?: HotkeyConfig;
   notesHotkeyEnabled?: boolean;
+  notesFolder?: string;
   aiHotkey?: HotkeyConfig;
   aiHotkeyEnabled?: boolean;
   logsHotkey?: HotkeyConfig;
@@ -625,6 +626,13 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "boolean",
     default: true,
     description: "Whether the Notes hotkey is registered"
+  },
+  {
+    key: "notesFolder",
+    type: "string",
+    default: "~/.scriptkit/brain",
+    description: "Folder holding days/YYYY-MM-DD.md and notes/<Title>.md (plain Markdown, Obsidian-compatible); takes effect on the next start",
+    example: '"~/Documents/Notes"'
   },
   {
     key: "aiHotkey",
@@ -2133,7 +2141,7 @@ async function cmdValidate(): Promise<void> {
       'hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize',
       'terminalFontSize', 'uiScale', 'builtIns', 'processLimits',
       'clipboardHistoryMaxTextLength', 'clipboardHistorySecretRejection',
-      'suggested', 'notesHotkey', 'notesHotkeyEnabled',
+      'suggested', 'notesHotkey', 'notesHotkeyEnabled', 'notesFolder',
       'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
       'dictationHotkey', 'dictationHotkeyEnabled',
       'inlineAiHotkey', 'inlineAiHotkeyEnabled',

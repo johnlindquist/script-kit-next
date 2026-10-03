@@ -236,6 +236,11 @@ impl Note {
         result.trim().to_string()
     }
 
+    /// The title a note's words give it: the first non-empty line, without Markdown marks.
+    pub(crate) fn title_from_content(content: &str) -> String {
+        Self::extract_title(content)
+    }
+
     /// Extract title from content (first non-empty line, stripped of markdown)
     fn extract_title(content: &str) -> String {
         super::metadata::strip_frontmatter(content)

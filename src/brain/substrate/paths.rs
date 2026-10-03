@@ -1,4 +1,5 @@
-//! Canonical path construction for `~/.scriptkit/brain/`.
+//! Canonical path construction for the notes folder (`notesFolder`, default
+//! `~/.scriptkit/brain/`).
 //!
 //! Every filesystem path under the brain substrate must be derived from
 //! [`BrainPaths`] so no other module constructs these locations directly.
@@ -24,7 +25,7 @@ impl BrainPaths {
         if let Some(policy) = crate::runtime_policy::owned_evaluation() {
             return Self::new(policy.root().join("notes/brain"));
         }
-        Self::new(crate::setup::get_kit_path().join("brain"))
+        Self::new(crate::notes::folder::notes_folder())
     }
 
     pub fn base(&self) -> &Path {

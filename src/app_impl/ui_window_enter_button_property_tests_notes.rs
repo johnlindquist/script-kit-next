@@ -234,6 +234,39 @@ fn following_a_link_opens_the_note_and_esc_walks_back() {
 }
 
 #[test]
+fn cmd_t_on_today_leaves_esc_going_out_of_the_editor() {
+    let (back_label, from_note) = in_launcher("notes_cmd_t_on_today", 0, |cx| {
+        let _brain = OneBrain::new();
+        let note = seed_note("Heron plan", "- start");
+        let (app, window) = launcher(cx, Jev::Off);
+        let cmd = gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        };
+        open_in_editor(&app, window, cx, NoteTarget::Today);
+        let back_label = in_editor(&app, window, cx, |view, window, cx| {
+            view.handle_key_parts("t", cmd, window, cx);
+            view.back_label()
+        });
+        open_in_editor(&app, window, cx, NoteTarget::Note(note));
+        let from_note = in_editor(&app, window, cx, |view, window, cx| {
+            view.handle_key_parts("t", cmd, window, cx);
+            view.back_label()
+        });
+        (back_label, from_note)
+    });
+    assert_eq!(
+        back_label, None,
+        "⌘T on today's page stays put; Esc still leaves the editor"
+    );
+    assert_eq!(
+        from_note.as_deref(),
+        Some("Back to Heron plan"),
+        "⌘T from a note still comes back to it"
+    );
+}
+
+#[test]
 fn leaving_an_edited_note_never_moves_the_main_data_revision_backwards() {
     let (before, after, left) = in_launcher("notes_leave_revision", 0, |cx| {
         let _brain = OneBrain::new();
@@ -430,6 +463,53 @@ fn a_new_note_left_empty_is_removed_when_you_leave_it() {
         gone,
         Some(true),
         "an untouched new note leaves nothing behind"
+    );
+}
+
+#[test]
+fn a_new_note_is_listed_on_today_and_its_links_follow_a_rename() {
+    let (listed, renamed, file_name) = in_launcher("notes_new_listed_on_today", 0, |cx| {
+        let _brain = OneBrain::new();
+        seed_note(
+            "Osprey keeps the store from being empty",
+            "- so New skips the welcome note",
+        );
+        let (app, window) = launcher(cx, Jev::Off);
+        open_in_editor(&app, window, cx, NoteTarget::New);
+        let id = open_note_id(&app, cx).expect("a new note is open");
+        in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, "# Kestrel trip\n\nLisbon in May", window, cx);
+            view.escape_back(window, cx)
+        });
+        let today = |cx: &mut gpui::TestAppContext| {
+            open_in_editor(&app, window, cx, NoteTarget::Today);
+            let text = in_editor(&app, window, cx, |view, _, cx| text_of(view, cx));
+            in_editor(&app, window, cx, |view, window, cx| {
+                view.escape_back(window, cx)
+            });
+            text
+        };
+        let listed = today(cx);
+        open_in_editor(&app, window, cx, NoteTarget::Note(id));
+        in_editor(&app, window, cx, |view, window, cx| {
+            set_text(view, "# Kestrel journey\n\nLisbon in May", window, cx);
+            view.escape_back(window, cx)
+        });
+        let file_name = crate::notes::note_file_path(id)
+            .unwrap()
+            .and_then(|path| Some(path.file_name()?.to_str()?.to_string()));
+        (listed, today(cx), file_name)
+    });
+    assert!(
+        listed
+            .lines()
+            .any(|line| line.starts_with("- ") && line.ends_with(" [[Kestrel trip]]")),
+        "leaving a new note lists it on today's page at its time: {listed:?}"
+    );
+    assert_eq!(file_name.as_deref(), Some("Kestrel journey.md"));
+    assert!(
+        renamed.contains("[[Kestrel journey]]") && !renamed.contains("[[Kestrel trip]]"),
+        "the link follows the note's new name: {renamed:?}"
     );
 }
 
@@ -639,6 +719,42 @@ fn return_on_a_lone_title_leaves_a_blank_line_and_nothing_else_changes() {
         fixup("# ", "# \n", 3, None),
         None,
         "an empty title isn't one"
+    );
+}
+
+#[test]
+fn return_after_a_timed_line_starts_the_next_one_at_the_current_time() {
+    use crate::timed_line_enter_fixup as fixup;
+    let page = "# Today\n- 09:12 called Sam";
+    assert_eq!(
+        fixup(page, &format!("{page}\n"), page.len() + 1, "14:05"),
+        Some((format!("{page}\n- 14:05 "), page.len() + 9))
+    );
+    assert_eq!(
+        fixup("09:12 old style", "09:12 old style\n", 16, "14:05"),
+        Some(("09:12 old style\n- 14:05 ".into(), 24)),
+        "lines written before the list format keep going too"
+    );
+    let empty = "- 09:12 called Sam\n- 14:05 ";
+    assert_eq!(
+        fixup(empty, &format!("{empty}\n"), empty.len() + 1, "14:06"),
+        Some(("- 09:12 called Sam\n".into(), 19)),
+        "Return on a line with only its time ends the run"
+    );
+    assert_eq!(
+        fixup("plain words", "plain words\n", 12, "14:05"),
+        None,
+        "plain lines stay plain"
+    );
+    assert_eq!(
+        fixup("- [ ] 09:12 book", "- [ ] 09:12 book\n", 17, "14:05"),
+        None,
+        "tasks are left alone"
+    );
+    assert_eq!(
+        fixup("- 09:12 called Sam", "- 09:12 called\n Sam", 15, "14:05"),
+        None,
+        "a break inside a line is the person's"
     );
 }
 

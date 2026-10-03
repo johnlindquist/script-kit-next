@@ -136,6 +136,10 @@ export default {
   // notesHotkey: { modifiers: ["meta", "ctrl"], key: "KeyN" },
   // notesHotkeyEnabled: true,
 
+  // Where notes live: days/YYYY-MM-DD.md and notes/<Title>.md, plain Markdown
+  // that Obsidian can open. Takes effect the next time Script Kit starts.
+  // notesFolder: "~/.scriptkit/brain",
+
   // AI falls back to Cmd+Shift+Space when enabled and not explicitly set.
   // aiHotkey: { modifiers: ["meta", "shift"], key: "Space" },
   // aiHotkeyEnabled: true,

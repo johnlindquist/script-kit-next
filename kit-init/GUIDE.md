@@ -1235,6 +1235,8 @@ Every note and every day page opens in one editor that fills the main window. Th
 - Typing `[[` offers a matching title as ghost text after a short pause: `Tab` accepts it, `Cmd+→` takes the next word, `Esc` dismisses it.
 - `Cmd+K` lists the note's actions: New Note, Pin, Copy Link, Copy Deep Link, Duplicate, Show in Finder, Move to Trash, and the notes linking to this one.
 - `Cmd+N` starts a note, `Cmd+P` switches notes in place, `Cmd+S` saves.
+- On a day page, a line that starts with a time (`- 14:32 called Sam`) keeps going: `Return` at its end starts the next line with the current time. `Return` on a line holding only a time ends the run. Other lines stay plain.
+- A note started today is listed on today's page when you leave it, at the time it was started: `- 14:32 [[Trip ideas]]`.
 - Move to Trash waits 8 s in the line above the input; `Cmd+Z` stops it. A new note left empty is removed when you leave it.
 - `@notes:` in the main window attaches a note or a day page as context for the model; `Cmd+Return` then asks about it.
 
@@ -1252,7 +1254,29 @@ notesHotkey: {
 
 ### Storage
 
-Every note is a Markdown file under `~/.scriptkit/brain/notes/`, and day pages are `~/.scriptkit/brain/days/<date>.md`. Any editor can open them. `~/.scriptkit/db/notes.sqlite` is an index the app rebuilds from those files to keep search instant.
+Notes are a plain folder of Markdown files, laid out the way Obsidian and other Markdown apps expect, so you can open the same folder in either:
+
+```
+~/.scriptkit/brain/
+  days/2026-10-02.md      one page per day
+  notes/Trip ideas.md     one file per note, named after its title
+```
+
+- **File names follow titles.** A note's title is its first `# Heading` (or its file name when it has none). Renaming the heading renames the file; a taken name gets a number (`Trip ideas 2.md`). A file you named yourself keeps its name.
+- **Links name files.** `[[Trip ideas]]` opens `notes/Trip ideas.md`; `[[Trip ideas|the plan]]` shows other words, and `[[Trip ideas#Dates]]` points at a heading. When you rename a note in Script Kit, links to it in other notes and day pages follow the new name.
+- **Day pages are lists.** Captures land as list items that start with their time: `- 14:32 called Sam`, tasks as `- [ ] 14:32 book flights`.
+- **Front matter stays.** YAML between `---` lines at the top of a file is kept as it is; Script Kit adds its own `id`, `created` and `updated` fields. Markdown files another app made, without any front matter, appear as notes too.
+
+`~/.scriptkit/db/notes.sqlite` is an index the app rebuilds from those files to keep search instant.
+
+#### Choosing the Folder
+
+Point `notesFolder` at another folder, such as an Obsidian vault or a folder in iCloud Drive. `~` works, and a relative path is read from `~/.scriptkit`. The folder is read when Script Kit starts, so a change takes effect after a restart.
+
+```typescript
+// ~/.scriptkit/config.ts
+notesFolder: "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault",
+```
 
 ### Notes Automation
 

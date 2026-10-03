@@ -9,9 +9,13 @@ Create and automate notes. A note opens in Script Kit's main window, under the s
 
 ## Where Notes Live
 
-Day notes are markdown files at `~/.scriptkit/brain/days/<date>.md`. Other notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`. Scripts and agents must use the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`); do not raw-write the database.
+Notes are a plain folder of Markdown files, laid out the way Obsidian and other Markdown apps expect. The folder is `~/.scriptkit/brain` unless `notesFolder` in `config.ts` names another (read when Script Kit starts):
 
-Every active note is also mirrored as a read-only markdown file at `~/.scriptkit/notes/<slug>-<id8>.md`, so external tools (grep, editors, git) can read note content as plain files. The mirror is write-through from the app; treat the files as read-only — edits to them are not synced back and are overwritten on the next save.
+- `days/YYYY-MM-DD.md` — one page per day. Captures are list items that start with their time: `- 14:32 called Sam`, tasks `- [ ] 14:32 book flights`. A note started that day is listed as `- 14:32 [[Trip ideas]]`.
+- `notes/<Title>.md` — one file per note, named after its `# Heading`; renaming the heading renames the file, and `[[links]]` to it in other notes and day pages follow. A taken name gets a number (`Trip ideas 2.md`).
+- `[[Title]]` links name files; `[[Title|words]]` and `[[Title#Heading]]` work too. YAML front matter is kept; Script Kit adds `id`, `created` and `updated`.
+
+`~/.scriptkit/db/notes.sqlite` is a search index rebuilt from the files. Scripts and agents change notes through the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`); never write the database.
 
 ## Opening a Note
 
@@ -31,14 +35,14 @@ notesHotkey: {
 
 ## Working in a Note
 
-A note's lines are rows under a `NOTE · <name>` header; the input never moves.
+A note fills the main window as one Markdown editor; the line above it names what's open.
 
-- Type and press `Enter` — add a line
-- `Enter` on a line — put its words in the input; `Enter` again saves them in place (its time and bullet are kept)
-- `Cmd+Backspace` — delete a line; it waits 8 s in the line above the input, and `Cmd+Z` stops it
-- `Cmd+P` — list notes by name under `NOTES`
-- `Cmd+Enter` — ask the model about the note; the chat opens under the same input with the note attached
-- Tags from frontmatter or `#tag` markdown, and wiki-style links and backlinks from `[[Note Title]]`
+- `Cmd+N` — start a note titled with the time; type to rename it
+- `Cmd+P` — switch notes in place; `Cmd+T` — today's page
+- On a day page, `Enter` at the end of a timed line (`- 14:32 …`) starts the next one with the current time
+- `[[Note Title]]` links notes; `Cmd+.` follows a link and `Esc` comes back
+- `Cmd+K` — the note's actions (pin, copy link, duplicate, show in Finder, move to trash)
+- Tags come from front matter or `#tag`
 
 ## Creating and Organizing Notes
 

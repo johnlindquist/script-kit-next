@@ -136,6 +136,52 @@ pub(crate) fn heading_enter_fixup(
     Some((fixed, end))
 }
 
+/// ↵ at the end of a timed line (`- 14:32 called Sam`) starts the next one with the current
+/// time; ↵ on a timed line with nothing after its time ends the run and leaves a plain line.
+/// Returns the new text and cursor.
+pub(crate) fn timed_line_enter_fixup(
+    previous: &str,
+    content: &str,
+    cursor: usize,
+    now: &str,
+) -> Option<(String, usize)> {
+    let newline = cursor.checked_sub(1)?;
+    if content.as_bytes().get(newline) != Some(&b'\n')
+        || content.len() != previous.len() + 1
+        || !content.is_char_boundary(cursor)
+        || format!("{}{}", &content[..newline], &content[cursor..]) != previous
+        || !content[cursor..]
+            .split('\n')
+            .next()
+            .unwrap_or("")
+            .is_empty()
+    {
+        return None;
+    }
+    let line_start = content[..newline].rfind('\n').map_or(0, |at| at + 1);
+    let line = &content[line_start..newline];
+    if line.contains("[ ]") || line.contains("[x]") {
+        return None;
+    }
+    let time_only =
+        script_kit_gpui::brain::substrate::split_day_line_time(&format!("{} .", line.trim()))
+            .is_some_and(|(_, rest)| rest == ".");
+    if time_only {
+        let fixed = format!("{}{}", &content[..line_start], &content[cursor..]);
+        return Some((fixed, line_start));
+    }
+    script_kit_gpui::brain::substrate::split_day_line_time(line)?;
+    let stamp = format!("- {now} ");
+    let fixed = format!("{}{stamp}{}", &content[..cursor], &content[cursor..]);
+    Some((fixed, cursor + stamp.len()))
+}
+
+/// A note file's name without `.md`, which is what `[[links]]` name.
+fn note_file_name(path: &std::path::Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_string)
+}
 const DAY_PAGE_NOTE_ACTION_PREFIX: &str = "day_page:note:";
 const DAY_PAGE_NOTES_SECTION_TITLE: &str = "Note";
 const DAY_PAGE_LINKED_FROM_SECTION_TITLE: &str = "Linked from";
@@ -174,6 +220,7 @@ impl DayPageView {
             .filter(|note| !note.is_deleted())
             .ok_or_else(|| anyhow::anyhow!("That note isn't there anymore"))?;
         let path = crate::notes::note_file_path(note.id).ok().flatten();
+        let name = path.as_deref().and_then(note_file_name);
         self.session.bind_note_content(
             note.id.as_str(),
             note.title.clone(),
@@ -183,6 +230,7 @@ impl DayPageView {
         )?;
         self.apply_loaded_content_to_editor(window, cx);
         self.open_note_pinned = note.is_pinned;
+        self.opened_note_name = name;
         cx.notify();
         Ok(())
     }
@@ -209,7 +257,9 @@ impl DayPageView {
             self.session.bound_date(),
             self.local_today(),
             self.open_note_pinned,
-            self.new_note_title.is_some(),
+            self.new_note_title
+                .as_ref()
+                .is_some_and(|title| first_line == Some(format!("# {title}").as_str())),
             first_line,
         )
     }
@@ -238,8 +288,12 @@ impl DayPageView {
         let here = self
             .current_note_target()
             .map(|here| (here, self.document_label()));
+        let going_to = match &target {
+            crate::notes::NoteTarget::Today => crate::notes::NoteTarget::Day(self.today()),
+            other => other.clone(),
+        };
         let kept = self.leave_current_document(window, cx)?;
-        if let Some(here) = here.filter(|(here, _)| kept && *here != target) {
+        if let Some(here) = here.filter(|(here, _)| kept && *here != going_to) {
             self.trail.push(here);
         }
         self.show_note_target(target, window, cx)
@@ -304,7 +358,41 @@ impl DayPageView {
         if self.session.is_dirty() && !self.save_and_sync_footer(window, cx) {
             anyhow::bail!("Couldn't save {}", self.document_label());
         }
+        if let Some(id) = self.current_note_id() {
+            if self.new_note_title.take().is_some() {
+                self.add_new_note_to_today(id)?;
+            } else if let Some(old) = self.opened_note_name.take() {
+                let new = crate::notes::note_file_path(id)?
+                    .as_deref()
+                    .and_then(note_file_name);
+                if let Some(new) = new.filter(|new| *new != old) {
+                    let days_dir = self.session.substrate().paths().days_dir();
+                    crate::notes::rewrite_note_links(id, &old, &new, &days_dir)?;
+                }
+            }
+        }
         Ok(true)
+    }
+
+    /// A note made today is listed on the day it was started, at the time it was started:
+    /// `- 14:32 [[Trip ideas]]`.
+    fn add_new_note_to_today(&self, id: crate::notes::NoteId) -> anyhow::Result<()> {
+        let (Some(note), Some(name)) = (
+            crate::notes::get_note(id)?,
+            crate::notes::note_file_path(id)?
+                .as_deref()
+                .and_then(note_file_name),
+        ) else {
+            return Ok(());
+        };
+        let substrate = self.session.substrate();
+        let (date, _) = substrate.capture_day_destination(note.created_at);
+        substrate.append_to_captured_day(
+            date,
+            note.created_at,
+            script_kit_gpui::brain::substrate::DayEntry::NoteLink { name },
+        )?;
+        Ok(())
     }
 
     /// Esc: dismiss a ghost suggestion, then walk back the trail; a past day opened on its own

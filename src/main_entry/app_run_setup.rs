@@ -12,6 +12,11 @@
     // Load config early so we can use it for hotkey registration AND clipboard history settings
     // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
     let loaded_config = config::load_config();
+    // The notes folder is fixed for the run; the binary and the library each keep a copy.
+    crate::notes::folder::use_configured_notes_folder(loaded_config.notes_folder.as_deref());
+    script_kit_gpui::notes::folder::use_configured_notes_folder(
+        loaded_config.notes_folder.as_deref(),
+    );
     logging::log(
         "APP",
         &format!(

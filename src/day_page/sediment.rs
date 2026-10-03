@@ -597,9 +597,8 @@ fn parse_fragment_card_lines(
 }
 
 fn parse_fragment_card_header_line(line: &str) -> Option<String> {
-    let trimmed = line.trim_end();
-    let (timestamp, rest) = trimmed.split_once(' ')?;
-    if !is_timestamp(timestamp) || rest.trim() != "Fragment" {
+    let (timestamp, rest) = crate::brain::substrate::split_day_line_time(line)?;
+    if rest.trim() != "Fragment" {
         return None;
     }
     Some(timestamp.to_string())
@@ -614,11 +613,7 @@ fn parse_fragment_quote_line(line: &str) -> Option<String> {
 }
 
 fn parse_fragment_markdown_link_line(line: &str) -> Option<(String, String, String)> {
-    let trimmed = line.trim_end();
-    let (timestamp, rest) = trimmed.split_once(' ')?;
-    if !is_timestamp(timestamp) {
-        return None;
-    }
+    let (timestamp, rest) = crate::brain::substrate::split_day_line_time(line)?;
     let rest = rest.trim();
     let (excerpt, relative_link) = parse_markdown_link(rest)?;
     parse_fragment_link_line(&relative_link).map(|link| (timestamp.to_string(), excerpt, link))
@@ -650,11 +645,7 @@ fn parse_fragment_link_line(line: &str) -> Option<String> {
 }
 
 fn parse_kept_url_line(line: &str) -> Option<(String, String)> {
-    let trimmed = line.trim_end();
-    let (timestamp, rest) = trimmed.split_once(' ')?;
-    if !is_timestamp(timestamp) {
-        return None;
-    }
+    let (timestamp, rest) = crate::brain::substrate::split_day_line_time(line)?;
     if let Some((_label, url)) = parse_markdown_link(rest.trim()) {
         if is_single_token_http_url(&url) {
             return Some((timestamp.to_string(), url));
@@ -668,11 +659,7 @@ fn parse_kept_url_line(line: &str) -> Option<(String, String)> {
 }
 
 fn parse_clipboard_ref_line(line: &str) -> Option<(String, String)> {
-    let trimmed = line.trim_end();
-    let (timestamp, rest) = trimmed.split_once(' ')?;
-    if !is_timestamp(timestamp) {
-        return None;
-    }
+    let (timestamp, rest) = crate::brain::substrate::split_day_line_time(line)?;
     let (_label, uri) = parse_markdown_link(rest.trim())?;
     crate::clipboard_history::parse_entry_resource_uri(&uri)
         .map(|entry_id| (timestamp.to_string(), entry_id))

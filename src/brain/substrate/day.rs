@@ -38,14 +38,19 @@ pub enum DayEntry {
         summary: String,
         provenance_link: String,
     },
+    /// A note made today, linked by its file name (`[[Trip ideas]]`) at the time it was started.
+    NoteLink { name: String },
 }
 
 impl DayEntry {
+    /// The line as it lands in the day file: a Markdown list item that starts with the capture
+    /// time (`- 14:33 text`, tasks `- [ ] 14:33 text`), the shape Obsidian, Logseq and the
+    /// capture plugins read.
     pub fn format_line(&self, timestamp: &str) -> String {
         match self {
-            Self::Capture { text } => format!("{timestamp} {text}"),
+            Self::Capture { text } => format!("- {timestamp} {text}"),
             Self::Task { body, tags, due } => {
-                let mut line = format!("{timestamp} - [ ] {body}");
+                let mut line = format!("- [ ] {timestamp} {body}");
                 for tag in tags {
                     let normalized = tag.trim().trim_start_matches('#');
                     if !normalized.is_empty() {
@@ -65,11 +70,11 @@ impl DayEntry {
             }
             Self::KeptUrl { url } => {
                 let label = markdown_url_label(url);
-                format!("{timestamp} [{label}]({url})")
+                format!("- {timestamp} [{label}]({url})")
             }
             Self::ClipboardRef { entry_id } => {
                 let uri = crate::clipboard_history::entry_resource_uri(entry_id);
-                format!("{timestamp} [{CLIPBOARD_REF_LABEL}]({uri})")
+                format!("- {timestamp} [{CLIPBOARD_REF_LABEL}]({uri})")
             }
             Self::FragmentRef(reference) => format_fragment_reference_card(timestamp, reference),
             Self::Trace {
@@ -77,17 +82,30 @@ impl DayEntry {
                 provenance_link,
             } => {
                 let label = markdown_link_label(summary);
-                format!("{timestamp} [{label}]({provenance_link})")
+                format!("- {timestamp} [{label}]({provenance_link})")
             }
+            Self::NoteLink { name } => format!("- {timestamp} [[{name}]]"),
         }
     }
 }
 
 fn format_fragment_reference_card(timestamp: &str, reference: &FragmentReference) -> String {
     format!(
-        "{timestamp} {FRAGMENT_CARD_TITLE}\n> {}\n[{FRAGMENT_CARD_LINK_LABEL}]({})",
+        "- {timestamp} {FRAGMENT_CARD_TITLE}\n  > {}\n  [{FRAGMENT_CARD_LINK_LABEL}]({})",
         reference.excerpt, reference.relative_link
     )
+}
+
+/// Splits a day-file line into its capture time and the words after it. Reads the list-item
+/// shape the app writes (`- 14:33 text`) and the bare shape of older day files (`14:33 text`).
+pub fn split_day_line_time(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim();
+    let unbulleted = trimmed
+        .strip_prefix("- ")
+        .map(str::trim_start)
+        .unwrap_or(trimmed);
+    let (timestamp, rest) = unbulleted.split_once(' ')?;
+    is_timestamp(timestamp).then_some((timestamp, rest))
 }
 
 pub fn local_day_and_time(now: DateTime<Utc>, tz: Tz) -> (chrono::NaiveDate, String) {
@@ -257,10 +275,7 @@ fn fragment_path_from_timestamped_markdown_fragment_link(
     paths: &BrainPaths,
     line: &str,
 ) -> Option<PathBuf> {
-    let (timestamp, rest) = line.trim().split_once(' ')?;
-    if !is_timestamp(timestamp) {
-        return None;
-    }
+    let (_, rest) = split_day_line_time(line)?;
     let relative_link = parse_markdown_link_destination(rest.trim())?;
     fragment_path_from_relative_link(paths, relative_link)
 }
@@ -311,10 +326,7 @@ fn parse_legacy_fragment_header(line: &str) -> Option<(&str, &str)> {
 }
 
 fn is_fragment_card_header(line: &str) -> bool {
-    let Some((timestamp, title)) = line.trim().split_once(' ') else {
-        return false;
-    };
-    is_timestamp(timestamp) && title.trim() == FRAGMENT_CARD_TITLE
+    split_day_line_time(line).is_some_and(|(_, title)| title.trim() == FRAGMENT_CARD_TITLE)
 }
 
 fn is_timestamp(value: &str) -> bool {

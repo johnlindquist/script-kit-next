@@ -197,6 +197,8 @@ pub struct DayPageView {
     /// The time-stamp title a new note started with, while that note is open. It's selected on
     /// open so typing names the note, and a note still holding only it is removed on leaving.
     pub(crate) new_note_title: Option<String>,
+    /// The open note's file name when it was opened; links to it follow a rename on leaving.
+    pub(crate) opened_note_name: Option<String>,
     /// Whether the open note is pinned, for the line above the editor.
     pub(crate) open_note_pinned: bool,
 }

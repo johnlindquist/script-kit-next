@@ -16,11 +16,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
-use crate::brain::substrate::{io as brain_io, BrainFrontmatter, BrainSlugDir, BrainSubstrate};
+use crate::brain::substrate::{io as brain_io, BrainFrontmatter, BrainSubstrate};
 use crate::scripts::root_search_contract::{
     RootOwnedProviderRefresh, RootOwnedProviderRefreshLifecycle,
 };
 
+use super::file_names;
 use super::metadata;
 use super::model::{Note, NoteId};
 
@@ -242,7 +243,7 @@ fn get_notes_brain_base_path() -> PathBuf {
             .join("brain");
     }
 
-    crate::setup::get_kit_path().join("brain")
+    crate::notes::folder::notes_folder()
 }
 
 /// Days directory under the notes brain root. The Notes Cmd+P switcher
@@ -303,10 +304,13 @@ fn user_facing_content(frontmatter: &BrainFrontmatter, body: &str) -> Result<Str
 }
 
 /// What the editor shows for a note file read from disk: its words, without the store's own
-/// front matter (id, dates, pinned), and keeping any front matter the person wrote.
+/// front matter (id, dates, pinned), and keeping any front matter the person wrote. A file
+/// another app wrote, without the store's front matter, is shown exactly as written.
 pub(crate) fn note_editor_content_from_file(raw: &str) -> Result<String> {
-    let (frontmatter, body) = notes_substrate()?.parse_document(raw)?;
-    user_facing_content(&frontmatter, &body)
+    match notes_substrate()?.parse_document(raw) {
+        Ok((frontmatter, body)) => user_facing_content(&frontmatter, &body),
+        Err(_) => Ok(raw.to_string()),
+    }
 }
 
 fn brain_frontmatter_from_note(
@@ -379,12 +383,136 @@ fn load_note_from_file(
     let raw = brain_io::read_private_document(path)
         .with_context(|| format!("reading note file {}", path.display()))?;
     let hash = content_hash(&raw);
-    let (frontmatter, body) = substrate
-        .parse_document(&raw)
-        .with_context(|| format!("parsing note file {}", path.display()))?;
     let slug = slug_from_path(path).context("note file missing slug stem")?;
-    let note = note_from_brain_document(frontmatter, &body, deleted_at, sort_order)?;
+    // A note another app wrote has none of the store's front matter: it is still a note, with
+    // an identity from its name and its words exactly as written.
+    let (frontmatter, body) = match substrate.parse_document(&raw) {
+        Ok(parsed) => parsed,
+        Err(_) => (unmanaged_note_frontmatter(path, &slug), raw.clone()),
+    };
+    let mut note = note_from_brain_document(frontmatter, &body, deleted_at, sort_order)?;
+    note.title = file_names::title_for_file(&note.content, &slug);
     Ok((note, slug, hash))
+}
+
+fn unmanaged_note_frontmatter(path: &Path, stem: &str) -> BrainFrontmatter {
+    let metadata = fs::metadata(path).ok();
+    let updated: DateTime<Utc> = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.modified().ok())
+        .map(DateTime::<Utc>::from)
+        .unwrap_or_else(Utc::now);
+    let created = metadata
+        .as_ref()
+        .and_then(|metadata| metadata.created().ok())
+        .map(DateTime::<Utc>::from)
+        .unwrap_or(updated);
+    BrainFrontmatter::new(
+        file_names::note_id_for_unmanaged_file(stem),
+        created,
+        updated,
+    )
+}
+
+/// A free file name for a new note, after its title.
+fn allocate_note_stem(substrate: &BrainSubstrate, title: &str) -> Result<String> {
+    let notes_dir = substrate.paths().notes_dir();
+    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+        policy.require_owned_path(&notes_dir)?;
+    }
+    Ok(file_names::unused_stem(
+        &notes_dir,
+        &file_names::stem_for_title(title),
+        None,
+    ))
+}
+
+/// Renames a note's file when its title changed and the file was named after the old one. A
+/// file someone named themselves keeps its name. Returns the name the file has now.
+fn name_note_file_after_title(
+    substrate: &BrainSubstrate,
+    stem: &str,
+    previous_title: &str,
+    title: &str,
+) -> Result<String> {
+    if file_names::stem_follows_title(stem, title)
+        || !file_names::stem_follows_title(stem, previous_title)
+    {
+        return Ok(stem.to_string());
+    }
+    let next = allocate_note_stem_keeping(substrate, title, stem)?;
+    if next == stem {
+        return Ok(next);
+    }
+    let from = substrate.paths().note_file(stem);
+    let to = substrate.paths().note_file(&next);
+    if from.exists() {
+        brain_io::with_brain_write_lock(|| fs::rename(&from, &to))
+            .with_context(|| format!("renaming note file to {}", to.display()))?;
+    }
+    Ok(next)
+}
+
+fn allocate_note_stem_keeping(
+    substrate: &BrainSubstrate,
+    title: &str,
+    own: &str,
+) -> Result<String> {
+    let notes_dir = substrate.paths().notes_dir();
+    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+        policy.require_owned_path(&notes_dir)?;
+    }
+    Ok(file_names::unused_stem(
+        &notes_dir,
+        &file_names::stem_for_title(title),
+        Some(own),
+    ))
+}
+
+/// Notes named the way they used to be (`launch-plan.md`) take their title as their name
+/// (`Launch plan.md`), so `[[Launch plan]]` finds them in other Markdown apps too.
+fn name_legacy_note_files_by_title(substrate: &BrainSubstrate) -> Result<usize> {
+    let notes_dir = substrate.paths().notes_dir();
+    if !notes_dir.exists() {
+        return Ok(0);
+    }
+    let mut renamed = 0;
+    for entry in fs::read_dir(&notes_dir)
+        .with_context(|| format!("reading notes dir {}", notes_dir.display()))?
+    {
+        let path = entry.context("reading notes dir entry")?.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md")
+            || is_conflict_copy_path(&path)
+        {
+            continue;
+        }
+        let Some(stem) = slug_from_path(&path) else {
+            continue;
+        };
+        let Ok(raw) = brain_io::read_private_document(&path) else {
+            continue;
+        };
+        if substrate.parse_document(&raw).is_err() {
+            continue;
+        }
+        let title = Note::title_from_content(&raw);
+        let slug = crate::brain::substrate::slugify(&title);
+        let legacy = !slug.is_empty()
+            && (stem == slug
+                || stem
+                    .strip_prefix(slug.as_str())
+                    .and_then(|rest| rest.strip_prefix('-'))
+                    .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())));
+        if !legacy || stem == file_names::stem_for_title(&title) {
+            continue;
+        }
+        let next = allocate_note_stem(substrate, &title)?;
+        let to = substrate.paths().note_file(&next);
+        brain_io::with_brain_write_lock(|| fs::rename(&path, &to))
+            .with_context(|| format!("naming note file {}", to.display()))?;
+        renamed += 1;
+    }
+    Ok(renamed)
 }
 
 fn lookup_note_slug(conn: &Connection, note_id: NoteId) -> Result<Option<String>> {
@@ -398,21 +526,39 @@ fn lookup_note_slug(conn: &Connection, note_id: NoteId) -> Result<Option<String>
     .map(|row| row.flatten())
 }
 
-fn resolve_note_save_target(conn: &Connection, note: &Note) -> Result<(String, bool)> {
+/// Where a save writes: the note's file name, whether the save brings it back from the trash,
+/// and the title it had before (`None` for a new note).
+fn resolve_note_save_target(
+    conn: &Connection,
+    note: &Note,
+) -> Result<(String, bool, Option<String>)> {
     let existing = conn
         .query_row(
-            "SELECT file_slug, deleted_at IS NOT NULL FROM notes WHERE id = ?1",
+            "SELECT file_slug, deleted_at IS NOT NULL, title FROM notes WHERE id = ?1",
             params![note.id.as_str()],
-            |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, bool>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, bool>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
         )
         .optional()
         .context("Failed to look up note save target")?;
-    let (slug, was_deleted) = existing.unwrap_or((None, false));
+    let (slug, was_deleted, previous_title) = match existing {
+        Some((slug, was_deleted, title)) => (slug, was_deleted, Some(title)),
+        None => (None, false, None),
+    };
     let slug = match slug {
         Some(slug) => slug,
-        None => notes_substrate()?.allocate_slug(&note.title, BrainSlugDir::Notes)?,
+        None => allocate_note_stem(notes_substrate()?.as_ref(), &note.title)?,
     };
-    Ok((slug, was_deleted && note.deleted_at.is_none()))
+    Ok((
+        slug,
+        was_deleted && note.deleted_at.is_none(),
+        previous_title,
+    ))
 }
 
 fn write_conflict_copy(path: &Path, contents: &str) -> Result<()> {
@@ -638,6 +784,11 @@ fn rebuild_index_from_files_with_conn_inner(conn: &Connection) -> Result<()> {
     clear_index_tables(conn)?;
 
     let substrate = notes_substrate()?;
+    match name_legacy_note_files_by_title(&substrate) {
+        Ok(0) => {}
+        Ok(renamed) => info!(renamed, "Named note files after their titles"),
+        Err(error) => warn!(%error, "Could not name every note file after its title"),
+    }
     let notes_dir = substrate.paths().notes_dir();
     if notes_dir.exists() {
         for entry in fs::read_dir(&notes_dir)
@@ -813,7 +964,9 @@ fn restore_canonical_note_file(
         if metadata::strip_frontmatter(&raw).len() == raw.len() {
             continue;
         }
-        let (frontmatter, _) = substrate.parse_document(&raw)?;
+        let Ok((frontmatter, _)) = substrate.parse_document(&raw) else {
+            continue;
+        };
         if frontmatter.id == note_id {
             anyhow::ensure!(
                 matching_path.is_none(),
@@ -1108,16 +1261,32 @@ pub fn save_note(note: &Note) -> Result<()> {
     let db = get_db()?;
     let mut conn = db.lock().map_err(db_lock_err)?;
 
-    let (mut slug, is_restoring) = resolve_note_save_target(&conn, note)?;
+    // A note's title is its `# Heading`, else its file name; the file is named after it.
+    let heading = file_names::heading_title(&note.content);
+    let mut titled = note.clone();
+    if let Some(heading) = &heading {
+        titled.title = heading.clone();
+    }
+    let (mut slug, is_restoring, previous_title) = resolve_note_save_target(&conn, &titled)?;
     if is_restoring {
         let destination = substrate.paths().note_file(&slug);
         if let Some(raw) = brain_io::read_private_document_if_present(&destination)? {
-            let (existing, _) = substrate.parse_document(&raw)?;
-            if existing.id != note.id {
-                slug = substrate.allocate_slug(&note.title, BrainSlugDir::Notes)?;
+            let other_note = substrate
+                .parse_document(&raw)
+                .map_or(true, |(existing, _)| existing.id != note.id);
+            if other_note {
+                slug = allocate_note_stem(&substrate, &titled.title)?;
             }
         }
+    } else if note.deleted_at.is_none() {
+        if let (Some(heading), Some(previous)) = (heading.as_deref(), previous_title.as_deref()) {
+            slug = name_note_file_after_title(&substrate, &slug, previous, heading)?;
+        }
     }
+    if heading.is_none() && previous_title.is_some() {
+        titled.title = slug.clone();
+    }
+    let note = &titled;
     let hash = if note.deleted_at.is_some() {
         trash_canonical_note_file(&substrate, &slug)?;
         String::new()
@@ -1148,6 +1317,59 @@ pub fn save_note(note: &Note) -> Result<()> {
     Ok(())
 }
 
+/// After a note's file is renamed from `old` to `new`, points the links in other notes and in
+/// the day pages in `days_dir` at the new name, as other Markdown apps do. Links stay as they
+/// are when another note still answers to `old`. Returns how many files changed.
+pub(crate) fn rewrite_note_links(
+    renamed: NoteId,
+    old: &str,
+    new: &str,
+    days_dir: &Path,
+) -> Result<usize> {
+    if metadata::slugify_note_ref(old) == metadata::slugify_note_ref(new)
+        || resolve_note_ref(old)? != NoteRefResolution::NotFound
+    {
+        return Ok(0);
+    }
+    let mut changed = 0;
+    for mut note in get_all_notes()? {
+        if note.id == renamed {
+            continue;
+        }
+        if let Some(content) = file_names::rewrite_wiki_links(&note.content, old, new) {
+            note.set_content(&content);
+            save_note(&note)?;
+            changed += 1;
+        }
+    }
+    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+        policy.require_owned_path(days_dir)?;
+    }
+    let Ok(entries) = fs::read_dir(days_dir) else {
+        return Ok(changed);
+    };
+    for entry in entries {
+        let path = entry.context("reading days dir entry")?.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("md") {
+            continue;
+        }
+        let rewrote = brain_io::with_brain_write_lock(|| -> Result<bool> {
+            let Some(content) = brain_io::read_private_document_if_present(&path)? else {
+                return Ok(false);
+            };
+            let Some(rewritten) = file_names::rewrite_wiki_links(&content, old, new) else {
+                return Ok(false);
+            };
+            brain_io::atomic_write(&path, &rewritten)?;
+            Ok(true)
+        })
+        .with_context(|| format!("updating links in {}", path.display()))?;
+        changed += usize::from(rewrote);
+    }
+    invalidate_root_notes_search_cache();
+    Ok(changed)
+}
+
 /// Read back the canonical file and index after a delivery save.
 pub(crate) fn verify_saved_note_content(id: NoteId, expected: &str) -> Result<()> {
     let note = get_note(id)?.context("saved Notes index entry missing")?;
@@ -1169,7 +1391,19 @@ pub(crate) fn verify_saved_note_content(id: NoteId, expected: &str) -> Result<()
 }
 
 fn replace_note_metadata_with_conn(conn: &Connection, note: &Note) -> Result<()> {
-    let parsed = metadata::parse_note_metadata(&note.title, &note.content);
+    let mut parsed = metadata::parse_note_metadata(&note.title, &note.content);
+    // Other Markdown apps link a note by its file name, which can differ from its title
+    // (`Trip ideas 2.md`), so `[[Trip ideas 2]]` finds it too.
+    if let Some(stem) = lookup_note_slug(conn, note.id)? {
+        let slug = metadata::slugify_note_ref(&stem);
+        if !slug.is_empty() && parsed.aliases.iter().all(|alias| alias.slug != slug) {
+            parsed.aliases.push(metadata::ParsedAlias {
+                alias: stem,
+                slug,
+                source: "file",
+            });
+        }
+    }
     let now = Utc::now().to_rfc3339();
 
     conn.execute(

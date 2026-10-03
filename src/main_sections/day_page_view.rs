@@ -207,6 +207,7 @@ impl DayPageView {
             trail: Vec::new(),
             ghost_generation: 0,
             new_note_title: None,
+            opened_note_name: None,
             open_note_pinned: false,
             read_mode: false,
         };
@@ -448,6 +449,7 @@ impl DayPageView {
             self.loaded_document = Some(identity);
         }
         self.new_note_title = None;
+        self.opened_note_name = None;
         let full = self.session.disk_content().to_string();
         let content = self.adopt_clipboard_shelf_from(&full);
         self.reset_day_page_spine_handoff_state(true, true);
@@ -559,6 +561,14 @@ impl DayPageView {
                         selection.end,
                         self.new_note_title.as_deref(),
                     )
+                })
+                .or_else(|| {
+                    let now = self
+                        .now()
+                        .with_timezone(&self.session.substrate().timezone())
+                        .format("%H:%M")
+                        .to_string();
+                    timed_line_enter_fixup(&previous, &content, selection.end, &now)
                 })
         {
             self.notes_editor.update(cx, |editor, cx| {

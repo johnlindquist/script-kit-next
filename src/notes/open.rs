@@ -76,10 +76,10 @@ pub fn save_note_with_content_and_source(
 /// The first note anyone makes: what notes can do, pinned so it's easy to find again.
 pub(crate) const WELCOME_NOTE: &str = "# Welcome to Notes
 
-Every note is a Markdown file in `~/.scriptkit/brain/notes`, so any editor can open it too.
+Every note is a Markdown file named after its title, in `~/.scriptkit/brain/notes` (or the folder `notesFolder` names in config.ts), so Obsidian or any editor can open it too.
 
 - Type a few words in the main window to find a note; pinned notes come first. Type `#` on the empty input to start a new one.
-- `⌘T` opens today's page. Start a line in the main window with `;` to add it to today.
+- `⌘T` opens today's page. Start a line in the main window with `;` to add it to today. On today's page, ↵ after a line like `- 14:32 called Sam` starts the next one with the time.
 - Link one note to another with [[Note title]]. Type `[[` and a few letters, then Tab to finish the title. `⌘.` opens the link under the cursor.
 - `⌘K` lists what you can do with the open note: pin it, copy its link, duplicate it, see which notes link to it.
 - `⌘↵` asks the model about the line you're on. In the main window, `@notes:` attaches a note or a day page to what you ask.

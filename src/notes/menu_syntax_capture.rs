@@ -622,7 +622,7 @@ mod tests {
 
         let path = substrate.paths().day_page(now.date_naive());
         let contents = std::fs::read_to_string(path).expect("read day page");
-        assert!(contents.contains("10:15 - [ ] x #y due:2026-06-12"));
+        assert!(contents.contains("- [ ] 10:15 x #y due:2026-06-12"));
     }
 
     #[test]
@@ -649,7 +649,7 @@ mod tests {
             .paths()
             .day_page(chrono::NaiveDate::from_ymd_opt(2026, 6, 14).unwrap());
         let contents = std::fs::read_to_string(local_path).expect("read local day page");
-        assert!(contents.contains("23:30 - [ ] local day task #qmd"));
+        assert!(contents.contains("- [ ] 23:30 local day task #qmd"));
         assert!(!utc_path.exists(), "UTC day file must not be created");
     }
 

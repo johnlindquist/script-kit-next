@@ -601,6 +601,9 @@ pub(crate) fn set_root_todo_snapshot_for_tests(hits: Vec<RootTodoSearchHit>) {
 }
 
 fn brain_days_dir(sk_path: &Path) -> PathBuf {
+    if sk_path == default_sk_path() {
+        return crate::brain::substrate::BrainPaths::default_kit().days_dir();
+    }
     sk_path.join("brain").join("days")
 }
 
@@ -744,6 +747,9 @@ fn parse_unchecked_task_line(line: &str) -> Option<ParsedDayTaskLine> {
     }
     let marker = "- [ ] ";
     let rest = trimmed.split_once(marker).map(|(_, tail)| tail.trim())?;
+    // `- [ ] 14:33 body` carries its capture time first; it is not part of the task.
+    let rest =
+        crate::brain::substrate::split_day_line_time(rest).map_or(rest, |(_, words)| words.trim());
     let mut body_parts = Vec::new();
     let mut tags = Vec::new();
     let mut due = None;

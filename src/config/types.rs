@@ -1930,6 +1930,14 @@ pub struct Config {
         rename = "unifiedSearch"
     )]
     pub unified_search: Option<UnifiedSearchConfig>,
+    /// The folder notes live in: `days/` holds a page per day and `notes/` the named notes.
+    /// `~` and paths relative to `~/.scriptkit` are allowed. Default: `~/.scriptkit/brain`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "notesFolder"
+    )]
+    pub notes_folder: Option<String>,
     /// Hotkey for opening Notes window (no default; user-configured only)
     #[serde(
         default,
@@ -2111,6 +2119,7 @@ impl Default for Config {
             clipboard_history_secret_rejection: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
             unified_search: None,     // Will use UnifiedSearchConfig::default() via getter
+            notes_folder: None,       // Notes live in ~/.scriptkit/brain
             notes_hotkey: None,       // Will use HotkeyConfig::default_notes_hotkey() via getter
             notes_hotkey_enabled: None, // Defaults to true via getter
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter

@@ -217,7 +217,7 @@ const due = payload.dates?.find((date) => date.role === "due")?.iso?.slice(0, 10
   ?? payload.dates?.[0]?.iso?.slice(0, 10)
   ?? null;
 const stamp = new Date().toTimeString().slice(0, 5);
-let line = `${{stamp}} - [ ] ${{payload.body}}`;
+let line = `- [ ] ${{stamp}} ${{payload.body}}`;
 if (tags) line += ` ${{tags}}`;
 if (due) line += ` due:${{due}}`;
 line += "\n";

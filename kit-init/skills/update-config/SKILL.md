@@ -74,6 +74,10 @@ Command deeplinks: `scriptkit://commands/{id}`
 - `dictationHotkey` — no default; set explicitly
 - All have `*Enabled` boolean (default `true`)
 
+## Notes Folder
+
+- `notesFolder` — where notes live (default `~/.scriptkit/brain`): `days/YYYY-MM-DD.md` and `notes/<Title>.md`, plain Markdown other apps (Obsidian) can open. `~` and paths relative to `~/.scriptkit` work. Takes effect the next time Script Kit starts.
+
 ## Runtime Preference Groups
 
 ```typescript

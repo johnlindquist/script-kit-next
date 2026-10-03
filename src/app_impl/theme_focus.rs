@@ -95,6 +95,18 @@ impl ScriptListApp {
         });
         // Hot-reload hotkeys from updated config
         hotkeys::update_hotkeys(&self.config);
+        if let Some(folder) =
+            crate::notes::folder::newly_configured_folder(self.config.notes_folder.as_deref())
+        {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                format!(
+                    "Notes will open from {} the next time Script Kit starts",
+                    crate::notes::folder::display_path(&folder)
+                ),
+                cx,
+            );
+        }
         info!(
             target: "APP",
             padding = ?self.config.get_padding(),

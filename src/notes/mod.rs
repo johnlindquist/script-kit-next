@@ -22,6 +22,8 @@ pub(crate) mod ai_scope;
 pub(crate) mod code_highlight;
 pub(crate) mod day_switcher;
 pub(crate) mod deeplink_activation;
+pub(crate) mod file_names;
+pub mod folder;
 pub(crate) mod ghost;
 pub(crate) mod ghost_llm;
 pub(crate) mod markdown;
@@ -88,4 +90,4 @@ pub use open::{open_note, register_open_note_hook, save_note_with_content, NoteT
 #[allow(unused_imports)]
 pub(crate) use open::new_note_to_edit;
 #[allow(unused_imports)]
-pub(crate) use storage::{resolve_note_ref, NoteRefResolution};
+pub(crate) use storage::{resolve_note_ref, rewrite_note_links, NoteRefResolution};

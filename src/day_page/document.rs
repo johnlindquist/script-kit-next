@@ -1045,11 +1045,16 @@ mod tests {
             stored.title,
             session.viewing_note_title().unwrap_or_default()
         );
+        let saved_path = session.path().expect("saved note path").clone();
         assert!(
-            fs::read_to_string(note_path)
+            fs::read_to_string(&saved_path)
                 .expect("read canonical note")
                 .contains(&updated),
             "canonical note file should contain updated body"
+        );
+        assert!(
+            saved_path == note_path || !note_path.exists(),
+            "a renamed note leaves no file under its old name"
         );
         assert!(!session.is_dirty());
     }

@@ -18,19 +18,12 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 
-pub use day::DayEntry;
+pub use day::{split_day_line_time, DayEntry};
 pub use fragment::FragmentReference;
 pub use frontmatter::BrainFrontmatter;
 pub use paths::BrainPaths;
-pub use slug::dedupe_slug_in_dir;
+pub use slug::slugify;
 pub use trash::{restore_file, trash_file};
-
-/// Which brain subdirectory a slug allocation targets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BrainSlugDir {
-    Notes,
-    Fragments,
-}
 
 /// Entry point for brain filesystem operations.
 #[derive(Debug, Clone)]
@@ -188,18 +181,6 @@ impl BrainSubstrate {
     /// Parse a brain markdown document into frontmatter and body.
     pub fn parse_document(&self, content: &str) -> Result<(BrainFrontmatter, String)> {
         BrainFrontmatter::parse(content)
-    }
-
-    /// Allocate a unique lowercase hyphenated slug in the given directory.
-    pub fn allocate_slug(&self, base: &str, dir: BrainSlugDir) -> Result<String> {
-        let parent = match dir {
-            BrainSlugDir::Notes => self.paths.notes_dir(),
-            BrainSlugDir::Fragments => self.paths.fragments_dir(),
-        };
-        if let Some(policy) = crate::runtime_policy::owned_evaluation() {
-            policy.require_owned_path(&parent)?;
-        }
-        Ok(dedupe_slug_in_dir(&parent, base))
     }
 
     /// Move a brain file into `brain/trash/`.
@@ -386,11 +367,11 @@ mod tests {
         let lines: Vec<&str> = contents.lines().collect();
 
         assert_eq!(lines.len(), 3);
-        assert_eq!(lines[0], "09:42 first capture");
-        assert_eq!(lines[1], "09:45 - [ ] buy milk #errand due:2026-06-12");
+        assert_eq!(lines[0], "- 09:42 first capture");
+        assert_eq!(lines[1], "- [ ] 09:45 buy milk #errand due:2026-06-12");
         assert_eq!(
             lines[2],
-            "09:50 [Clipboard entry](kit://clipboard-history?id=clip-1)"
+            "- 09:50 [Clipboard entry](kit://clipboard-history?id=clip-1)"
         );
     }
 
@@ -473,7 +454,7 @@ mod tests {
         let path = substrate.paths().day_page(now.date_naive());
         let contents = fs::read_to_string(path).expect("read day page");
         assert!(contents.contains("09:42 original"));
-        assert!(contents.starts_with("09:42 original"));
+        assert!(contents.starts_with("- 09:42 original"));
         assert!(contents.contains("09:43 second"));
     }
 
@@ -541,28 +522,6 @@ mod tests {
             .paths()
             .fragment_file("2026-06-13-2330-clipboard")
             .exists());
-    }
-
-    #[test]
-    fn slug_dedup_adds_numeric_suffixes() {
-        let (_dir, substrate) = test_substrate();
-        let notes_dir = substrate.paths().notes_dir();
-        fs::create_dir_all(&notes_dir).expect("notes dir");
-        fs::write(notes_dir.join("my-note.md"), "existing").expect("seed note");
-
-        assert_eq!(
-            substrate
-                .allocate_slug("My Note", BrainSlugDir::Notes)
-                .expect("allocate slug"),
-            "my-note-2"
-        );
-        fs::write(notes_dir.join("my-note-2.md"), "existing").expect("seed note 2");
-        assert_eq!(
-            substrate
-                .allocate_slug("My Note", BrainSlugDir::Notes)
-                .expect("allocate slug"),
-            "my-note-3"
-        );
     }
 
     #[test]

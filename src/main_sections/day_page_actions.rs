@@ -790,8 +790,9 @@ impl DayPageView {
             .now()
             .with_timezone(&self.session.substrate().timezone());
         let timestamp = local.format("%H:%M").to_string();
-        self.session
-            .append_external_line_to_bound_file(&format!("{timestamp} Agent Chat\n\n{response}"))?;
+        self.session.append_external_line_to_bound_file(&format!(
+            "- {timestamp} Agent Chat\n\n{response}"
+        ))?;
         if !crate::runtime_policy::is_owned_evaluation() {
             script_kit_gpui::brain::indexer::wake_indexer();
         }
