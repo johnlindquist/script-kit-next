@@ -27,6 +27,8 @@ pub(crate) fn query_is_ascii_punctuation_only(query: &str) -> bool {
 }
 
 pub use apps::fuzzy_search_apps;
+#[allow(unused_imports)] // The Apps list in the app target ranks with it.
+pub(crate) use apps::rank_apps;
 pub use builtins::fuzzy_search_builtins;
 pub use flows::fuzzy_search_flows;
 pub use highlight::compute_match_indices_for_result;
@@ -63,7 +65,7 @@ pub(crate) use match_contract::{
 #[allow(unused_imports, reason = "the binary's one-window host ranks by these")]
 pub(crate) use match_contract::{
     TIER_ACRONYM_PRIMARY, TIER_COMPACT_FUZZY_PRIMARY, TIER_EXACT_PRIMARY, TIER_PATH,
-    TIER_PREFIX_PRIMARY, TIER_SUBSTRING_PRIMARY, TIER_WORD_BOUNDARY_PRIMARY,
+    TIER_PREFIX_PRIMARY, TIER_SLIP_PRIMARY, TIER_SUBSTRING_PRIMARY, TIER_WORD_BOUNDARY_PRIMARY,
 };
 
 // `is_fuzzy_match` is shared with the spine catalogs so sigil filtering

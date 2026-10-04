@@ -9,8 +9,15 @@ pub(crate) const TIER_EXACT_PRIMARY: i32 = 1000;
 pub(crate) const TIER_PREFIX_PRIMARY: i32 = 950;
 pub(crate) const TIER_WORD_BOUNDARY_PRIMARY: i32 = 900;
 pub(crate) const TIER_SUBSTRING_PRIMARY: i32 = 850;
+/// Two or three letters that are the initials of every word in the name
+/// (`ch` → "Clipboard History"): a deliberate abbreviation, so it outranks a
+/// match buried mid-word.
+pub(crate) const TIER_FULL_INITIALS_PRIMARY: i32 = 875;
 pub(crate) const TIER_ACRONYM_PRIMARY: i32 = 800;
 pub(crate) const TIER_COMPACT_FUZZY_PRIMARY: i32 = 700;
+/// One slip of the fingers: two letters swapped (`ntoes`) or one extra letter
+/// (`notess`) against the start of a word in the name.
+pub(crate) const TIER_SLIP_PRIMARY: i32 = 680;
 pub(crate) const TIER_ALIAS: i32 = 650;
 pub(crate) const TIER_KEYWORD: i32 = 550;
 pub(crate) const TIER_DESCRIPTION: i32 = 450;
@@ -20,6 +27,12 @@ pub(crate) const TIER_BODY: i32 = 150;
 
 pub(crate) const MIN_PRIMARY_FUZZY_QUERY_LEN: usize = 4;
 pub(crate) const MIN_BODY_EXACT_QUERY_LEN: usize = 5;
+/// Short initials (`ch`, `gcl`) are tried from two letters up to this length.
+const MAX_INITIALS_QUERY_LEN: usize = 3;
+/// Slips are only forgiven in queries long enough to say what was meant, and
+/// short enough that trying every correction stays cheap.
+const MIN_SLIP_QUERY_LEN: usize = 4;
+const MAX_SLIP_QUERY_LEN: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TextMatchKind {
@@ -97,6 +110,10 @@ pub(crate) fn low_tier_substring_match(
     })
 }
 
+/// Secondary text (descriptions, keywords, subtitles): the query as one run of
+/// text, or — for two or more words — every word starting a word of the field
+/// in any order (`template resume` finds "Résumé template generator"). Sparse
+/// letter-by-letter matches stay out.
 pub(crate) fn normalized_substring_match(
     haystack: &str,
     query_lower: &str,
@@ -105,13 +122,56 @@ pub(crate) fn normalized_substring_match(
     if let Some(exact) = low_tier_substring_match(haystack, query_lower, tier) {
         return Some(exact);
     }
-    let indices = normalized_indices_for_query(haystack, query_lower)?;
+    if let Some(indices) = normalized_indices_for_query(haystack, query_lower) {
+        return Some(TextMatch {
+            kind: TextMatchKind::Substring,
+            tier,
+            score: score_from_tier(tier, 900),
+            indices,
+        });
+    }
+    all_words_match(haystack, query_lower, tier)
+}
+
+fn all_words_match(haystack: &str, query_lower: &str, tier: i32) -> Option<TextMatch> {
+    let words = query_lower.split_whitespace().collect::<Vec<_>>();
+    if words.len() < 2 || query_lower.chars().count() > haystack.chars().count() {
+        return None;
+    }
+    let folded = normalized_chars_with_original_indices(haystack);
+    let mut indices = Vec::new();
+    for word in words {
+        let word = normalized_query_chars(word);
+        let end = folded.len().checked_sub(word.len())?;
+        let start = (0..=end).find(|&start| {
+            folded_index_is_word_start(&folded, start)
+                && folded[start..start + word.len()]
+                    .iter()
+                    .map(|(ch, _)| *ch)
+                    .eq(word.iter().copied())
+        })?;
+        indices.extend(
+            folded[start..start + word.len()]
+                .iter()
+                .map(|(_, original)| *original),
+        );
+    }
+    indices.sort_unstable();
+    indices.dedup();
     Some(TextMatch {
         kind: TextMatchKind::Substring,
         tier,
-        score: score_from_tier(tier, 900),
+        // Below the same words typed as one run of text.
+        score: score_from_tier(tier, 400),
         indices,
     })
+}
+
+fn folded_index_is_word_start(folded: &[(char, usize)], index: usize) -> bool {
+    index == 0
+        || folded
+            .get(index - 1)
+            .is_some_and(|(previous, _)| !previous.is_alphanumeric())
 }
 
 pub(crate) fn primary_text_match(
@@ -119,44 +179,161 @@ pub(crate) fn primary_text_match(
     query_lower: &str,
     nucleo: &mut NucleoCtx,
 ) -> Option<TextMatch> {
-    if let Some(exact) = exact_substring_match(haystack, query_lower, TIER_SUBSTRING_PRIMARY) {
-        return Some(exact);
-    }
-
-    if query_lower.chars().count() < MIN_PRIMARY_FUZZY_QUERY_LEN {
-        return None;
-    }
-
-    let score = nucleo.score(haystack)?;
-    let indices = nucleo.indices(haystack)?;
-    if indices.is_empty() {
-        return None;
-    }
-
     let query_len = query_lower.chars().count();
-    let first = *indices.first()?;
-    let last = *indices.last()?;
-    let span = last.saturating_sub(first).saturating_add(1);
-    if span <= query_len.saturating_add(1) {
-        let tier = TIER_COMPACT_FUZZY_PRIMARY;
-        return Some(TextMatch {
-            kind: TextMatchKind::CompactFuzzy,
-            tier,
-            score: score_from_tier(tier, (score / 20).min(999) as i32),
-            indices,
-        });
+    let contiguous = exact_substring_match(haystack, query_lower, TIER_SUBSTRING_PRIMARY);
+    if (2..=MAX_INITIALS_QUERY_LEN).contains(&query_len) {
+        let mut best = contiguous;
+        better_match(&mut best, word_initials_match(haystack, query_lower));
+        return best;
+    }
+    if contiguous.is_some() {
+        return contiguous;
     }
 
-    if fuzzy_indices_are_structured_abbreviation(haystack, &indices) {
-        let tier = TIER_ACRONYM_PRIMARY;
-        return Some(TextMatch {
-            kind: TextMatchKind::Acronym,
-            tier,
-            score: score_from_tier(tier, (score / 20).min(999) as i32),
-            indices,
-        });
+    if query_len < MIN_PRIMARY_FUZZY_QUERY_LEN {
+        return None;
     }
 
+    if let Some(score) = nucleo.score(haystack) {
+        if let Some(indices) = nucleo.indices(haystack).filter(|i| !i.is_empty()) {
+            let first = indices[0];
+            let last = indices[indices.len() - 1];
+            let span = last.saturating_sub(first).saturating_add(1);
+            if span <= query_len.saturating_add(1) {
+                let tier = TIER_COMPACT_FUZZY_PRIMARY;
+                return Some(TextMatch {
+                    kind: TextMatchKind::CompactFuzzy,
+                    tier,
+                    score: score_from_tier(tier, (score / 20).min(999) as i32),
+                    indices,
+                });
+            }
+
+            if fuzzy_indices_are_structured_abbreviation(haystack, &indices) {
+                let tier = TIER_ACRONYM_PRIMARY;
+                return Some(TextMatch {
+                    kind: TextMatchKind::Acronym,
+                    tier,
+                    score: score_from_tier(tier, (score / 20).min(999) as i32),
+                    indices,
+                });
+            }
+        }
+    }
+
+    slip_match(haystack, query_lower)
+}
+
+/// The first letters of the name's words, as an unbroken run of words:
+/// `ch` finds "Clipboard History" and "Show Clipboard History", but not
+/// "Copy Path Home" (whose `c` and `h` words are not neighbours).
+fn word_initials_match(haystack: &str, query_lower: &str) -> Option<TextMatch> {
+    if query_lower.chars().any(|ch| !ch.is_alphanumeric()) {
+        return None;
+    }
+    let query = normalized_query_chars(query_lower);
+    let starts = word_start_chars(haystack);
+    if query.len() < 2 || query.len() > starts.len() {
+        return None;
+    }
+    let first_word = (0..=starts.len() - query.len()).find(|&first| {
+        starts[first..first + query.len()]
+            .iter()
+            .map(|(ch, _)| *ch)
+            .eq(query.iter().copied())
+    })?;
+    let every_word = query.len() == starts.len();
+    let tier = if every_word {
+        TIER_FULL_INITIALS_PRIMARY
+    } else {
+        TIER_ACRONYM_PRIMARY
+    };
+    Some(TextMatch {
+        kind: TextMatchKind::Acronym,
+        tier,
+        score: score_from_tier(tier, 900usize.saturating_sub(first_word).min(900) as i32),
+        indices: starts[first_word..first_word + query.len()]
+            .iter()
+            .map(|(_, index)| *index)
+            .collect(),
+    })
+}
+
+/// The folded first letter of every word, with its character index.
+fn word_start_chars(haystack: &str) -> Vec<(char, usize)> {
+    let mut starts = Vec::new();
+    let mut previous: Option<char> = None;
+    for (index, current) in haystack.chars().enumerate() {
+        let starts_word = current.is_alphanumeric()
+            && match previous {
+                None => true,
+                Some(previous) => {
+                    !previous.is_alphanumeric()
+                        || (previous.is_lowercase() && current.is_uppercase())
+                }
+            };
+        if starts_word {
+            if let Some(first) = fold_search_char(current).into_iter().next() {
+                starts.push((first, index));
+            }
+        }
+        previous = Some(current);
+    }
+    starts
+}
+
+/// One slip forgiven against the start of a word: two neighbouring letters
+/// swapped (`ntoes` → Notes) or one letter too many (`notess` → Notes).
+fn slip_match(haystack: &str, query_lower: &str) -> Option<TextMatch> {
+    let query_len = query_lower.chars().count();
+    if !(MIN_SLIP_QUERY_LEN..=MAX_SLIP_QUERY_LEN).contains(&query_len)
+        || query_lower.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    let query = normalized_query_chars(query_lower);
+    let mut corrections = Vec::new();
+    for i in 0..query.len().saturating_sub(1) {
+        if query[i] != query[i + 1] {
+            let mut swapped = query.clone();
+            swapped.swap(i, i + 1);
+            corrections.push(swapped);
+        }
+    }
+    if query.len() > MIN_SLIP_QUERY_LEN {
+        for i in 0..query.len() {
+            let mut shorter = query.clone();
+            shorter.remove(i);
+            corrections.push(shorter);
+        }
+    }
+    let folded = normalized_chars_with_original_indices(haystack);
+    for correction in &corrections {
+        let Some(end) = folded.len().checked_sub(correction.len()) else {
+            continue;
+        };
+        let found = (0..=end).find(|&start| {
+            folded_index_is_word_start(&folded, start)
+                && folded[start..start + correction.len()]
+                    .iter()
+                    .map(|(ch, _)| *ch)
+                    .eq(correction.iter().copied())
+        });
+        if let Some(start) = found {
+            let mut indices = folded[start..start + correction.len()]
+                .iter()
+                .map(|(_, original)| *original)
+                .collect::<Vec<_>>();
+            indices.dedup();
+            let tier = TIER_SLIP_PRIMARY;
+            return Some(TextMatch {
+                kind: TextMatchKind::CompactFuzzy,
+                tier,
+                score: score_from_tier(tier, 900usize.saturating_sub(start).min(900) as i32),
+                indices,
+            });
+        }
+    }
     None
 }
 

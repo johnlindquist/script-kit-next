@@ -1372,12 +1372,14 @@ impl ScriptListApp {
             needs_recompute = true;
         }
 
-        if needs_recompute {
-            let is_directory_query = matches!(
-                &self.current_view,
-                AppView::FileSearchView { query, .. }
-                    if crate::file_search::parse_directory_path(query).is_some()
-            );
+        let is_directory_query = matches!(
+            &self.current_view,
+            AppView::FileSearchView { query, .. }
+                if crate::file_search::parse_directory_path(query).is_some()
+        );
+        // The last batch is sorted once, below, with the rest of the listing.
+        let sorts_when_done = batch_state.is_done && (policy.sort_on_done || is_directory_query);
+        if needs_recompute && !sorts_when_done {
             if is_directory_query {
                 self.apply_file_search_sort_mode();
                 tracing::debug!(
@@ -1411,12 +1413,7 @@ impl ScriptListApp {
             // resolves to a directory, even if a caller passes
             // `sort_on_done = false`.  This keeps the user's chosen sort
             // order across directory navigations and refreshes.
-            let is_directory_query = matches!(
-                &self.current_view,
-                AppView::FileSearchView { query, .. }
-                    if crate::file_search::parse_directory_path(query).is_some()
-            );
-            if policy.sort_on_done || is_directory_query {
+            if sorts_when_done {
                 self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
                 self.restore_file_search_selection_after_results_change(

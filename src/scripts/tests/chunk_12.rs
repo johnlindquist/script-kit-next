@@ -611,6 +611,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
     // Default suggestions should appear in order from DEFAULT_SUGGESTED_ITEMS
     // (reordered by observed user frequency; "Do in Current App" leads and is
     // rendered with its dynamic per-app name, here "Safari Commands").
+    // "Open Notes" is a place, so it is listed under PLACES instead.
     // "SDK Reference" is no longer a default suggestion, so it lands in
     // COMMANDS alongside "Some Other Command".
     assert_eq!(
@@ -623,8 +624,9 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             "Clipboard History",
             "Search Browser Tabs",
             "Quick Terminal",
-            "Open Notes",
             "New Script",
+            "[Places]",
+            "Open Notes",
             "[Commands]",
             "SDK Reference",
             "Some Other Command",

@@ -656,12 +656,73 @@ pub fn search_root_clipboard_history_meta(
             return Vec::new();
         }
     };
+    let full_text = entry_ids_whose_text_contains(&query);
     entries
         .into_iter()
         .filter(root_clipboard_entry_is_eligible)
-        .filter(|entry| entry.text_preview.to_lowercase().contains(&query))
+        .filter(|entry| {
+            entry.text_preview.to_lowercase().contains(&query) || full_text.contains(&entry.id)
+        })
         .take(options.max_results)
         .collect()
+}
+
+/// Ids of the text entries whose whole copied text contains `query_lower` — not only the
+/// 100-character preview the list shows. The answer for the latest query is kept until
+/// the words or the history change, so redraws and key handling don't read it again.
+pub fn entry_ids_whose_text_contains(
+    query_lower: &str,
+) -> std::sync::Arc<std::collections::HashSet<String>> {
+    use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
+    static LAST: Mutex<Option<(String, i64, i64, Arc<HashSet<String>>)>> = Mutex::new(None);
+
+    let query_lower = query_lower.trim();
+    if query_lower.is_empty() {
+        return Arc::new(HashSet::new());
+    }
+    let Ok(conn) = get_connection() else {
+        return Arc::new(HashSet::new());
+    };
+    let Ok(conn) = conn.lock() else {
+        return Arc::new(HashSet::new());
+    };
+    // The history changes when an entry is added, removed or re-copied.
+    let (count, newest): (i64, i64) = conn
+        .query_row(
+            "SELECT COUNT(*), COALESCE(MAX(timestamp), 0) FROM history",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or((0, 0));
+    if let Ok(last) = LAST.lock() {
+        if let Some((query, last_count, last_newest, ids)) = last.as_ref() {
+            if query == query_lower && *last_count == count && *last_newest == newest {
+                return Arc::clone(ids);
+            }
+        }
+    }
+    let ids: HashSet<String> = conn
+        .prepare(
+            "SELECT id FROM history
+             WHERE content_type != 'image' AND instr(lower(content), ?1) > 0",
+        )
+        .and_then(|mut stmt| {
+            stmt.query_map(params![query_lower], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<HashSet<_>>>()
+        })
+        .unwrap_or_else(|error| {
+            error!(
+                error_bytes = error.to_string().len(),
+                "Clipboard full-text search failed"
+            );
+            HashSet::new()
+        });
+    let ids = Arc::new(ids);
+    if let Ok(mut last) = LAST.lock() {
+        *last = Some((query_lower.to_string(), count, newest, Arc::clone(&ids)));
+    }
+    ids
 }
 
 pub fn search_root_clipboard_history_meta_direct(

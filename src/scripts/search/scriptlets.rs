@@ -6,8 +6,9 @@ use super::super::types::{
 };
 use super::{
     better_match_evidence, extract_scriptlet_display_path, low_tier_substring_match,
-    match_evidence, primary_text_match, query_is_ascii_punctuation_only, NucleoCtx, TIER_ALIAS,
-    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
+    match_evidence, normalized_substring_match, primary_text_match,
+    query_is_ascii_punctuation_only, NucleoCtx, TIER_ALIAS, TIER_DESCRIPTION, TIER_FILENAME,
+    TIER_KEYWORD,
 };
 
 /// Fuzzy search scriptlets by query string
@@ -81,7 +82,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
                 match_evidence(
                     MatchEvidenceField::Description,
                     desc,
-                    low_tier_substring_match(desc, &query_lower, TIER_DESCRIPTION),
+                    normalized_substring_match(desc, &query_lower, TIER_DESCRIPTION),
                 ),
             );
         }

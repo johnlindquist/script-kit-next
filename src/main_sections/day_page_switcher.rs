@@ -61,9 +61,20 @@ impl DayPageView {
         let actions = crate::actions::get_canonical_note_search_actions(&search_state, current_id);
         self.note_switcher.set_actions(actions, cx);
         self.note_switcher.open(window, cx);
+        // Rows show a title and one line; whole bodies and day pages' dates are searched too.
+        // Day pages are read on the first search, not while the switcher opens.
+        let days_dir = crate::notes::notes_brain_days_dir();
+        let days = std::cell::OnceCell::new();
+        let today = self.local_today();
         if let Some(dialog) = self.note_switcher.dialog() {
             dialog.update(cx, |dialog, cx| {
                 dialog.set_context_title(Some(destination.primary_verb().to_string()));
+                dialog.content_matches = Some(Box::new(move |query| {
+                    let days = days.get_or_init(|| {
+                        crate::notes::day_switcher::load_day_note_switcher_entries(&days_dir)
+                    });
+                    crate::notes::search_model::content_match_action_ids(query, days, today)
+                }));
                 cx.notify();
             });
         }

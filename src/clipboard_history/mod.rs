@@ -86,11 +86,11 @@ pub(crate) use cache::{
 // Database operations
 #[allow(unused_imports)]
 pub use database::{
-    add_entry, clear_history, clear_unpinned_history, get_clipboard_history,
-    get_clipboard_history_meta, get_clipboard_history_page, get_entry_by_id, get_entry_content,
-    get_total_entry_count, pin_entry, remove_entry, search_root_clipboard_history_meta,
-    search_root_clipboard_history_meta_direct, trim_oversize_text_entries, unpin_entry,
-    update_ocr_text,
+    add_entry, clear_history, clear_unpinned_history, entry_ids_whose_text_contains,
+    get_clipboard_history, get_clipboard_history_meta, get_clipboard_history_page, get_entry_by_id,
+    get_entry_content, get_total_entry_count, pin_entry, remove_entry,
+    search_root_clipboard_history_meta, search_root_clipboard_history_meta_direct,
+    trim_oversize_text_entries, unpin_entry, update_ocr_text,
 };
 
 // Image operations
@@ -127,6 +127,7 @@ pub use ocr::{enqueue_ocr, start_ocr_worker, stop_ocr_worker};
 pub use clipboard::copy_entry_to_clipboard;
 #[allow(unused_imports)]
 pub use clipboard::ClipboardWriteError;
+pub use macos_paste::copy_image_with_file_url;
 #[allow(unused_imports)]
 pub use uri::{entry_resource_uri, parse_entry_resource_uri};
 

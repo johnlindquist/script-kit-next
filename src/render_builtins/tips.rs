@@ -79,8 +79,7 @@ impl ScriptListApp {
             .cloned();
         let try_hint = preview
             .as_ref()
-            .and_then(|tip| tip.try_it())
-            .map_or("Try It", script_kit_gpui::tips::TipTry::label);
+            .map_or_else(|| "Try It".to_string(), |tip| tip.enter_label());
 
         let handle_key = cx.listener(
             move |this: &mut Self,

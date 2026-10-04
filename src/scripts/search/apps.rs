@@ -22,12 +22,25 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
             .collect();
     }
 
+    rank_apps(apps, query)
+        .into_iter()
+        .map(|(index, evidence)| AppMatch {
+            app: apps[index].clone(),
+            score: evidence.score,
+            match_evidence: Some(evidence),
+        })
+        .collect()
+}
+
+/// The apps whose names match `query`, best first, as positions in `apps` with the
+/// evidence that admitted them. The launcher and the Apps list share this one rule, so
+/// an abbreviation such as `gcal` finds Google Calendar in both.
+pub fn rank_apps(apps: &[AppInfo], query: &str) -> Vec<(usize, MatchEvidence)> {
     let query_lower = query.to_lowercase();
-    let mut matches: Vec<(usize, MatchEvidence)> = Vec::with_capacity(apps.len());
+    let mut matches: Vec<(usize, MatchEvidence)> = Vec::new();
 
     // Create nucleo context once for all apps - reuses buffer across calls
     let mut nucleo = NucleoCtx::new(&query_lower);
-    // Check if query is ASCII once for all items
     for (index, app) in apps.iter().enumerate() {
         if let Some(evidence) = match_evidence(
             MatchEvidenceField::Name,
@@ -45,13 +58,5 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
             other => other,
         }
     });
-
     matches
-        .into_iter()
-        .map(|(index, evidence)| AppMatch {
-            app: apps[index].clone(),
-            score: evidence.score,
-            match_evidence: Some(evidence),
-        })
-        .collect()
 }

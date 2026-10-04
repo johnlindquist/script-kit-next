@@ -93,5 +93,6 @@ pub use open::{open_note, register_open_note_hook, save_note_with_content, NoteT
 // The note editor lives in the binary; the library build doesn't use these.
 #[allow(unused_imports)]
 pub(crate) use open::new_note_to_edit;
+pub(crate) use storage::search_note_ids;
 #[allow(unused_imports)]
 pub(crate) use storage::{resolve_note_ref, rewrite_note_links, NoteRefResolution};

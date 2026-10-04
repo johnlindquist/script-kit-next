@@ -48,6 +48,8 @@ A sigil only counts at a word boundary — `hello@world.com` is plain search.
 - `⌘↵` — with typed words, **Do It**: run Jev's first reading (same as `⌘1`). With empty input, **Agent**: open the model's chat.
 - `↑` on an empty input — stage the last run (undo it, run it again, share it).
 - `Escape` — let go of what's staged first, then go back one view, then clear the input, and only then hide the window.
+- In every list opened from the launcher (Apps, File Search, Clipboard History, Help, a script's choice prompt), `Escape` first clears what you typed; with nothing typed it goes back, or cancels the script's prompt.
+- The Notes list shows 60 notes at a time; a last "Show N More" row says how many matched in all, and ↵ on it lists the next ones.
 
 ### Selection while results arrive
 
@@ -120,7 +122,7 @@ Three sigils leave the main-list grammar entirely:
 
 - `~` or `~/path` — open **File Search** rooted at home/that path.
 - `!` — open **Quick Terminal** for a shell command.
-- `?` — open **Actions Help**.
+- `?` — open **Help**: what each key and symbol does. Actions for the highlighted row are on ⌘K.
 
 ## Safe Boundaries
 

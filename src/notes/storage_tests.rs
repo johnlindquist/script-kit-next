@@ -1199,6 +1199,58 @@ mod tests {
         );
     }
 
+    /// A note named exactly what was typed leads a pinned note that only contains the
+    /// word, in every notes search.
+    #[test]
+    fn test_an_exact_title_leads_a_pinned_note_that_only_mentions_it() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before exact title test");
+        let word = unique_test_token("wallabudget");
+        let now = Utc::now();
+        let make = |title: String, content: String, is_pinned: bool| Note {
+            id: NoteId::new(),
+            title,
+            content,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned,
+            sort_order: 0,
+        };
+        let exact = make(word.clone(), format!("# {word}\n"), false);
+        let pinned = make(
+            format!("{word} Archive"),
+            format!("# {word} Archive\n{word} {word}\n"),
+            true,
+        );
+        save_note(&exact).expect("failed to save exact note");
+        save_note(&pinned).expect("failed to save pinned note");
+        let first_in = |content: bool| {
+            search_root_notes_meta(
+                &word,
+                RootNotesSectionOptions {
+                    enabled: true,
+                    max_results: 5,
+                    min_query_chars: 0,
+                    search_content: content,
+                },
+            )
+            .first()
+            .map(|found| found.id)
+        };
+        let store_first = search_notes(&word)
+            .expect("search should succeed")
+            .first()
+            .map(|found| found.id);
+        let (with_bodies, titles_only) = (first_in(true), first_in(false));
+        delete_note_permanently(exact.id).expect("cleanup failed for exact note");
+        delete_note_permanently(pinned.id).expect("cleanup failed for pinned note");
+
+        assert_eq!(store_first, Some(exact.id), "notes list and model context");
+        assert_eq!(with_bodies, Some(exact.id), "launcher searching bodies");
+        assert_eq!(titles_only, Some(exact.id), "launcher searching titles");
+    }
+
     #[test]
     fn test_note_metadata_tables_roundtrip() {
         let _guard = notes_db_test_guard();

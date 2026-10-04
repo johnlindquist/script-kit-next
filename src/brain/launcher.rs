@@ -242,11 +242,14 @@ pub fn search_root_brain_direct(
 
 /// Async hybrid pass for the root launcher: embed the query on the warm
 /// indexer thread (hard ~200ms budget), then run hybrid FTS+cosine search.
-/// Returns `Ok(None)` when embedding is unavailable within its native budget;
+/// Returns `Ok(None)` when embedding is unavailable within its native budget, or when
+/// `superseded` says a newer query has arrived (checked between the embedding and the
+/// vector pass, so an obsolete search frees its worker for the new one);
 /// storage failures stay `Err`. Call from a background thread, never the UI thread.
 pub fn search_root_brain_semantic(
     query: &str,
     options: &RootBrainSectionOptions,
+    superseded: &dyn Fn() -> bool,
 ) -> anyhow::Result<Option<Vec<RootBrainSearchHit>>> {
     if !root_brain_query_is_eligible(query, *options) || options.max_results == 0 {
         return Ok(None);
@@ -258,10 +261,16 @@ pub fn search_root_brain_semantic(
         )
         .into());
     }
+    if superseded() {
+        return Ok(None);
+    }
     let query = query.trim();
     let Some((model_id, query_vec)) = super::indexer::embed_query_within_budget(query) else {
         return Ok(None);
     };
+    if superseded() {
+        return Ok(None);
+    }
     let fetch_limit = options.max_results.saturating_mul(2);
     let mut hits = map_root_brain_hits_for_query(
         super::search::brain_search_proximity(

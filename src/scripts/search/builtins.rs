@@ -4,8 +4,8 @@ use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 
 use super::super::types::{BuiltInMatch, MatchEvidence, MatchEvidenceField};
 use super::{
-    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match,
-    query_is_ascii_punctuation_only, NucleoCtx, TIER_KEYWORD,
+    better_match_evidence, low_tier_substring_match, match_evidence, normalized_substring_match,
+    primary_text_match, query_is_ascii_punctuation_only, NucleoCtx, TIER_KEYWORD,
 };
 
 const TIER_BUILTIN_DESCRIPTION: i32 = 450;
@@ -124,7 +124,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
                 match_evidence(
                     MatchEvidenceField::Description,
                     &entry.description,
-                    low_tier_substring_match(
+                    normalized_substring_match(
                         &entry.description,
                         &query_lower,
                         TIER_BUILTIN_DESCRIPTION,

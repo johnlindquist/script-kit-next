@@ -1,11 +1,16 @@
-//! Query-owned Brain reads. Lexical IO runs once before first paint; the bounded
-//! semantic worker keeps the native debounce and embedding-availability policy.
+//! Query-owned Brain reads. Lexical IO runs on a worker thread and its rows join the list
+//! when they arrive (owned evaluations read it synchronously, before first paint); the
+//! bounded semantic worker keeps the native debounce and embedding-availability policy.
 //! Grouping consumes only accepted, query-stamped source snapshots.
 
 use super::*;
 use crate::design_evaluation::search_fixtures as F;
 
 const ROOT_BRAIN_SEMANTIC_DEBOUNCE_MS: u64 = 60;
+
+/// Counts launcher queries offered to semantic Brain search; a worker started at one count
+/// stops between stages once it changes.
+static ROOT_BRAIN_TYPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl ScriptListApp {
     fn root_brain_search_plan_for_query(
@@ -75,10 +80,14 @@ impl ScriptListApp {
             crate::brain::RootBrainQueryPlan::RecentsOnly => "",
             crate::brain::RootBrainQueryPlan::Search(query) => query.as_str(),
         };
+        let owned_gate = self.main_services.search_gate();
+        if owned_gate.is_none() && self.main_services.owned_sources().is_none() {
+            self.start_root_brain_lexical_worker(plan, options, cx);
+            return;
+        }
         let generation = self
             .root_search
             .allocate_named_provider_generation("brain-lexical");
-        let owned_gate = self.main_services.search_gate();
         let owned_run = if let Some(gate) = &owned_gate {
             let Some(run) = gate.begin(
                 "brain-lexical",
@@ -103,17 +112,7 @@ impl ScriptListApp {
         } else if let Some(sources) = self.main_services.owned_sources() {
             Ok(sources.brain_hits.clone())
         } else {
-            match &plan {
-                crate::brain::RootBrainQueryPlan::RecentsOnly => {
-                    crate::brain::recent_root_brain_hits(options.max_results)
-                }
-                crate::brain::RootBrainQueryPlan::Search(query) => {
-                    crate::brain::search_root_brain_direct(query, &options)
-                }
-                crate::brain::RootBrainQueryPlan::Skip => {
-                    unreachable!("ineligible read returned before admission")
-                }
-            }
+            unreachable!("production reads run on the lexical worker")
         };
         self.root_search.begin_named_provider(
             "brain-lexical",
@@ -152,6 +151,98 @@ impl ScriptListApp {
         }
     }
 
+    /// Production's lexical read: storage IO on a worker thread so typing never waits on
+    /// the Brain index, with the rows joining the list when they arrive for the same query.
+    fn start_root_brain_lexical_worker(
+        &mut self,
+        plan: crate::brain::RootBrainQueryPlan,
+        options: crate::brain::RootBrainSectionOptions,
+        cx: &mut Context<Self>,
+    ) {
+        let work_query = match &plan {
+            crate::brain::RootBrainQueryPlan::Skip => return,
+            crate::brain::RootBrainQueryPlan::RecentsOnly => String::new(),
+            crate::brain::RootBrainQueryPlan::Search(query) => query.clone(),
+        };
+        // A read already running for this query will answer it.
+        if let Some(running) = self
+            .root_search
+            .provider_admission_owner("brain-lexical")
+            .map(|run| run.generation)
+        {
+            if self.root_search.named_provider_work_matches(
+                "brain-lexical",
+                running,
+                &work_query,
+                "",
+            ) {
+                return;
+            }
+        }
+        let generation = self
+            .root_search
+            .allocate_named_provider_generation("brain-lexical");
+        self.root_search.begin_named_provider(
+            "brain-lexical",
+            generation,
+            &work_query,
+            "",
+            RootProviderPublicationPolicy::Visible,
+            true,
+        );
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = tx.send_blocking(match plan {
+                crate::brain::RootBrainQueryPlan::Search(query) => {
+                    crate::brain::search_root_brain_direct(&query, &options)
+                }
+                _ => crate::brain::recent_root_brain_hits(options.max_results),
+            });
+        });
+        cx.spawn(async move |this, cx| {
+            let result = rx
+                .recv()
+                .await
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("brain lexical worker ended")));
+            let _ = this.update(cx, |app, cx| {
+                if !app
+                    .root_search
+                    .accepts_named_provider("brain-lexical", generation)
+                {
+                    app.root_search.finish_named_provider(
+                        "brain-lexical",
+                        generation,
+                        RootProviderTerminal::StaleDiscarded,
+                    );
+                    return;
+                }
+                let terminal = F::ProviderTerminal::for_result(&result);
+                app.commit_main_menu_results_refresh(
+                    "brain_lexical_refresh_complete",
+                    Some(("brain-lexical", generation)),
+                    cx,
+                    |app, _cx| {
+                        let changed = app.root_search.install_root_brain_lexical_results(
+                            generation,
+                            result,
+                            options.max_results,
+                        );
+                        app.root_search.finish_named_provider(
+                            "brain-lexical",
+                            generation,
+                            terminal.into(),
+                        );
+                        if changed {
+                            app.invalidate_root_passive_and_grouped_cache();
+                        }
+                        changed
+                    },
+                );
+            });
+        })
+        .detach();
+    }
+
     pub(crate) fn maybe_start_root_brain_semantic_search(
         &mut self,
         value: &str,
@@ -165,6 +256,7 @@ impl ScriptListApp {
         }
         let (plan, options) = self.root_brain_search_plan_for_query(value);
         let crate::brain::RootBrainQueryPlan::Search(query) = plan else {
+            ROOT_BRAIN_TYPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             self.root_search.invalidate_root_brain_semantic_freshness();
             return;
         };
@@ -174,6 +266,8 @@ impl ScriptListApp {
         {
             return;
         }
+        // A new query tells a running semantic worker its words are obsolete.
+        ROOT_BRAIN_TYPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.root_search.note_desired_provider(
             "brain-semantic",
             value,
@@ -254,10 +348,16 @@ impl ScriptListApp {
                 let _ = tx.try_send(Ok(Some(sources.brain_hits.clone())));
             } else {
                 let worker_query = query.clone();
+                let typed_at_start = ROOT_BRAIN_TYPED.load(std::sync::atomic::Ordering::Relaxed);
                 std::thread::spawn(move || {
+                    let superseded = || {
+                        ROOT_BRAIN_TYPED.load(std::sync::atomic::Ordering::Relaxed)
+                            != typed_at_start
+                    };
                     let _ = tx.send_blocking(crate::brain::search_root_brain_semantic(
                         &worker_query,
                         &options,
+                        &superseded,
                     ));
                 });
             }

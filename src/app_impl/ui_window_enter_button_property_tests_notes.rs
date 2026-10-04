@@ -104,6 +104,47 @@ fn the_notes_list_puts_pinned_notes_first() {
     );
 }
 
+/// A broad search past the list's length ends in "Show More" saying how many are hidden,
+/// and Enter on it lists them; nothing that matched is silently cut.
+#[test]
+fn the_notes_list_says_how_many_more_match_and_shows_them() {
+    let (first, more) = in_launcher("notes_list_more", 0, |_| {
+        for n in 0..65 {
+            seed_note(&format!("Wombatique {n}"), "- body");
+        }
+        let mut list = NotesList::new("wombatique".to_string());
+        let first = list
+            .found
+            .iter()
+            .map(|found| (found.title.clone(), found.sub.clone()))
+            .collect::<Vec<_>>();
+        list.sel = list
+            .found
+            .iter()
+            .position(|found| found.doc == NoteDoc::More)
+            .expect("a Show More row");
+        list.show_more();
+        let more = list
+            .found
+            .iter()
+            .filter(|found| matches!(found.doc, NoteDoc::Note(_)))
+            .count();
+        (first, more)
+    });
+    assert_eq!(
+        first
+            .iter()
+            .filter(|(title, _)| title.starts_with("Wombatique"))
+            .count(),
+        60
+    );
+    assert!(
+        first.contains(&("Show 5 More".to_string(), "60 of 65 shown".to_string())),
+        "{first:?}"
+    );
+    assert_eq!(more, 65, "Show More lists the rest");
+}
+
 fn found(title: &str, pinned: bool, changed: i64, created: i64) -> Found {
     Found {
         doc: NoteDoc::Note(NoteId::new()),

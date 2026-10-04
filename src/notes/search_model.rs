@@ -36,6 +36,35 @@ impl NoteSearchDocumentId {
     }
 }
 
+/// Action ids of the notes and day pages `query` finds by everything they hold — a note's
+/// whole body, a day page's date and words — best first. Switcher rows show a title and one
+/// line; this finds the rest. A query that only names dates ("yesterday", "march 3") puts
+/// those days first.
+pub(crate) fn content_match_action_ids(
+    query: &str,
+    days: &[super::day_switcher::DayNoteSwitcherEntry],
+    today: NaiveDate,
+) -> Vec<String> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let day_query = super::day_switcher::DayQuery::parse(query, today);
+    let day_ids = days
+        .iter()
+        .filter(|day| day_query.matches(day, today))
+        .map(|day| NoteSearchDocumentId::Day(day.date).action_id());
+    let note_ids = super::search_note_ids(query, 200)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|id| NoteSearchDocumentId::Note(id).action_id());
+    if day_query.only_dates() {
+        day_ids.chain(note_ids).collect()
+    } else {
+        note_ids.chain(day_ids).collect()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum NoteSearchDocumentKind {
     Note,

@@ -1692,6 +1692,9 @@ pub(crate) struct ScriptListApp {
     menu_syntax_trigger_picker_state:
         crate::menu_syntax_trigger_picker::MenuSyntaxTriggerPickerState,
     menu_syntax_object_selector_state: crate::menu_syntax::MenuSyntaxObjectSelectorState,
+    /// Capture targets registered by the loaded scripts, with the catalog they were read
+    /// from; rebuilt only when that catalog changes, not on every key.
+    menu_syntax_capture_targets: (Vec<Arc<scripts::Script>>, Vec<String>),
     /// Focused field index for the grammar-derived handler form shown in
     /// capture composer mode. Tab/Shift-Tab mutate this instead of opening
     /// Tab AI while handler mode owns the main input.

@@ -93,7 +93,7 @@ fn name_strength(result: &SearchResult) -> u8 {
     use crate::scripts::search::{
         TIER_ACRONYM_PRIMARY, TIER_ALIAS, TIER_COMPACT_FUZZY_PRIMARY, TIER_DESCRIPTION,
         TIER_EXACT_PRIMARY, TIER_FILENAME, TIER_KEYWORD, TIER_PATH, TIER_PREFIX_PRIMARY,
-        TIER_SUBSTRING_PRIMARY, TIER_WORD_BOUNDARY_PRIMARY,
+        TIER_SLIP_PRIMARY, TIER_SUBSTRING_PRIMARY, TIER_WORD_BOUNDARY_PRIMARY,
     };
     match result.match_tier() {
         TIER_EXACT_PRIMARY.. => 100,
@@ -102,6 +102,7 @@ fn name_strength(result: &SearchResult) -> u8 {
         TIER_SUBSTRING_PRIMARY.. => 80,
         TIER_ACRONYM_PRIMARY.. => 75,
         TIER_COMPACT_FUZZY_PRIMARY.. => 40,
+        TIER_SLIP_PRIMARY.. => 38,
         TIER_ALIAS.. => 70,
         TIER_KEYWORD.. => 60,
         TIER_DESCRIPTION.. => 35,
@@ -707,6 +708,14 @@ impl ScriptListApp {
                 picked.sort_unstable();
             }
         }
+        // A name typed exactly leads whichever source it comes from — a note called "Budget"
+        // goes above a command that merely contains the word — after the row learned for
+        // these words.
+        let typed = text.trim().to_lowercase();
+        picked.sort_by_key(|&at| {
+            let (row, result) = &names[at];
+            (!row.learned, result.name().trim().to_lowercase() != typed)
+        });
         for &at in &picked {
             let (row, result) = &names[at];
             results.insert(row.key.clone(), (*result).clone());

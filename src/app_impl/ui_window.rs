@@ -1181,19 +1181,19 @@ impl ScriptListApp {
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let visible = script_kit_gpui::tips::visible_tip_indices(entries, filter);
-            let try_label = visible
+            let selected_tip = visible
                 .get(*selected_index)
-                .and_then(|index| entries.get(*index))
-                .and_then(|tip| tip.try_it())
-                .map(script_kit_gpui::tips::TipTry::label);
+                .and_then(|index| entries.get(*index));
+            let runs = selected_tip.is_some_and(|tip| tip.try_it().is_some());
+            let enter_label = selected_tip.map_or_else(|| "Try It".to_string(), |tip| tip.enter_label());
             let secondary_label = if filter.trim().is_empty() {
                 "Back"
             } else {
                 "Clear Search"
             };
             let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", try_label.unwrap_or("Try It"))
-                    .enabled(!footer_disabled && try_label.is_some()),
+                FooterButtonConfig::new(FooterAction::Run, "↵", enter_label)
+                    .enabled(!footer_disabled && runs),
                 FooterButtonConfig::new(FooterAction::Close, "Esc", secondary_label)
                     .enabled(!footer_disabled),
             ];

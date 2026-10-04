@@ -66,58 +66,91 @@ pub(crate) fn profile_search_results(
         crate::ai::agent_chat::profiles::selected_agent_chat_profile_picker_id(ai, ctx);
     let quick_ai_id = crate::ai::agent_chat::profiles::resolve_quick_ai_profile(ai, ctx).id;
     let query = query.trim();
-    let query_lower = query.to_ascii_lowercase();
+    let query_lower = query.to_lowercase();
     // The built-in Quick AI profile leads the list: it isn't a pickable Agent
     // Chat default, but Tab ("Use for Quick AI") needs it as the way back to
     // the fast zero-context default.
-    std::iter::once(crate::ai::agent_chat::profiles::built_in_quick_ai_profile(
+    let mut found = std::iter::once(crate::ai::agent_chat::profiles::built_in_quick_ai_profile(
         ctx,
     ))
     .chain(crate::ai::agent_chat::profiles::resolved_agent_chat_profile_picker_profiles(ai, ctx))
-    .chain(std::iter::once(create_profile_action_row(ctx)))
-    .filter(|profile| {
-        if query_lower.is_empty() {
-            return true;
-        }
-        profile.name.to_ascii_lowercase().contains(&query_lower)
-            || profile.id.to_ascii_lowercase().contains(&query_lower)
-            || profile
-                .model
-                .as_deref()
-                .unwrap_or_default()
-                .to_ascii_lowercase()
-                .contains(&query_lower)
-            || profile
-                .provider
-                .as_deref()
-                .unwrap_or_default()
-                .to_ascii_lowercase()
-                .contains(&query_lower)
-    })
-    .map(|profile| {
-        let selected = profile.id == selected_id;
-        let quick_ai = profile.id == quick_ai_id;
-        let description = profile_search_result_description(&profile);
-        let (_, name_indices) = crate::scripts::search::highlight_indices_for(query, &profile.name);
-        let (_, description_indices) =
-            crate::scripts::search::highlight_indices_for(query, &description);
-        ProfileSearchResult {
-            profile,
-            selected,
-            quick_ai,
-            name_highlight_indices: non_empty_indices(name_indices),
-            description_highlight_indices: non_empty_indices(description_indices),
-        }
-    })
-    .collect()
+    .map(|profile| (name_match_rank(&profile.name, &query_lower), profile))
+    .collect::<Vec<_>>();
+    // With words typed, a profile whose name matches leads one that matched only by id,
+    // model or provider; exact names first, then names starting with the words.
+    found.sort_by_key(|(rank, _)| *rank);
+    found
+        .into_iter()
+        .map(|(_, profile)| profile)
+        .chain(std::iter::once(create_profile_action_row(ctx)))
+        .filter(|profile| {
+            query_lower.is_empty()
+                || profile.name.to_lowercase().contains(&query_lower)
+                || profile.id.to_lowercase().contains(&query_lower)
+                || profile
+                    .model
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_lowercase()
+                    .contains(&query_lower)
+                || profile
+                    .provider
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_lowercase()
+                    .contains(&query_lower)
+        })
+        .map(|profile| {
+            let selected = profile.id == selected_id;
+            let quick_ai = profile.id == quick_ai_id;
+            let description = profile_search_result_description(&profile);
+            // Only the letters that actually matched are lit: the words where they stand in
+            // the name or the model label, never initials picked out of a name that matched
+            // by provider alone.
+            ProfileSearchResult {
+                name_highlight_indices: contiguous_match_indices(&profile.name, &query_lower),
+                description_highlight_indices: contiguous_match_indices(&description, &query_lower),
+                profile,
+                selected,
+                quick_ai,
+            }
+        })
+        .collect()
 }
 
-fn non_empty_indices(indices: Vec<usize>) -> Option<Vec<usize>> {
-    if indices.is_empty() {
-        None
-    } else {
-        Some(indices)
+/// How well a profile's name answers the words: exact, then starting with them, then
+/// containing them, then not at all (it matched elsewhere, or nothing is typed).
+fn name_match_rank(name: &str, query_lower: &str) -> u8 {
+    if query_lower.is_empty() {
+        return 0;
     }
+    let name = name.to_lowercase();
+    if name == query_lower {
+        0
+    } else if name.starts_with(query_lower) {
+        1
+    } else if name.contains(query_lower) {
+        2
+    } else {
+        3
+    }
+}
+
+/// Character positions of the first place `query_lower` stands in `text`, ignoring case.
+fn contiguous_match_indices(text: &str, query_lower: &str) -> Option<Vec<usize>> {
+    if query_lower.is_empty() {
+        return None;
+    }
+    let chars = text.chars().collect::<Vec<_>>();
+    let lowered = chars
+        .iter()
+        .map(|ch| ch.to_lowercase().next().unwrap_or(*ch))
+        .collect::<Vec<_>>();
+    let query = query_lower.chars().collect::<Vec<_>>();
+    let end = lowered.len().checked_sub(query.len())?;
+    (0..=end)
+        .find(|&start| lowered[start..start + query.len()] == query[..])
+        .map(|start| (start..start + query.len()).collect())
 }
 
 pub(crate) fn profile_search_result_description(profile: &ResolvedAgentChatProfile) -> String {
@@ -269,6 +302,33 @@ mod tests {
             .find(|result| result.profile.id == "general")
             .expect("general profile should match by model description");
         assert!(codex.description_highlight_indices.is_some());
+    }
+
+    /// A profile that matched only by its model lights nothing in its name, and a
+    /// profile whose name matches comes before one that matched elsewhere.
+    #[test]
+    fn profile_search_lights_only_the_field_that_matched_and_puts_names_first() {
+        let prefs = AiPreferences::default();
+        let ctx = AgentChatProfileContext::from_setup();
+
+        let codex = profile_search_results(&prefs, &ctx, "codex");
+        let general = codex
+            .iter()
+            .find(|result| result.profile.id == "general")
+            .expect("general matches by model");
+        assert_eq!(general.name_highlight_indices, None);
+
+        // "o" is in many names, ids and models: every name match comes first.
+        let rows = profile_search_results(&prefs, &ctx, "o");
+        let names_match = rows
+            .iter()
+            .filter(|result| result.profile.id != CREATE_PROFILE_ROW_ID)
+            .map(|result| result.profile.name.to_lowercase().contains('o'))
+            .collect::<Vec<_>>();
+        assert!(
+            names_match.windows(2).all(|pair| pair[0] || !pair[1]),
+            "a name match follows a metadata-only match: {names_match:?}"
+        );
     }
 
     #[test]

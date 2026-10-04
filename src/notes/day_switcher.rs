@@ -6,7 +6,7 @@ use crate::actions::NoteSwitcherNoteInfo;
 
 const DAY_NOTE_ID_PREFIX: &str = "day:";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DayNoteSwitcherEntry {
     pub(crate) date: NaiveDate,
     pub(crate) path: PathBuf,

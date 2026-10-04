@@ -119,11 +119,18 @@ impl ClipboardHistoryFilterQuery {
         !self.has_structured_filter && self.text.is_empty()
     }
 
-    fn matches(&self, entry: &clipboard_history::ClipboardEntryMeta) -> bool {
+    /// `full_text` holds the ids whose whole copied text contains the words; the preview
+    /// and image text are checked here.
+    fn matches(
+        &self,
+        entry: &clipboard_history::ClipboardEntryMeta,
+        full_text: &std::collections::HashSet<String>,
+    ) -> bool {
         let type_matches =
             self.content_types.is_empty() || self.content_types.contains(&entry.content_type);
-        let text_matches =
-            self.text.is_empty() || Self::entry_text_matches(entry, self.text.as_str());
+        let text_matches = self.text.is_empty()
+            || full_text.contains(&entry.id)
+            || Self::entry_text_matches(entry, self.text.as_str());
 
         type_matches && text_matches
     }
@@ -136,28 +143,28 @@ impl ClipboardHistoryFilterQuery {
             || entry
                 .ocr_text
                 .as_deref()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains(filter_lower)
+                .is_some_and(|ocr| ocr.to_lowercase().contains(filter_lower))
     }
 }
 
 impl ScriptListApp {
+    /// Rows matching `filter`, searching each copy's whole text (not only its preview) and
+    /// image text. Entries are matched first and only the matches are copied.
     pub(crate) fn clipboard_history_visible_rows_for_entries(
         entries: &[clipboard_history::ClipboardEntryMeta],
         filter: &str,
     ) -> Vec<(usize, clipboard_history::ClipboardEntryMeta)> {
         let query = ClipboardHistoryFilterQuery::parse(filter);
         if query.is_empty() {
-            entries.iter().cloned().enumerate().collect()
-        } else {
-            entries
-                .iter()
-                .cloned()
-                .enumerate()
-                .filter(|(_, entry)| query.matches(entry))
-                .collect()
+            return entries.iter().cloned().enumerate().collect();
         }
+        let full_text = clipboard_history::entry_ids_whose_text_contains(&query.text);
+        entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| query.matches(entry, &full_text))
+            .map(|(index, entry)| (index, entry.clone()))
+            .collect()
     }
 
     fn clipboard_history_visible_rows(

@@ -5,8 +5,8 @@ use crate::window_control::WindowInfo;
 
 use super::super::types::{MatchEvidence, MatchEvidenceField, WindowMatch};
 use super::{
-    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match, NucleoCtx,
-    TIER_DESCRIPTION,
+    better_match_evidence, match_evidence, normalized_substring_match, primary_text_match,
+    NucleoCtx, TIER_DESCRIPTION,
 };
 
 /// Fuzzy search windows by query string
@@ -83,7 +83,7 @@ pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Ve
             match_evidence(
                 MatchEvidenceField::Description,
                 &entry.subtitle,
-                low_tier_substring_match(&entry.subtitle, &query_lower, TIER_DESCRIPTION),
+                normalized_substring_match(&entry.subtitle, &query_lower, TIER_DESCRIPTION),
             ),
         );
 

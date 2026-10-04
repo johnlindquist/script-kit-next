@@ -49,7 +49,7 @@ The launcher input accepts symbols that say part of a sentence exactly, or switc
 | `;` / `todo; ...` | Structured capture (todo, note, link, snippet, cal, social) — `+` is a legacy alias |
 | `:` | List filters (`:type:script`, `:tag:work`, `:source:main`) |
 | `>` | Working-directory picker / command invocation |
-| `~` `!` `?` | Exit to File Search, Quick Terminal, Actions Help |
+| `~` `!` `?` | Exit to File Search, Quick Terminal, Help |
 
 Two keyboard moves worth learning:
 

@@ -377,7 +377,10 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         }
 
         let mut content_match = None;
-        if let Some(ref body) = script.body {
+        // A body line only ever ranks at the body tier, so once any field above it has
+        // matched the scan cannot change the row: skip reading the body.
+        let body_can_win = best.as_ref().is_none_or(|current| current.tier < TIER_BODY);
+        if let Some(body) = script.body.as_ref().filter(|_| body_can_win) {
             if let Some(hit) = find_best_content_line(body, &query_lower) {
                 if crate::logging::filter_perf_trace_enabled() {
                     crate::logging::log(

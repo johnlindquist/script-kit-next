@@ -70,6 +70,16 @@ impl Tip {
         self.typed_example()
             .map(|example| TipTry::Type(example.input.as_str()))
     }
+
+    /// The ↵ label in Help's footer. A tip that only describes a key says the key to press
+    /// instead of offering to try something ↵ cannot do.
+    pub fn enter_label(&self) -> String {
+        match (self.try_it(), self.hint_key.as_deref()) {
+            (Some(try_it), _) => try_it.label().to_string(),
+            (None, Some(key)) => format!("Press {key}"),
+            (None, None) => "Read It".to_string(),
+        }
+    }
 }
 
 /// What trying a tip does.

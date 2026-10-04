@@ -83,6 +83,9 @@ pub struct SelectPrompt {
     pub submission_hint: Option<String>,
     /// Filtered choice indices (for display)
     pub filtered_choices: Vec<usize>,
+    /// The trimmed words `filtered_choices` was computed for, as typed (case matters to
+    /// the matcher, so "Ab" then "ab" is not a narrowing).
+    filtered_for: String,
     /// Currently focused index in filtered list
     pub focused_index: usize,
     /// Currently hovered index in filtered list
@@ -183,6 +186,7 @@ impl SelectPrompt {
             header_context: None,
             disabled_choices: HashSet::new(),
             filtered_choices,
+            filtered_for: String::new(),
             focused_index: 0,
             hovered_index: None,
             filter_text: String::new(),
@@ -197,26 +201,43 @@ impl SelectPrompt {
     }
 
     /// Refilter choices based on current filter_text
+    ///
+    /// Typing forward only narrows: a choice that missed the shorter words misses the longer
+    /// ones too, so only the previous matches are scored again. Backspace and words using
+    /// the matcher's operators (`!`, `^`, `$`, `'`, `\`) score every choice.
     fn refilter(&mut self) {
         let trimmed_filter = self.filter_text.trim();
         if trimmed_filter.is_empty() {
             self.filtered_choices = (0..self.choices.len()).collect();
+            self.filtered_for.clear();
             self.set_focused_index(0);
             self.hovered_index = None;
             return;
         }
 
         let query_lower = trimmed_filter.to_lowercase();
+        let narrows = !self.filtered_for.is_empty()
+            && trimmed_filter.starts_with(self.filtered_for.as_str())
+            && !trimmed_filter.contains(['!', '^', '$', '\'', '\\']);
+        let candidates = if narrows {
+            std::mem::take(&mut self.filtered_choices)
+        } else {
+            (0..self.choices.len()).collect()
+        };
         let mut nucleo = scripts::NucleoCtx::new(trimmed_filter);
-        let mut scored_matches: Vec<(usize, u32)> = self
-            .choices
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, choice)| {
-                score_choice_for_filter(choice, &self.choice_index[idx], &query_lower, &mut nucleo)
-                    .map(|score| (idx, score))
+        let mut scored_matches: Vec<(usize, u32)> = candidates
+            .into_iter()
+            .filter_map(|idx| {
+                score_choice_for_filter(
+                    &self.choices[idx],
+                    &self.choice_index[idx],
+                    &query_lower,
+                    &mut nucleo,
+                )
+                .map(|score| (idx, score))
             })
             .collect();
+        self.filtered_for = trimmed_filter.to_string();
 
         scored_matches.sort_by(|(a_idx, a_score), (b_idx, b_score)| {
             b_score.cmp(a_score).then_with(|| {

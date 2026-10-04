@@ -5,8 +5,8 @@ use crate::plugins::PluginSkill;
 
 use super::super::types::{MatchEvidence, MatchEvidenceField, MatchIndices, SkillMatch};
 use super::{
-    better_match_evidence, low_tier_substring_match, match_evidence, primary_text_match, NucleoCtx,
-    TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
+    better_match_evidence, low_tier_substring_match, match_evidence, normalized_substring_match,
+    primary_text_match, NucleoCtx, TIER_DESCRIPTION, TIER_FILENAME, TIER_KEYWORD,
 };
 
 /// Fuzzy search plugin skills by query string.
@@ -66,7 +66,7 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
                 match_evidence(
                     MatchEvidenceField::Description,
                     &skill.description,
-                    low_tier_substring_match(&skill.description, &query_lower, TIER_DESCRIPTION),
+                    normalized_substring_match(&skill.description, &query_lower, TIER_DESCRIPTION),
                 ),
             );
         }

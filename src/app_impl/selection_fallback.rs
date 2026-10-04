@@ -538,23 +538,12 @@ impl ScriptListApp {
             } else {
                 None
             };
-            if let Some(query) = history_query.as_deref() {
-                self.commit_main_menu_results_refresh("launcher_input_history_recorded", None, cx, |app, _cx| {
-                    app.input_history.add_entry_with_selection(
-                        query,
-                        selected_result.as_ref().and_then(|result| result.history_result_key()),
-                    );
-                    if let Err(e) = app.input_history.save() {
-                        tracing::warn!(
-                            error_sha256 = %crate::logging::log_private_user_value(&e.to_string()),
-                            "Failed to save input history"
-                        );
-                    }
-                    true
-                });
-            }
+            let history_key = selected_result
+                .as_ref()
+                .and_then(|result| result.history_result_key());
 
             if let Some(part) = attachment_part {
+                self.record_launcher_use(history_query.as_deref(), history_key, None, cx);
                 self.close_attachment_portal_with_part(part, cx);
                 return Ok(MainMenuDispatchResult::Dispatched);
             }
@@ -586,7 +575,8 @@ impl ScriptListApp {
                     Some(submitted_value.as_str()),
                     false,
                 );
-                // Record frecency usage before executing (unless excluded).
+                // Usage (frecency and the typed words' preferred row) is recorded only once
+                // the row has run, so a refused, failed or still-waiting run teaches nothing.
                 // Skills and scriptlets use plugin-qualified keys.
                 let frecency_path: Option<String> = match &result {
                     scripts::SearchResult::Script(sm) => {
@@ -643,18 +633,7 @@ impl ScriptListApp {
                     // Spine projections don't track frecency.
                     scripts::SearchResult::SpineProjection(_) => None,
                 };
-                if let Some(path) = frecency_path {
-                    self.commit_main_menu_results_refresh(
-                        "launcher_frecency_recorded",
-                        None,
-                        cx,
-                        |app, _cx| {
-                            app.frecency_store.record_use(&path);
-                            app.frecency_store.save().ok(); // Best-effort save
-                            true
-                        },
-                    );
-                }
+                let history_query = history_query.as_deref();
 
                 // Log the action being performed using the same label path as the footer/preflight.
                 let action_text = self.main_window_primary_action_label();
@@ -691,7 +670,13 @@ impl ScriptListApp {
                     if !selected_handler_is_user_authored {
                         match self.try_execute_app_owned_menu_syntax_capture(&invocation, cx) {
                             AppOwnedCaptureOutcome::Handled => {
-                                return Ok(MainMenuDispatchResult::Dispatched)
+                                self.record_launcher_use(
+                                    history_query,
+                                    history_key,
+                                    frecency_path,
+                                    cx,
+                                );
+                                return Ok(MainMenuDispatchResult::Dispatched);
                             }
                             AppOwnedCaptureOutcome::Invalid => {
                                 anyhow::bail!("main_menu_capture_invalid")
@@ -700,6 +685,7 @@ impl ScriptListApp {
                         }
                     }
                     self.execute_menu_syntax_capture_script(script, invocation, cx);
+                    self.record_launcher_use(history_query, history_key, frecency_path, cx);
                     return Ok(MainMenuDispatchResult::Dispatched);
                 }
 
@@ -789,9 +775,10 @@ impl ScriptListApp {
                         self.update_main_menu_dispatch_status("completed", None);
                     }
                     scripts::SearchResult::App(app_match) => {
-                        if self.execute_app(&app_match.app, cx) {
-                            self.one_window_app_launched(&app_match.app.name, cx);
+                        if !self.execute_app(&app_match.app, cx) {
+                            return Ok(MainMenuDispatchResult::Dispatched);
                         }
+                        self.one_window_app_launched(&app_match.app.name, cx);
                     }
                     scripts::SearchResult::Window(window_match) => {
                         self.execute_window_focus(&window_match.window, cx);
@@ -947,10 +934,51 @@ impl ScriptListApp {
                         anyhow::bail!("main_menu_spine_action_requires_live_window");
                     }
                 }
+                self.record_launcher_use(history_query, history_key, frecency_path, cx);
                 return Ok(MainMenuDispatchResult::Dispatched);
             }
         }
         anyhow::bail!("main_menu_selected_subject_missing")
+    }
+
+    /// A row the launcher ran: remember it for the typed words and count the use.
+    fn record_launcher_use(
+        &mut self,
+        history_query: Option<&str>,
+        history_key: Option<String>,
+        frecency_path: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(query) = history_query {
+            self.commit_main_menu_results_refresh(
+                "launcher_input_history_recorded",
+                None,
+                cx,
+                |app, _cx| {
+                    app.input_history
+                        .add_entry_with_selection(query, history_key.clone());
+                    if let Err(e) = app.input_history.save() {
+                        tracing::warn!(
+                            error_sha256 = %crate::logging::log_private_user_value(&e.to_string()),
+                            "Failed to save input history"
+                        );
+                    }
+                    true
+                },
+            );
+        }
+        if let Some(path) = frecency_path {
+            self.commit_main_menu_results_refresh(
+                "launcher_frecency_recorded",
+                None,
+                cx,
+                |app, _cx| {
+                    app.frecency_store.record_use(&path);
+                    app.frecency_store.save().ok(); // Best-effort save
+                    true
+                },
+            );
+        }
     }
 
     pub(crate) fn selected_main_list_search_result_owned(

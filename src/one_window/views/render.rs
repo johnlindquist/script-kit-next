@@ -112,13 +112,23 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 word: None,
             }],
         },
-        HostedView::Notes(list) if list.found.is_empty() => vec![ViewRow {
-            id: "notes-row:none".into(),
-            title: "No notes yet".into(),
-            description: Some("Type a title to start one".into()),
-            icon: "plus",
-            selected: true,
-            word: None,
+        HostedView::Notes(list) if list.found.is_empty() => vec![match &list.trouble {
+            Some(trouble) => ViewRow {
+                id: "notes-row:trouble".into(),
+                title: "Notes couldn't be searched".into(),
+                description: Some(trouble.clone()),
+                icon: "warning",
+                selected: true,
+                word: None,
+            },
+            None => ViewRow {
+                id: "notes-row:none".into(),
+                title: "No notes yet".into(),
+                description: Some("Type a title to start one".into()),
+                icon: "plus",
+                selected: true,
+                word: None,
+            },
         }],
         HostedView::Notes(list) => list
             .found

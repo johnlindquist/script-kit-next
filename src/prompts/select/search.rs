@@ -134,12 +134,13 @@ pub(super) fn highlighted_choice_title(choice_name: &str, query: &str) -> TextCo
         return TextContent::plain(choice_name.to_string());
     }
 
+    // The same accent- and case-folding matcher that admitted the choice picks the letters,
+    // so "cafe" lights the "Café" it found.
     let query_lower = trimmed_query.to_lowercase();
-    let (matched, indices) =
-        crate::scripts::search::fuzzy_match_with_indices_ascii(choice_name, &query_lower);
-    if !matched || indices.is_empty() {
+    let mut nucleo = scripts::NucleoCtx::new(&query_lower);
+    let Some(indices) = nucleo.indices(choice_name).filter(|i| !i.is_empty()) else {
         return TextContent::plain(choice_name.to_string());
-    }
+    };
 
     let ranges = char_indices_to_byte_ranges(choice_name, &indices);
     if ranges.is_empty() {

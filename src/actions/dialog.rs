@@ -741,6 +741,9 @@ pub(crate) struct ActionsHostContextSnapshot {
     pub selected_semantic_id: Option<String>,
 }
 
+/// Finds action ids by text a row doesn't show; see `ActionsDialog::content_matches`.
+pub(crate) type ContentMatches = Box<dyn Fn(&str) -> Vec<String>>;
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -764,6 +767,10 @@ pub struct ActionsDialog {
     pub selected_index: Option<usize>, // Index within grouped_items; None when no row is selectable
     /// Renderer-neutral search value mirrored from the entity-backed input.
     pub search_text: String,
+    /// Finds actions by text their rows don't show (a note's whole body, a day page's
+    /// date words): returns matching action ids, best first. Those rows are kept and
+    /// ranked just below every title match.
+    pub(crate) content_matches: Option<ContentMatches>,
     /// The sole text-editing owner for Actions search.
     pub(crate) search_input: Option<Entity<gpui_component::input::InputState>>,
     search_input_subscription: Option<Subscription>,
@@ -1243,6 +1250,7 @@ impl ActionsDialog {
             filtered_description_match_indices: Vec::new(),
             selected_index,
             search_text: String::new(),
+            content_matches: None,
             search_input: None,
             search_input_subscription: None,
             search_input_syncing: false,
@@ -3570,6 +3578,30 @@ impl ActionsDialog {
                     })
                 })
                 .collect();
+
+            // Rows found by what they hold, not their visible text, join below title matches
+            // in the order the content search ranked them.
+            if let Some(content_matches) = self.content_matches.as_ref() {
+                let ids = content_matches(self.search_text.trim());
+                if !ids.is_empty() {
+                    let at: std::collections::HashMap<&str, usize> = self
+                        .actions
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, action)| (action.id.as_str(), idx))
+                        .collect();
+                    for (rank, id) in ids.iter().enumerate() {
+                        let Some(&idx) = at.get(id.as_str()) else {
+                            continue;
+                        };
+                        let content_score = 24 - (rank.min(20) as i32);
+                        match scored.iter_mut().find(|entry| entry.0 == idx) {
+                            Some(entry) => entry.1 = entry.1.max(content_score),
+                            None => scored.push((idx, content_score, Vec::new(), Vec::new())),
+                        }
+                    }
+                }
+            }
 
             // Sort by score descending (stable: ties keep action order)
             scored.sort_by_key(|a| std::cmp::Reverse(a.1));

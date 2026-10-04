@@ -25,10 +25,10 @@ pub struct FrecencyEntry {
     pub count: u32,
     /// Unix timestamp (seconds) of last use
     pub last_used: u64,
-    /// Cached score (recalculated on load, not persisted)
-    /// This is a derived value computed from count, last_used, and half_life.
-    /// We skip serializing it because it's always recalculated on load.
-    #[serde(skip_serializing, default)]
+    /// Accumulated score as of `last_used`: every use decayed to that moment, plus one.
+    /// Saved with the entry so a restart keeps it; [`FrecencyEntry::score_at`] decays it to
+    /// any later moment. Files written before it was saved lack it and load as `count`.
+    #[serde(default)]
     pub score: f64,
 }
 impl FrecencyEntry {
@@ -82,49 +82,18 @@ impl FrecencyEntry {
         self.record_use_with_timestamp(current_timestamp(), DEFAULT_SUGGESTED_HALF_LIFE_DAYS);
     }
 
-    /// Recalculate the frecency score based on current time using default half-life
-    ///
-    /// NOTE: Prefer using recalculate_score_with_half_life() with the store's
-    /// configured half-life.
-    #[allow(dead_code)]
-    pub fn recalculate_score(&mut self) {
-        self.score = calculate_score(self.count, self.last_used, DEFAULT_SUGGESTED_HALF_LIFE_DAYS);
-    }
-
-    /// Recalculate the frecency score with a custom half-life
-    pub fn recalculate_score_with_half_life(&mut self, half_life_days: f64) {
-        self.score = calculate_score(self.count, self.last_used, half_life_days);
+    /// Entries saved before the accumulated score was persisted carry `count` uses and no
+    /// score; take the uses as having happened at `last_used`, as the old model did.
+    fn backfill_missing_score(&mut self) {
+        if self.score <= 0.0 {
+            self.score = f64::from(self.count.max(1));
+        }
     }
 }
 impl Default for FrecencyEntry {
     fn default() -> Self {
         Self::new()
     }
-}
-/// Calculate frecency score using exponential decay with true half-life
-///
-/// Formula: score = count * 2^(-days_since_use / half_life_days)
-///        = count * e^(-ln(2) * days_since_use / half_life_days)
-///
-/// This means (with default 7-day half-life):
-/// - After 7 days (half_life), the score is reduced to exactly 50%
-/// - After 14 days, the score is reduced to exactly 25%
-/// - After 21 days, the score is reduced to exactly 12.5%
-///
-/// With a shorter half-life (e.g., 1 day), recent items dominate.
-/// With a longer half-life (e.g., 30 days), frequently used items dominate.
-fn calculate_score(count: u32, last_used: u64, half_life_days: f64) -> f64 {
-    let now = current_timestamp();
-    let seconds_since_use = now.saturating_sub(last_used);
-    let days_since_use = seconds_since_use as f64 / SECONDS_PER_DAY;
-
-    // Guard against nonsense config (zero or negative half-life)
-    let hl = half_life_days.max(0.001);
-
-    // True half-life decay: 2^(-days/hl) == e^(-ln(2) * days/hl)
-    // At days == hl: decay_factor = 2^(-1) = 0.5 (exactly 50%)
-    let decay_factor = (-std::f64::consts::LN_2 * days_since_use / hl).exp();
-    f64::from(count) * decay_factor
 }
 /// Get current Unix timestamp in seconds
 fn current_timestamp() -> u64 {
@@ -205,10 +174,7 @@ impl FrecencyStore {
     pub fn set_half_life_days(&mut self, half_life_days: f64) {
         if (self.half_life_days - half_life_days).abs() > 0.001 {
             self.half_life_days = half_life_days;
-            // Recalculate all scores with new half-life
-            for entry in self.entries.values_mut() {
-                entry.recalculate_score_with_half_life(half_life_days);
-            }
+            // Scores are decayed when read, so a new half-life applies at once.
             self.revision = self.revision.wrapping_add(1);
         }
     }
@@ -279,10 +245,9 @@ impl FrecencyStore {
 
         self.entries = data.entries;
 
-        // Recalculate all scores to account for time passed since last save
-        let half_life = self.half_life_days;
+        // The saved score is as of each entry's last use; reads decay it to now.
         for entry in self.entries.values_mut() {
-            entry.recalculate_score_with_half_life(half_life);
+            entry.backfill_missing_score();
         }
 
         info!(
@@ -411,11 +376,17 @@ impl FrecencyStore {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// Get the frecency score for a script
+    /// Get the frecency score for a script, decayed to this moment
     ///
-    /// Returns 0.0 if the script has never been used.
+    /// Returns 0.0 if the script has never been used. Typed search and Suggested read
+    /// the same live score, so an item not used for a while loses its lead even while
+    /// the app stays open.
     pub fn get_score(&self, path: &str) -> f64 {
-        self.entries.get(path).map(|e| e.score).unwrap_or(0.0)
+        let now = current_timestamp();
+        self.entries
+            .get(path)
+            .map(|e| e.score_at(now, self.half_life_days))
+            .unwrap_or(0.0)
     }
 
     /// Get the top N items by frecency score
@@ -660,10 +631,6 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn days_to_seconds(days: f64) -> u64 {
-        std::time::Duration::from_secs_f64(days * SECONDS_PER_DAY).as_secs()
-    }
-
     // Helper to create a test store with a temp file
     fn create_test_store() -> (FrecencyStore, PathBuf) {
         let temp_dir = std::env::temp_dir();
@@ -695,75 +662,6 @@ mod tests {
 
         assert_eq!(entry.count, initial_count + 1);
         assert!(entry.last_used >= initial_last_used);
-    }
-    #[test]
-    fn test_calculate_score_no_decay() {
-        // Score right now should be close to count
-        let now = current_timestamp();
-        let score = calculate_score(5, now, HALF_LIFE_DAYS);
-
-        // Should be approximately 5 (allowing for tiny time difference)
-        assert!((score - 5.0).abs() < 0.01);
-    }
-    #[test]
-    fn test_calculate_score_with_decay_true_half_life() {
-        let now = current_timestamp();
-        let count = 10;
-
-        // One half-life ago (7 days)
-        let one_half_life_ago = now - days_to_seconds(HALF_LIFE_DAYS);
-        let score = calculate_score(count, one_half_life_ago, HALF_LIFE_DAYS);
-
-        // With TRUE half-life, score should be exactly count/2 (50% decay at one half-life)
-        // Formula: count * 2^(-days/half_life) = count * 2^(-1) = count/2
-        let expected = f64::from(count) * 0.5;
-        assert!(
-            (score - expected).abs() < 0.01,
-            "Expected ~{} (50% of {}), got {} - half-life formula should give 50% decay at half-life",
-            expected,
-            count,
-            score
-        );
-    }
-    #[test]
-    fn test_calculate_score_two_half_lives() {
-        let now = current_timestamp();
-        let count = 100;
-
-        // Two half-lives ago (14 days)
-        let two_half_lives_ago = now - days_to_seconds(2.0 * HALF_LIFE_DAYS);
-        let score = calculate_score(count, two_half_lives_ago, HALF_LIFE_DAYS);
-
-        // After 2 half-lives, should be 25% (0.5^2 = 0.25)
-        let expected = f64::from(count) * 0.25;
-        assert!(
-            (score - expected).abs() < 0.1,
-            "Expected ~{} (25% of {}), got {} - two half-lives should give 25% remaining",
-            expected,
-            count,
-            score
-        );
-    }
-    #[test]
-    fn test_calculate_score_old_item() {
-        let now = current_timestamp();
-        let count = 100;
-
-        // 30 days ago (about 4.3 half-lives with 7-day half-life)
-        let thirty_days_ago = now - (30 * SECONDS_PER_DAY_U64);
-        let score = calculate_score(count, thirty_days_ago, HALF_LIFE_DAYS);
-
-        // With true half-life: 100 * 0.5^(30/7) = 100 * 0.5^4.28 ≈ 5.15
-        // Should be heavily decayed but still detectable
-        let expected = f64::from(count) * 0.5_f64.powf(30.0 / HALF_LIFE_DAYS);
-        assert!(
-            (score - expected).abs() < 0.5,
-            "Expected ~{:.2}, got {:.2}",
-            expected,
-            score
-        );
-        // Verify it's indeed heavily decayed (less than 10% of original)
-        assert!(score < 10.0, "Should be heavily decayed, got {}", score);
     }
     #[test]
     fn test_frecency_store_new() {
@@ -1037,24 +935,72 @@ mod tests {
     }
     #[test]
     fn test_frecency_entry_serialization() {
-        // score is NOT serialized (it's derived on load), so we only verify
-        // that count and last_used round-trip correctly
         let entry = FrecencyEntry {
             count: 5,
             last_used: 1704067200, // 2024-01-01 00:00:00 UTC
-            score: 4.5,            // This will NOT be serialized
+            score: 4.5,
         };
 
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: FrecencyEntry = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(entry.count, deserialized.count);
-        assert_eq!(entry.last_used, deserialized.last_used);
-        // score defaults to 0.0 since it's not serialized
         assert_eq!(
-            deserialized.score, 0.0,
-            "Score should default to 0.0 when deserializing"
+            entry, deserialized,
+            "the accumulated score is saved with the entry"
         );
+    }
+
+    /// Uses spread over time weigh the same after a restart as they did before it: a
+    /// restart must not rejuvenate old uses to the moment of the latest one.
+    #[test]
+    fn spaced_uses_keep_their_weight_across_a_restart() {
+        let (mut store, path) = create_test_store();
+        let now = current_timestamp();
+        store.record_use_at("/a.ts", now - 28 * SECONDS_PER_DAY_U64);
+        store.record_use_at("/a.ts", now);
+        let before = store.get_score("/a.ts");
+        store.save().unwrap();
+
+        let mut reloaded = FrecencyStore::with_path(path.clone());
+        reloaded.load().unwrap();
+        let after = reloaded.get_score("/a.ts");
+        assert!(
+            (before - after).abs() < 0.01,
+            "{before} before the restart, {after} after"
+        );
+        assert!(
+            after < 1.1,
+            "a use four half-lives ago adds little: {after}"
+        );
+        cleanup_temp_file(&path);
+    }
+
+    /// Typed search reads the score at this moment, so an item last used weeks ago
+    /// trails one used today without any new use or restart.
+    #[test]
+    fn an_unused_item_loses_its_lead_without_new_uses() {
+        let (mut store, _temp) = create_test_store();
+        let now = current_timestamp();
+        for _ in 0..3 {
+            store.record_use_at("/old.ts", now - 35 * SECONDS_PER_DAY_U64);
+        }
+        store.record_use_at("/new.ts", now);
+        assert!(store.get_score("/new.ts") > store.get_score("/old.ts"));
+    }
+
+    #[test]
+    fn files_saved_before_scores_were_kept_load_their_uses_as_the_score() {
+        let (_, path) = create_test_store();
+        let now = current_timestamp();
+        fs::write(
+            &path,
+            format!(r#"{{"entries": {{"/script.ts": {{"count": 4, "last_used": {now}}}}}}}"#),
+        )
+        .unwrap();
+        let mut store = FrecencyStore::with_path(path.clone());
+        store.load().unwrap();
+        assert!((store.get_score("/script.ts") - 4.0).abs() < 0.01);
+        cleanup_temp_file(&path);
     }
     #[test]
     fn test_frecency_entry_deserialization_without_score() {
@@ -1560,38 +1506,6 @@ mod tests {
         );
 
         cleanup_temp_file(&path);
-    }
-    // ========================================
-    // Score skip_serializing tests
-    // ========================================
-
-    #[test]
-    fn test_score_not_serialized() {
-        // Score should not be written to JSON (it's derived on load)
-        let entry = FrecencyEntry {
-            count: 5,
-            last_used: 1704067200,
-            score: 999.0, // This should not be serialized
-        };
-
-        let json = serde_json::to_string(&entry).unwrap();
-
-        // JSON should NOT contain "score" field
-        assert!(
-            !json.contains("\"score\""),
-            "score field should not be serialized, but got: {}",
-            json
-        );
-    }
-    #[test]
-    fn test_score_defaults_on_deserialization() {
-        // When loading old data without score, it should default to 0.0
-        let json = r#"{"count": 5, "last_used": 1704067200}"#;
-        let entry: FrecencyEntry = serde_json::from_str(json).unwrap();
-
-        assert_eq!(entry.count, 5);
-        assert_eq!(entry.last_used, 1704067200);
-        assert_eq!(entry.score, 0.0, "Score should default to 0.0");
     }
     // ========================================
     // Pruning tests

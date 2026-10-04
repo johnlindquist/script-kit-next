@@ -53,19 +53,35 @@ impl AppLauncherEmptyState {
 }
 
 impl ScriptListApp {
+    /// The apps the filter finds, best first, as positions in `apps`. The same rule as the
+    /// launcher's app rows, so a name, a prefix or an abbreviation such as `gcal` finds the
+    /// same app in both places.
     fn app_launcher_filtered_entries<'a>(
         apps: &'a [app_launcher::AppInfo],
         filter: &str,
     ) -> Vec<(usize, &'a app_launcher::AppInfo)> {
-        if filter.is_empty() {
-            apps.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            apps.iter()
+        Self::app_launcher_ranked_entries(apps, filter)
+            .into_iter()
+            .map(|(index, app, _)| (index, app))
+            .collect()
+    }
+
+    /// Like [`Self::app_launcher_filtered_entries`], with the letters of each name that matched.
+    fn app_launcher_ranked_entries<'a>(
+        apps: &'a [app_launcher::AppInfo],
+        filter: &str,
+    ) -> Vec<(usize, &'a app_launcher::AppInfo, Vec<usize>)> {
+        if filter.trim().is_empty() {
+            return apps
+                .iter()
                 .enumerate()
-                .filter(|(_, app)| app.name.to_lowercase().contains(&filter_lower))
-                .collect()
+                .map(|(index, app)| (index, app, Vec::new()))
+                .collect();
         }
+        crate::scripts::search::rank_apps(apps, filter.trim())
+            .into_iter()
+            .map(|(index, evidence)| (index, &apps[index], evidence.indices))
+            .collect()
     }
 
     fn app_launcher_visible_row_names(&self, filter: &str) -> Vec<String> {
@@ -125,7 +141,7 @@ impl ScriptListApp {
         // Removed: box_shadows - shadows on transparent elements block vibrancy
         let _box_shadows = self.create_box_shadows();
 
-        let filtered_apps = Self::app_launcher_filtered_entries(&self.apps, &filter);
+        let filtered_apps = Self::app_launcher_ranked_entries(&self.apps, &filter);
         let filtered_len = filtered_apps.len();
 
         // Key handler for app launcher
@@ -171,6 +187,9 @@ impl ScriptListApp {
                 {
                     let filtered_apps = Self::app_launcher_filtered_entries(&this.apps, filter);
                     let filtered_len = filtered_apps.len();
+                    let selected_app = filtered_apps
+                        .get(*selected_index)
+                        .map(|(_, app)| (*app).clone());
 
                     match key {
                         _ if is_key_up(key) => {
@@ -187,16 +206,20 @@ impl ScriptListApp {
                             cx.notify();
                         }
                         _ if is_key_enter(key) => {
-                            // Launch selected app and hide window
-                            if let Some((_, app)) = filtered_apps.get(*selected_index) {
+                            // Launch selected app and hide window; a failure is said in the
+                            // line above the input.
+                            if let Some(app) = selected_app {
                                 let activation_action =
                                     AppLauncherActivationAction::LaunchSelectedApp;
                                 logging::log("EXEC", &activation_action.launch_log(&app.name));
-                                if let Err(e) = app_launcher::launch_application(app) {
-                                    logging::log("ERROR", &activation_action.failure_log(e));
-                                } else {
+                                if this.execute_app(&app, cx) {
                                     logging::log("EXEC", &activation_action.success_log(&app.name));
                                     this.hide_main_and_reset(cx);
+                                } else {
+                                    logging::log(
+                                        "ERROR",
+                                        &activation_action.failure_log(&app.name),
+                                    );
                                 }
                             }
                         }
@@ -226,7 +249,7 @@ impl ScriptListApp {
             // Clone data for the closure
             let apps_for_closure: Vec<_> = filtered_apps
                 .iter()
-                .map(|(i, a)| (*i, (*a).clone()))
+                .map(|(i, a, indices)| (*i, (*a).clone(), indices.clone()))
                 .collect();
             let selected = selected_index;
             let hovered = self.hovered_index;
@@ -239,7 +262,7 @@ impl ScriptListApp {
                 move |visible_range, _window, _cx| {
                     visible_range
                         .map(|ix| {
-                            if let Some((_, app)) = apps_for_closure.get(ix) {
+                            if let Some((_, app, name_indices)) = apps_for_closure.get(ix) {
                                 let is_selected = ix == selected;
                                 let is_hovered = hovered == Some(ix);
                                 let row_id = app
@@ -295,11 +318,7 @@ impl ScriptListApp {
                                                                     &app_info.name,
                                                                 ),
                                                         );
-                                                        if app_launcher::launch_application(
-                                                            &app_info,
-                                                        )
-                                                        .is_ok()
-                                                        {
+                                                        if this.execute_app(&app_info, cx) {
                                                             this.hide_main_and_reset(cx);
                                                         }
                                                     }
@@ -358,6 +377,7 @@ impl ScriptListApp {
                                     .on_hover(hover_handler)
                                     .child(
                                         ListItem::new(app.name.clone(), list_colors)
+                                            .highlight_indices(name_indices.clone())
                                             .icon_kind(icon)
                                             .description_opt(description)
                                             .selected(is_selected)

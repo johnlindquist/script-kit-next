@@ -16,7 +16,7 @@ use crate::ScriptListApp;
 
 pub(crate) const NOTES: &str = "notes";
 
-/// How long the list is.
+/// How many notes the list shows at first, and how many more each "Show More" adds.
 const LISTED_NOTES: usize = 60;
 
 /// The order notes are listed in after the pinned ones. Tab moves to the next.
@@ -58,6 +58,8 @@ pub(crate) enum NoteDoc {
     Note(NoteId),
     /// A new note whose first line is these words.
     New(String),
+    /// The list stopped at its length; Enter shows the next notes.
+    More,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -75,6 +77,7 @@ impl Found {
         match self.doc {
             _ if self.pinned => "starfilled",
             NoteDoc::New(_) => "plus",
+            NoteDoc::More => "chevrondown",
             NoteDoc::Day(_) | NoteDoc::Note(_) => "file",
         }
     }
@@ -86,6 +89,14 @@ pub(crate) struct NotesList {
     pub(crate) found: Vec<Found>,
     pub(crate) sel: usize,
     pub(crate) sort: NotesSort,
+    /// How many notes are listed before "Show More".
+    shown: usize,
+    /// Why notes couldn't be searched, said instead of an empty-looking list.
+    pub(crate) trouble: Option<String>,
+    /// The day pages folder couldn't be read.
+    days_unreadable: bool,
+    /// Day pages, read once when the list opens rather than on every key.
+    days: Vec<notes::day_switcher::DayNoteSwitcherEntry>,
 }
 
 fn today() -> NaiveDate {
@@ -120,11 +131,22 @@ pub(crate) fn order_found(found: &mut [Found], sort: NotesSort) {
 
 impl NotesList {
     pub(crate) fn new(query: String) -> Self {
+        let days = notes::day_switcher::load_day_note_switcher_entries_result(
+            &notes::notes_brain_days_dir(),
+        );
+        let days_unreadable = days.is_err();
+        if let Err(error) = &days {
+            tracing::warn!(error = %error, "notes_list_day_pages_unreadable");
+        }
         let mut list = Self {
             query,
             found: Vec::new(),
             sel: 0,
             sort: chosen_sort(),
+            shown: LISTED_NOTES,
+            trouble: None,
+            days: days.unwrap_or_default(),
+            days_unreadable,
         };
         list.search();
         list
@@ -135,10 +157,8 @@ impl NotesList {
         let today = today();
         let day_query = notes::day_switcher::DayQuery::parse(&query, today);
         let mut found = Vec::new();
-        for day in
-            notes::day_switcher::load_day_note_switcher_entries(&notes::notes_brain_days_dir())
-        {
-            if day_query.matches(&day, today) {
+        for day in &self.days {
+            if day_query.matches(day, today) {
                 let at = day
                     .date
                     .and_hms_opt(0, 0, 0)
@@ -158,12 +178,23 @@ impl NotesList {
                 });
             }
         }
-        if notes::ensure_notes_db_open().is_ok() {
-            let mut named = if query.is_empty() {
-                notes::get_all_notes().unwrap_or_default()
+        let named = notes::ensure_notes_db_open().and_then(|()| {
+            if query.is_empty() {
+                notes::get_all_notes()
             } else {
-                notes::search_notes(&query).unwrap_or_default()
-            };
+                notes::search_notes(&query)
+            }
+        });
+        if let Err(error) = &named {
+            tracing::warn!(error = %error, "notes_list_search_failed");
+        }
+        self.trouble = match (named.is_err(), self.days_unreadable) {
+            (true, true) => Some("couldn't read your notes or day pages".to_string()),
+            (true, false) => Some("couldn't search your notes; day pages only".to_string()),
+            (false, true) => Some("couldn't read day pages; notes only".to_string()),
+            (false, false) => None,
+        };
+        if let Ok(mut named) = named {
             // "yesterday" or "notes from march 3" also means the notes changed on that day.
             if day_query.only_dates() {
                 for note in
@@ -194,7 +225,19 @@ impl NotesList {
             }
         }
         order_found(&mut found, self.sort);
-        found.truncate(LISTED_NOTES);
+        let total = found.len();
+        if total > self.shown {
+            found.truncate(self.shown);
+            let now = Utc::now();
+            found.push(Found {
+                doc: NoteDoc::More,
+                title: format!("Show {} More", (total - self.shown).min(LISTED_NOTES)),
+                sub: format!("{} of {total} shown", self.shown),
+                pinned: false,
+                changed: now,
+                created: now,
+            });
+        }
         let named_exactly = found
             .iter()
             .any(|found| found.title.eq_ignore_ascii_case(&query));
@@ -210,11 +253,20 @@ impl NotesList {
             });
         }
         self.found = found;
-        self.sel = 0;
+        self.sel = self.sel.min(self.found.len().saturating_sub(1));
+    }
+
+    /// Lists the next notes after "Show More", keeping the highlight where it was.
+    pub(crate) fn show_more(&mut self) {
+        self.shown += LISTED_NOTES;
+        self.search();
     }
 
     pub(crate) fn label(&self) -> String {
-        format!("Notes · by {} · Tab to change", self.sort.words())
+        match &self.trouble {
+            Some(trouble) => format!("Notes · {trouble}"),
+            None => format!("Notes · by {} · Tab to change", self.sort.words()),
+        }
     }
 
     pub(crate) fn enter(&self) -> EnterTarget {
@@ -223,6 +275,9 @@ impl NotesList {
                 doc: NoteDoc::New(title),
                 ..
             }) => EnterTarget::new(format!("notes:new:{title}"), "Start Note"),
+            Some(Found {
+                doc: NoteDoc::More, ..
+            }) => EnterTarget::new("notes:more", "Show More"),
             Some(found) => EnterTarget::new(format!("notes:open:{}", found.title), "Open Note"),
             None => EnterTarget::new("notes:new", "New Note"),
         }
@@ -231,6 +286,8 @@ impl NotesList {
     pub(crate) fn typed(&mut self, text: String) {
         if text != self.query {
             self.query = text;
+            self.shown = LISTED_NOTES;
+            self.sel = 0;
             self.search();
         }
     }
@@ -242,6 +299,7 @@ impl NotesList {
             .position(|sort| *sort == self.sort)
             .unwrap_or(0);
         SORT.store(at as u8, Ordering::Relaxed);
+        self.sel = 0;
         self.search();
     }
 }
@@ -322,6 +380,16 @@ impl ScriptListApp {
             return Vec::new();
         }
         let doc = list.found.get(list.sel).map(|found| found.doc.clone());
+        if doc == Some(NoteDoc::More) {
+            list.show_more();
+            cx.notify();
+            let after = list.enter();
+            return if after != before {
+                vec![Event::ViewEnter(after)]
+            } else {
+                Vec::new()
+            };
+        }
         let target = match doc {
             Some(NoteDoc::Day(date)) => NoteTarget::Day(date),
             Some(NoteDoc::Note(id)) => NoteTarget::Note(id),
@@ -334,7 +402,7 @@ impl ScriptListApp {
                     }
                 }
             }
-            None => NoteTarget::New,
+            None | Some(NoteDoc::More) => NoteTarget::New,
         };
         self.open_note_in_editor_soon(target, crate::DayPageBack::NotesList, cx);
         Vec::new()

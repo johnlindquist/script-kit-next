@@ -42,11 +42,20 @@ impl ScriptListApp {
             self.menu_syntax_trigger_picker_state = Default::default();
             return;
         }
-        let capture_targets =
-            crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+        let catalog = &self.menu_syntax_capture_targets.0;
+        let catalog_unchanged = catalog.len() == self.scripts.len()
+            && catalog
+                .iter()
+                .zip(self.scripts.iter())
+                .all(|(cached, current)| Arc::ptr_eq(cached, current));
+        if !catalog_unchanged {
+            let targets =
+                crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+            self.menu_syntax_capture_targets = (self.scripts.clone(), targets);
+        }
         self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::from_input_with_capture_targets(
             raw,
-            &capture_targets,
+            &self.menu_syntax_capture_targets.1,
         );
     }
 

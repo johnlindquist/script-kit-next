@@ -566,3 +566,74 @@ fn test_skill_description_evidence_prevents_stale_title_indices() {
     assert!(indices.name_indices.is_empty());
     assert_eq!(indices.description_indices, vec![16, 17, 18, 19]);
 }
+
+/// Initials, one slip of the fingers and remembered description words in any
+/// order find what a person meant, while sparse letters still match nothing.
+#[test]
+fn people_find_commands_by_initials_slips_and_remembered_words() {
+    let scripts = vec![
+        make_script("Launch Checklist", None),
+        make_script("Clipboard History", None),
+        make_script("Copy Path Home", None),
+        make_script("Notes", None),
+        make_script("Invoice Tool", Some("Résumé template generator")),
+    ];
+    let first = |query: &str| {
+        fuzzy_search_scripts(&scripts, query)
+            .first()
+            .map(|found| found.script.name.clone())
+    };
+
+    // Every word's initial beats the same letters buried mid-word.
+    assert_eq!(first("ch").as_deref(), Some("Clipboard History"));
+    let ch = fuzzy_search_scripts(&scripts, "ch")
+        .into_iter()
+        .map(|found| found.script.name.clone())
+        .collect::<Vec<_>>();
+    assert!(
+        !ch.contains(&"Copy Path Home".to_string()),
+        "initials must be neighbouring words: {ch:?}"
+    );
+    let mut clipboard = fuzzy_search_scripts(&scripts, "ch");
+    let indices =
+        compute_match_indices_for_result(&SearchResult::Script(clipboard.remove(0)), "ch");
+    assert_eq!(indices.name_indices, vec![0, 10], "the initials light up");
+
+    assert_eq!(first("ntoes").as_deref(), Some("Notes"), "swapped letters");
+    assert_eq!(
+        first("notess").as_deref(),
+        Some("Notes"),
+        "one letter too many"
+    );
+    assert_eq!(
+        first("template resume").as_deref(),
+        Some("Invoice Tool"),
+        "description words in any order"
+    );
+    assert_eq!(first("tmplate zzz"), None, "every word must be there");
+    assert_eq!(first("qx"), None);
+}
+
+/// The Apps list ranks with the launcher's rule: an abbreviation finds the app and an
+/// exact name leads one that merely starts with it, with the matched letters to light.
+#[test]
+fn the_apps_list_finds_apps_the_way_the_launcher_does() {
+    let apps = vec![
+        make_app("Notes Helper"),
+        make_app("Google Calendar"),
+        make_app("Notes"),
+    ];
+    let ranked = |query: &str| {
+        rank_apps(&apps, query)
+            .into_iter()
+            .map(|(index, evidence)| (apps[index].name.clone(), evidence.indices))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        ranked("gcal"),
+        vec![("Google Calendar".to_string(), vec![0, 7, 8, 9])]
+    );
+    let notes = ranked("notes");
+    assert_eq!(notes[0].0, "Notes");
+    assert_eq!(notes[1].0, "Notes Helper");
+}

@@ -164,6 +164,14 @@ fn char_indices_to_byte_ranges_handles_utf8_boundaries() {
 }
 
 #[test]
+fn an_accented_choice_found_without_the_accent_lights_its_letters() {
+    let TextContent::Highlighted { ranges, .. } = highlighted_choice_title("Café", "cafe") else {
+        panic!("Café is found by cafe, so its letters are lit");
+    };
+    assert_eq!(ranges, vec![0.."Café".len()]);
+}
+
+#[test]
 fn test_select_prompt_accepts_space_and_rejects_control_chars_in_filter_query() {
     assert!(should_append_to_filter(' '));
     assert!(should_append_to_filter('x'));

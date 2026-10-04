@@ -426,9 +426,15 @@ impl Render for SelectPrompt {
             .build(
                 window,
                 cx,
-                |this, intercepted_key, _event, _window, _cx| match intercepted_key {
+                |this, intercepted_key, _event, _window, cx| match intercepted_key {
+                    // Like every list under the input: Escape clears typed words first,
+                    // and cancels the prompt once there are none.
                     FocusablePromptInterceptedKey::Escape => {
-                        this.submit_cancel();
+                        if this.filter_text.is_empty() {
+                            this.submit_cancel();
+                        } else {
+                            this.set_input(String::new(), cx);
+                        }
                         true
                     }
                     _ => false,

@@ -27,6 +27,8 @@ pub(crate) struct StagedActionRow {
     pub(crate) description: Option<String>,
     pub(crate) icon: String,
     pub(crate) selected: bool,
+    /// Title letters that matched what's typed.
+    pub(crate) highlights: Vec<usize>,
 }
 
 /// The dialog's actions as its row for each entry of `grouped_items`: `None` for the dialog's
@@ -47,6 +49,11 @@ pub(crate) fn staged_action_slots(dialog: &ActionsDialog) -> Vec<Option<StagedAc
                     description: action.description.clone().filter(|text| !text.is_empty()),
                     icon: format!("{:?}", action.icon.unwrap_or(IconName::Settings)),
                     selected: selected.as_deref() == Some(action.id.as_str()),
+                    highlights: dialog
+                        .filtered_title_match_indices
+                        .get(*filtered)
+                        .cloned()
+                        .unwrap_or_default(),
                 }),
             GroupedActionItem::SectionHeader(_) => None,
         })
@@ -73,6 +80,9 @@ pub(crate) fn render_staged_actions(
     let slots = Rc::new(staged_action_slots(dialog));
     let on_click = Rc::new(on_click);
     let row_height = crate::list_item::effective_list_item_height_for_theme(main_menu_theme);
+    let nothing_matches =
+        slots.iter().all(Option::is_none) && !dialog.search_text.trim().is_empty();
+    let typed = dialog.search_text.trim().to_string();
     let rows = list(dialog.list_state.clone(), move |ix, _window, _cx| {
         let Some(Some(row)) = slots.get(ix) else {
             return div().into_any_element();
@@ -92,6 +102,7 @@ pub(crate) fn render_staged_actions(
                     .semantic_id(semantic_id)
                     .icon_kind(IconKind::Svg(row.icon.clone()))
                     .description_opt(row.description.clone())
+                    .highlight_indices(row.highlights.clone())
                     .selected(row.selected)
                     .main_menu_theme(main_menu_theme),
             )
@@ -120,6 +131,23 @@ pub(crate) fn render_staged_actions(
                 ))
                 .child(render_section_header(head, None, colors, true)),
         )
+        .when(nothing_matches, |stack| {
+            stack.child(
+                div()
+                    .flex_none()
+                    .h(px(row_height))
+                    .debug_selector(|| "list-row:staged-action:none".to_string())
+                    .child(
+                        ListItem::new(format!("No actions match \u{201c}{typed}\u{201d}"), colors)
+                            .semantic_id("staged-action:none".to_string())
+                            .icon_kind(IconKind::Svg("MagnifyingGlass".to_string()))
+                            .description_opt(Some(
+                                "Fewer letters widen it; Esc clears what you typed".to_string(),
+                            ))
+                            .main_menu_theme(main_menu_theme),
+                    ),
+            )
+        })
         .child(rows)
         .into_any_element()
 }

@@ -4,7 +4,8 @@ use crate::flows::model::FlowDescriptor;
 
 use super::super::types::{FlowMatch, MatchIndices};
 use super::{
-    low_tier_substring_match, primary_text_match, NucleoCtx, TIER_DESCRIPTION, TIER_FILENAME,
+    low_tier_substring_match, normalized_substring_match, primary_text_match, NucleoCtx,
+    TIER_DESCRIPTION, TIER_FILENAME,
 };
 
 fn flow_subtitle(flow: &FlowDescriptor) -> String {
@@ -60,7 +61,8 @@ pub fn fuzzy_search_flows(flows: &[FlowDescriptor], query: &str) -> Vec<FlowMatc
         }
 
         if let Some(description) = flow.description.as_deref() {
-            if let Some(m) = low_tier_substring_match(description, &query_lower, TIER_DESCRIPTION) {
+            if let Some(m) = normalized_substring_match(description, &query_lower, TIER_DESCRIPTION)
+            {
                 if m.score > best_score {
                     best_score = m.score;
                 }

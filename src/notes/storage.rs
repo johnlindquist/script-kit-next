@@ -2135,8 +2135,8 @@ fn note_ids_by_title_text(conn: &Connection, query: &str, limit: usize) -> Resul
             SELECT id FROM notes
             WHERE deleted_at IS NULL AND lower(title) LIKE ?1 ESCAPE '\'
             ORDER BY
-                is_pinned DESC,
                 CASE WHEN lower(title) = ?2 THEN 0 WHEN lower(title) LIKE ?3 ESCAPE '\' THEN 1 ELSE 2 END,
+                is_pinned DESC,
                 updated_at DESC
             LIMIT ?4
             "#,
@@ -2183,6 +2183,7 @@ fn ranked_note_ids(conn: &Connection, query: &str, limit: usize) -> Result<Vec<S
             .replace('%', "\\%")
             .replace('_', "\\_")
     );
+    let title_exact = query.trim().to_lowercase();
     let mut ids: Vec<String> = Vec::new();
     {
         // The word index answers first and the notes table is read only for its hits; joining
@@ -2197,17 +2198,18 @@ fn ranked_note_ids(conn: &Connection, query: &str, limit: usize) -> Result<Vec<S
                 SELECT n.id
                 FROM hits INNER JOIN notes n ON n.rowid = hits.hit
                 WHERE n.deleted_at IS NULL
-                ORDER BY n.is_pinned DESC, lower(n.title) LIKE ?3 ESCAPE '\' DESC,
-                    hits.score, n.updated_at DESC
+                ORDER BY lower(n.title) = ?4 DESC, lower(n.title) LIKE ?3 ESCAPE '\' DESC,
+                    n.is_pinned DESC, hits.score, n.updated_at DESC
                 LIMIT ?2
                 "#,
             )
             .context("Failed to prepare notes word search")?;
         for (tier, fts_query) in note_fts_queries(query).iter().enumerate() {
             let found = stmt
-                .query_map(params![fts_query, limit as i64, title_prefix], |row| {
-                    row.get::<_, String>(0)
-                })
+                .query_map(
+                    params![fts_query, limit as i64, title_prefix, title_exact],
+                    |row| row.get::<_, String>(0),
+                )
                 .context("Failed to run notes word search")?
                 .collect::<Result<Vec<_>, _>>()
                 .context("Failed to collect notes word search")?;
@@ -2229,6 +2231,21 @@ fn ranked_note_ids(conn: &Connection, query: &str, limit: usize) -> Result<Vec<S
         ids = note_ids_by_title_letters(conn, query, limit)?;
     }
     Ok(ids)
+}
+
+/// The ids of the notes `query` finds, best first, at most `limit`, without loading the
+/// notes themselves: the same ranking as [`search_notes`], for lists that already hold
+/// their rows.
+pub(crate) fn search_note_ids(query: &str, limit: usize) -> Result<Vec<NoteId>> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    Ok(ranked_note_ids(&conn, query, limit)?
+        .iter()
+        .filter_map(|id| NoteId::parse(id))
+        .collect())
 }
 
 /// Loads rows for `ids` with `select` (whose `?` list is filled in) and keeps `ids`' order.
