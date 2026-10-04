@@ -987,7 +987,7 @@ impl DayPageView {
     }
 
     pub fn focus_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.read_mode {
+        if self.read_mode || self.kit_resource_preview.is_some() {
             self.focus_handle.focus(window, cx);
             return;
         }
@@ -1019,6 +1019,12 @@ impl DayPageView {
     }
 
     fn focus_editor_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // A deferred focus can land after a preview replaced the editor; the hidden editor
+        // would take every key, Esc included, so the page keeps focus instead.
+        if self.read_mode || self.kit_resource_preview.is_some() {
+            self.focus_handle.focus(window, cx);
+            return;
+        }
         let input = self.notes_editor.read(cx).input_state();
         let title = self
             .new_note_title

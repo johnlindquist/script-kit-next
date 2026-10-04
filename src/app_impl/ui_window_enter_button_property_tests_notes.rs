@@ -1062,3 +1062,62 @@ fn add_it_to_todays_note_opens_today_with_the_words_added() {
     );
     assert_eq!(windows, 1, "no Notes window opens");
 }
+
+/// Opening a kept entry from ⌘K on today's page shows it in the editor's place. Closing ⌘K
+/// first asks the editor to take focus, and part of that request lands after the entry is
+/// already showing; the hidden editor must not take the keys, or Esc never reaches the page.
+/// The page's Escape closes the entry, leaves today's page open, and the editor types again.
+#[test]
+fn esc_closes_a_kept_entry_opened_from_today() {
+    let (keys_while_showing, preview_after_esc, editor_typing_again, still_on_today) =
+        in_launcher("notes_kept_entry_esc", 0, |cx| {
+            let _brain = OneBrain::new();
+            let (app, window) = launcher(cx, Jev::Off);
+            open_in_editor(&app, window, cx, NoteTarget::Today);
+            in_editor(&app, window, cx, |view, window, cx| {
+                view.fixture_shelf_previews = Some(std::collections::HashMap::from([(
+                    "kept-esc".to_string(),
+                    "# Kept\n- a line".to_string(),
+                )]));
+                view.adopt_clipboard_shelf_from(
+                    "- coffee\n09:20 [Clipboard entry](kit://clipboard-history?id=kept-esc)\n",
+                );
+                // What closing ⌘K does, then the row's action.
+                view.focus_editor(window, cx);
+                assert!(view.open_clipboard_shelf_entry("kept-esc", window, cx));
+            });
+            wait(cx, 100);
+            let keys_while_showing = in_editor(&app, window, cx, |view, window, cx| {
+                (
+                    view.focus_handle.is_focused(window),
+                    view.notes_editor.read(cx).is_focused(window, cx),
+                )
+            });
+            in_editor(&app, window, cx, |view, window, cx| {
+                view.handle_key_parts("escape", gpui::Modifiers::default(), window, cx);
+            });
+            wait(cx, 100);
+            let (preview_after_esc, editor_typing_again) =
+                in_editor(&app, window, cx, |view, window, cx| {
+                    (
+                        view.kit_resource_preview.is_some(),
+                        view.notes_editor.read(cx).is_focused(window, cx),
+                    )
+                });
+            let still_on_today = editor(&app, cx).is_some() && open_note_id(&app, cx).is_none();
+            (
+                keys_while_showing,
+                preview_after_esc,
+                editor_typing_again,
+                still_on_today,
+            )
+        });
+    assert_eq!(
+        keys_while_showing,
+        (true, false),
+        "the page, not the hidden editor, has the keys while the entry shows"
+    );
+    assert!(!preview_after_esc, "Esc closes the entry");
+    assert!(editor_typing_again, "the editor has the keys again");
+    assert!(still_on_today, "today's page is open again");
+}

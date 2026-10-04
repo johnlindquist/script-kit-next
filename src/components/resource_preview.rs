@@ -339,8 +339,13 @@ pub(crate) fn render_resource_preview(surface: ResourcePreviewSurface, cx: &App)
                 .border_1()
                 .border_color(cx.theme().border.opacity(BORDER_OPACITY))
                 .p(px(BODY_PADDING))
-                .text_xs()
-                .font_family(FONT_MONO)
+                // The body is read in place of the editor, so it reads at the editor's size
+                // and family (the theme's mono font) rather than as caption text.
+                .font_family(cx.theme().mono_font_family.clone())
+                .text_size(cx.theme().mono_font_size)
+                .line_height(gpui::rems(
+                    crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS,
+                ))
                 .text_color(cx.theme().foreground)
                 .child(text),
         )
