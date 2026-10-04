@@ -3747,6 +3747,10 @@ impl ActionsDialog {
             let (title_matched, indices) = highlight_ctx.indices_for(&action.title);
             if title_matched {
                 score += Self::title_match_tier(&indices, query_char_count);
+                // A title that is exactly what's typed leads one that only starts with it.
+                if action.title_lower == search_lower {
+                    score += 20;
+                }
                 title_indices = indices;
             }
         }

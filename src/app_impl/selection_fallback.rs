@@ -773,6 +773,12 @@ impl ScriptListApp {
                             anyhow::bail!(reason);
                         }
                         self.update_main_menu_dispatch_status("completed", None);
+                        // A held built-in hasn't run yet and may never run.
+                        if outcome.detail.as_deref()
+                            == Some(crate::action_helpers::BUILTIN_HELD_BEFORE_IT_RUNS)
+                        {
+                            return Ok(MainMenuDispatchResult::Dispatched);
+                        }
                     }
                     scripts::SearchResult::App(app_match) => {
                         if !self.execute_app(&app_match.app, cx) {
@@ -781,10 +787,14 @@ impl ScriptListApp {
                         self.one_window_app_launched(&app_match.app.name, cx);
                     }
                     scripts::SearchResult::Window(window_match) => {
-                        self.execute_window_focus(&window_match.window, cx);
+                        if !self.execute_window_focus(&window_match.window, cx) {
+                            return Ok(MainMenuDispatchResult::Dispatched);
+                        }
                     }
                     scripts::SearchResult::File(file_match) => {
-                        self.execute_root_file_open(&file_match.file, cx);
+                        if !self.execute_root_file_open(&file_match.file, cx) {
+                            return Ok(MainMenuDispatchResult::Dispatched);
+                        }
                     }
                     scripts::SearchResult::Note(note_match) => {
                         let outcome = self.execute_root_note_open(note_match.hit.id, cx);
@@ -1212,11 +1222,12 @@ impl ScriptListApp {
         });
     }
 
+    /// Opens a file found in the launcher. Returns whether it opened.
     pub(crate) fn execute_root_file_open(
         &mut self,
         file: &crate::file_search::FileResult,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         // Journal the query → choice pair so the brain can answer
         // "what did I just search for?".
         let query = self.filter_text.trim();
@@ -1240,10 +1251,11 @@ impl ScriptListApp {
                 format!("Failed to open {}", file.name),
                 cx,
             );
-            return;
+            return false;
         }
         self.record_root_file_open_use(file, cx);
         self.close_and_reset_window(cx);
+        true
     }
 
     pub(crate) fn execute_root_clipboard_history_paste(

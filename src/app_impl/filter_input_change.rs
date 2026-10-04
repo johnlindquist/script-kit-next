@@ -352,26 +352,9 @@ impl ScriptListApp {
                         input_mode,
                     );
                 }
-                let filtered_entries: Vec<_> = if filter.is_empty() {
-                    self.cached_clipboard_entries.iter().enumerate().collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    self.cached_clipboard_entries
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, e)| {
-                            e.text_preview.to_lowercase().contains(&filter_lower)
-                                || e.ocr_text
-                                    .as_deref()
-                                    .unwrap_or("")
-                                    .to_lowercase()
-                                    .contains(&filter_lower)
-                        })
-                        .collect()
-                };
-                self.focused_clipboard_entry_id = filtered_entries
-                    .get(*selected_index)
-                    .map(|(_, entry)| entry.id.clone());
+                let filter = filter.clone();
+                self.clipboard_history_refocus(&filter);
+                self.clipboard_history_read_full_text(&filter, cx);
                 cx.notify();
                 return; // Don't run main menu filter logic
             }

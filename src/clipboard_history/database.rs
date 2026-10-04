@@ -656,7 +656,15 @@ pub fn search_root_clipboard_history_meta(
             return Vec::new();
         }
     };
-    let full_text = entry_ids_whose_text_contains(&query);
+    // The answer Clipboard History already read covers every entry; otherwise only the
+    // entries listed here are read, so the scan stays as small as the list.
+    let full_text = match cached_entry_ids_whose_text_contains(&query) {
+        Some(ids) => ids,
+        None => std::sync::Arc::new(recent_entry_ids_whose_text_contains(
+            &query,
+            options.scan_limit,
+        )),
+    };
     entries
         .into_iter()
         .filter(root_clipboard_entry_is_eligible)
@@ -667,60 +675,108 @@ pub fn search_root_clipboard_history_meta(
         .collect()
 }
 
+/// Ids among the newest `limit` entries (pinned first, as listed) whose whole text
+/// contains `query_lower`.
+fn recent_entry_ids_whose_text_contains(
+    query_lower: &str,
+    limit: usize,
+) -> std::collections::HashSet<String> {
+    text_entry_ids_containing(query_lower, i64::try_from(limit).unwrap_or(i64::MAX))
+}
+
+/// Ids of text entries, among the newest `limit` (`-1` for all), whose whole text contains
+/// `query_lower`, ignoring case the same way the list's previews do. SQLite's `lower()`
+/// only folds A–Z, so it does the matching only for words with no other letters; other
+/// words are matched here after Unicode lowercasing.
+fn text_entry_ids_containing(query_lower: &str, limit: i64) -> std::collections::HashSet<String> {
+    const NEWEST: &str =
+        "id IN (SELECT id FROM history ORDER BY pinned DESC, timestamp DESC LIMIT ?2)";
+    let Ok(conn) = get_connection() else {
+        return Default::default();
+    };
+    let Ok(conn) = conn.lock() else {
+        return Default::default();
+    };
+    let ids = if query_lower.is_ascii() {
+        conn.prepare(&format!(
+            "SELECT id FROM history
+             WHERE content_type != 'image' AND instr(lower(content), ?1) > 0 AND {NEWEST}"
+        ))
+        .and_then(|mut stmt| {
+            stmt.query_map(params![query_lower, limit], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<_>>()
+        })
+    } else {
+        conn.prepare(
+            "SELECT id, content FROM history WHERE content_type != 'image' AND id IN
+             (SELECT id FROM history ORDER BY pinned DESC, timestamp DESC LIMIT ?1)",
+        )
+        .and_then(|mut stmt| {
+            let rows = stmt.query_map(params![limit], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            let mut ids = std::collections::HashSet::new();
+            for row in rows {
+                let (id, content) = row?;
+                if content.to_lowercase().contains(query_lower) {
+                    ids.insert(id);
+                }
+            }
+            Ok(ids)
+        })
+    };
+    ids.unwrap_or_else(|error| {
+        error!(
+            error_bytes = error.to_string().len(),
+            "Clipboard full-text search failed"
+        );
+        Default::default()
+    })
+}
+
+type FullTextAnswer = (
+    String,
+    u64,
+    std::sync::Arc<std::collections::HashSet<String>>,
+);
+
+/// The latest full-text answer: the words, the history revision it was read at, the ids.
+static FULL_TEXT_ANSWER: std::sync::Mutex<Option<FullTextAnswer>> = std::sync::Mutex::new(None);
+
+/// The ids whose whole copied text contains `query_lower`, if they were already read for
+/// these words and the current history. Memory only, so redraws and keys can ask freely.
+pub fn cached_entry_ids_whose_text_contains(
+    query_lower: &str,
+) -> Option<std::sync::Arc<std::collections::HashSet<String>>> {
+    let query_lower = query_lower.trim();
+    if query_lower.is_empty() {
+        return Some(std::sync::Arc::default());
+    }
+    let revision = super::cache::entry_cache_revision();
+    let answer = FULL_TEXT_ANSWER.lock().ok()?;
+    answer
+        .as_ref()
+        .filter(|(query, read_at, _)| query == query_lower && *read_at == revision)
+        .map(|(_, _, ids)| std::sync::Arc::clone(ids))
+}
+
 /// Ids of the text entries whose whole copied text contains `query_lower` — not only the
-/// 100-character preview the list shows. The answer for the latest query is kept until
-/// the words or the history change, so redraws and key handling don't read it again.
+/// 100-character preview the list shows. Reads the database unless the answer for these
+/// words and the current history is already kept; call it off the UI thread.
 pub fn entry_ids_whose_text_contains(
     query_lower: &str,
 ) -> std::sync::Arc<std::collections::HashSet<String>> {
-    use std::collections::HashSet;
-    use std::sync::{Arc, Mutex};
-    static LAST: Mutex<Option<(String, i64, i64, Arc<HashSet<String>>)>> = Mutex::new(None);
+    use std::sync::Arc;
 
+    if let Some(ids) = cached_entry_ids_whose_text_contains(query_lower) {
+        return ids;
+    }
     let query_lower = query_lower.trim();
-    if query_lower.is_empty() {
-        return Arc::new(HashSet::new());
-    }
-    let Ok(conn) = get_connection() else {
-        return Arc::new(HashSet::new());
-    };
-    let Ok(conn) = conn.lock() else {
-        return Arc::new(HashSet::new());
-    };
-    // The history changes when an entry is added, removed or re-copied.
-    let (count, newest): (i64, i64) = conn
-        .query_row(
-            "SELECT COUNT(*), COALESCE(MAX(timestamp), 0) FROM history",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .unwrap_or((0, 0));
-    if let Ok(last) = LAST.lock() {
-        if let Some((query, last_count, last_newest, ids)) = last.as_ref() {
-            if query == query_lower && *last_count == count && *last_newest == newest {
-                return Arc::clone(ids);
-            }
-        }
-    }
-    let ids: HashSet<String> = conn
-        .prepare(
-            "SELECT id FROM history
-             WHERE content_type != 'image' AND instr(lower(content), ?1) > 0",
-        )
-        .and_then(|mut stmt| {
-            stmt.query_map(params![query_lower], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<HashSet<_>>>()
-        })
-        .unwrap_or_else(|error| {
-            error!(
-                error_bytes = error.to_string().len(),
-                "Clipboard full-text search failed"
-            );
-            HashSet::new()
-        });
-    let ids = Arc::new(ids);
-    if let Ok(mut last) = LAST.lock() {
-        *last = Some((query_lower.to_string(), count, newest, Arc::clone(&ids)));
+    // Read before scanning: a change during the scan leaves this answer behind.
+    let revision = super::cache::entry_cache_revision();
+    let ids = Arc::new(text_entry_ids_containing(query_lower, -1));
+    if let Ok(mut answer) = FULL_TEXT_ANSWER.lock() {
+        *answer = Some((query_lower.to_string(), revision, Arc::clone(&ids)));
     }
     ids
 }
@@ -1384,6 +1440,39 @@ mod tests {
         assert!(get_entry_by_id(&pinned_id).is_some());
 
         reset_test_clipboard_db();
+    }
+
+    /// Words deep in a long copy are found with the same case rules as its preview,
+    /// accented capitals included, and a pinned copy counts among the newest.
+    #[test]
+    fn whole_copies_are_searched_with_the_preview_case_rules() {
+        let _guard = test_db_lock();
+        let dir = tempfile::tempdir().expect("tempdir");
+        init_test_clipboard_db(&dir.path().join("clipboard.sqlite")).expect("test db");
+        let padding = "words before the match ".repeat(20);
+        let accented =
+            add_entry(&format!("{padding}ÉCLAIR recipe"), ContentType::Text).expect("accented add");
+        let plain =
+            add_entry(&format!("{padding}NEEDLE here"), ContentType::Text).expect("plain add");
+        pin_entry(&accented).expect("pin");
+
+        let everywhere = |query: &str| text_entry_ids_containing(query, -1);
+        let newest_one = |query: &str| recent_entry_ids_whose_text_contains(query, 1);
+        let found = (
+            everywhere("éclair"),
+            everywhere("needle"),
+            everywhere("recipe here"),
+            newest_one("éclair"),
+            newest_one("needle"),
+        );
+        reset_test_clipboard_db();
+
+        let only = |id: &String| std::collections::HashSet::from([id.clone()]);
+        assert_eq!(found.0, only(&accented), "accented capitals deep in a copy");
+        assert_eq!(found.1, only(&plain), "plain capitals deep in a copy");
+        assert!(found.2.is_empty(), "words from two copies never join");
+        assert_eq!(found.3, only(&accented), "the pinned copy leads the newest");
+        assert!(found.4.is_empty(), "copies past the newest are left unread");
     }
 
     #[test]

@@ -637,3 +637,21 @@ fn the_apps_list_finds_apps_the_way_the_launcher_does() {
     assert_eq!(notes[0].0, "Notes");
     assert_eq!(notes[1].0, "Notes Helper");
 }
+
+/// Description words typed in any order each need a word of their own: typing a word twice
+/// finds only a description that says it twice.
+#[test]
+fn each_description_word_typed_needs_its_own_word() {
+    let builtins = vec![
+        make_builtin("Archive Tool", "Keep a resume of old work"),
+        make_builtin("Z Tool", "Resume a paused resume upload"),
+    ];
+    let names = |query: &str| {
+        fuzzy_search_builtins(&builtins, query)
+            .into_iter()
+            .map(|found| found.entry.name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names("resume resume"), ["Z Tool"]);
+    assert_eq!(names("old resume"), ["Archive Tool"]);
+}

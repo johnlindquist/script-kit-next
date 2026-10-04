@@ -912,8 +912,18 @@ impl ScriptListApp {
                             );
                         }
                         "escape" => {
-                            logging::log("STDIN", "SimulateKey: Escape - close AppLauncherView");
-                            view.go_back_or_close(window, ctx);
+                            if view.clear_builtin_view_filter(ctx) {
+                                logging::log(
+                                    "STDIN",
+                                    "SimulateKey: Escape - clear AppLauncherView filter",
+                                );
+                            } else {
+                                logging::log(
+                                    "STDIN",
+                                    "SimulateKey: Escape - close AppLauncherView",
+                                );
+                                view.go_back_or_close(window, ctx);
+                            }
                         }
                         _ => {
                             logging::log(
@@ -1918,7 +1928,22 @@ impl ScriptListApp {
                         // generic Cmd+K fallback above — automation could
                         // enter builtin views but never leave them.
                         let view_name = view.app_view_name();
-                        if view.clear_builtin_view_filter(ctx) {
+                        if let Some(entity) = match &view.current_view {
+                            AppView::SelectPrompt { entity, .. }
+                                if !entity.read(ctx).filter_text.is_empty() =>
+                            {
+                                Some(entity.clone())
+                            }
+                            _ => None,
+                        } {
+                            // Same as a physical Escape in the prompt: clear the typed
+                            // words first; the next Escape cancels.
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - clear SelectPrompt filter",
+                            );
+                            entity.update(ctx, |prompt, cx| prompt.set_input(String::new(), cx));
+                        } else if view.clear_builtin_view_filter(ctx) {
                             logging::log(
                                 "STDIN",
                                 &format!(

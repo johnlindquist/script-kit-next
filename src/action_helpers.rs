@@ -507,6 +507,10 @@ pub enum ActionOutcomeStatus {
     NoEffect,
 }
 
+/// `detail` of a built-in's outcome while it waits in its 8 s hold: accepted, not yet run.
+/// The launcher doesn't count a use for it.
+pub const BUILTIN_HELD_BEFORE_IT_RUNS: &str = "held_before_it_runs";
+
 /// Structured outcome from any action dispatch (builtin, SDK, or handler).
 ///
 /// Every `handle_*_action` function returns this so the top-level router can

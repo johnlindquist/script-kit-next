@@ -191,14 +191,7 @@ impl ScriptListApp {
             true,
         );
         let (tx, rx) = async_channel::bounded(1);
-        std::thread::spawn(move || {
-            let _ = tx.send_blocking(match plan {
-                crate::brain::RootBrainQueryPlan::Search(query) => {
-                    crate::brain::search_root_brain_direct(&query, &options)
-                }
-                _ => crate::brain::recent_root_brain_hits(options.max_results),
-            });
-        });
+        root_brain_lexical_worker().send((plan, options, tx));
         cx.spawn(async move |this, cx| {
             let result = rx
                 .recv()
@@ -242,7 +235,6 @@ impl ScriptListApp {
         })
         .detach();
     }
-
     pub(crate) fn maybe_start_root_brain_semantic_search(
         &mut self,
         value: &str,
@@ -452,4 +444,72 @@ impl ScriptListApp {
             self.maybe_start_root_brain_semantic_search(&value, cx);
         }
     }
+}
+
+type RootBrainLexicalJob = (
+    crate::brain::RootBrainQueryPlan,
+    crate::brain::RootBrainSectionOptions,
+    async_channel::Sender<anyhow::Result<Vec<crate::brain::RootBrainSearchHit>>>,
+);
+
+/// One thread reads the Brain index for the launcher. A read waiting behind a running
+/// one is dropped when a newer one arrives, so typing quickly never queues reads for
+/// text that is already gone; a dropped read's caller sees its channel close.
+struct RootBrainLexicalWorker {
+    pending: std::sync::Mutex<Option<RootBrainLexicalJob>>,
+    ready: std::sync::Condvar,
+}
+
+impl RootBrainLexicalWorker {
+    fn send(&self, job: RootBrainLexicalJob) {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *pending = Some(job);
+        self.ready.notify_one();
+    }
+
+    fn next(&self) -> RootBrainLexicalJob {
+        let mut pending = self
+            .pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        loop {
+            if let Some(job) = pending.take() {
+                return job;
+            }
+            pending = self
+                .ready
+                .wait(pending)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+}
+
+static ROOT_BRAIN_LEXICAL_WORKER: std::sync::LazyLock<RootBrainLexicalWorker> =
+    std::sync::LazyLock::new(|| RootBrainLexicalWorker {
+        pending: std::sync::Mutex::new(None),
+        ready: std::sync::Condvar::new(),
+    });
+
+fn root_brain_lexical_worker() -> &'static RootBrainLexicalWorker {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("root-brain-lexical".to_string())
+            .spawn(|| loop {
+                let (plan, options, tx) = ROOT_BRAIN_LEXICAL_WORKER.next();
+                let _ = tx.send_blocking(match plan {
+                    crate::brain::RootBrainQueryPlan::Search(query) => {
+                        crate::brain::search_root_brain_direct(&query, &options)
+                    }
+                    _ => crate::brain::recent_root_brain_hits(options.max_results),
+                });
+            });
+        if let Err(error) = spawned {
+            tracing::warn!(%error, "root brain lexical worker could not start");
+        }
+    });
+    &ROOT_BRAIN_LEXICAL_WORKER
 }

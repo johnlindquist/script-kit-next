@@ -91,8 +91,10 @@ pub(crate) struct NotesList {
     pub(crate) sort: NotesSort,
     /// How many notes are listed before "Show More".
     shown: usize,
-    /// Why notes couldn't be searched, said instead of an empty-looking list.
+    /// Why notes couldn't be searched; the empty list says it instead of looking empty.
     pub(crate) trouble: Option<String>,
+    /// Trouble that appeared since the line last said it.
+    unsaid: Option<String>,
     /// The day pages folder couldn't be read.
     days_unreadable: bool,
     /// Day pages, read once when the list opens rather than on every key.
@@ -113,10 +115,24 @@ fn day_title(date: NaiveDate) -> String {
     }
 }
 
-/// Pinned notes first, then the rest in `sort`'s order.
-pub(crate) fn order_found(found: &mut [Found], sort: NotesSort) {
+/// A title named exactly what's typed first, then one starting with it, then pinned notes,
+/// then the rest in `sort`'s order — the same order as the launcher's note search.
+pub(crate) fn order_found(found: &mut [Found], sort: NotesSort, query: &str) {
+    let typed = query.trim().to_lowercase();
+    let title_rank = |found: &Found| {
+        let title = found.title.to_lowercase();
+        match () {
+            _ if typed.is_empty() => 2,
+            _ if title == typed => 0,
+            _ if title.starts_with(&typed) => 1,
+            _ => 2,
+        }
+    };
     found.sort_by(|a, b| {
-        b.pinned.cmp(&a.pinned).then_with(|| match sort {
+        let ahead = title_rank(a)
+            .cmp(&title_rank(b))
+            .then_with(|| b.pinned.cmp(&a.pinned));
+        ahead.then_with(|| match sort {
             NotesSort::Changed => b.changed.cmp(&a.changed),
             NotesSort::Created => b.created.cmp(&a.created),
             NotesSort::Title => {
@@ -145,6 +161,7 @@ impl NotesList {
             sort: chosen_sort(),
             shown: LISTED_NOTES,
             trouble: None,
+            unsaid: None,
             days: days.unwrap_or_default(),
             days_unreadable,
         };
@@ -188,12 +205,16 @@ impl NotesList {
         if let Err(error) = &named {
             tracing::warn!(error = %error, "notes_list_search_failed");
         }
-        self.trouble = match (named.is_err(), self.days_unreadable) {
-            (true, true) => Some("couldn't read your notes or day pages".to_string()),
-            (true, false) => Some("couldn't search your notes; day pages only".to_string()),
-            (false, true) => Some("couldn't read day pages; notes only".to_string()),
+        let trouble = match (named.is_err(), self.days_unreadable) {
+            (true, true) => Some("Couldn't read your notes or day pages".to_string()),
+            (true, false) => Some("Couldn't search your notes; showing day pages only".to_string()),
+            (false, true) => Some("Couldn't read your day pages; showing notes only".to_string()),
             (false, false) => None,
         };
+        if trouble.is_some() && trouble != self.trouble {
+            self.unsaid = trouble.clone();
+        }
+        self.trouble = trouble;
         if let Ok(mut named) = named {
             // "yesterday" or "notes from march 3" also means the notes changed on that day.
             if day_query.only_dates() {
@@ -224,7 +245,7 @@ impl NotesList {
                 });
             }
         }
-        order_found(&mut found, self.sort);
+        order_found(&mut found, self.sort, &query);
         let total = found.len();
         if total > self.shown {
             found.truncate(self.shown);
@@ -263,10 +284,12 @@ impl NotesList {
     }
 
     pub(crate) fn label(&self) -> String {
-        match &self.trouble {
-            Some(trouble) => format!("Notes · {trouble}"),
-            None => format!("Notes · by {} · Tab to change", self.sort.words()),
-        }
+        format!("Notes · by {} · Tab to change", self.sort.words())
+    }
+
+    /// New trouble the line should say, once.
+    pub(crate) fn take_unsaid(&mut self) -> Option<String> {
+        self.unsaid.take()
     }
 
     pub(crate) fn enter(&self) -> EnterTarget {
@@ -319,6 +342,17 @@ impl ScriptListApp {
     pub(crate) fn one_window_open_notes_list(&mut self, query: String, cx: &mut Context<Self>) {
         let list = NotesList::new(query.clone());
         self.one_window_open_hosted(HostedView::Notes(list), Some(query), cx);
+        self.one_window_say_notes_trouble(cx);
+    }
+
+    /// Says in the line why the Notes list couldn't search, when that's new.
+    pub(crate) fn one_window_say_notes_trouble(&mut self, cx: &mut Context<Self>) {
+        let Some(HostedView::Notes(list)) = self.one_window_host.view.as_mut() else {
+            return;
+        };
+        if let Some(trouble) = list.take_unsaid() {
+            cx.defer(move |cx| crate::line_notice::say(cx, crate::line_notice::FAILED, trouble));
+        }
     }
 
     /// A note someone asked for while the window was hidden opens once it's shown.
@@ -382,6 +416,11 @@ impl ScriptListApp {
         let doc = list.found.get(list.sel).map(|found| found.doc.clone());
         if doc == Some(NoteDoc::More) {
             list.show_more();
+            if let Some(trouble) = list.take_unsaid() {
+                cx.defer(move |cx| {
+                    crate::line_notice::say(cx, crate::line_notice::FAILED, trouble)
+                });
+            }
             cx.notify();
             let after = list.enter();
             return if after != before {

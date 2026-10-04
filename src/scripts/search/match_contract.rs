@@ -133,23 +133,32 @@ pub(crate) fn normalized_substring_match(
     all_words_match(haystack, query_lower, tier)
 }
 
+/// Every query word starts a different word of the field, in any order: "resume resume" needs
+/// two words starting "resume". Longer words claim their word first, so "re res" still finds
+/// "res" and "re" in "re res".
 fn all_words_match(haystack: &str, query_lower: &str, tier: i32) -> Option<TextMatch> {
-    let words = query_lower.split_whitespace().collect::<Vec<_>>();
+    let mut words = query_lower
+        .split_whitespace()
+        .map(normalized_query_chars)
+        .collect::<Vec<_>>();
     if words.len() < 2 || query_lower.chars().count() > haystack.chars().count() {
         return None;
     }
+    words.sort_by_key(|word| std::cmp::Reverse(word.len()));
     let folded = normalized_chars_with_original_indices(haystack);
+    let mut claimed = Vec::with_capacity(words.len());
     let mut indices = Vec::new();
     for word in words {
-        let word = normalized_query_chars(word);
         let end = folded.len().checked_sub(word.len())?;
         let start = (0..=end).find(|&start| {
-            folded_index_is_word_start(&folded, start)
+            !claimed.contains(&start)
+                && folded_index_is_word_start(&folded, start)
                 && folded[start..start + word.len()]
                     .iter()
                     .map(|(ch, _)| *ch)
                     .eq(word.iter().copied())
         })?;
+        claimed.push(start);
         indices.extend(
             folded[start..start + word.len()]
                 .iter()

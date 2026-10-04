@@ -334,6 +334,7 @@ impl ScriptListApp {
             }
             if typed {
                 queue.extend(self.one_window_view_typed());
+                self.one_window_say_notes_trouble(cx);
             }
         }
         for row in runs {
@@ -701,21 +702,35 @@ impl ScriptListApp {
             .iter()
             .map(|(_, result)| name_source(result))
             .collect();
-        let mut picked = pick_across_sources(&sources, budget);
-        if let Some(at) = names.iter().position(|(row, _)| row.learned) {
-            if !picked.contains(&at) && picked.pop().is_some() {
-                picked.push(at);
-                picked.sort_unstable();
-            }
-        }
-        // A name typed exactly leads whichever source it comes from — a note called "Budget"
-        // goes above a command that merely contains the word — after the row learned for
-        // these words.
+        // The row an alias names comes first (A1), then the row learned for these words, then
+        // any name typed exactly, whichever source it comes from: a note called "Budget" goes
+        // above a command that merely contains the word. Each of those is listed even when
+        // spreading rows across sources would leave it to "See All".
         let typed = text.trim().to_lowercase();
-        picked.sort_by_key(|&at| {
+        let alias = (!typed.is_empty())
+            .then(|| self.find_alias_match(text.trim()))
+            .flatten();
+        let rank = |at: usize| {
             let (row, result) = &names[at];
-            (!row.learned, result.name().trim().to_lowercase() != typed)
-        });
+            let aliased = alias.as_ref().is_some_and(|alias| alias.is_target(result));
+            let exact = result.name().trim().to_lowercase() == typed;
+            (!aliased, !row.learned, !exact)
+        };
+        let plain = (true, true, true);
+        let mut picked = pick_across_sources(&sources, budget);
+        let mut must: Vec<usize> = (0..names.len()).filter(|&at| rank(at) != plain).collect();
+        must.sort_by_key(|&at| (rank(at), at));
+        for at in must {
+            if picked.contains(&at) {
+                continue;
+            }
+            let Some(evict) = picked.iter().rposition(|&kept| rank(kept) == plain) else {
+                break;
+            };
+            picked.remove(evict);
+            picked.push(at);
+        }
+        picked.sort_by_key(|&at| (rank(at), at));
         for &at in &picked {
             let (row, result) = &names[at];
             results.insert(row.key.clone(), (*result).clone());

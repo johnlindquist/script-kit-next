@@ -3478,37 +3478,7 @@ impl ScriptListApp {
         // Pinned positionally; the score only matters if a later pass re-sorts.
         let pin_score = i32::MAX;
 
-        let is_alias_target: Box<dyn Fn(&SearchResult) -> bool> = match alias_match {
-            AliasMatch::Script(script) => {
-                let path = script.path.clone();
-                Box::new(
-                    move |result| matches!(result, SearchResult::Script(sm) if sm.script.path == path),
-                )
-            }
-            AliasMatch::Scriptlet(scriptlet) => {
-                let name = scriptlet.name.clone();
-                let file_path = scriptlet.file_path.clone();
-                Box::new(move |result| {
-                    matches!(
-                        result,
-                        SearchResult::Scriptlet(sm)
-                            if sm.scriptlet.name == name && sm.scriptlet.file_path == file_path
-                    )
-                })
-            }
-            AliasMatch::BuiltIn(entry) => {
-                let id = entry.id.clone();
-                Box::new(
-                    move |result| matches!(result, SearchResult::BuiltIn(bm) if bm.entry.id == id),
-                )
-            }
-            AliasMatch::App(app) => {
-                let path = app.path.clone();
-                Box::new(
-                    move |result| matches!(result, SearchResult::App(am) if am.app.path == path),
-                )
-            }
-        };
+        let is_alias_target = |result: &SearchResult| alias_match.is_target(result);
 
         let fallback: Box<dyn Fn() -> SearchResult> = match alias_match {
             AliasMatch::Script(script) => {
@@ -3566,7 +3536,7 @@ impl ScriptListApp {
         crate::scripts::pin_alias_match_first(
             grouped_items,
             flat_results,
-            is_alias_target.as_ref(),
+            &is_alias_target,
             fallback.as_ref(),
             Some(ranking_evidence),
         );

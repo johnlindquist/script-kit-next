@@ -115,8 +115,8 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
         HostedView::Notes(list) if list.found.is_empty() => vec![match &list.trouble {
             Some(trouble) => ViewRow {
                 id: "notes-row:trouble".into(),
-                title: "Notes couldn't be searched".into(),
-                description: Some(trouble.clone()),
+                title: trouble.clone(),
+                description: Some("Esc goes back; reopen Notes to try again".into()),
                 icon: "warning",
                 selected: true,
                 word: None,

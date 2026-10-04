@@ -29,6 +29,8 @@ pub(crate) struct StagedActionRow {
     pub(crate) selected: bool,
     /// Title letters that matched what's typed.
     pub(crate) highlights: Vec<usize>,
+    /// Description letters that matched, when the row was found by its description.
+    pub(crate) description_highlights: Vec<usize>,
 }
 
 /// The dialog's actions as its row for each entry of `grouped_items`: `None` for the dialog's
@@ -51,6 +53,11 @@ pub(crate) fn staged_action_slots(dialog: &ActionsDialog) -> Vec<Option<StagedAc
                     selected: selected.as_deref() == Some(action.id.as_str()),
                     highlights: dialog
                         .filtered_title_match_indices
+                        .get(*filtered)
+                        .cloned()
+                        .unwrap_or_default(),
+                    description_highlights: dialog
+                        .filtered_description_match_indices
                         .get(*filtered)
                         .cloned()
                         .unwrap_or_default(),
@@ -103,6 +110,7 @@ pub(crate) fn render_staged_actions(
                     .icon_kind(IconKind::Svg(row.icon.clone()))
                     .description_opt(row.description.clone())
                     .highlight_indices(row.highlights.clone())
+                    .description_highlight_indices(row.description_highlights.clone())
                     .selected(row.selected)
                     .main_menu_theme(main_menu_theme),
             )
@@ -141,9 +149,7 @@ pub(crate) fn render_staged_actions(
                         ListItem::new(format!("No actions match \u{201c}{typed}\u{201d}"), colors)
                             .semantic_id("staged-action:none".to_string())
                             .icon_kind(IconKind::Svg("MagnifyingGlass".to_string()))
-                            .description_opt(Some(
-                                "Fewer letters widen it; Esc clears what you typed".to_string(),
-                            ))
+                            .description_opt(Some("Delete some letters to see more".to_string()))
                             .main_menu_theme(main_menu_theme),
                     ),
             )

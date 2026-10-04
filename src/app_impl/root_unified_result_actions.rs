@@ -1020,8 +1020,7 @@ pub(crate) fn execute_root_unified_result_action(
             copy(app_info.bundle_id.clone().unwrap_or_default(), cx)
         }
         (RootUnifiedResultAction::WindowSwitch, RootUnifiedActionSubject::Window(window_info)) => {
-            app.execute_window_focus(window_info, cx);
-            true
+            app.execute_window_focus(window_info, cx)
         }
         (
             RootUnifiedResultAction::WindowCopyTitle,

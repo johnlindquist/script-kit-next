@@ -924,16 +924,17 @@ fn filtered_directory_recompute_reapplies_active_sort_mode() {
 fn directory_stream_batches_reapply_active_sort_mode_before_recompute() {
     let source = include_str!("../../src/app_impl/filter_input_change.rs");
     let block_start = source
-        .find("if needs_recompute {")
-        .expect("needs_recompute block must exist");
+        .find("let is_directory_query = matches!(")
+        .expect("stream batch handling must identify directory queries");
     let block = &source[block_start..(block_start + 1200).min(source.len())];
-
+    let sort = block
+        .find("self.apply_file_search_sort_mode();")
+        .expect("stream batch handling must reapply the active sort mode");
+    let recompute = block
+        .find("self.recompute_file_search_display_indices();")
+        .expect("stream batch handling must recompute the visible rows");
     assert!(
-        block.contains("let is_directory_query = matches!("),
-        "stream batch handling must identify directory queries before recompute"
-    );
-    assert!(
-        block.contains("self.apply_file_search_sort_mode();"),
+        sort < recompute,
         "stream batch handling must reapply the active sort mode before recomputing indices"
     );
 }

@@ -398,7 +398,38 @@ pub(crate) fn load_note_search_state(
         }
     }
 
-    match load_note_search_corpus(days_dir) {
+    note_search_state_from(
+        load_note_search_corpus(days_dir),
+        query,
+        generation,
+        prior_snapshot,
+    )
+}
+
+/// The ⌘P switcher's starting list, and the day pages read to build it, so its full-text
+/// searches reuse them instead of reading the days folder again.
+pub(crate) fn load_note_switcher_state(
+    days_dir: &Path,
+) -> (
+    NoteSearchState,
+    Vec<super::day_switcher::DayNoteSwitcherEntry>,
+) {
+    match load_note_search_corpus_with_days(days_dir) {
+        Ok((rows, days)) => (note_search_state_from(Ok(rows), "", 1, None), days),
+        Err(failure) => (
+            note_search_state_from(Err(failure), "", 1, None),
+            Vec::new(),
+        ),
+    }
+}
+
+fn note_search_state_from(
+    corpus: Result<Vec<NoteSearchRow>, Box<AppFailureRecord>>,
+    query: &str,
+    generation: u64,
+    prior_snapshot: Option<NoteSearchSnapshot>,
+) -> NoteSearchState {
+    match corpus {
         Ok(rows) => {
             let total_count = rows.len();
             let rows = rank_note_search_rows(rows, query);
@@ -425,22 +456,34 @@ pub(crate) fn load_note_search_state(
 pub(crate) fn load_note_search_corpus(
     days_dir: &Path,
 ) -> Result<Vec<NoteSearchRow>, Box<AppFailureRecord>> {
+    load_note_search_corpus_with_days(days_dir).map(|(rows, _)| rows)
+}
+
+fn load_note_search_corpus_with_days(
+    days_dir: &Path,
+) -> Result<
+    (
+        Vec<NoteSearchRow>,
+        Vec<super::day_switcher::DayNoteSwitcherEntry>,
+    ),
+    Box<AppFailureRecord>,
+> {
     let notes =
         super::get_all_notes().map_err(|error| Box::new(search_failure(&error.to_string())))?;
     let days = super::day_switcher::load_day_note_switcher_entries_result(days_dir)
         .map_err(|error| Box::new(search_failure(&error.to_string())))?;
 
     let mut rows = notes.into_iter().map(note_search_row).collect::<Vec<_>>();
-    rows.extend(days.into_iter().map(|entry| NoteSearchRow {
+    rows.extend(days.iter().map(|entry| NoteSearchRow {
         id: NoteSearchDocumentId::Day(entry.date),
-        title: entry.title,
+        title: entry.title.clone(),
         preview: note_search_preview(&entry.content),
         updated_at: entry.updated_at,
         char_count: entry.content.chars().count(),
         pinned: false,
         kind: NoteSearchDocumentKind::Day,
     }));
-    Ok(rows)
+    Ok((rows, days))
 }
 
 pub(crate) fn rank_note_search_rows(

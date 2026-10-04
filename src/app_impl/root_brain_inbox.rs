@@ -6,9 +6,9 @@
 //! empty-query view can pin a "Brain Inbox" section at the very top (see
 //! `crate::scripts::prepend_root_brain_inbox_section`).
 //!
-//! Refresh model: cheap sqlite read, throttled to once per
-//! [`ROOT_BRAIN_INBOX_TTL`]. Hooked where the main window becomes visible
-//! (`show_main_window_helper`) and on filter-text changes, so the section is
+//! Refresh model: a sqlite read, throttled to once per [`ROOT_BRAIN_INBOX_TTL`] and
+//! run on a background thread in production. Hooked where the main window becomes
+//! visible (`show_main_window_helper`) and on filter-text changes, so the section is
 //! current whenever the empty root query is shown. Resolving an item drops it
 //! from the snapshot immediately — notification semantics: touching it clears
 //! it.
@@ -45,6 +45,13 @@ impl ScriptListApp {
             return;
         }
         let query = self.computed_filter_text.clone();
+        if self.main_services.search_gate().is_none()
+            && self.main_services.owned_sources().is_none()
+            && !crate::runtime_policy::is_owned_evaluation()
+        {
+            self.start_root_brain_inbox_read(now, query, cx);
+            return;
+        }
         let generation = self
             .root_search
             .allocate_named_provider_generation("brain-inbox");
@@ -116,6 +123,68 @@ impl ScriptListApp {
         } else {
             apply(self, cx);
         }
+    }
+
+    /// Production's Inbox read: the Brain database is read on a background thread, so
+    /// typing never waits on it, and the rows join the list when they arrive. One read runs
+    /// at a time; keys pressed meanwhile leave it alone.
+    fn start_root_brain_inbox_read(
+        &mut self,
+        now: std::time::Instant,
+        query: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .root_search
+            .provider_admission_owner("brain-inbox")
+            .is_some()
+        {
+            return;
+        }
+        let generation = self
+            .root_search
+            .allocate_named_provider_generation("brain-inbox");
+        self.root_search.begin_named_provider(
+            "brain-inbox",
+            generation,
+            &query,
+            "",
+            RootProviderPublicationPolicy::Visible,
+            true,
+        );
+        let read = cx.background_spawn(async move {
+            crate::brain::open_inbox_items(ROOT_BRAIN_INBOX_LOAD_LIMIT)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = read.await;
+            let _ = this.update(cx, |app, cx| {
+                let terminal = F::ProviderTerminal::for_result(&result);
+                app.commit_main_menu_results_refresh(
+                    "brain_inbox_refresh_complete",
+                    Some(("brain-inbox", generation)),
+                    cx,
+                    |app, _cx| {
+                        let changed = app.root_search.install_root_brain_inbox_read(
+                            generation,
+                            now,
+                            result,
+                            true,
+                            ROOT_BRAIN_INBOX_LOAD_LIMIT,
+                        );
+                        app.root_search.finish_named_provider(
+                            "brain-inbox",
+                            generation,
+                            terminal.into(),
+                        );
+                        if changed {
+                            app.invalidate_root_passive_and_grouped_cache();
+                        }
+                        changed
+                    },
+                );
+            });
+        })
+        .detach();
     }
 
     /// Resolve through the real source owner before dropping its accepted row.

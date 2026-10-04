@@ -192,6 +192,11 @@ pub(crate) fn root_clipboard_history_cache_is_fresh() -> bool {
         && (!get_entry_cache().lock().is_empty() || *entry_cache_ready().lock())
 }
 
+/// Advances whenever entries are added, removed, re-copied, pinned or reloaded.
+pub(crate) fn entry_cache_revision() -> u64 {
+    ENTRY_CACHE_REVISION.load(Ordering::Relaxed)
+}
+
 #[allow(dead_code)] // Root search cache receipts use this through the binary app layer.
 /// Accepted metadata cache revision and row count, observed under the owner locks.
 pub(crate) fn root_clipboard_history_fresh_cache_status() -> Option<(u64, usize)> {

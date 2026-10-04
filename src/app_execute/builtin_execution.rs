@@ -1726,7 +1726,8 @@ impl ScriptListApp {
                 }),
                 cx,
             );
-            let outcome = Self::builtin_success(&dctx, "held_before_it_runs");
+            let outcome =
+                Self::builtin_success(&dctx, crate::action_helpers::BUILTIN_HELD_BEFORE_IT_RUNS);
             Self::log_builtin_outcome(&entry.id, &dctx, "hold", &outcome, &start);
             return Some(outcome);
         }

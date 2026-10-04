@@ -128,12 +128,12 @@ impl ScriptListApp {
         }
     }
 
-    /// Focus a window from the main search results
+    /// Focus a window from the main search results. Returns whether it was focused.
     fn execute_window_focus(
         &mut self,
         window: &window_control::WindowInfo,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let execution_action = SearchResultExecutionAction::FocusWindow;
         tracing::info!(message = %&format!("Focusing window: {} - {}", window.app, window.title),
         );
@@ -142,11 +142,13 @@ impl ScriptListApp {
             let message = execution_action.failure_message(&window.title, &e);
             tracing::error!(message = %message);
             self.notice_failed(message, cx);
+            false
         } else {
             tracing::info!(message = %&format!("Focused window: {}", window.title));
             self.root_search
                 .record_root_window_focus(window.selection_key());
             self.close_and_reset_window(cx);
+            true
         }
     }
 

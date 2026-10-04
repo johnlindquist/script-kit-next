@@ -149,7 +149,9 @@ impl ClipboardHistoryFilterQuery {
 
 impl ScriptListApp {
     /// Rows matching `filter`, searching each copy's whole text (not only its preview) and
-    /// image text. Entries are matched first and only the matches are copied.
+    /// image text. Whole texts come from the last background read for these words
+    /// (`clipboard_history_read_full_text`); until it lands, previews and image text match.
+    /// Entries are matched first and only the matches are copied.
     pub(crate) fn clipboard_history_visible_rows_for_entries(
         entries: &[clipboard_history::ClipboardEntryMeta],
         filter: &str,
@@ -158,13 +160,65 @@ impl ScriptListApp {
         if query.is_empty() {
             return entries.iter().cloned().enumerate().collect();
         }
-        let full_text = clipboard_history::entry_ids_whose_text_contains(&query.text);
+        let full_text = clipboard_history::cached_entry_ids_whose_text_contains(&query.text)
+            .unwrap_or_default();
         entries
             .iter()
             .enumerate()
             .filter(|(_, entry)| query.matches(entry, &full_text))
             .map(|(index, entry)| (index, entry.clone()))
             .collect()
+    }
+
+    /// Reads which copies contain `filter`'s words in their whole text on a background
+    /// thread, then redraws the list if those words are still the ones typed. A read is
+    /// skipped when newer words arrive before it starts.
+    pub(crate) fn clipboard_history_read_full_text(
+        &mut self,
+        filter: &str,
+        cx: &mut Context<Self>,
+    ) {
+        static TYPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let text = ClipboardHistoryFilterQuery::parse(filter).text;
+        let typed = TYPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        if clipboard_history::cached_entry_ids_whose_text_contains(&text).is_some() {
+            return;
+        }
+        let still_typed = move || TYPED.load(std::sync::atomic::Ordering::Relaxed) == typed;
+        let pause = cx
+            .background_executor()
+            .timer(std::time::Duration::from_millis(40));
+        let read = text.clone();
+        let scan = cx.background_spawn(async move {
+            pause.await;
+            still_typed().then(|| clipboard_history::entry_ids_whose_text_contains(&read))
+        });
+        cx.spawn(async move |this, cx| {
+            if scan.await.is_none() {
+                return;
+            }
+            let _ = this.update(cx, |app, cx| {
+                let AppView::ClipboardHistoryView { filter, .. } = &app.current_view else {
+                    return;
+                };
+                if ClipboardHistoryFilterQuery::parse(filter).text == text {
+                    let filter = filter.clone();
+                    app.clipboard_history_refocus(&filter);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Points the focused entry at the selected visible row.
+    pub(crate) fn clipboard_history_refocus(&mut self, filter: &str) {
+        let AppView::ClipboardHistoryView { selected_index, .. } = &self.current_view else {
+            return;
+        };
+        self.focused_clipboard_entry_id = self
+            .clipboard_history_selected_visible_row(filter, *selected_index)
+            .map(|(_, entry)| entry.id);
     }
 
     fn clipboard_history_visible_rows(

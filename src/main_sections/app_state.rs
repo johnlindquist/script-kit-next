@@ -2040,6 +2040,27 @@ enum AliasMatch {
     App(Arc<app_launcher::AppInfo>),
 }
 
+impl AliasMatch {
+    /// Whether `result` is the command this alias names.
+    fn is_target(&self, result: &scripts::SearchResult) -> bool {
+        use scripts::SearchResult;
+        match (self, result) {
+            (AliasMatch::Script(script), SearchResult::Script(found)) => {
+                found.script.path == script.path
+            }
+            (AliasMatch::Scriptlet(scriptlet), SearchResult::Scriptlet(found)) => {
+                found.scriptlet.name == scriptlet.name
+                    && found.scriptlet.file_path == scriptlet.file_path
+            }
+            (AliasMatch::BuiltIn(entry), SearchResult::BuiltIn(found)) => {
+                found.entry.id == entry.id
+            }
+            (AliasMatch::App(app), SearchResult::App(found)) => found.app.path == app.path,
+            _ => false,
+        }
+    }
+}
+
 pub(crate) const ROOT_LAUNCHER_PLACEHOLDER: &str = "Search or ask";
 
 #[cfg(test)]

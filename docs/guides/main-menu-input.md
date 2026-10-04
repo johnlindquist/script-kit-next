@@ -20,7 +20,7 @@ A small set of symbols says part of a sentence exactly, turning the input into a
 | `:type:script deploy` | Filtered search |
 | `~` / `~/Downloads` | Exit to File Search |
 | `!` | Exit to Quick Terminal |
-| `?` | Actions help |
+| `?` | Exit to Help |
 
 ## Prompt-Builder Sigils
 
@@ -48,7 +48,7 @@ A sigil only counts at a word boundary — `hello@world.com` is plain search.
 - `⌘↵` — with typed words, **Do It**: run Jev's first reading (same as `⌘1`). With empty input, **Agent**: open the model's chat.
 - `↑` on an empty input — stage the last run (undo it, run it again, share it).
 - `Escape` — let go of what's staged first, then go back one view, then clear the input, and only then hide the window.
-- In every list opened from the launcher (Apps, File Search, Clipboard History, Help, a script's choice prompt), `Escape` first clears what you typed; with nothing typed it goes back, or cancels the script's prompt.
+- Lists opened from the launcher (Apps, File Search, Clipboard History, Help, a script's choice prompt) follow their own order: `Escape` first clears what you typed, then goes back, or cancels the script's prompt. Three exceptions leave at once: an action list (`⌘K`) lets go of what's staged, and choosing a working folder after `Tab` or picking a file or copy to attach returns without clearing.
 - The Notes list shows 60 notes at a time; a last "Show N More" row says how many matched in all, and ↵ on it lists the next ones.
 
 ### Selection while results arrive

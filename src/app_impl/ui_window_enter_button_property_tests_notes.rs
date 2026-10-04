@@ -167,12 +167,29 @@ fn pinned_notes_come_first_in_every_order() {
         found("apple", false, 10, 30),
         found("zebra", true, 1, 1),
     ];
-    order_found(&mut list, NotesSort::Changed);
+    order_found(&mut list, NotesSort::Changed, "");
     assert_eq!(titles(&list), ["zebra", "banana", "apple"]);
-    order_found(&mut list, NotesSort::Title);
+    order_found(&mut list, NotesSort::Title, "");
     assert_eq!(titles(&list), ["zebra", "apple", "banana"]);
-    order_found(&mut list, NotesSort::Created);
+    order_found(&mut list, NotesSort::Created, "");
     assert_eq!(titles(&list), ["zebra", "apple", "banana"]);
+}
+
+/// Searching, a note named exactly what's typed leads, then one starting with it, and only
+/// then pinned notes — whatever order the list is in.
+#[test]
+fn a_typed_title_leads_pinned_notes_in_every_order() {
+    let mut list = vec![
+        found("Budget Archive", true, 30, 30),
+        found("Q3 budget notes", true, 40, 40),
+        found("Budgeting", false, 20, 20),
+        found("Budget", false, 10, 10),
+    ];
+    for sort in [NotesSort::Changed, NotesSort::Title, NotesSort::Created] {
+        order_found(&mut list, sort, " budget ");
+        assert_eq!(titles(&list)[0], "Budget", "{sort:?}");
+        assert_eq!(titles(&list)[3], "Q3 budget notes", "{sort:?}");
+    }
 }
 
 #[test]
@@ -182,7 +199,7 @@ fn by_title_day_pages_follow_named_notes() {
         found("zebra", false, 1, 1),
     ];
     list[0].doc = NoteDoc::Day(chrono::NaiveDate::from_ymd_opt(2026, 9, 30).unwrap());
-    order_found(&mut list, NotesSort::Title);
+    order_found(&mut list, NotesSort::Title, "");
     assert_eq!(titles(&list), ["zebra", "2026-09-30 · Tuesday"]);
 }
 
