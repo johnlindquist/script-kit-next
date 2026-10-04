@@ -18,6 +18,17 @@ Notes are a plain folder of Markdown files, laid out the way Obsidian and other 
 
 `~/.scriptkit/db/notes.sqlite` is a search index rebuilt from the files. Scripts and agents change notes through the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`); never write the database.
 
+## Finding a Note
+
+Every notes search (the launcher, `@notes:`, the Notes list and the model's context search) matches the same way:
+
+- The words of a title or body in any order, the last one half typed: `trip lisb`, `hotel castle`. Word forms count (`booking` finds `booked`), and accents don't matter.
+- Request phrasing is skipped when the words alone find nothing: `find my note about the lisbon trip`.
+- A slip in a title still finds it when nothing else matches: `lisbn` → "Lisbon trip".
+- Day pages by date: `today`, `yesterday`, `tuesday`, `march 3`, `3 mar`, `2026-03-03`, `2026-03`, or with words on the page (`march sam invoice`). In the Notes list a date alone also lists the notes changed that day.
+- `@notes:` is one word, so join words with `-`: `@notes:lisbon-trip`.
+- `#tag`, `tag:`, `alias:` and `link:` search note metadata.
+
 ## Opening a Note
 
 - **Hotkey**: `Cmd+Ctrl+N` opens today's note by default — override with `notesHotkey` or disable with `notesHotkeyEnabled: false` in `config.ts`

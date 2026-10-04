@@ -1045,7 +1045,8 @@ mod tests {
 
         let note = Note {
             id: NoteId::new(),
-            title: format!("{token} title"),
+            // The token sits only in the body: a title match is found without the word index.
+            title: "Desynced index note".to_string(),
             content: format!("{token} content"),
             created_at: now,
             updated_at: now,
@@ -1130,6 +1131,71 @@ mod tests {
         assert!(
             results.iter().any(|candidate| candidate.id == note.id),
             "search should return the note that contains the special-character query"
+        );
+    }
+
+    /// People rarely type a note's exact wording: they type its words in another order, stop
+    /// mid-word, use another form of a word, wrap it in a request, or slip a letter. Each of
+    /// these must still find the note in the shared store search and the launcher's search,
+    /// while a word the note doesn't contain must still rule it out.
+    #[test]
+    fn test_search_finds_notes_the_way_people_type() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().expect("notes db should initialize before search phrasing test");
+        let now = Utc::now();
+        let note = Note {
+            id: NoteId::new(),
+            title: "Quokkaville trip".to_string(),
+            content: "Flights booked with TAP.\nHotel in Alfama near the castle.\n".to_string(),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: false,
+            sort_order: 0,
+        };
+        save_note(&note).expect("failed to save note for search phrasing test");
+        let root = RootNotesSectionOptions {
+            enabled: true,
+            max_results: 5,
+            min_query_chars: 0,
+            search_content: true,
+        };
+        let found = |query: &str| {
+            let store = search_notes(query)
+                .expect("search should succeed")
+                .iter()
+                .any(|candidate| candidate.id == note.id);
+            let launcher = search_root_notes_meta(query, root)
+                .iter()
+                .any(|candidate| candidate.id == note.id);
+            (store, launcher)
+        };
+
+        let wanted = [
+            "trip quokkaville",
+            "quokkav",
+            "hotel castle",
+            // How `@notes:` carries several words, as Jev writes it.
+            "hotel-castle",
+            "booking",
+            "find my note about the quokkaville trip",
+            "quokkavile",
+        ];
+        let results: Vec<_> = wanted.iter().map(|query| (*query, found(query))).collect();
+        let ruled_out = found("quokkaville paris");
+        delete_note_permanently(note.id).expect("cleanup failed for search phrasing note");
+
+        for (query, (store, launcher)) in results {
+            assert!(store, "store search should find the note for {query:?}");
+            assert!(
+                launcher,
+                "launcher search should find the note for {query:?}"
+            );
+        }
+        assert_eq!(
+            ruled_out,
+            (false, false),
+            "a word the note lacks must rule it out"
         );
     }
 

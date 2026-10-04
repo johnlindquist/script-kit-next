@@ -84,14 +84,47 @@ fn ensure_notes_schema(conn: &Connection) -> Result<()> {
             title,
             content,
             content='notes',
-            content_rowid='rowid'
+            content_rowid='rowid',
+            tokenize='porter unicode61 remove_diacritics 2'
         );
         "#,
     )
     .context("Failed to create notes tables")?;
 
     migrate_notes_schema(conn)?;
+    ensure_notes_fts_tokenizer(conn)?;
     ensure_notes_fts_triggers(conn)?;
+    Ok(())
+}
+
+/// Older stores indexed exact words only. Re-create the word index with stemming (so
+/// "booking" finds "booked") and accent folding, then refill it from the notes table.
+fn ensure_notes_fts_tokenizer(conn: &Connection) -> Result<()> {
+    let sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'notes_fts'",
+            [],
+            |row| row.get(0),
+        )
+        .context("Failed to read notes search index definition")?;
+    if sql.contains("porter") {
+        return Ok(());
+    }
+    conn.execute_batch(
+        r#"
+        DROP TABLE notes_fts;
+        CREATE VIRTUAL TABLE notes_fts USING fts5(
+            title,
+            content,
+            content='notes',
+            content_rowid='rowid',
+            tokenize='porter unicode61 remove_diacritics 2'
+        );
+        INSERT INTO notes_fts(notes_fts) VALUES('rebuild');
+        "#,
+    )
+    .context("Failed to rebuild notes search index with stemming")?;
+    info!("Rebuilt notes search index with stemming");
     Ok(())
 }
 

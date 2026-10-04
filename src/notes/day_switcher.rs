@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc, Weekday};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -38,13 +38,195 @@ pub(crate) fn day_page_file_matches(query: &str, limit: usize) -> Vec<crate::scr
     )
 }
 
+/// A date a query names: "today", "yesterday", a weekday, a month, "march 3" / "3 mar", or an
+/// ISO date or part of one ("2026-03").
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DateTest {
+    On(NaiveDate),
+    Weekday(Weekday),
+    Month(u32),
+    MonthDay(u32, u32),
+    IsoText(String),
+}
+
+impl DateTest {
+    fn holds(&self, date: NaiveDate) -> bool {
+        match self {
+            Self::On(day) => date == *day,
+            Self::Weekday(weekday) => date.weekday() == *weekday,
+            Self::Month(month) => date.month() == *month,
+            Self::MonthDay(month, day) => date.month() == *month && date.day() == *day,
+            Self::IsoText(text) => date.to_string().contains(text.as_str()),
+        }
+    }
+}
+
+/// Words that phrase a request about days rather than say what a day page holds.
+const DAY_QUERY_FILLER: &[&str] = &[
+    "a", "about", "day", "days", "find", "for", "from", "in", "last", "my", "note", "notes", "of",
+    "on", "open", "page", "pages", "show", "the", "what", "did", "i", "do", "was", "were",
+];
+
+fn weekday_named(word: &str) -> Option<Weekday> {
+    Some(match word {
+        "monday" | "mon" => Weekday::Mon,
+        "tuesday" | "tue" | "tues" => Weekday::Tue,
+        "wednesday" | "wed" => Weekday::Wed,
+        "thursday" | "thu" | "thur" | "thurs" => Weekday::Thu,
+        "friday" | "fri" => Weekday::Fri,
+        // "sat" and "sun" are ordinary words too often to read as days.
+        "saturday" => Weekday::Sat,
+        "sunday" => Weekday::Sun,
+        _ => return None,
+    })
+}
+
+fn month_named(word: &str) -> Option<u32> {
+    const MONTHS: [&str; 12] = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ];
+    if word == "sept" {
+        return Some(9);
+    }
+    MONTHS
+        .iter()
+        .position(|month| *month == word || (word.len() == 3 && month.starts_with(word)))
+        .map(|at| at as u32 + 1)
+}
+
+/// "3", "3rd", "21st" as a day of the month.
+fn day_of_month(word: &str) -> Option<u32> {
+    let digits = word.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    let suffix = &word[digits.len()..];
+    if digits.is_empty() || !matches!(suffix, "" | "st" | "nd" | "rd" | "th") {
+        return None;
+    }
+    digits.parse().ok().filter(|day| (1..=31).contains(day))
+}
+
+/// What a typed query asks of day pages: the dates it names and the words a page must hold.
+/// Both `@notes:` and the Notes list read day pages through this, so "march 3", "mar-3",
+/// "tuesday", "yesterday" and "sam invoice" find the same pages everywhere.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DayQuery {
+    dates: Vec<DateTest>,
+    words: Vec<String>,
+    everything: bool,
+}
+
+impl DayQuery {
+    pub(crate) fn parse(query: &str, today: NaiveDate) -> Self {
+        let lower = query.trim().to_lowercase();
+        let mut parts: Vec<String> = Vec::new();
+        let mut dates = Vec::new();
+        for token in lower.split(|c: char| c.is_whitespace() || c == ',') {
+            let token = token.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
+            if token.is_empty() {
+                continue;
+            }
+            if let Ok(date) = NaiveDate::parse_from_str(token, "%Y-%m-%d") {
+                dates.push(DateTest::On(date));
+            } else if token.contains('-') && token.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                dates.push(DateTest::IsoText(token.to_string()));
+            } else {
+                parts.extend(
+                    token
+                        .split(|c: char| !c.is_alphanumeric())
+                        .filter(|part| !part.is_empty())
+                        .map(str::to_string),
+                );
+            }
+        }
+
+        let mut words: Vec<String> = Vec::new();
+        let mut at = 0;
+        while at < parts.len() {
+            let part = parts[at].as_str();
+            if part == "today" {
+                dates.push(DateTest::On(today));
+            } else if part == "yesterday" {
+                dates.push(DateTest::On(today.pred_opt().unwrap_or(today)));
+            } else if let Some(weekday) = weekday_named(part) {
+                dates.push(DateTest::Weekday(weekday));
+            } else if let Some(month) = month_named(part) {
+                if let Some(day) = parts.get(at + 1).and_then(|next| day_of_month(next)) {
+                    dates.push(DateTest::MonthDay(month, day));
+                    at += 1;
+                } else if let Some(day) = words.last().and_then(|last| day_of_month(last)) {
+                    words.pop();
+                    dates.push(DateTest::MonthDay(month, day));
+                } else {
+                    dates.push(DateTest::Month(month));
+                }
+            } else if !DAY_QUERY_FILLER.contains(&part) {
+                words.push(part.to_string());
+            }
+            at += 1;
+        }
+        // A lone letter ("c" from "c++") appears on nearly every page.
+        words.retain(|word| word.chars().count() > 1);
+        Self {
+            dates,
+            words,
+            everything: lower.is_empty(),
+        }
+    }
+
+    /// The query names dates and nothing else, such as "yesterday" or "notes from march 3".
+    pub(crate) fn only_dates(&self) -> bool {
+        !self.dates.is_empty() && self.words.is_empty()
+    }
+
+    /// Whether `date` is one of the dates the query names (true when it names none).
+    pub(crate) fn date_holds(&self, date: NaiveDate) -> bool {
+        self.dates.iter().all(|test| test.holds(date))
+    }
+
+    pub(crate) fn matches(&self, entry: &DayNoteSwitcherEntry, today: NaiveDate) -> bool {
+        if self.everything {
+            return true;
+        }
+        if self.dates.is_empty() && self.words.is_empty() {
+            return false;
+        }
+        if !self.date_holds(entry.date) {
+            return false;
+        }
+        if self.words.is_empty() {
+            return true;
+        }
+        let mut text = format!(
+            "{} {} {}",
+            entry.title,
+            entry.date.format("%b %-d %B"),
+            entry.content
+        )
+        .to_lowercase();
+        if entry.date == today {
+            text.push_str(" today");
+        }
+        self.words.iter().all(|word| text.contains(word.as_str()))
+    }
+}
+
 fn day_page_file_matches_in(
     entries: &[DayNoteSwitcherEntry],
     today: NaiveDate,
     query: &str,
     limit: usize,
 ) -> Vec<crate::scripts::FileMatch> {
-    let query = query.trim().to_lowercase();
+    let day_query = DayQuery::parse(query, today);
     entries
         .iter()
         .filter_map(|entry| {
@@ -53,15 +235,7 @@ fn day_page_file_matches_in(
             } else {
                 entry.title.clone()
             };
-            let matches = query.is_empty()
-                || name.to_lowercase().contains(&query)
-                || entry
-                    .date
-                    .format("%b %-d")
-                    .to_string()
-                    .to_lowercase()
-                    .contains(&query)
-                || entry.content.to_lowercase().contains(&query);
+            let matches = day_query.matches(entry, today);
             matches.then(|| crate::scripts::FileMatch {
                 file: crate::file_search::FileResult {
                     path: entry.path.to_string_lossy().into_owned(),
@@ -244,6 +418,56 @@ mod tests {
         assert_eq!(
             parse_day_note_action_id(&infos[0].id),
             Some(chrono::NaiveDate::from_ymd_opt(2026, 6, 1).expect("date"))
+        );
+    }
+
+    /// People look for a day page by the date written out ("march 3", "3rd mar"), by its
+    /// weekday, as "yesterday", or by words on the page that are not next to each other,
+    /// often inside a request. Each of these must reach the right page and only that page.
+    #[test]
+    fn day_pages_are_found_by_the_dates_and_words_people_type() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let days = dir.path().join("days");
+        std::fs::create_dir_all(&days).expect("days dir");
+        std::fs::write(
+            days.join("2026-03-03.md"),
+            "Called Sam about the invoice.\n",
+        )
+        .unwrap();
+        std::fs::write(days.join("2026-03-09.md"), "Dentist at noon.\n").unwrap();
+        std::fs::write(days.join("2026-03-10.md"), "Quiet day.\n").unwrap();
+        let entries = load_day_note_switcher_entries(&days);
+        let today = NaiveDate::from_ymd_opt(2026, 3, 10).expect("date");
+        let found = |query: &str| -> Vec<String> {
+            day_page_file_matches_in(&entries, today, query, 10)
+                .into_iter()
+                .map(|hit| hit.file.path)
+                .map(|path| path.rsplit('/').next().unwrap_or_default().to_string())
+                .collect()
+        };
+
+        for query in [
+            "march 3",
+            "mar 3",
+            "3rd march",
+            "tuesday",
+            "sam invoice",
+            "notes from march 3",
+            "2026-03-03",
+            "2026-03-0",
+        ] {
+            assert!(
+                found(query).contains(&"2026-03-03.md".to_string()),
+                "{query:?} should find the March 3 page, found {:?}",
+                found(query)
+            );
+        }
+        assert_eq!(found("yesterday"), vec!["2026-03-09.md".to_string()]);
+        assert_eq!(found("today"), vec!["2026-03-10.md".to_string()]);
+        assert!(found("march 4").is_empty(), "no page is dated March 4");
+        assert!(
+            found("sam dentist").is_empty(),
+            "words on different pages don't make a match"
         );
     }
 }

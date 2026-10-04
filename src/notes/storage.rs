@@ -1842,7 +1842,7 @@ pub(crate) fn count_active_notes_with_tag(tag: &str) -> Result<u64> {
         return Ok(0);
     };
 
-    init_notes_db()?;
+    ensure_notes_db_open()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
 
@@ -2010,6 +2010,261 @@ fn sanitize_fts_query(query: &str) -> String {
     format!("\"{}\"", escaped)
 }
 
+/// Words that phrase a request ("find my note about the …") rather than say what a note holds.
+/// They're dropped only when every typed word together finds nothing.
+const NOTE_QUERY_FILLER: &[&str] = &[
+    "a", "about", "an", "and", "any", "called", "find", "for", "from", "get", "i", "in", "is",
+    "look", "me", "my", "named", "note", "notes", "of", "on", "open", "our", "please", "search",
+    "show", "that", "the", "titled", "to", "where", "which", "with",
+];
+
+/// The words of a query as the search index splits them: runs of letters and digits, lowercased.
+fn note_query_words(query: &str) -> Vec<String> {
+    query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Every word must appear somewhere in the note; the last one may still be half typed.
+fn every_word_fts_query(words: &[String]) -> String {
+    let last = words.len().saturating_sub(1);
+    words
+        .iter()
+        .enumerate()
+        .map(|(at, word)| {
+            if at == last {
+                format!("\"{word}\"*")
+            } else {
+                format!("\"{word}\"")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The full-text matches tried in order: the exact phrase, then every word in any order (the
+/// last as a prefix), then the same without request phrasing such as "find my note about".
+fn note_fts_queries(query: &str) -> Vec<String> {
+    let words = note_query_words(query);
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let mut queries = vec![sanitize_fts_query(query.trim())];
+    queries.push(every_word_fts_query(&words));
+    let content: Vec<String> = words
+        .iter()
+        .filter(|word| !NOTE_QUERY_FILLER.contains(&word.as_str()))
+        .cloned()
+        .collect();
+    if !content.is_empty() && content.len() < words.len() {
+        queries.push(every_word_fts_query(&content));
+    }
+    queries
+}
+
+/// Where `needle`'s letters appear in order in `title`, how many letters that run spans.
+fn title_subsequence_span(needle: &[char], title: &str) -> Option<usize> {
+    let letters: Vec<char> = title
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    (0..letters.len())
+        .filter(|start| letters[*start] == needle[0])
+        .filter_map(|start| {
+            let mut wanted = needle.iter();
+            let mut next = wanted.next();
+            for (at, letter) in letters[start..].iter().enumerate() {
+                if Some(letter) == next {
+                    next = wanted.next();
+                    if next.is_none() {
+                        return Some(at + 1);
+                    }
+                }
+            }
+            None
+        })
+        .min()
+}
+
+/// Notes whose title holds the typed letters in order, closest runs first, so a slip like
+/// "lisbn" still finds "Lisbon trip". Only consulted when nothing else matched.
+fn note_ids_by_title_letters(conn: &Connection, query: &str, limit: usize) -> Result<Vec<String>> {
+    let needle: Vec<char> = query
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    if needle.len() < 3 {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn
+        .prepare("SELECT id, title FROM notes WHERE deleted_at IS NULL")
+        .context("Failed to prepare note title scan")?;
+    let mut scored: Vec<(usize, String)> = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .context("Failed to scan note titles")?
+        .filter_map(|row| row.ok())
+        .filter_map(|(id, title)| {
+            title_subsequence_span(&needle, &title)
+                .filter(|span| *span <= needle.len() * 2)
+                .map(|span| (span, id))
+        })
+        .collect();
+    scored.sort();
+    Ok(scored.into_iter().take(limit).map(|(_, id)| id).collect())
+}
+
+/// Notes whose title contains the query as typed, for queries the word index can't express.
+fn note_ids_by_title_text(conn: &Connection, query: &str, limit: usize) -> Result<Vec<String>> {
+    let trimmed = query.trim().to_lowercase();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let escaped = trimmed
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id FROM notes
+            WHERE deleted_at IS NULL AND lower(title) LIKE ?1 ESCAPE '\'
+            ORDER BY
+                is_pinned DESC,
+                CASE WHEN lower(title) = ?2 THEN 0 WHEN lower(title) LIKE ?3 ESCAPE '\' THEN 1 ELSE 2 END,
+                updated_at DESC
+            LIMIT ?4
+            "#,
+        )
+        .context("Failed to prepare note title text query")?;
+    let ids = stmt
+        .query_map(
+            params![
+                format!("%{escaped}%"),
+                trimmed,
+                format!("{escaped}%"),
+                limit as i64
+            ],
+            |row| row.get::<_, String>(0),
+        )
+        .context("Failed to run note title text query")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note title text matches")?;
+    Ok(ids)
+}
+
+/// Ids of the notes that match `query`, best first, at most `limit`.
+///
+/// `#tag`, `tag:`, `alias:` and `link:` read note metadata. Otherwise exact-phrase hits lead;
+/// then notes holding every typed word in any order (the last word may be half typed, and the
+/// index stems words so "booking" finds "booked"); then, if that found nothing, the words left
+/// after request phrasing like "find my note about". Within each, titles that start with the
+/// query come first. When the words find nothing at all, titles containing the query as typed
+/// and finally titles holding its letters in order are tried.
+fn ranked_note_ids(conn: &Connection, query: &str, limit: usize) -> Result<Vec<String>> {
+    if let Some(notes) = search_notes_metadata_only(conn, query)? {
+        return Ok(notes
+            .into_iter()
+            .take(limit)
+            .map(|note| note.id.as_str())
+            .collect());
+    }
+    let title_prefix = format!(
+        "{}%",
+        query
+            .trim()
+            .to_lowercase()
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    );
+    let mut ids: Vec<String> = Vec::new();
+    {
+        // The word index answers first and the notes table is read only for its hits; joining
+        // the other way round re-runs the match once per note.
+        let mut stmt = conn
+            .prepare(
+                r#"
+                WITH hits AS MATERIALIZED (
+                    SELECT rowid AS hit, bm25(notes_fts, 8.0, 1.0) AS score
+                    FROM notes_fts WHERE notes_fts MATCH ?1
+                )
+                SELECT n.id
+                FROM hits INNER JOIN notes n ON n.rowid = hits.hit
+                WHERE n.deleted_at IS NULL
+                ORDER BY n.is_pinned DESC, lower(n.title) LIKE ?3 ESCAPE '\' DESC,
+                    hits.score, n.updated_at DESC
+                LIMIT ?2
+                "#,
+            )
+            .context("Failed to prepare notes word search")?;
+        for (tier, fts_query) in note_fts_queries(query).iter().enumerate() {
+            let found = stmt
+                .query_map(params![fts_query, limit as i64, title_prefix], |row| {
+                    row.get::<_, String>(0)
+                })
+                .context("Failed to run notes word search")?
+                .collect::<Result<Vec<_>, _>>()
+                .context("Failed to collect notes word search")?;
+            for id in found {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+            if tier > 0 && !ids.is_empty() {
+                break;
+            }
+        }
+    }
+    ids.truncate(limit);
+    if ids.is_empty() {
+        ids = note_ids_by_title_text(conn, query, limit)?;
+    }
+    if ids.is_empty() {
+        ids = note_ids_by_title_letters(conn, query, limit)?;
+    }
+    Ok(ids)
+}
+
+/// Loads rows for `ids` with `select` (whose `?` list is filled in) and keeps `ids`' order.
+fn rows_for_note_ids<T>(
+    conn: &Connection,
+    ids: &[String],
+    select: &str,
+    map: impl FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+    id_of: impl Fn(&T) -> NoteId,
+) -> Result<Vec<T>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = vec!["?"; ids.len()].join(", ");
+    let sql = select.replace("{ids}", &placeholders);
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Failed to prepare matched notes query")?;
+    let mut rows = stmt
+        .query_map(rusqlite::params_from_iter(ids.iter()), map)
+        .context("Failed to load matched notes")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect matched notes")?;
+    let rank: HashMap<String, usize> = ids
+        .iter()
+        .enumerate()
+        .map(|(at, id)| (id.clone(), at))
+        .collect();
+    rows.sort_by_key(|row| {
+        rank.get(&id_of(row).as_str())
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
+    Ok(rows)
+}
+
 fn log_notes_search_completed(query: &str, count: usize, method: &'static str) {
     let safe_query = crate::logging::log_private_user_value(query);
     debug!(
@@ -2036,8 +2291,8 @@ fn log_notes_search_fts_fallback(query: &str, error: &impl std::fmt::Display) {
 
 /// Search notes using full-text search
 ///
-/// Uses FTS5 search when possible with a fallback to LIKE queries for robustness
-/// against special characters that break FTS5 MATCH syntax.
+/// Matching follows `ranked_note_ids`; a LIKE scan over titles and bodies stands in if the
+/// index itself fails.
 pub fn search_notes(query: &str) -> Result<Vec<Note>> {
     if query.trim().is_empty() {
         return get_all_notes();
@@ -2051,28 +2306,19 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
         return Ok(metadata_notes);
     }
 
-    // Try FTS search first with sanitized query
-    let sanitized_query = sanitize_fts_query(query);
-
-    // FTS5 search with BM25 ranking
-    let fts_result: rusqlite::Result<Vec<Note>> = (|| {
-        let mut stmt = conn.prepare(
+    let fts_result = ranked_note_ids(&conn, query, 200).and_then(|ids| {
+        rows_for_note_ids(
+            &conn,
+            &ids,
             r#"
-            SELECT n.id, n.title, n.content, n.created_at, n.updated_at,
-                   n.deleted_at, n.is_pinned, n.sort_order
-            FROM notes n
-            INNER JOIN notes_fts fts ON n.rowid = fts.rowid
-            WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
-            ORDER BY n.is_pinned DESC, bm25(notes_fts)
-            LIMIT 200
+            SELECT id, title, content, created_at, updated_at,
+                   deleted_at, is_pinned, sort_order
+            FROM notes WHERE id IN ({ids})
             "#,
-        )?;
-
-        let notes = stmt
-            .query_map(params![sanitized_query], row_to_note)?
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(notes)
-    })();
+            row_to_note,
+            |note| note.id,
+        )
+    });
 
     match fts_result {
         Ok(notes) => {
@@ -2589,7 +2835,7 @@ fn search_root_notes_meta_result(
     query: &str,
     options: RootNotesSectionOptions,
 ) -> Result<Vec<RootNoteSearchHit>> {
-    init_notes_db()?;
+    ensure_notes_db_open()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
 
@@ -2614,32 +2860,16 @@ fn search_root_notes_meta_result(
             .context("Failed to collect root notes recent results")?;
         rows
     } else if options.search_content {
-        let sanitized_query = sanitize_fts_query(query);
-        let mut stmt = conn
-            .prepare(
-                r#"
-                SELECT n.id, n.title, n.updated_at, n.is_pinned, length(n.content)
-                FROM notes n
-                INNER JOIN notes_fts fts ON n.rowid = fts.rowid
-                WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
-                ORDER BY n.is_pinned DESC, bm25(notes_fts, 8.0, 1.0), n.updated_at DESC
-                LIMIT ?2
-                "#,
-            )
-            .context("Failed to prepare root notes FTS query")?;
-
-        let hits = stmt
-            .query_map(params![sanitized_query, limit], row_to_root_note_hit)
-            .context("Failed to execute root notes FTS query")?
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to collect root notes FTS results")?;
-        if hits.is_empty() {
-            search_root_notes_meta_like(&conn, query, true, limit)?
-        } else {
-            hits
-        }
+        let ids = ranked_note_ids(&conn, query, limit as usize)?;
+        rows_for_note_ids(
+            &conn,
+            &ids,
+            "SELECT id, title, updated_at, is_pinned, length(content) FROM notes WHERE id IN ({ids})",
+            row_to_root_note_hit,
+            |hit| hit.id,
+        )?
     } else {
-        search_root_notes_meta_like(&conn, query, false, limit)?
+        search_root_notes_title_like(&conn, query, limit)?
     };
 
     Ok(hits
@@ -2652,68 +2882,68 @@ fn search_root_notes_meta_result(
         .collect())
 }
 
-fn search_root_notes_meta_like(
+/// Root search with note bodies switched off: titles containing the query, else titles
+/// holding its letters in order.
+fn search_root_notes_title_like(
     conn: &Connection,
     query: &str,
-    search_content: bool,
     limit: i64,
 ) -> Result<Vec<RootNoteSearchHit>> {
-    let like_pattern = format!("%{}%", query);
-    let exact = query.to_lowercase();
-    let prefix = format!("{}%", exact);
-    let mut stmt = if search_content {
-        conn.prepare(
-            r#"
-            SELECT id, title, updated_at, is_pinned, length(content)
-            FROM notes
-            WHERE deleted_at IS NULL AND (title LIKE ?1 OR content LIKE ?1)
-            ORDER BY
-                is_pinned DESC,
-                CASE
-                    WHEN lower(title) = ?2 THEN 0
-                    WHEN lower(title) LIKE ?3 THEN 1
-                    WHEN lower(title) LIKE ?1 THEN 2
-                    ELSE 3
-                END,
-                updated_at DESC
-            LIMIT ?4
-            "#,
-        )
-        .context("Failed to prepare root notes content LIKE query")?
-    } else {
-        conn.prepare(
-            r#"
-            SELECT id, title, updated_at, is_pinned, length(content)
-            FROM notes
-            WHERE deleted_at IS NULL AND title LIKE ?1
-            ORDER BY
-                is_pinned DESC,
-                CASE
-                    WHEN lower(title) = ?2 THEN 0
-                    WHEN lower(title) LIKE ?3 THEN 1
-                    ELSE 2
-                END,
-                updated_at DESC
-            LIMIT ?4
-            "#,
-        )
-        .context("Failed to prepare root notes title LIKE query")?
-    };
+    let mut ids = note_ids_by_title_text(conn, query, limit as usize)?;
+    if ids.is_empty() {
+        ids = note_ids_by_title_letters(conn, query, limit as usize)?;
+    }
+    rows_for_note_ids(
+        conn,
+        &ids,
+        "SELECT id, title, updated_at, is_pinned, length(content) FROM notes WHERE id IN ({ids})",
+        row_to_root_note_hit,
+        |hit| hit.id,
+    )
+}
 
-    let hits = stmt
-        .query_map(
-            params![like_pattern, exact, prefix, limit],
-            row_to_root_note_hit,
-        )
-        .context("Failed to execute root notes LIKE query")?
-        .collect::<Result<Vec<_>, _>>()
-        .context("Failed to collect root notes LIKE results")?;
-    Ok(hits)
+/// Notes last changed on a local day that `on_day` accepts, most recent first, at most 60.
+/// Reads only ids and dates to decide, so it stays quick with long documents.
+pub(crate) fn notes_changed_on(on_day: impl Fn(chrono::NaiveDate) -> bool) -> Result<Vec<Note>> {
+    ensure_notes_db_open()?;
+    let db = get_db()?;
+    let conn = db.lock().map_err(db_lock_err)?;
+    let ids: Vec<String> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, updated_at FROM notes WHERE deleted_at IS NULL ORDER BY updated_at DESC",
+            )
+            .context("Failed to prepare notes-by-day query")?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .context("Failed to read note change dates")?;
+        rows.filter_map(|row| row.ok())
+            .filter(|(_, updated_at)| {
+                DateTime::parse_from_rfc3339(updated_at)
+                    .is_ok_and(|at| on_day(at.with_timezone(&chrono::Local).date_naive()))
+            })
+            .map(|(id, _)| id)
+            .take(60)
+            .collect()
+    };
+    rows_for_note_ids(
+        &conn,
+        &ids,
+        r#"
+        SELECT id, title, content, created_at, updated_at,
+               deleted_at, is_pinned, sort_order
+        FROM notes WHERE id IN ({ids})
+        "#,
+        row_to_note,
+        |note| note.id,
+    )
 }
 
 /// Pinned notes, most recently changed first, for the launcher with nothing typed.
 pub(crate) fn pinned_root_notes(limit: usize) -> Result<Vec<RootNoteSearchHit>> {
-    init_notes_db()?;
+    ensure_notes_db_open()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
     let mut stmt = conn

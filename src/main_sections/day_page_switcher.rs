@@ -34,7 +34,7 @@ impl DayPageView {
     }
 
     pub(crate) fn open_note_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Err(error) = crate::notes::init_notes_db() {
+        if let Err(error) = crate::notes::ensure_notes_db_open() {
             tracing::warn!(
                 target: "script_kit::day_page",
                 error = %error,

@@ -1238,7 +1238,8 @@ Every note and every day page opens in one editor that fills the main window. Th
 - On a day page, a line that starts with a time (`- 14:32 called Sam`) keeps going: `Return` at its end starts the next line with the current time. `Return` on a line holding only a time ends the run. Other lines stay plain.
 - A note started today is listed on today's page when you leave it, at the time it was started: `- 14:32 [[Trip ideas]]`.
 - Move to Trash waits 8 s in the line above the input; `Cmd+Z` stops it. A new note left empty is removed when you leave it.
-- `@notes:` in the main window attaches a note or a day page as context for the model; `Cmd+Return` then asks about it.
+- `@notes:` in the main window attaches a note or a day page as context for the model; `Cmd+Return` then asks about it. Join words with `-` (`@notes:lisbon-trip`); dates work too (`@notes:yesterday`, `@notes:march-3`).
+- Notes search matches a title's or body's words in any order, the last one half typed, any form of a word (`booking` finds `booked`), and a slip in a title (`lisbn`). A folder of long Markdown prompts or reference documents is searched the same way, through to the last line.
 
 The first note you create comes with a pinned welcome note that explains the basics.
 

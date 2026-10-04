@@ -1570,6 +1570,17 @@ pub fn reading_for(
                 query: query.map(str::to_string),
             }];
             reading.typed = Some(match info {
+                // A space would end the `@notes:` token and leave its picker, so the words are
+                // joined the way picked notes are written; notes search reads `-` as a gap.
+                Some(info) if info.key == "notes" => format!(
+                    "{}{}",
+                    info.prefix,
+                    query
+                        .unwrap_or_default()
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join("-")
+                ),
                 Some(info) => format!("{}{}", info.prefix, query.unwrap_or_default()),
                 None => query.unwrap_or_default().to_string(),
             });

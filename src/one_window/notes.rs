@@ -132,14 +132,13 @@ impl NotesList {
 
     fn search(&mut self) {
         let query = self.query.trim().to_string();
-        let lower = query.to_lowercase();
-        let has = |text: &str| lower.is_empty() || text.to_lowercase().contains(&lower);
+        let today = today();
+        let day_query = notes::day_switcher::DayQuery::parse(&query, today);
         let mut found = Vec::new();
         for day in
             notes::day_switcher::load_day_note_switcher_entries(&notes::notes_brain_days_dir())
         {
-            let title = day_title(day.date);
-            if has(&title) || has(&day.title) || has(&day.content) {
+            if day_query.matches(&day, today) {
                 let at = day
                     .date
                     .and_hms_opt(0, 0, 0)
@@ -147,7 +146,11 @@ impl NotesList {
                     .unwrap_or(day.updated_at);
                 found.push(Found {
                     doc: NoteDoc::Day(day.date),
-                    title,
+                    title: if day.date == today {
+                        "Today".to_string()
+                    } else {
+                        day.title.clone()
+                    },
                     sub: "Day page".to_string(),
                     pinned: false,
                     changed: day.updated_at,
@@ -155,13 +158,23 @@ impl NotesList {
                 });
             }
         }
-        if notes::init_notes_db().is_ok() {
-            let named = if query.is_empty() {
-                notes::get_all_notes()
+        if notes::ensure_notes_db_open().is_ok() {
+            let mut named = if query.is_empty() {
+                notes::get_all_notes().unwrap_or_default()
             } else {
-                notes::search_notes(&query)
+                notes::search_notes(&query).unwrap_or_default()
             };
-            for note in named.unwrap_or_default() {
+            // "yesterday" or "notes from march 3" also means the notes changed on that day.
+            if day_query.only_dates() {
+                for note in
+                    notes::notes_changed_on(|date| day_query.date_holds(date)).unwrap_or_default()
+                {
+                    if !named.iter().any(|known| known.id == note.id) {
+                        named.push(note);
+                    }
+                }
+            }
+            for note in named {
                 if note.deleted_at.is_some() {
                     continue;
                 }

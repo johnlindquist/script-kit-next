@@ -60,13 +60,13 @@ pub(crate) use storage::{
     get_note_backlink_count, get_note_backlinks, get_note_outbound_link_count, get_note_tags,
     init_notes_db, invalidate_owned_root_notes_search_freshness,
     invalidate_root_notes_search_cache, list_note_cart_items, list_note_cart_items_deduped,
-    note_editor_content_from_file, note_file_path, notes_brain_days_dir, notes_substrate,
-    owned_root_notes_search_snapshot, pinned_root_notes, read_root_notes_search_snapshot,
-    reset_owned_root_notes_search, root_notes_query_is_eligible, root_notes_search_cache_is_fresh,
-    root_notes_search_fresh_cache_status, save_note, save_note_cart_item, search_notes,
-    search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
-    try_begin_root_notes_search_refresh, NoteBacklinkSummary, RootNoteSearchHit,
-    RootNotesSearchRefresh, RootNotesSearchSnapshot, RootNotesSectionOptions,
+    note_editor_content_from_file, note_file_path, notes_brain_days_dir, notes_changed_on,
+    notes_substrate, owned_root_notes_search_snapshot, pinned_root_notes,
+    read_root_notes_search_snapshot, reset_owned_root_notes_search, root_notes_query_is_eligible,
+    root_notes_search_cache_is_fresh, root_notes_search_fresh_cache_status, save_note,
+    save_note_cart_item, search_notes, search_root_notes_meta, search_root_notes_meta_cached,
+    search_root_notes_meta_direct, try_begin_root_notes_search_refresh, NoteBacklinkSummary,
+    RootNoteSearchHit, RootNotesSearchRefresh, RootNotesSearchSnapshot, RootNotesSectionOptions,
 };
 
 /// Tag that promotes a note to a standing agent instruction.
