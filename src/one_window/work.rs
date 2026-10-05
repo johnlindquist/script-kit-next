@@ -11,7 +11,7 @@ use gpui::{ClipboardItem, Context, Entity, Subscription};
 use sk_one_window::steps::StepSpec;
 use sk_one_window::strip::TaskState;
 use sk_one_window::work::{WorkEffect, WorkEvent};
-use sk_one_window::{chat, connect, past_chats, steps, strip, Done, Event, Risk, Row};
+use sk_one_window::{chat, connect, past_chats, steps, strip, Done, Event, Row};
 
 use crate::ai::agent_chat::ui::mock_fixture::AgentChatFixtureControl;
 use crate::ai::agent_chat::ui::thread::{
@@ -259,12 +259,16 @@ impl ScriptListApp {
                             crate::intent_launcher::append_capture_to_day("note", &reply, None)
                         {
                             tracing::warn!(target: "script_kit::one_window", event = "chat_note_failed", error);
+                            self.one_window_notice(
+                                crate::line_notice::FAILED,
+                                "Couldn't add the model's reply to today's note.",
+                                cx,
+                            );
                             return;
                         }
                         Done {
                             icon: "append".into(),
                             title: "Added the model's reply to today's note".into(),
-                            risk: Some(Risk::Undo),
                             ..Done::default()
                         }
                     }
@@ -290,8 +294,12 @@ impl ScriptListApp {
             }
             WorkEffect::RunSteps { steps } => {
                 for (index, text) in steps {
-                    self.one_window_run_step(&text, cx);
-                    self.one_window_handle(Event::Work(WorkEvent::StepDone { index }), cx);
+                    let event = if self.one_window_run_step(&text, cx) {
+                        WorkEvent::StepDone { index }
+                    } else {
+                        WorkEvent::StepFailed { index }
+                    };
+                    self.one_window_handle(Event::Work(event), cx);
                 }
             }
             WorkEffect::SignIn { integration } => {
@@ -344,7 +352,6 @@ impl ScriptListApp {
                     Event::Done(Done {
                         icon: "delegate".into(),
                         title,
-                        risk: Some(Risk::Undo),
                         ..Done::default()
                     }),
                     cx,
@@ -355,8 +362,9 @@ impl ScriptListApp {
     }
 
     /// A step of "Do all": a message waits in the line before it goes, a note line lands in
-    /// today's note, and anything else is handed to an agent that works in the strip.
-    fn one_window_run_step(&mut self, text: &str, cx: &mut Context<Self>) {
+    /// today's note, and anything else is handed to an agent that works in the strip. False when
+    /// the step didn't do what it said; the line says why.
+    fn one_window_run_step(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
         if let Some((who, what)) = message_step(text) {
             self.one_window_handle(
                 Event::Hold {
@@ -368,6 +376,12 @@ impl ScriptListApp {
         } else if let Some(body) = note_step(text) {
             if let Err(error) = crate::intent_launcher::append_capture_to_day("note", body, None) {
                 tracing::warn!(target: "script_kit::one_window", event = "step_note_failed", error);
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!("Couldn't add “{body}” to today's note."),
+                    cx,
+                );
+                return false;
             }
         } else {
             self.one_window_handle(
@@ -377,6 +391,7 @@ impl ScriptListApp {
                 cx,
             );
         }
+        true
     }
 
     /// Feeds a fact on the next turn, the way an answer arrives after the key that asked for it.

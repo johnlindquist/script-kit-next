@@ -236,8 +236,8 @@ impl ScriptListApp {
                 "Failed to create menu-syntax payload directory"
             );
             self.one_window_notice(
-                crate::line_notice::INFO,
-                format!("Menu syntax: failed to create payload dir: {err}"),
+                crate::line_notice::FAILED,
+                format!("Couldn't save the captured text: {err}"),
                 cx,
             );
             return;
@@ -255,8 +255,8 @@ impl ScriptListApp {
                     "Failed to write menu-syntax payload"
                 );
                 self.one_window_notice(
-                    crate::line_notice::INFO,
-                    format!("Menu syntax: failed to write payload: {err}"),
+                    crate::line_notice::FAILED,
+                    format!("Couldn't save the captured text: {err}"),
                     cx,
                 );
                 return;
@@ -308,8 +308,8 @@ impl ScriptListApp {
                     "Failed to spawn capture handler"
                 );
                 self.one_window_notice(
-                    crate::line_notice::INFO,
-                    format!("Capture failed: {err}"),
+                    crate::line_notice::FAILED,
+                    format!("Couldn't run the capture: {err}"),
                     cx,
                 );
             }

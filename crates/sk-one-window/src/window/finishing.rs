@@ -25,6 +25,7 @@ impl OneWindow {
                         title: done.title.clone(),
                         said: said.clone(),
                         risk,
+                        undo_kept: done.undo_kept,
                         ..NewEntry::default()
                     },
                 );

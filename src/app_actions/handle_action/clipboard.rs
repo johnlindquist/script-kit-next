@@ -1465,16 +1465,19 @@ impl ClipboardBulkDeleteHandlerAction {
 
     /// What waits in the line before the entries go.
     fn held_title(self, count: usize) -> String {
+        let entries = if count == 1 { "entry" } else { "entries" };
         match self {
-            Self::MatchingEntries => format!("Delete {count} matching clipboard entries"),
+            Self::MatchingEntries => format!("Delete {count} matching clipboard {entries}"),
+            Self::AllUnpinned if count == 1 => "Delete the 1 unpinned clipboard entry".to_string(),
             Self::AllUnpinned => format!("Delete all {count} unpinned clipboard entries"),
         }
     }
 
     fn success_hud(self, deleted: usize) -> String {
+        let entries = if deleted == 1 { "entry" } else { "entries" };
         match self {
-            Self::MatchingEntries => format!("Deleted {deleted} entries"),
-            Self::AllUnpinned => format!("Deleted {deleted} entries (pinned preserved)"),
+            Self::MatchingEntries => format!("Deleted {deleted} {entries}"),
+            Self::AllUnpinned => format!("Deleted {deleted} {entries} and kept the pinned ones"),
         }
     }
 

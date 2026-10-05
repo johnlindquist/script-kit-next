@@ -210,7 +210,10 @@ impl ScriptListApp {
             KeysFor::Script(prompt) => {
                 if !prompt.observation().retired {
                     if let Err(error) = prompt.try_complete(outcome) {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(
+                            format!("Couldn't give the script those keys: {error}"),
+                            cx,
+                        );
                     }
                 }
                 self.mark_main_data_changed();

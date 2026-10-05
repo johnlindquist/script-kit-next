@@ -1352,7 +1352,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("arg", false, cx);
@@ -1369,7 +1369,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("mini", false, cx);
@@ -1386,7 +1386,7 @@ impl ScriptListApp {
                     input: String::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("micro", false, cx);
@@ -1425,7 +1425,7 @@ impl ScriptListApp {
                     options: container_options,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("div", false, cx);
@@ -1436,7 +1436,7 @@ impl ScriptListApp {
                     html,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("form", false, cx);
@@ -1451,7 +1451,7 @@ impl ScriptListApp {
                     fields,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("fields", false, cx);
@@ -1464,7 +1464,7 @@ impl ScriptListApp {
                 if let Err(error) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)
                 {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't open a terminal here: {error}"), cx);
                     return;
                 }
                 let terminal = match command {
@@ -1479,7 +1479,7 @@ impl ScriptListApp {
                 let terminal = match terminal {
                     Ok(terminal) => terminal,
                     Err(error) => {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(format!("Couldn't start the terminal: {error}"), cx);
                         return;
                     }
                 };
@@ -1488,7 +1488,7 @@ impl ScriptListApp {
                     terminal,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("term", true, cx);
@@ -1507,7 +1507,7 @@ impl ScriptListApp {
                     template,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("editor", true, cx);
@@ -1749,11 +1749,14 @@ impl ScriptListApp {
                     );
                 }
 
-                let notice = if error_message.chars().count() > 140 {
-                    let truncated: String = error_message.chars().take(137).collect();
-                    format!("Script Error: {}...", truncated)
-                } else {
-                    format!("Script Error: {}", error_message)
+                // The header names the script; its error, stack and stderr stay in the log above.
+                let script_name = std::path::Path::new(&script_path)
+                    .file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+                    .filter(|stem| !stem.is_empty());
+                let notice = match script_name {
+                    Some(name) => format!("\u{201C}{name}\u{201D} stopped with an error"),
+                    None => "The script stopped with an error".to_string(),
                 };
                 self.one_window_notice(crate::line_notice::FAILED, notice, cx);
 
@@ -5236,7 +5239,7 @@ impl ScriptListApp {
                     hint,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("path", false, cx);
@@ -5251,7 +5254,7 @@ impl ScriptListApp {
                 if let Err(error) =
                     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)
                 {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't read that secret here: {error}"), cx);
                     return;
                 }
 
@@ -5307,7 +5310,7 @@ impl ScriptListApp {
                     local_storage: None,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 let auto_submitted = if let AppView::EnvPrompt { entity, .. } = &self.current_view {
@@ -5320,7 +5323,7 @@ impl ScriptListApp {
                 if auto_submitted {
                     let completion = completion.observation();
                     if let Some(error) = completion.error {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(format!("Couldn't use the saved secret: {error}"), cx);
                     } else if completion.completed {
                         self.transition_current_view_and_rekey_main_automation_surface(
                             previous_view,
@@ -5348,7 +5351,7 @@ impl ScriptListApp {
                     owned_files: None,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("drop", false, cx);
@@ -5359,7 +5362,7 @@ impl ScriptListApp {
                     template,
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("template", false, cx);
@@ -5379,7 +5382,7 @@ impl ScriptListApp {
                     disabled: Vec::new(),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("select", false, cx);
@@ -5414,7 +5417,10 @@ impl ScriptListApp {
                         if let Err(error) =
                             binding.try_complete(PromptOutcome::Confirmed(confirmed))
                         {
-                            app.notice_failed(error.to_string(), cx);
+                            app.notice_failed(
+                                format!("Couldn't send your answer to the script: {error}"),
+                                cx,
+                            );
                         }
                     })
                 };
@@ -5469,7 +5475,7 @@ impl ScriptListApp {
                     if let Err(error) = crate::runtime_policy::check(
                         crate::runtime_policy::ExternalEffect::Provider,
                     ) {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(format!("Couldn't start the chat here: {error}"), cx);
                         return;
                     }
                 }
@@ -5477,7 +5483,7 @@ impl ScriptListApp {
                     if let Err(error) = crate::runtime_policy::check(
                         crate::runtime_policy::ExternalEffect::ExternalStorage,
                     ) {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(format!("Couldn't keep this chat here: {error}"), cx);
                         return;
                     }
                 }
@@ -5818,7 +5824,7 @@ impl ScriptListApp {
             PromptMessage::SetInput { text } => {
                 if let Some(window) = current_window {
                     if let Err(error) = self.set_input_text_in_window(&text, window, cx) {
-                        self.notice_failed(error.to_string(), cx);
+                        self.notice_failed(format!("Couldn't set the script's input: {error}"), cx);
                     }
                 } else if matches!(
                     self.current_view,
@@ -5864,7 +5870,7 @@ impl ScriptListApp {
                     description: placeholder.unwrap_or_else(|| "Press a shortcut".into()),
                 });
                 if let Err(error) = self.construct_prompt_seed(seed, cx) {
-                    self.notice_failed(error.to_string(), cx);
+                    self.notice_failed(format!("Couldn't show the script's prompt: {error}"), cx);
                     return;
                 }
                 self.prepare_constructed_sdk_prompt("hotkey", false, cx);

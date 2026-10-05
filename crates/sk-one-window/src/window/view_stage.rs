@@ -13,8 +13,17 @@ impl OneWindow {
             head: self.staged_head(words::STAGED),
             waiting_for_rows: false,
             entry_state: None,
+            shown: self.shown_when_staged(),
         });
         self.refresh_rows();
+    }
+
+    /// What the line showed as something is staged: the last run, or what an earlier stage kept.
+    pub(super) fn shown_when_staged(&self) -> Option<u64> {
+        match &self.staged {
+            Some(staged) => staged.shown,
+            None => self.ledger.last().map(|e| e.id),
+        }
     }
 
     /// Whether something was staged to let go of.

@@ -45,7 +45,7 @@ impl ScriptListApp {
                 AppOwnedCaptureOutcome::Handled
             }
             Err(message) => {
-                self.one_window_notice(crate::line_notice::INFO, message, cx);
+                self.one_window_notice(crate::line_notice::FAILED, message, cx);
                 AppOwnedCaptureOutcome::Invalid
             }
         }
@@ -237,8 +237,7 @@ fn append_app_owned_jsonl_in_sk_path(
     record: &serde_json::Value,
 ) -> Result<(), String> {
     let dir = sk_path.join("menu-syntax");
-    std::fs::create_dir_all(&dir)
-        .map_err(|err| format!("Menu syntax: failed to create artifact dir: {err}"))?;
+    std::fs::create_dir_all(&dir).map_err(|err| format!("Couldn't save the capture: {err}"))?;
     let path = dir.join(filename);
 
     // Read existing file if it exists
@@ -247,7 +246,7 @@ fn append_app_owned_jsonl_in_sk_path(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(err) => {
             return Err(format!(
-                "Menu syntax: failed to read {}: {err}",
+                "Couldn't save the capture: can't read {}: {err}",
                 path.display()
             ));
         }
@@ -275,8 +274,7 @@ fn append_app_owned_jsonl_in_sk_path(
     }
 
     lines.push(
-        serde_json::to_string(record)
-            .map_err(|err| format!("Menu syntax: failed to serialize artifact: {err}"))?,
+        serde_json::to_string(record).map_err(|err| format!("Couldn't save the capture: {err}"))?,
     );
 
     let mut contents = lines.join("\n");
@@ -288,7 +286,7 @@ fn append_app_owned_jsonl_in_sk_path(
     if let Err(e) = std::fs::write(&temp_path, &contents) {
         let _ = std::fs::remove_file(&temp_path);
         return Err(format!(
-            "Menu syntax: failed to write to temp file {}: {}",
+            "Couldn't save the capture: can't write {}: {}",
             temp_path.display(),
             e
         ));
@@ -296,7 +294,7 @@ fn append_app_owned_jsonl_in_sk_path(
     if let Err(e) = std::fs::rename(&temp_path, &path) {
         let _ = std::fs::remove_file(&temp_path);
         return Err(format!(
-            "Menu syntax: failed to rename temp file {} to {}: {}",
+            "Couldn't save the capture: can't move {} to {}: {}",
             temp_path.display(),
             path.display(),
             e
@@ -399,15 +397,14 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
     record: &serde_json::Value,
 ) -> Result<(), String> {
     let dir = sk_path.join("menu-syntax");
-    std::fs::create_dir_all(&dir)
-        .map_err(|err| format!("Menu syntax: failed to create artifact dir: {err}"))?;
+    std::fs::create_dir_all(&dir).map_err(|err| format!("Couldn't save the capture: {err}"))?;
     let path = dir.join(filename);
     let existing = match std::fs::read_to_string(&path) {
         Ok(contents) => contents,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(err) => {
             return Err(format!(
-                "Menu syntax: failed to read {}: {err}",
+                "Couldn't save the capture: can't read {}: {err}",
                 path.display()
             ));
         }
@@ -441,8 +438,7 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
         }
     }
     lines.push(
-        serde_json::to_string(record)
-            .map_err(|err| format!("Menu syntax: failed to serialize artifact: {err}"))?,
+        serde_json::to_string(record).map_err(|err| format!("Couldn't save the capture: {err}"))?,
     );
     let mut contents = lines.join("\n");
     contents.push('\n');
@@ -453,7 +449,7 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
     if let Err(e) = std::fs::write(&temp_path, &contents) {
         let _ = std::fs::remove_file(&temp_path);
         return Err(format!(
-            "Menu syntax: failed to write to temp file {}: {}",
+            "Couldn't save the capture: can't write {}: {}",
             temp_path.display(),
             e
         ));
@@ -461,7 +457,7 @@ fn upsert_app_owned_jsonl_by_key_in_sk_path(
     if let Err(e) = std::fs::rename(&temp_path, &path) {
         let _ = std::fs::remove_file(&temp_path);
         return Err(format!(
-            "Menu syntax: failed to rename temp file {} to {}: {}",
+            "Couldn't save the capture: can't move {} to {}: {}",
             temp_path.display(),
             path.display(),
             e

@@ -66,6 +66,39 @@ impl OneWindow {
             .collect()
     }
 
+    /// A step of "Do all" ran. Once every step has, the run leaves its line: only the steps that
+    /// did what they said are counted, and a run with a failed step says so with its icon.
+    fn step_settled(&mut self, now: Ms, index: usize, failed: bool, fx: &mut Vec<Effect>) -> bool {
+        let Some(s) = self.work.steps.as_mut() else {
+            return false;
+        };
+        if failed {
+            s.step_failed(index);
+        } else {
+            s.step_done(index);
+        }
+        if s.all_done() {
+            let title = s.done_title();
+            let failed = s.any_failed();
+            self.steps = Some((s.sentence.clone(), s.texts()));
+            self.work.steps = None;
+            self.done(
+                now,
+                Done {
+                    icon: if failed {
+                        crate::contract::FAILED_ICON.into()
+                    } else {
+                        "steps".into()
+                    },
+                    title,
+                    ..Done::default()
+                },
+                fx,
+            );
+        }
+        true
+    }
+
     pub(super) fn on_work(&mut self, now: Ms, ev: WorkEvent, fx: &mut Vec<Effect>) -> bool {
         let user = self.user_turn(now);
         let taken = match ev {
@@ -101,28 +134,8 @@ impl OneWindow {
                 }
                 true
             }
-            WorkEvent::StepDone { index } => {
-                let Some(s) = self.work.steps.as_mut() else {
-                    return false;
-                };
-                s.step_done(index);
-                if s.all_done() {
-                    let title = s.done_title();
-                    self.steps = Some((s.sentence.clone(), s.texts()));
-                    self.work.steps = None;
-                    self.done(
-                        now,
-                        Done {
-                            icon: "steps".into(),
-                            title,
-                            risk: Some(Risk::Undo),
-                            ..Done::default()
-                        },
-                        fx,
-                    );
-                }
-                true
-            }
+            WorkEvent::StepDone { index } => self.step_settled(now, index, false, fx),
+            WorkEvent::StepFailed { index } => self.step_settled(now, index, true, fx),
             WorkEvent::Connections(keys) => {
                 for k in keys {
                     self.work.connections.add(&k);

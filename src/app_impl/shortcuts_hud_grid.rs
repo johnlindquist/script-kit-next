@@ -53,16 +53,14 @@ impl ScriptListApp {
             return true;
         }
 
-        // Cmd+Shift+P toggles pin mode (window stays open on blur)
+        // Cmd+Shift+P toggles pin mode (window stays open on blur). The pin at the header's right
+        // end shows the state, so nothing is said in the line.
         if has_cmd && has_shift && key_str.eq_ignore_ascii_case("p") {
             self.is_pinned = !self.is_pinned;
-            let status = if self.is_pinned {
-                "📌 Window Pinned"
-            } else {
-                "📌 Window Unpinned"
-            };
-            logging::log("KEY", &format!("Cmd+Shift+P - {}", status));
-            self.one_window_notice(crate::line_notice::INFO, status, cx);
+            logging::log(
+                "KEY",
+                &format!("Cmd+Shift+P - window pinned={}", self.is_pinned),
+            );
             cx.notify();
             return true;
         }

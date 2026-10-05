@@ -77,6 +77,7 @@ fn staged_noun(kind: SubjectKind) -> &'static str {
         SubjectKind::App => "app",
         SubjectKind::Script => "script",
         SubjectKind::Thing => "line above",
+        SubjectKind::Question => "question",
     }
 }
 
@@ -527,6 +528,8 @@ impl Form {
             risk: Some(risk),
             form_kind: Some(kind.into()),
             stay: false,
+            // The host keeps a way back, if it has one, when it runs the form.
+            undo_kept: false,
         }
     }
 }

@@ -134,6 +134,9 @@ pub struct Done {
     pub form_kind: Option<String>,
     /// Stay in the view instead of going back to the list.
     pub stay: bool,
+    /// The host kept a way to take it back. Only then does ⌘Z offer it: a run that could be
+    /// undone but that nobody kept a way to undo never says "Undid".
+    pub undo_kept: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -227,6 +230,8 @@ pub enum Event {
     },
     /// The view stopped acting on what it staged.
     LetGo,
+    /// Saving this entry's run as a script failed on disk: it no longer says "saved as".
+    ScriptNotSaved(u64),
 }
 
 impl Event {
@@ -405,6 +410,8 @@ pub struct OneWindow {
     context: Vec<ContextChip>,
     /// The chip ← highlighted, counted from the attached subject; ⌫ removes it.
     chip_at: Option<usize>,
+    /// A failure said while a waiting thing held the line; it gets the line once nothing waits.
+    missed: Option<u64>,
 }
 
 impl Default for OneWindow {
@@ -452,6 +459,7 @@ impl OneWindow {
             chose: false,
             context: Vec::new(),
             chip_at: None,
+            missed: None,
         }
     }
 
@@ -564,6 +572,7 @@ impl OneWindow {
             self.keep_focus(now, focus);
         }
         self.sync_pause(now, &mut fx);
+        self.give_missed_its_turn();
         self.sync_staged(now);
         if self.line_from_view && !self.in_view() {
             self.line = None;
@@ -818,6 +827,10 @@ impl OneWindow {
                 true
             }
             Event::LetGo => self.let_go(),
+            Event::ScriptNotSaved(entry) => {
+                self.ledger.forget_script(entry);
+                true
+            }
         }
     }
 }

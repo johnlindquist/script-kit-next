@@ -37,8 +37,9 @@ impl Global for LineNoticeSink {}
 
 /// The icon beside a notice: something worked.
 pub const DONE: &str = "check";
-/// Something went wrong.
-pub const FAILED: &str = "warning";
+/// Something went wrong. The reducer reads this icon as a failure: the line keeps it strong and
+/// says only the failure's sentence.
+pub const FAILED: &str = sk_one_window::contract::FAILED_ICON;
 /// Something to know.
 pub const INFO: &str = "info";
 

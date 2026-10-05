@@ -135,7 +135,7 @@ fn execute_fallback_action(
                             crate::line_notice::say(
                                 cx,
                                 crate::line_notice::FAILED,
-                                format!("Error: {}", e),
+                                format!("Couldn't work that out: {e}"),
                             );
                         }
                     }

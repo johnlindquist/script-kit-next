@@ -133,6 +133,7 @@ fn a_reading_that_takes_back_undoes_the_last_run_when_nothing_waits() {
         Event::Done(Done {
             icon: "move".into(),
             title: "Moved standup".into(),
+            undo_kept: true,
             ..Done::default()
         }),
     );
@@ -213,6 +214,7 @@ fn actions_the_host_lists_keep_what_the_window_does_for_its_own_rows() {
         Event::Done(Done {
             icon: "move".into(),
             title: "Moved standup".into(),
+            undo_kept: true,
             ..Done::default()
         }),
     );
@@ -754,4 +756,179 @@ fn the_prototypes_rules_keep_the_last_run_in_the_line() {
     assert_eq!(win.slot_line(ENTER_GUARD_MS).kind, SlotKind::Recent);
     win.handle(ENTER_GUARD_MS + 10, Event::Key(Key::CmdK));
     assert_eq!(win.staged().expect("staged").subject.title, "Ghostty");
+}
+
+#[test]
+fn the_last_run_says_how_long_ago_it_ran_and_wakes_when_that_changes() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Done(Done {
+            icon: "move".into(),
+            title: "Moved standup".into(),
+            ..Done::default()
+        }),
+    );
+    let ago = |win: &OneWindow, now: Ms| win.slot_line(now).sub;
+    win.handle(30_000, Event::Tick);
+    assert_eq!(ago(&win, 30_000), "just now");
+    assert_eq!(ago(&win, 61_000), ">1m ago");
+    assert_eq!(ago(&win, 31 * 60_000), ">30m ago");
+    assert_eq!(ago(&win, 2 * 3_600_000 + 5), ">2h ago");
+    assert_eq!(ago(&win, 3 * 86_400_000), ">3d ago");
+    assert_eq!(
+        win.next_wake(),
+        Some(60_000),
+        "the line wakes when \"just now\" stops being true"
+    );
+}
+
+#[test]
+fn a_failure_said_while_a_message_waits_gets_the_line_once_it_is_sent() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Hold {
+            label: "To Sarah: “friday”".into(),
+            request: "tell Sarah friday".into(),
+        },
+    );
+    win.handle(
+        100,
+        Event::Notice(crate::notice::Notice::new(
+            crate::contract::FAILED_ICON,
+            "Couldn't add the reply to today's note.",
+        )),
+    );
+    assert_eq!(
+        win.slot_line(100).kind,
+        SlotKind::Holding,
+        "the wait keeps the line"
+    );
+    let after = crate::contract::MESSAGE_HOLD_MS + 1_000;
+    win.handle(after, Event::Tick);
+    let line = win.slot_line(after);
+    assert_eq!(line.title, "Couldn't add the reply to today's note.");
+    assert!(line.failed);
+    assert_eq!(line.icon, crate::contract::FAILED_ICON);
+    assert_eq!(win.slot_style(after).opacity, 1.0);
+}
+
+#[test]
+fn the_line_offers_only_keys_that_do_what_it_says_right_now() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Done(Done {
+            icon: "trash".into(),
+            title: "Moved Notes.md to Trash".into(),
+            risk: Some(Risk::Undo),
+            undo_kept: true,
+            ..Done::default()
+        }),
+    );
+    let keys = |win: &OneWindow| -> Vec<String> {
+        win.slot_line(ENTER_GUARD_MS)
+            .hints
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect()
+    };
+    assert_eq!(keys(&win), vec!["⌘Z".to_string()]);
+    win.handle(ENTER_GUARD_MS, Event::Text("moved".into()));
+    assert!(
+        keys(&win).is_empty(),
+        "while you type ⌘Z belongs to the text, so the line doesn't offer it"
+    );
+}
+
+#[test]
+fn a_run_nobody_can_take_back_never_offers_undo() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Done(Done {
+            icon: "append".into(),
+            title: "Added the reply to today's note".into(),
+            risk: Some(Risk::Undo),
+            ..Done::default()
+        }),
+    );
+    let line = win.slot_line(10);
+    assert!(line.hints.iter().all(|(key, _)| key != "⌘Z"));
+    let out = win.handle(ENTER_GUARD_MS, Event::Key(Key::CmdZ));
+    assert!(
+        out.effects
+            .iter()
+            .all(|e| !matches!(e, Effect::Undo { .. })),
+        "⌘Z never claims to undo what nobody kept a way back for"
+    );
+    assert_eq!(
+        win.ledger().last().unwrap().title,
+        "Added the reply to today's note"
+    );
+}
+
+#[test]
+fn a_question_waiting_for_its_answer_holds_the_line() {
+    let mut win = OneWindow::default();
+    win.handle(
+        0,
+        Event::Done(Done {
+            icon: "move".into(),
+            title: "Moved standup".into(),
+            ..Done::default()
+        }),
+    );
+    win.handle(
+        10,
+        Event::Stage(Subject {
+            kind: SubjectKind::Question,
+            title: "Allow Accessibility access?".into(),
+            sub: "Script Kit needs it to type into other apps".into(),
+            ..Subject::default()
+        }),
+    );
+    let line = win.slot_line(20);
+    assert_eq!(line.title, "Allow Accessibility access?");
+    assert_eq!(line.sub, "Script Kit needs it to type into other apps");
+    assert!(line.lit);
+    win.handle(ENTER_GUARD_MS, Event::Key(Key::Escape));
+    assert_eq!(win.slot_line(ENTER_GUARD_MS).title, "Moved standup");
+}
+
+#[test]
+fn news_waits_while_something_is_staged_and_gets_the_line_once_let_go() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Focused(front_app()));
+    win.handle(
+        0,
+        Event::Notice(crate::notice::Notice::new("info", "Backup finished")),
+    );
+    win.handle(10, Event::Key(Key::Space));
+    assert!(win.staged().is_some());
+    win.handle(
+        20,
+        Event::Notice(crate::notice::Notice::new("info", "Sync done")),
+    );
+    assert_eq!(
+        win.slot_line(20).title,
+        "Backup finished",
+        "the line keeps what it showed when Space staged the window"
+    );
+    win.handle(30, Event::Key(Key::Escape));
+    assert_eq!(win.slot_line(30).title, "Sync done");
+
+    let mut fresh = OneWindow::default();
+    fresh.handle(0, Event::Focused(front_app()));
+    fresh.handle(10, Event::Key(Key::Space));
+    fresh.handle(
+        20,
+        Event::Notice(crate::notice::Notice::new("info", "Sync done")),
+    );
+    assert_eq!(
+        fresh.slot_line(20).kind,
+        SlotKind::Focused,
+        "with nothing run before staging, the line keeps naming what's behind"
+    );
 }

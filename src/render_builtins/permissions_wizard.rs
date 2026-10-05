@@ -73,7 +73,7 @@ impl ScriptListApp {
                     "Missing required permissions at startup"
                 );
                 self.one_window_notice(crate::line_notice::FAILED, format!(
-                            "Missing required permissions: {names}. Run \u{201c}Set Up Permissions\u{201d} to grant them."
+                            "Script Kit still needs {names}. Run \u{201c}Set Up Permissions\u{201d} to grant them."
                         ), cx);
                 let _ = notify_rust::Notification::new()
                     .summary("Script Kit needs permissions")
@@ -135,7 +135,7 @@ impl ScriptListApp {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
         {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(format!("Couldn't check permissions here: {error}"), cx);
             return;
         }
         use crate::platform::permiso_detect::PermissionStatus;

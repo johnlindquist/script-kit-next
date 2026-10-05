@@ -54,6 +54,11 @@ impl ScriptListApp {
         let action = crate::dictation::device_selection_action_from_value(value);
         if let Err(error) = crate::dictation::apply_device_selection(&action) {
             tracing::warn!(target: "script_kit::one_window", %error, "microphone_not_changed");
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!("Couldn't switch Dictation to {}.", row.title),
+                cx,
+            );
             return;
         }
         self.one_window_handle(

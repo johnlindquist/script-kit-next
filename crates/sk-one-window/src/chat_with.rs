@@ -60,21 +60,90 @@ pub fn line(chat: &Chat, names_reply: bool) -> Option<SlotLine> {
     )
 }
 
-/// The reply's first words as the line quotes them, without Markdown's marks.
+/// The reply's first readable words as the line quotes them. Markdown's marks go (headings,
+/// quotes, list bullets, emphasis, code ticks, links keep their labels, HTML tags), while a minus
+/// sign or an underscore inside a word stays. A reply with nothing readable is "the model's reply".
 fn quote(reply: &str) -> String {
     let words = reply
         .lines()
-        .map(|l| l.trim_start_matches(['#', '>', '-', ' ']))
-        .find(|l| !l.trim().is_empty())
-        .unwrap_or_default()
-        .replace(['*', '`', '_'], "");
-    let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+        .map(readable)
+        .find(|l| !l.is_empty())
+        .unwrap_or_default();
+    if words.is_empty() {
+        return THE_REPLY_IN_WORDS.to_string();
+    }
     let Some((cut, _)) = words.char_indices().nth(REPLY_CHARS) else {
         return format!("“{words}”");
     };
     let head = &words[..cut];
     let head = head.rfind(' ').map_or(head, |space| &head[..space]);
     format!("“{}…”", head.trim_end_matches([',', ';', ':', ' ']))
+}
+
+/// What a quote says when the reply has no readable words.
+const THE_REPLY_IN_WORDS: &str = "The model's reply";
+
+/// One Markdown line as plain words.
+fn readable(line: &str) -> String {
+    let mut line = line.trim_start();
+    // Block marks: headings, quotes, then one list bullet ("- ", "* ", "+ ", "1. ").
+    line = line.trim_start_matches(['#', '>']).trim_start();
+    for bullet in ["- ", "* ", "+ "] {
+        if let Some(rest) = line.strip_prefix(bullet) {
+            line = rest;
+            break;
+        }
+    }
+    if let Some(dot) = line.find(". ") {
+        if dot > 0 && line[..dot].chars().all(|c| c.is_ascii_digit()) {
+            line = &line[dot + 2..];
+        }
+    }
+    let line = without_links(line);
+    let line = crate::notice::one_line(&line);
+    // Emphasis marks: "**", "__" and a lone "*"/"_" at a word's edge; code ticks anywhere.
+    let words: Vec<String> = line
+        .split(' ')
+        .map(|word| {
+            let word = word.replace("**", "").replace('`', "");
+            let word = word.trim_matches('*');
+            let inner = word.trim_matches('_');
+            if inner.contains('_') || inner.is_empty() {
+                word.to_string()
+            } else {
+                inner.to_string()
+            }
+        })
+        .filter(|word| !word.is_empty())
+        .collect();
+    words.join(" ")
+}
+
+/// "[label](url)" as "label"; "![alt](url)" as "alt".
+fn without_links(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(open) = rest.find('[') {
+        let after = &rest[open + 1..];
+        let link = after.find("](").and_then(|close| {
+            after[close + 2..]
+                .find(')')
+                .map(|end| (&after[..close], close + 2 + end + 1))
+        });
+        match link {
+            Some((label, used)) => {
+                out.push_str(rest[..open].strip_suffix('!').unwrap_or(&rest[..open]));
+                out.push_str(label);
+                rest = &after[used..];
+            }
+            None => {
+                out.push_str(&rest[..=open]);
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// What a turn says went with it.
@@ -147,5 +216,19 @@ mod tests {
         assert_eq!(old.title, THE_CHAT, "without it ⌘K stages the chat");
         chat.let_go();
         assert!(line(&chat, false).is_none());
+    }
+
+    #[test]
+    fn a_quote_reads_markdown_without_changing_what_the_reply_said() {
+        assert_eq!(quote("-5 degrees tonight"), "“-5 degrees tonight”");
+        assert_eq!(quote("- use my_file now"), "“use my_file now”");
+        assert_eq!(quote("## **Bold** and `code`"), "“Bold and code”");
+        assert_eq!(
+            quote("See [the docs](https://example.com) and ![a chart](c.png)"),
+            "“See the docs and a chart”"
+        );
+        assert_eq!(quote("**\n\nThen <b>this</b>"), "“Then this”");
+        assert_eq!(quote("1. First step"), "“First step”");
+        assert_eq!(quote("**"), THE_REPLY_IN_WORDS);
     }
 }

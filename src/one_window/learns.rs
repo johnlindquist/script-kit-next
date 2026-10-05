@@ -63,6 +63,8 @@ impl OwnView {
 #[derive(Default)]
 pub(crate) struct LearnsHost {
     pub(crate) lessons_loaded: bool,
+    /// The ledger as last written for the next session; unchanged runs aren't written again.
+    pub(crate) runs_fingerprint: u64,
     /// The rows of the list view on top, with the header they lead with.
     pub(crate) view_rows: Vec<Row>,
     pub(crate) view_head: String,

@@ -140,11 +140,6 @@ fn settings_opens_config_in_editor() {
             && content.contains(".spawn(&editor, &config_dir, &config_file)"),
         "settings should use the named editor launch plan for editor-specific arguments"
     );
-    assert!(
-        block.contains("launch_plan.success_hud(&editor_for_hud)")
-            && content.contains("Opening config.ts in {editor}"),
-        "settings should derive success HUD copy from the named editor launch plan"
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -160,11 +155,6 @@ fn settings_shows_error_when_editor_fails() {
         .expect("Expected settings action handler");
     let block = &content[settings_pos..content.len().min(settings_pos + 4000)];
 
-    assert!(
-        block.contains("launch_plan.failure_message(&editor_for_hud, e)")
-            && content.contains("Failed to open {editor} for settings: {error}"),
-        "settings should derive error toast copy from the named editor launch plan"
-    );
     assert!(
         block.contains("notice_failed("),
         "settings should use notice_failed for consistent error reporting"

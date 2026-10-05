@@ -1,8 +1,9 @@
-//! Keeps what the reducer learned across sessions, and runs a learned row.
+//! Keeps what the reducer learned and ran across sessions, and runs a learned row.
 //!
 //! A learned row runs the plan it ran before when that plan is still in memory; after a restart
 //! the sentence goes back in the input and Enter waits for Jev's reading of it, so a row never
-//! runs something other than what the list showed without asking.
+//! runs something other than what the list showed without asking. The last things that ran come
+//! back too, so the line above the input still says what ran and how long ago.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,13 +19,50 @@ fn lessons_path() -> PathBuf {
     crate::setup::get_kit_path().join("db/one-window-lessons.json")
 }
 
+fn runs_path() -> PathBuf {
+    crate::setup::get_kit_path().join("db/one-window-runs.json")
+}
+
+/// How many of the last runs the next session remembers.
+const RUNS_REMEMBERED: usize = 50;
+
+/// The last runs as written to disk, with the wall-clock time they were written so the next
+/// session can tell how long ago each ran.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RememberedRuns {
+    saved_at_ms: u64,
+    entries: Vec<sk_one_window::Entry>,
+}
+
+fn wall_clock_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| {
+            u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+        })
+}
+
+/// What changes when the ledger gains, settles or renames an entry: its newest entry's id,
+/// state, title and saved-script name.
+fn runs_fingerprint(window: &sk_one_window::OneWindow) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for entry in window.ledger().entries().iter().rev().take(2) {
+        entry.id.hash(&mut hasher);
+        format!("{:?}", entry.state).hash(&mut hasher);
+        entry.title.hash(&mut hasher);
+        entry.script.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
 /// Plans of the sentences learned this session, by learned row key.
 #[derive(Default)]
 pub(crate) struct LearnedPlans(HashMap<String, Arc<Plan>>);
 
 impl ScriptListApp {
-    /// Loads what earlier sessions learned, once.
-    pub(crate) fn one_window_load_lessons(&mut self, _cx: &mut Context<Self>) {
+    /// Loads what earlier sessions learned and ran, once.
+    pub(crate) fn one_window_load_lessons(&mut self, cx: &mut Context<Self>) {
         let learns = &mut self.one_window_host.learns;
         if learns.lessons_loaded {
             return;
@@ -43,6 +81,62 @@ impl ScriptListApp {
             let window = std::mem::take(&mut self.one_window);
             self.one_window = window.with_lessons(lessons);
         }
+        let runs = std::fs::read_to_string(runs_path())
+            .ok()
+            .and_then(|text| serde_json::from_str::<RememberedRuns>(&text).ok());
+        if let Some(runs) = runs {
+            let now = self.one_window_now(cx);
+            let since_saved = wall_clock_ms().saturating_sub(runs.saved_at_ms);
+            let history = runs
+                .entries
+                .into_iter()
+                .map(|entry| sk_one_window::Entry {
+                    at: now,
+                    before: entry.before.saturating_add(since_saved),
+                    ..entry
+                })
+                .collect();
+            let window = std::mem::take(&mut self.one_window);
+            self.one_window = window.with_history(history);
+        }
+        self.one_window_host.learns.runs_fingerprint = runs_fingerprint(&self.one_window);
+    }
+
+    /// Something ran or settled: the next session will remember it. Written off the UI thread,
+    /// and only in production.
+    pub(crate) fn one_window_remember_runs(
+        &mut self,
+        now: sk_one_window::Ms,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.main_services.is_production() || !self.one_window_host.learns.lessons_loaded {
+            return;
+        }
+        let fingerprint = runs_fingerprint(&self.one_window);
+        if fingerprint == self.one_window_host.learns.runs_fingerprint {
+            return;
+        }
+        self.one_window_host.learns.runs_fingerprint = fingerprint;
+        let runs = RememberedRuns {
+            saved_at_ms: wall_clock_ms(),
+            entries: self.one_window.ledger().remembered(now, RUNS_REMEMBERED),
+        };
+        cx.background_executor()
+            .spawn(async move {
+                let path = runs_path();
+                let written = serde_json::to_string(&runs)
+                    .map_err(std::io::Error::other)
+                    .and_then(|json| {
+                        if let Some(dir) = path.parent() {
+                            std::fs::create_dir_all(dir)?;
+                        }
+                        std::fs::write(&path, json)
+                    });
+                if let Err(error) = written {
+                    tracing::warn!(target: "script_kit::one_window", %error, "runs_not_saved");
+                }
+            })
+            .detach();
     }
 
     /// Something new was learned: keep its plan for this session and the lesson for the next.

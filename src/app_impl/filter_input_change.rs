@@ -72,7 +72,11 @@ impl ScriptListApp {
                     cx,
                 );
                 if let Err(error) = opened {
-                    self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't open a new note: {error}"),
+                        cx,
+                    );
                 }
             }
         }

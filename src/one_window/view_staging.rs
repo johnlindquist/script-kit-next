@@ -386,11 +386,16 @@ impl ScriptListApp {
         let (_, dialog) = self.one_window_view_staged()?;
         let dialog = dialog.read(cx);
         let rows = staged_actions::staged_action_rows(dialog);
-        let mut elements = vec![
-            self.main_view_slot_line_element(),
-            protocol::ElementInfo::input(STAGED_SEARCH_ID, Some(dialog.search_text.as_str()), true),
-            protocol::ElementInfo::list(staged_actions::STAGED_ACTIONS_ID, rows.len()),
-        ];
+        let mut elements = self.main_view_slot_line_elements();
+        elements.push(protocol::ElementInfo::input(
+            STAGED_SEARCH_ID,
+            Some(dialog.search_text.as_str()),
+            true,
+        ));
+        elements.push(protocol::ElementInfo::list(
+            staged_actions::STAGED_ACTIONS_ID,
+            rows.len(),
+        ));
         if include_headers {
             let head = self
                 .one_window

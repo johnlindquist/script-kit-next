@@ -27,14 +27,14 @@ pub fn view_spec() -> ViewSpec {
 }
 
 /// Entries as rows, newest first; the first carries the view's header.
-pub fn history_rows(entries: &[&Entry]) -> Vec<Row> {
+pub fn history_rows(entries: &[&Entry], now: crate::Ms) -> Vec<Row> {
     entries
         .iter()
         .enumerate()
         .map(|(i, e)| {
             let mut row = Row::new(format!("{KEY_PREFIX}{}", e.id), e.title.clone())
                 .with_icon(if e.icon.is_empty() { "check" } else { &e.icon })
-                .with_sub(when(e))
+                .with_sub(when(e, now))
                 .with_enter_label(ledger_words::ACT_ON_IT);
             if i == 0 {
                 row.head = Some(ledger_words::HISTORY_HEAD.to_string());
@@ -49,12 +49,8 @@ pub fn entry_id(key: &str) -> Option<u64> {
     key.strip_prefix(KEY_PREFIX)?.parse().ok()
 }
 
-fn when(e: &Entry) -> String {
-    let at = if e.seeded {
-        e.when.clone().unwrap_or_default()
-    } else {
-        words::JUST_NOW.to_string()
-    };
+fn when(e: &Entry, now: crate::Ms) -> String {
+    let at = e.when_words(now);
     let state = match e.state {
         EntryState::Holding => words::SENDING,
         EntryState::Undone if e.held.is_some() => words::NOT_SENT,
@@ -85,7 +81,7 @@ mod tests {
                 },
             );
         }
-        let rows = history_rows(&l.since(0));
+        let rows = history_rows(&l.since(0), 0);
         assert_eq!(rows[0].title, "Moved standup");
         assert_eq!(rows[0].head.as_deref(), Some(ledger_words::HISTORY_HEAD));
         assert!(rows[1].head.is_none());

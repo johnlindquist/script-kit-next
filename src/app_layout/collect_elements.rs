@@ -154,26 +154,14 @@ impl ScriptListApp {
         elements
     }
 
-    fn main_view_slot_line_element(&self) -> protocol::ElementInfo {
-        let line = self.one_window.slot_line(self.one_window_clock());
-        protocol::ElementInfo {
-            semantic_id: crate::one_window::slot_line::SLOT_LINE_ID.to_string(),
-            element_type: protocol::ElementType::Panel,
-            text: Some(line.title),
-            value: Some(line.label),
-            content: None,
-            selected: Some(false),
-            focused: Some(false),
-            index: None,
-            role: Some("slot-line".to_string()),
-            kind: Some(format!("{:?}", line.kind).to_lowercase()),
-            source: Some("OneWindow::slot_line".to_string()),
-            source_name: (!line.sub.is_empty()).then_some(line.sub),
-            selectable: Some(false),
-            status_kind: None,
-            action_disabled: None,
-            style: None,
-        }
+    /// The line above the input as drawn: the same line and style the renderer uses
+    /// (`crate::one_window::slot_line::slot_line_elements`).
+    fn main_view_slot_line_elements(&self) -> Vec<protocol::ElementInfo> {
+        let now = self.one_window_clock();
+        crate::one_window::slot_line::slot_line_elements(
+            &self.one_window.slot_line(now),
+            self.one_window.slot_style(now),
+        )
     }
 
     /// The subject chip in the main input, projected from the reducer the renderer draws from:
@@ -263,7 +251,7 @@ impl ScriptListApp {
         }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let mut context = vec![self.main_view_slot_line_element()];
+                let mut context = self.main_view_slot_line_elements();
                 context.extend(self.main_input_subject_chip_element());
                 context.extend(self.main_input_context_chip_elements());
                 let context_count = context.len();
@@ -294,9 +282,15 @@ impl ScriptListApp {
             }
 
             AppView::DayPage { entity } => {
-                let (elements, total_count) =
-                    entity.read(cx).collect_day_page_elements(limit, self, cx);
-                ElementCollectionOutcome::complete("dayPage", elements, total_count)
+                let header = self.main_view_slot_line_elements();
+                let header_count = header.len();
+                let (elements, total_count) = entity.read(cx).collect_day_page_elements(
+                    limit.saturating_sub(header_count),
+                    self,
+                    cx,
+                );
+                let elements = header.into_iter().chain(elements).take(limit).collect();
+                ElementCollectionOutcome::complete("dayPage", elements, header_count + total_count)
             }
 
             AppView::PermissionsWizardView { selected_index } => {
@@ -1664,18 +1658,28 @@ impl ScriptListApp {
         }
 
         self.append_footer_elements(&mut outcome, limit);
-        if matches!(self.current_view, AppView::ScriptList) {
-            let line = self.one_window.slot_line(self.one_window_clock());
-            for (key, label) in line.hints.iter().filter(|(_, label)| !label.is_empty()) {
-                let mut hint = protocol::ElementInfo::button(0, key);
-                hint.semantic_id =
-                    format!("{}:{label}", crate::one_window::slot_line::SLOT_LINE_ID);
-                hint.role = Some("slot-line-hint".to_string());
-                outcome.total_count += 1;
-                if outcome.elements.len() < limit {
-                    outcome.elements.push(hint);
-                }
-            }
+        // The pin is the window's state, drawn at the header's right end in every view, so it
+        // goes with the header (after the line when it's projected) rather than after the list,
+        // where a long list would truncate it.
+        if self.is_pinned {
+            let mut pin =
+                protocol::ElementInfo::button(0, sk_one_window::contract::words::STAYS_OPEN);
+            pin.semantic_id = crate::one_window::slot_line::WINDOW_PINNED_ID.to_string();
+            pin.element_type = protocol::ElementType::Panel;
+            pin.role = Some("window-state".to_string());
+            pin.index = None;
+            pin.selectable = Some(false);
+            let at = outcome
+                .elements
+                .iter()
+                .rposition(|e| {
+                    e.semantic_id
+                        .starts_with(crate::one_window::slot_line::SLOT_LINE_ID)
+                })
+                .map_or(0, |line| line + 1);
+            outcome.elements.insert(at, pin);
+            outcome.elements.truncate(limit);
+            outcome.total_count += 1;
         }
         outcome
     }

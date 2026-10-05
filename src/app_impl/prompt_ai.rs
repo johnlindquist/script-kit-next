@@ -280,7 +280,7 @@ impl ScriptListApp {
         use crate::prompt_completion::{PromptCompletionBinding, PromptOutcome};
         let binding = if let Some(binding) = &self.prompt_completion {
             if binding.instance().id != id {
-                self.notice_failed("stale_prompt_submission".to_string(), cx);
+                self.notice_failed("That prompt has already closed", cx);
                 return;
             }
             binding.clone()
@@ -293,7 +293,10 @@ impl ScriptListApp {
             PromptOutcome::Submitted(crate::protocol::SubmitValue::Text(value))
         });
         if let Err(error) = binding.try_complete(outcome) {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(
+                format!("Couldn't send your answer to the script: {error}"),
+                cx,
+            );
             return;
         }
         self.mark_main_data_changed();

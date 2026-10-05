@@ -102,7 +102,11 @@ impl DayPageView {
                 error = %error,
                 "day_page_note_switcher_open_failed"
             );
-            crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
+            crate::line_notice::say(
+                cx,
+                crate::line_notice::FAILED,
+                format!("Couldn't open the note: {error}"),
+            );
         }
     }
 

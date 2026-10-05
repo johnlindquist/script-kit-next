@@ -436,7 +436,11 @@ impl ScriptListApp {
                 match notes::new_note_to_edit(Some(&format!("# {title}\n\n"))) {
                     Ok(id) => NoteTarget::Note(id),
                     Err(error) => {
-                        self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Couldn't make “{title}”: {error}"),
+                            cx,
+                        );
                         return Vec::new();
                     }
                 }

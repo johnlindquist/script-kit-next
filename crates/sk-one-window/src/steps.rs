@@ -106,6 +106,8 @@ pub enum StepState {
     Reading,
     Ready,
     Done,
+    /// It ran and didn't do what it said.
+    Failed,
 }
 
 /// What reading a step found: what it does and the service it needs, if any.
@@ -337,14 +339,42 @@ impl Steps {
         }
     }
 
-    pub fn all_done(&self) -> bool {
-        self.phase == Phase::Running && self.live().all(|(_, s)| s.state == StepState::Done)
+    pub fn step_failed(&mut self, step: usize) {
+        if let Some(s) = self.steps.get_mut(step) {
+            s.state = StepState::Failed;
+        }
     }
 
-    /// The line the run leaves: "Did 3 steps: a · b · c".
+    /// Every step ran, whether it did what it said or not.
+    pub fn all_done(&self) -> bool {
+        self.phase == Phase::Running
+            && self
+                .live()
+                .all(|(_, s)| matches!(s.state, StepState::Done | StepState::Failed))
+    }
+
+    /// Some step didn't do what it said.
+    pub fn any_failed(&self) -> bool {
+        self.live().any(|(_, s)| s.state == StepState::Failed)
+    }
+
+    /// The line the run leaves: "Did 3 steps: a · b · c", or "Did 2 of 3 steps: a · b" when a step
+    /// failed: only the steps that did what they said are counted.
     pub fn done_title(&self) -> String {
-        let texts: Vec<&str> = self.live().map(|(_, s)| s.text.as_str()).collect();
-        format!("Did {} steps: {}", texts.len(), texts.join(" · "))
+        let all = self.live().count();
+        let did: Vec<&str> = self
+            .live()
+            .filter(|(_, s)| s.state == StepState::Done)
+            .map(|(_, s)| s.text.as_str())
+            .collect();
+        let noun = if all == 1 { "step" } else { "steps" };
+        if did.len() == all {
+            format!("Did {all} {noun}: {}", did.join(" · "))
+        } else if did.is_empty() {
+            format!("Didn't do the {noun}")
+        } else {
+            format!("Did {} of {all} {noun}: {}", did.len(), did.join(" · "))
+        }
     }
 
     pub fn texts(&self) -> Vec<String> {

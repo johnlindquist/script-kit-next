@@ -172,7 +172,8 @@ impl ScriptListApp {
     }
 
     /// The reducer saved a run as `name`: its entry goes into saved.ts.
-    pub(crate) fn one_window_save_script(&mut self, name: String, said: String) {
+    /// Saves the run as a script in `saved.ts`. False when it couldn't be written to disk.
+    pub(crate) fn one_window_save_script(&mut self, name: String, said: String) -> bool {
         let plan = self
             .one_window_last_run()
             .and_then(|row| self.intent_launcher.plan(&said, &row.key));
@@ -204,7 +205,7 @@ impl ScriptListApp {
         );
         self.one_window_host.learns.saved_file = next.clone();
         if !self.main_services.is_production() {
-            return;
+            return true;
         }
         let path = saved_path();
         let written = (|| {
@@ -215,10 +216,12 @@ impl ScriptListApp {
         })();
         match written {
             Ok(()) => {
-                tracing::info!(target: "script_kit::one_window", event = "script_saved", name = %name)
+                tracing::info!(target: "script_kit::one_window", event = "script_saved", name = %name);
+                true
             }
             Err(error) => {
-                tracing::warn!(target: "script_kit::one_window", %error, "script_not_saved")
+                tracing::warn!(target: "script_kit::one_window", %error, "script_not_saved");
+                false
             }
         }
     }

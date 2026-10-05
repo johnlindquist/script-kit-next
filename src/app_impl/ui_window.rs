@@ -1484,6 +1484,7 @@ impl ScriptListApp {
             &self.one_window,
             &self.slot_dimmer,
             self.one_window_clock(),
+            self.is_pinned,
         )
     }
 

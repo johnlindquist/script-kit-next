@@ -194,13 +194,13 @@ impl FileSearchEditorHandlerAction {
 
     fn success_hud(self) -> &'static str {
         match self {
-            Self::OpenInEditor => "Opened in Editor",
+            Self::OpenInEditor => "Opened in the editor",
         }
     }
 
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
-            Self::OpenInEditor => format!("Failed to open in editor: {error}"),
+            Self::OpenInEditor => format!("Couldn't open it in the editor: {error}"),
         }
     }
 }

@@ -371,7 +371,7 @@ impl ScriptListApp {
         if claude_available {
             self.one_window_notice(
                 crate::line_notice::DONE,
-                "Claude Code enabled! Ready to use.".to_string(),
+                "Claude Code is ready".to_string(),
                 cx,
             );
 
@@ -403,7 +403,7 @@ impl ScriptListApp {
         if let Err(error) =
             crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::ExternalStorage)
         {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(format!("Couldn't open the scratch pad here: {error}"), cx);
             return;
         }
 
@@ -457,7 +457,7 @@ impl ScriptListApp {
             path: scratch_path,
         });
         if let Err(error) = self.construct_prompt_seed(seed, cx) {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(format!("Couldn't open the scratch pad: {error}"), cx);
             return;
         }
         self.prepare_constructed_sdk_prompt("scratch-pad", true, cx);

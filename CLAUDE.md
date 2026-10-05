@@ -307,9 +307,20 @@ third), and a new one is a design change, not a fix.
   runs the kept undo exactly once.
 - Word from the app (a script's `hud()`, failures, "Copied", script errors) is a notice:
   `ScriptListApp::one_window_notice` (`notice_done` / `notice_failed` in action handlers) or
-  `crate::line_notice::say`. It lands in the ledger, so the line reads "Last · <words> just now"
-  at once while the window shows and when it comes back if it was hidden. A notice never covers
-  a waiting hold or a staged subject.
+  `crate::line_notice::say`. It lands in the ledger, so the line shows "<words> just now" beside
+  its icon at once while the window shows and when it comes back if it was hidden; the age then
+  steps through ">1m ago", ">5m ago", ">15m ago", ">30m ago", ">1h ago", ">1d ago", ">1w ago"
+  (`sk_one_window::contract::words::ago`). Runs are remembered across restarts
+  (`db/one-window-runs.json`, last 50) with their real age and without undo. The reducer folds
+  every notice to one line (`sk_one_window::notice`): no emoji, markup or empty notices, and a
+  failure ("Couldn't save the note: <error>") shows only the words before the colon while the
+  error goes to the log. Write failures that way: a plain sentence, then `: {error}`. Failures
+  keep the warning icon at full strength. The header draws icons with words that say what
+  happened, never label words such as "Last", "Behind" or "Pinned", and never emoji: icons come
+  from Lucide or the app's icon set. The window's own state (pinned with ⌘⇧P) sits at the
+  header's right end as a pin and "Stays open". A notice never covers a waiting hold, a waiting
+  question or a staged subject; a failure hidden by a hold gets the line once the hold ends.
+  ⌘Z and ↑ are offered only while they do what they say.
 - A question that genuinely needs an answer (SDK `confirm()` with no risk, provider sign-in,
   the Tab AI "Save this script?" offer, Agent Chat recovery) is staged in the line and its
   answers become rows: `ScriptListApp::one_window_ask` / `crate::line_notice::ask`. Esc lets go

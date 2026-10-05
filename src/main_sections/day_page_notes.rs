@@ -411,7 +411,11 @@ impl DayPageView {
                 .leave_current_document(window, cx)
                 .and_then(|_| self.show_note_target(previous, window, cx))
             {
-                crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
+                crate::line_notice::say(
+                    cx,
+                    crate::line_notice::FAILED,
+                    format!("Couldn't go back to the last note: {error}"),
+                );
             }
             return;
         }
@@ -426,12 +430,20 @@ impl DayPageView {
                 .leave_current_document(window, cx)
                 .and_then(|_| self.show_note_target(crate::notes::NoteTarget::Today, window, cx))
             {
-                crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
+                crate::line_notice::say(
+                    cx,
+                    crate::line_notice::FAILED,
+                    format!("Couldn't open today's page: {error}"),
+                );
             }
             return;
         }
         if let Err(error) = self.leave_current_document(window, cx) {
-            crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
+            crate::line_notice::say(
+                cx,
+                crate::line_notice::FAILED,
+                format!("Couldn't save the note: {error}"),
+            );
             return;
         }
         let back = self.back;
@@ -744,7 +756,11 @@ impl ScriptListApp {
             let _ = handle.update(cx, |_, window, cx| {
                 app.update(cx, |app, cx| {
                     if let Err(error) = app.open_note_in_editor(target, back, window, cx) {
-                        app.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                        app.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Couldn't open the note: {error}"),
+                            cx,
+                        );
                     } else if direct {
                         app.mark_opened_directly("note_opened_onto_hidden_window");
                     }
@@ -768,7 +784,11 @@ impl ScriptListApp {
                 view.follow_to_note_target(target, window, cx)
             });
             if let Err(error) = result {
-                crate::line_notice::say(cx, crate::line_notice::FAILED, error.to_string());
+                crate::line_notice::say(
+                    cx,
+                    crate::line_notice::FAILED,
+                    format!("Couldn't open the note: {error}"),
+                );
             }
         };
         if let Some(id) = action.strip_prefix("open:") {
@@ -782,7 +802,11 @@ impl ScriptListApp {
             "list" => {
                 let result = entity.update(cx, |view, cx| view.leave_current_document(window, cx));
                 if let Err(error) = result {
-                    self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't save the note: {error}"),
+                        cx,
+                    );
                     return Some(true);
                 }
                 self.reset_to_script_list(cx);
@@ -830,7 +854,12 @@ impl ScriptListApp {
                         )
                     }
                     Err(error) => {
-                        self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx)
+                        let verb = if pinned { "pin" } else { "unpin" };
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Couldn't {verb} “{title}”: {error}"),
+                            cx,
+                        )
                     }
                 }
             }
@@ -860,20 +889,26 @@ impl ScriptListApp {
                         if let Err(error) = result {
                             self.one_window_notice(
                                 crate::line_notice::FAILED,
-                                error.to_string(),
+                                format!("Couldn't open the copy of “{title}”: {error}"),
                                 cx,
                             );
                         }
                     }
-                    Err(error) => {
-                        self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx)
-                    }
+                    Err(error) => self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't duplicate “{title}”: {error}"),
+                        cx,
+                    ),
                 }
             }
             "reveal" => match crate::notes::note_file_path(note.id) {
                 Ok(Some(path)) => {
                     if let Err(error) = crate::platform::reveal_in_finder(&path) {
-                        self.one_window_notice(crate::line_notice::FAILED, error, cx);
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Couldn't show “{title}” in Finder: {error}"),
+                            cx,
+                        );
                     }
                 }
                 _ => self.one_window_notice(
@@ -893,7 +928,7 @@ impl ScriptListApp {
                         if let Err(error) = trashed {
                             app.one_window_notice(
                                 crate::line_notice::FAILED,
-                                error.to_string(),
+                                format!("Couldn't move the note to the Trash: {error}"),
                                 cx,
                             );
                         }
@@ -1002,9 +1037,11 @@ impl ScriptListApp {
                         DayPageBack::Leave,
                         cx,
                     ),
-                    Err(error) => {
-                        self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx)
-                    }
+                    Err(error) => self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't make a note of the clipboard: {error}"),
+                        cx,
+                    ),
                 }
             }
             "selection" => {
@@ -1034,7 +1071,11 @@ impl ScriptListApp {
                     context_block_text(&block).to_string(),
                 )),
                 Err(error) => {
-                    self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx);
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        format!("Couldn't read {} for the note: {error}", part.label()),
+                        cx,
+                    );
                     return;
                 }
             }
@@ -1049,7 +1090,11 @@ impl ScriptListApp {
                 DayPageBack::Leave,
                 cx,
             ),
-            Err(error) => self.one_window_notice(crate::line_notice::FAILED, error.to_string(), cx),
+            Err(error) => self.one_window_notice(
+                crate::line_notice::FAILED,
+                format!("Couldn't save the note: {error}"),
+                cx,
+            ),
         }
     }
 }

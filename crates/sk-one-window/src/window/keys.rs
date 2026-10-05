@@ -187,7 +187,7 @@ impl OneWindow {
         true
     }
 
-    fn last_target(&self) -> Option<u64> {
+    pub(super) fn last_target(&self) -> Option<u64> {
         self.holds
             .newest()
             .and_then(|h| h.entry)
@@ -279,7 +279,7 @@ impl OneWindow {
             return true;
         }
         match self.ledger.last().cloned() {
-            Some(e) if e.risk == Risk::Undo && e.state == EntryState::Done => {
+            Some(e) if e.can_undo() => {
                 self.staged = None;
                 self.entry_act(now, RowAct::Undo, &e, fx);
                 true

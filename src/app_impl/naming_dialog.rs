@@ -43,7 +43,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if let Err(error) = crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::ExternalStorage) {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(format!("Couldn't ask for a name here: {error}"), cx);
             return;
         }
         let (target_directory, extension) = match target {
@@ -66,7 +66,7 @@ impl ScriptListApp {
             config, input: String::new(),
         });
         if let Err(error) = self.construct_prompt_seed(seed, cx) {
-            self.notice_failed(error.to_string(), cx);
+            self.notice_failed(format!("Couldn't ask for a name: {error}"), cx);
             return;
         }
         self.opened_from_main_menu = true;
@@ -98,7 +98,7 @@ impl ScriptListApp {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!(error = %e, payload = %json, "Failed to parse naming payload");
-                self.one_window_notice(crate::line_notice::FAILED, format!("Failed to parse naming result: {}", e), cx);
+                self.one_window_notice(crate::line_notice::FAILED, format!("Couldn't read the name you gave: {}", e), cx);
                 self.go_back_or_close(window, cx);
                 return;
             }

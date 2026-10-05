@@ -25,6 +25,8 @@ pub enum SubjectKind {
     Thing,
     /// Something copied, pasted into the empty input.
     Clipboard,
+    /// A question waiting for its answer: its answers are the rows, and Esc lets it go.
+    Question,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -56,6 +58,9 @@ pub struct Staged {
     pub waiting_for_rows: bool,
     /// The entry's state when staged; a change rebuilds the rows.
     pub entry_state: Option<EntryState>,
+    /// The ledger entry the line above the input showed when this was staged (`None`: nothing
+    /// had run). While it stays staged the line keeps showing it, so news doesn't cover it.
+    pub shown: Option<u64>,
 }
 
 impl Staged {
@@ -101,7 +106,12 @@ pub fn entry_subject(entry: &Entry, label: &str) -> Subject {
         title: entry.title.clone(),
         sub: match &entry.script {
             Some(name) => format!("saved as “{name}”"),
-            None => entry.risk.words().to_string(),
+            None => match entry.risk {
+                crate::ledger::Risk::Undo if !entry.can_undo() => {
+                    crate::ledger::Risk::None.words().to_string()
+                }
+                risk => risk.words().to_string(),
+            },
         },
         icon: if entry.icon.is_empty() {
             "check".into()
@@ -162,7 +172,7 @@ pub fn entry_rows(entry: &Entry) -> Vec<Row> {
             RowAct::SendNow,
         ));
     } else {
-        if entry.risk == crate::ledger::Risk::Undo && entry.state == EntryState::Done {
+        if entry.can_undo() {
             rows.push(act("undo", "Undo it", "undo that", RowAct::Undo));
         }
         if entry.state != EntryState::Undone || entry.held.is_some() {
@@ -275,6 +285,8 @@ pub fn default_actions(subject: &Subject) -> Vec<Row> {
             ]
         }
         SubjectKind::Clipboard => crate::clipboard::actions(subject),
+        // A question's rows are its answers, which the host that asked it supplies.
+        SubjectKind::Question => Vec::new(),
         SubjectKind::Entry | SubjectKind::Script | SubjectKind::Answer | SubjectKind::Thing => {
             vec![
                 act("open", "Open it", "open it", RowAct::Host),
@@ -365,6 +377,8 @@ mod tests {
             held: None,
             seeded: false,
             when: None,
+            before: 0,
+            undo_kept: risk == Risk::Undo,
             undo_of: None,
         }
     }
@@ -407,6 +421,7 @@ mod tests {
             head: words::STAGED.into(),
             waiting_for_rows: false,
             entry_state: None,
+            shown: None,
         };
         assert_eq!(s.matches("undo").len(), 1);
         assert_eq!(s.pinned()[0].head.as_deref(), Some(words::STAGED));

@@ -85,7 +85,7 @@ impl ScriptListApp {
                         copied,
                         crate::components::conversation_actions::ConversationCommandExecution::Executed
                     ) {
-                        self.one_window_notice(crate::line_notice::INFO, "Copied response".to_string(), cx);
+                        self.one_window_notice(crate::line_notice::DONE, "Copied the reply".to_string(), cx);
                     }
                 }
             }

@@ -1504,7 +1504,7 @@ impl ScriptListApp {
                     event = "tab_ai_harness_start_failed",
                     error = %error,
                 );
-                self.one_window_notice(crate::line_notice::FAILED, format!("Failed to start harness: {error}. Install the configured CLI or update claudeCode.path in ~/.scriptkit/config.ts"), cx);
+                self.one_window_notice(crate::line_notice::FAILED, format!("Couldn't start the agent. Install its command-line tool or set claudeCode.path in ~/.scriptkit/config.ts: {error}"), cx);
                 cx.notify();
                 return;
             }
@@ -1660,7 +1660,7 @@ impl ScriptListApp {
                             );
                             this.one_window_notice(
                                 crate::line_notice::FAILED,
-                                format!("Failed to build harness context: {error}"),
+                                format!("Couldn't give the agent what's on screen: {error}"),
                                 cx,
                             );
                             cx.notify();

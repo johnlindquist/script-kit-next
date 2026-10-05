@@ -92,14 +92,28 @@ fn grouped_rows(rows: &[Row]) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
 impl ScriptListApp {
     /// The app has something to say. The line above the input says it now, or when the window
     /// comes back.
+    ///
+    /// A failure reads "<what didn't happen>: <the error>": the line says only the words before
+    /// the colon, and the error goes to the log (`sk_one_window::notice::failure_words`).
     pub(crate) fn one_window_notice(
         &mut self,
         icon: &str,
         text: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
+        let text = text.into();
+        if icon == crate::line_notice::FAILED {
+            if let (sentence, Some(detail)) = sk_one_window::notice::failure_words(&text) {
+                tracing::warn!(
+                    category = "NOTICE",
+                    notice = %sentence,
+                    detail = %detail,
+                    "Failure said in the line"
+                );
+            }
+        }
         self.one_window_host.ledger.said += 1;
-        self.one_window_handle(Event::Notice(Notice::new(icon, text.into())), cx);
+        self.one_window_handle(Event::Notice(Notice::new(icon, text)), cx);
     }
 
     /// Something that can't be taken back: it waits in the line, and `run` happens when the wait
@@ -159,7 +173,7 @@ impl ScriptListApp {
         });
         self.one_window_handle(
             Event::Stage(sk_one_window::Subject {
-                kind: sk_one_window::SubjectKind::Thing,
+                kind: sk_one_window::SubjectKind::Question,
                 label: sk_one_window::contract::words::ACTING_ON.to_string(),
                 title,
                 sub: detail.into(),
@@ -233,17 +247,19 @@ impl ScriptListApp {
                 icon: icon.to_string(),
                 title: title.clone(),
                 risk: Some(Risk::Undo),
+                undo_kept: true,
                 ..Done::default()
             }),
             cx,
         );
-        if let Some(entry) = self
+        let kept = self
             .one_window
             .ledger()
             .last()
-            .filter(|e| e.title == title && e.risk == Risk::Undo)
-        {
-            self.one_window_host.ledger.undo.insert(entry.id, undo);
+            .filter(|e| e.title == title && e.can_undo())
+            .map(|e| e.id);
+        if let Some(id) = kept {
+            self.one_window_host.ledger.undo.insert(id, undo);
         }
     }
 
@@ -396,7 +412,10 @@ impl ScriptListApp {
     }
 
     fn one_window_entry_rows(&self, text: &str) -> Vec<Row> {
-        history::history_rows(&self.one_window.ledger().search(text))
+        history::history_rows(
+            &self.one_window.ledger().search(text),
+            self.one_window_clock(),
+        )
     }
 
     /// ↑/↓ move the history view's highlight; Enter puts its entry in the line.

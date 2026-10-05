@@ -34,7 +34,7 @@ impl ScriptListApp {
                 trace_id = %dctx.trace_id,
                 "Builtin entry not found for held action"
             );
-            self.notice_failed(format!("Builtin not found: {}", entry_id), cx);
+            self.notice_failed("That command is no longer available", cx);
 
             let outcome = Self::builtin_error(
                 dctx,

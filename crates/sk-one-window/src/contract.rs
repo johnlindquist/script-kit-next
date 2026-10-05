@@ -101,15 +101,82 @@ pub mod slot_opacity {
 /// Words the window shows. Pages and the app use these and no others.
 pub mod words {
     pub const FOCUSED: &str = "Focused";
-    /// The line before anything has run: what's behind the window.
+    /// Names the line before anything has run (what's behind the window) for agents; the line
+    /// itself draws only that window's icon and title.
     pub const BEHIND: &str = "Behind";
     pub const THE_DESKTOP: &str = "The desktop";
+    /// Names the line holding the last thing that ran for agents; the line itself draws only the
+    /// history icon and what ran.
     pub const LAST: &str = "Last";
+    /// Beside the pin at the header's right end while the window stays open when it loses focus.
+    pub const STAYS_OPEN: &str = "Stays open";
     pub const ACTING_ON: &str = "Acting on";
     pub const SENDING: &str = "Sending";
     pub const SHARING: &str = "Sharing";
     pub const PAUSED: &str = "Paused while you type";
     pub const JUST_NOW: &str = "just now";
+    /// A failure whose only words were an internal code.
+    pub const SOMETHING_WENT_WRONG: &str = "Something went wrong";
+
+    const MINUTE: u64 = 60_000;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+    const WEEK: u64 = 7 * DAY;
+    /// The minutes the age words step through within the first hour.
+    const MINUTE_STEPS: [u64; 4] = [1, 5, 15, 30];
+
+    /// How long ago something ran, short: "just now" for the first minute, then the last step it
+    /// passed: ">1m ago", ">5m ago", ">15m ago", ">30m ago", ">1h ago", ">2h ago" … ">1d ago" …
+    /// ">1w ago".
+    pub fn ago(age_ms: u64) -> String {
+        match ago_step(age_ms) {
+            None => JUST_NOW.to_string(),
+            Some((n, unit)) => format!(">{n}{unit} ago"),
+        }
+    }
+
+    /// How much older something must get before [`ago`] says something else.
+    pub fn ago_changes_in(age_ms: u64) -> u64 {
+        let next = if age_ms < MINUTE {
+            MINUTE
+        } else if age_ms < HOUR {
+            MINUTE_STEPS
+                .iter()
+                .map(|m| m * MINUTE)
+                .find(|at| *at > age_ms)
+                .unwrap_or(HOUR)
+        } else if age_ms < DAY {
+            (age_ms / HOUR + 1) * HOUR
+        } else if age_ms < WEEK {
+            (age_ms / DAY + 1) * DAY
+        } else {
+            (age_ms / WEEK + 1) * WEEK
+        };
+        next - age_ms
+    }
+
+    fn ago_step(age_ms: u64) -> Option<(u64, char)> {
+        if age_ms < MINUTE {
+            return None;
+        }
+        Some(if age_ms < HOUR {
+            let minutes = age_ms / MINUTE;
+            let step = MINUTE_STEPS
+                .iter()
+                .rev()
+                .find(|step| minutes >= **step)
+                .copied()
+                .unwrap_or(1);
+            (step, 'm')
+        } else if age_ms < DAY {
+            (age_ms / HOUR, 'h')
+        } else if age_ms < WEEK {
+            (age_ms / DAY, 'd')
+        } else {
+            (age_ms / WEEK, 'w')
+        })
+    }
+
     pub const NOT_SENT: &str = "not sent";
     pub const SENT: &str = "sent";
     /// The line's hint beside Space, until Space has staged what's focused a few times.
@@ -188,6 +255,10 @@ pub mod words {
 
 /// The Last line's glyph: it reports what ran, whatever kind of run it was.
 pub const RECENT_ICON: &str = "history";
+
+/// A notice that something went wrong. The line keeps this icon (it never becomes history's)
+/// and draws it at full strength, so a failure reads as one even while you type.
+pub const FAILED_ICON: &str = "warning";
 
 /// Icons whose runs can be undone (the rest either wait or just happen).
 pub const UNDOABLE_ICONS: &[&str] = &[
@@ -300,7 +371,8 @@ pub mod talk_words {
 
     /// "Typed 20 words into Mail".
     pub fn typed_into(words: usize, app: &str) -> String {
-        format!("Typed {words} words into {app}")
+        let noun = if words == 1 { "word" } else { "words" };
+        format!("Typed {words} {noun} into {app}")
     }
 }
 
@@ -313,6 +385,8 @@ pub mod ledger_words {
     pub const RAN: &str = "ran";
     pub const NOT_RUN: &str = "stopped";
     pub const UNDO: &str = "undo";
+    /// ⌘Z beside something still waiting: it stops it before it runs or sends.
+    pub const STOP: &str = "stop";
     pub const TODAY: &str = "Today";
     pub const ACT_ON_IT: &str = "Act on it";
     pub const HISTORY_HEAD: &str = "What you ran today · newest first";

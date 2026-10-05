@@ -48,6 +48,10 @@ pub enum WorkEvent {
     StepDone {
         index: usize,
     },
+    /// A step ran and didn't do what it said; the host said why in the line.
+    StepFailed {
+        index: usize,
+    },
     /// What the user had connected before this session.
     Connections(Vec<String>),
     Connected {

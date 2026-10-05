@@ -42,6 +42,9 @@ pub struct SlotLine {
     /// It is what's in play: Space, ⌘K or ↑ staged it and Esc lets it go.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub lit: bool,
+    /// It says something went wrong: drawn with the failure icon at full strength.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub failed: bool,
 }
 
 /// What you act on, as a chip in the input.
@@ -104,6 +107,7 @@ impl SlotLine {
             hints: Vec::new(),
             progress: None,
             lit: false,
+            failed: false,
         }
     }
 
@@ -127,6 +131,15 @@ impl SlotLine {
         self
     }
 
+    /// What a waiting or typing line is doing ("Runs in 8s", "Paused while you type",
+    /// "Typing into"), drawn before its title. Other lines' labels only name the line for agents
+    /// ("Last", "Behind") and are never drawn.
+    pub fn state_words(&self) -> Option<&str> {
+        matches!(self.kind, SlotKind::Holding | SlotKind::Typing)
+            .then_some(self.label.as_str())
+            .filter(|label| !label.is_empty())
+    }
+
     /// The same words and state, ignoring a held message's progress bar.
     pub fn same_words(&self, other: &SlotLine) -> bool {
         self.kind == other.kind
@@ -147,15 +160,21 @@ pub struct SlotStyle {
 }
 
 impl SlotStyle {
-    pub fn new(kind: SlotKind, typing: bool, in_view: bool) -> Self {
+    pub fn new(line: &SlotLine, typing: bool, in_view: bool) -> Self {
         use crate::contract::slot_opacity as o;
-        if in_view && kind != SlotKind::Holding {
+        if line.failed {
+            return Self {
+                opacity: 1.0,
+                hints: !in_view,
+            };
+        }
+        if in_view && line.kind != SlotKind::Holding {
             return Self {
                 opacity: o::IN_VIEW_NOT_HOLDING,
                 hints: false,
             };
         }
-        let opacity = match kind {
+        let opacity = match line.kind {
             SlotKind::Focused if typing => o::TYPING_FOCUSED,
             SlotKind::Recent if typing => o::TYPING_RECENT,
             SlotKind::Focused => o::FOCUSED,
@@ -174,22 +193,26 @@ mod tests {
     use super::*;
     use crate::contract::slot_opacity as o;
 
+    fn of(kind: SlotKind) -> SlotLine {
+        SlotLine::new(kind, "", "")
+    }
+
     #[test]
     fn context_is_dimmed_and_dims_further_while_typing() {
         assert_eq!(
-            SlotStyle::new(SlotKind::Focused, false, false).opacity,
+            SlotStyle::new(&of(SlotKind::Focused), false, false).opacity,
             o::FOCUSED
         );
         assert_eq!(
-            SlotStyle::new(SlotKind::Recent, false, false).opacity,
+            SlotStyle::new(&of(SlotKind::Recent), false, false).opacity,
             o::RECENT
         );
         assert_eq!(
-            SlotStyle::new(SlotKind::Focused, true, false).opacity,
+            SlotStyle::new(&of(SlotKind::Focused), true, false).opacity,
             o::TYPING_FOCUSED
         );
         assert_eq!(
-            SlotStyle::new(SlotKind::Recent, true, false).opacity,
+            SlotStyle::new(&of(SlotKind::Recent), true, false).opacity,
             o::TYPING_RECENT
         );
     }
@@ -197,9 +220,12 @@ mod tests {
     #[test]
     fn staged_and_holding_lines_are_full_strength() {
         for typing in [false, true] {
-            assert_eq!(SlotStyle::new(SlotKind::Staged, typing, false).opacity, 1.0);
             assert_eq!(
-                SlotStyle::new(SlotKind::Holding, typing, false).opacity,
+                SlotStyle::new(&of(SlotKind::Staged), typing, false).opacity,
+                1.0
+            );
+            assert_eq!(
+                SlotStyle::new(&of(SlotKind::Holding), typing, false).opacity,
                 1.0
             );
         }
@@ -208,12 +234,33 @@ mod tests {
     #[test]
     fn inside_a_view_only_a_waiting_message_keeps_strength_and_hints() {
         for kind in [SlotKind::Focused, SlotKind::Typing] {
-            let style = SlotStyle::new(kind, false, true);
+            let style = SlotStyle::new(&of(kind), false, true);
             assert_eq!(style.opacity, o::IN_VIEW_NOT_HOLDING);
             assert!(!style.hints);
         }
-        let holding = SlotStyle::new(SlotKind::Holding, false, true);
+        let holding = SlotStyle::new(&of(SlotKind::Holding), false, true);
         assert_eq!(holding.opacity, 1.0);
         assert!(holding.hints);
+    }
+
+    /// A failure is news you must not miss: it never fades while you type or inside a view.
+    #[test]
+    fn a_failure_keeps_full_strength_while_typing_and_in_a_view() {
+        let mut failed = of(SlotKind::Recent);
+        failed.failed = true;
+        for (typing, in_view) in [(false, false), (true, false), (false, true), (true, true)] {
+            assert_eq!(SlotStyle::new(&failed, typing, in_view).opacity, 1.0);
+        }
+    }
+
+    #[test]
+    fn only_waiting_and_typing_lines_draw_their_state_words() {
+        let holding = SlotLine::new(SlotKind::Holding, "Runs in 8s", "Empty Trash");
+        assert_eq!(holding.state_words(), Some("Runs in 8s"));
+        let typing = SlotLine::new(SlotKind::Typing, "Typing into", "Mail");
+        assert_eq!(typing.state_words(), Some("Typing into"));
+        for (kind, label) in [(SlotKind::Recent, "Last"), (SlotKind::Focused, "Behind")] {
+            assert_eq!(SlotLine::new(kind, label, "x").state_words(), None);
+        }
     }
 }

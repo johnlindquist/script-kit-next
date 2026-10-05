@@ -217,6 +217,11 @@ impl ScriptListApp {
         if self.main_services.is_production() {
             if let Err(error) = save_off(&self.one_window_host.learns.stopped) {
                 tracing::warn!(target: "script_kit::one_window", %error, "automation_not_saved");
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    "Couldn't remember that change; it lasts until Script Kit quits.",
+                    cx,
+                );
             }
         }
         let title = if stop {
@@ -228,7 +233,6 @@ impl ScriptListApp {
             Event::Done(Done {
                 icon: "again".into(),
                 title,
-                risk: Some(sk_one_window::Risk::Undo),
                 stay: true,
                 ..Done::default()
             }),

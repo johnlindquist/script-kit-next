@@ -36,6 +36,7 @@ impl OneWindow {
             head: self.staged_head(head),
             waiting_for_rows: waiting,
             entry_state: entry.map(|e| e.state),
+            shown: self.shown_when_staged(),
         });
         let user = self.user_turn(now);
         self.guard.arm_unless_user(now, user);

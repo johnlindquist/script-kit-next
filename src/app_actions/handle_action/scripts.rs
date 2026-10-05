@@ -10,6 +10,9 @@ enum ScriptSourceHandlerAction {
     CopyContent,
 }
 
+/// What Help opens, in the words the line uses.
+const HELP_GUIDE: &str = "the Script Kit guide";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SettingsEditorLaunchPlan {
     ReuseWindowWithProject,
@@ -199,23 +202,22 @@ impl SettingsEditorLaunchPlan {
         }
     }
 
-    fn success_hud(self, editor: &str) -> String {
+    /// `file` is what opens, in words: "config.ts", "the Script Kit guide".
+    fn success_hud(self, editor: &str, file: &str) -> String {
         match self {
             Self::ReuseWindowWithProject
             | Self::FileOnlyZed
             | Self::AddToSublimeProject
-            | Self::GenericFileOnly => format!("Opening config.ts in {editor}"),
+            | Self::GenericFileOnly => format!("Opening {file} in {editor}"),
         }
     }
 
-    fn failure_message(self, editor: &str, error: impl std::fmt::Display) -> String {
+    fn failure_message(self, editor: &str, file: &str, error: impl std::fmt::Display) -> String {
         match self {
             Self::ReuseWindowWithProject
             | Self::FileOnlyZed
             | Self::AddToSublimeProject
-            | Self::GenericFileOnly => {
-                format!("Failed to open {editor} for settings: {error}")
-            }
+            | Self::GenericFileOnly => format!("Couldn't open {file} in {editor}: {error}"),
         }
     }
 }
@@ -542,7 +544,7 @@ impl ScriptListApp {
                             );
                             this.one_window_notice(
                                 crate::line_notice::INFO,
-                                launch_plan.success_hud(&editor_for_hud),
+                                launch_plan.success_hud(&editor_for_hud, "config.ts"),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -558,7 +560,10 @@ impl ScriptListApp {
                             );
                             let launch_plan =
                                 SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
-                            this.notice_failed(launch_plan.failure_message(&editor_for_hud, e), cx);
+                            this.notice_failed(
+                                launch_plan.failure_message(&editor_for_hud, "config.ts", e),
+                                cx,
+                            );
                         }
                     });
                 })
@@ -613,7 +618,7 @@ impl ScriptListApp {
                         Ok((launch_plan, _)) => {
                             this.one_window_notice(
                                 crate::line_notice::INFO,
-                                launch_plan.success_hud(&editor_for_hud),
+                                launch_plan.success_hud(&editor_for_hud, HELP_GUIDE),
                                 cx,
                             );
                             this.hide_main_and_reset(cx);
@@ -621,7 +626,10 @@ impl ScriptListApp {
                         Err(e) => {
                             let launch_plan =
                                 SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
-                            this.notice_failed(launch_plan.failure_message(&editor_for_hud, e), cx);
+                            this.notice_failed(
+                                launch_plan.failure_message(&editor_for_hud, HELP_GUIDE, e),
+                                cx,
+                            );
                         }
                     });
                 })

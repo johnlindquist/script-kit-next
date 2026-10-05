@@ -731,6 +731,13 @@ impl ScriptListApp {
             self.frontmost_menu_subscription_task = Some(cx.spawn(async move |this, cx| {
                 while subscription.changed().await.is_ok() {
                     let updated = this.update(cx, |app, cx| {
+                        // Pinned, the window stays up while you switch apps behind it, so the
+                        // line keeps naming the window that is behind it now.
+                        if app.is_pinned && crate::is_main_window_visible() {
+                            if let Some(front) = crate::frontmost_app_tracker::get_last_real_app() {
+                                app.focus_front_window(&front, cx);
+                            }
+                        }
                         if !app.main_services.is_production()
                             || !matches!(app.current_view, AppView::ScriptList)
                             || !app.root_search.query_is_current()

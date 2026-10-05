@@ -15,6 +15,9 @@ use crate::designs::MainMenuThemeDef;
 
 pub(crate) const SLOT_LINE_ID: &str = "main-view-slot-line";
 
+/// The pin at the header's right end while the window stays open when it loses focus (⌘⇧P).
+pub(crate) const WINDOW_PINNED_ID: &str = "main-view-window-pinned";
+
 /// The subject chip inside the main input.
 pub(crate) const SUBJECT_CHIP_ID: &str = "main-input-subject-chip";
 /// Each `@` chip's id is this and its place among them, from 0.
@@ -22,6 +25,11 @@ pub(crate) const CONTEXT_CHIP_ID_PREFIX: &str = "main-input-context-chip-";
 
 /// A subject icon naming the front app by bundle id: `app:com.google.Chrome`.
 pub(crate) const APP_ICON_PREFIX: &str = "app:";
+
+/// How much faster the small text gives way than the title when the line runs out of room, so
+/// a long title keeps its words while "· in Safari · >5m ago" is cut first. A layout weight, not
+/// a visual value.
+const SUB_GIVES_WAY_FIRST: f32 = 1_000.0;
 
 /// A change of strength the line eases through.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,6 +71,8 @@ pub(crate) struct SlotLineView {
     pub(crate) line: SlotLine,
     pub(crate) style: SlotStyle,
     pub(crate) dim: SlotDim,
+    /// The window stays open when it loses focus (⌘⇧P); drawn as a pin at the right end.
+    pub(crate) pinned: bool,
 }
 
 impl SlotLineView {
@@ -71,12 +81,14 @@ impl SlotLineView {
         window: &sk_one_window::OneWindow,
         dimmer: &SlotDimmer,
         now: sk_one_window::Ms,
+        pinned: bool,
     ) -> Self {
         let style = window.slot_style(now);
         Self {
             line: window.slot_line(now),
             style,
             dim: dimmer.toward(style.opacity),
+            pinned,
         }
     }
 
@@ -97,10 +109,15 @@ impl SlotLineView {
             ),
             _ => (None, colors.text.muted),
         };
-        let title_color = if line.lit || line.kind == SlotKind::Holding {
+        let title_color = if line.lit || line.kind == SlotKind::Holding || line.failed {
             colors.text.primary
         } else {
             colors.text.secondary
+        };
+        let icon_color = if line.failed {
+            colors.ui.error
+        } else {
+            title_color
         };
         let edge = crate::components::main_view_chrome::main_view_edge_inset_x(def)
             - def.shell.header_padding_x;
@@ -108,6 +125,11 @@ impl SlotLineView {
         let row = div()
             .id(SLOT_LINE_ID)
             .debug_selector(|| SLOT_LINE_ID.to_string())
+            .role(gpui::Role::Status)
+            .aria_label(spoken(line))
+            .when(self.style.hints && !line.hints.is_empty(), |row| {
+                row.aria_description(spoken_hints(&line.hints))
+            })
             .relative()
             .w_full()
             .h(px(tokens.height_px))
@@ -121,27 +143,28 @@ impl SlotLineView {
             .whitespace_nowrap()
             .text_color(rgb(colors.text.muted))
             .when_some(tint, |row, tint| row.bg(tint))
+            // The icon says what kind of line this is (history for what last ran, a warning for
+            // a failure, the app's own icon for what's behind the window), so no label word is
+            // drawn before the title. A wait and voice say what they are doing ("Runs in 8s",
+            // "Typing into") because the icon can't.
             .when(!line.icon.is_empty(), |row| {
-                row.child(render_slot_icon(&line.icon, tokens.icon_size, title_color))
+                row.child(render_slot_icon(&line.icon, tokens.icon_size, icon_color))
             })
-            // "Last" before the last run, "Behind" before the window the words would act on.
-            .when(
-                !line.label.is_empty()
-                    && (line.kind == SlotKind::Recent
-                        || line.label == sk_one_window::contract::words::BEHIND),
-                |row| {
-                    row.child(
-                        div()
-                            .flex_none()
-                            .text_size(px(tokens.title_font_size))
-                            .child(line.label.clone()),
-                    )
-                },
-            )
+            .when_some(line.state_words(), |row, words| {
+                row.child(
+                    div()
+                        .flex_none()
+                        .text_size(px(tokens.title_font_size))
+                        .text_color(rgb(accent))
+                        .child(words.to_string()),
+                )
+            })
+            // The title and its small text give way to the keys and the pin: the small text
+            // shrinks first, then the title, each ending in an ellipsis.
             .child(
                 div()
                     .min_w(px(0.0))
-                    .when(!line.sub.is_empty(), |title| title.flex_shrink_0())
+                    .flex_shrink_1()
                     .overflow_hidden()
                     .text_ellipsis()
                     .text_size(px(tokens.title_font_size))
@@ -153,6 +176,7 @@ impl SlotLineView {
                 row.child(
                     div()
                         .min_w(px(0.0))
+                        .flex_shrink(SUB_GIVES_WAY_FIRST)
                         .overflow_hidden()
                         .text_ellipsis()
                         .text_size(px(tokens.title_font_size))
@@ -167,6 +191,7 @@ impl SlotLineView {
                         .map(|(key, label)| render_hint(theme, def, key, label)),
                 )
             })
+            .when(self.pinned, |row| row.child(render_pinned(theme, def)))
             .when_some(line.progress, |row, progress| {
                 row.child(
                     div()
@@ -219,6 +244,31 @@ fn render_hint(
                 (theme.colors.text.muted << 8) | 0xFF,
             ),
         )
+        .into_any_element()
+}
+
+/// The window's own state, not the line's: a Lucide pin and what it means, at the right end.
+fn render_pinned(theme: &crate::theme::Theme, def: MainMenuThemeDef) -> AnyElement {
+    use gpui_component::IconNamed;
+    let tokens = def.slot_line;
+    div()
+        .id(WINDOW_PINNED_ID)
+        .debug_selector(|| WINDOW_PINNED_ID.to_string())
+        .flex_none()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(def.footer.metrics.content_gap))
+        .text_size(px(tokens.hint_font_size))
+        .text_color(rgb(theme.colors.text.muted))
+        .child(
+            svg()
+                .path(crate::icons::LucideIcon::Pin.path())
+                .flex_none()
+                .size(px(tokens.icon_size))
+                .text_color(rgb(theme.colors.text.secondary)),
+        )
+        .child(sk_one_window::contract::words::STAYS_OPEN)
         .into_any_element()
 }
 
@@ -450,8 +500,9 @@ fn shrink_icon(bytes: &[u8], width: u32, height: u32, side: u32) -> Option<gpui:
     )))
 }
 
-/// The asset for a name the one-window spec uses: the app's own icon set first, then Lucide
-/// ("history" for the Last line), then a check.
+/// The glyph for an icon name sent to the line: the app's own icons, the reducer's and hosts'
+/// names for what they did, then any Lucide name. A name nobody knows draws a neutral dot, never a
+/// check that would claim something worked.
 fn slot_icon(name: &str) -> gpui::SharedString {
     use gpui_component::IconNamed;
     let own = match name {
@@ -462,15 +513,141 @@ fn slot_icon(name: &str) -> gpui::SharedString {
         "append" => Some(IconName::Plus),
         "move" => Some(IconName::ArrowRight),
         "learned" => Some(IconName::StarFilled),
-        "selection" | "type" => Some(IconName::Pencil),
+        "selection" | "type" | "edit" | "change" => Some(IconName::Pencil),
         other => icon_name_from_str(other),
     };
-    match own {
-        Some(icon) => icon.asset_path().into(),
-        None => crate::icons::lucide_from_str(name)
-            .map(IconNamed::path)
-            .unwrap_or_else(|| IconName::Check.asset_path().into()),
+    if let Some(icon) = own {
+        return icon.asset_path().into();
     }
+    let lucide = match name {
+        "app" => "app-window",
+        "attach" => "paperclip",
+        "skill" => "sparkles",
+        "automation" => "zap",
+        "off" => "power-off",
+        "shortcut" => "keyboard",
+        "steps" => "list-checks",
+        "delegate" => "bot",
+        "schedule" => "calendar-clock",
+        "connect" => "plug",
+        "export" => "share",
+        "open" => "external-link",
+        "hide" => "eye-off",
+        "transform" => "wand-sparkles",
+        "triage" => "inbox",
+        other => other,
+    };
+    crate::icons::lucide_from_str(lucide)
+        .or_else(|| crate::icons::lucide_from_str("circle-small"))
+        .map(IconNamed::path)
+        .unwrap_or_else(|| IconName::Sidebar.asset_path().into())
+}
+
+/// The line as VoiceOver reads it: what it is doing, its words and its small text.
+fn spoken(line: &SlotLine) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    if line.failed {
+        parts.push("Failed");
+    }
+    if let Some(words) = line.state_words() {
+        parts.push(words);
+    }
+    parts.push(&line.title);
+    if !line.sub.is_empty() {
+        parts.push(&line.sub);
+    }
+    parts.join(", ")
+}
+
+/// The keys the line offers, as VoiceOver reads them: "⌘Z undo".
+fn spoken_hints(hints: &[(String, String)]) -> String {
+    hints
+        .iter()
+        .map(|(key, label)| {
+            if label.is_empty() {
+                key.clone()
+            } else {
+                format!("{key} {label}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The line as `getElements` shows it, from the same line and style the renderer draws:
+///
+/// - `main-view-slot-line`: `text` the title, `value` the state words drawn beside it ("Runs in
+///   8s", "Typing into"), `sourceName` the small text, `kind` the line's kind, `statusKind`
+///   `failed` or `lit` when it is drawn that way;
+/// - `main-view-slot-line:icon`: `text` the glyph drawn (an asset path, or `app:<bundle id>`);
+/// - `main-view-slot-line:progress`: `value` a waiting message's progress, 0 to 1;
+/// - `main-view-slot-line:<label>` (or `:<key>` for a wordless key such as ↑): each key hint the
+///   line draws. Inside a view the line draws none, so none are projected.
+#[allow(
+    dead_code,
+    reason = "the library builds the slot line only; getElements is the binary's"
+)]
+pub(crate) fn slot_line_elements(
+    line: &SlotLine,
+    style: SlotStyle,
+) -> Vec<crate::protocol::ElementInfo> {
+    use crate::protocol::{ElementInfo, ElementType};
+    let status_kind = if line.failed {
+        Some("failed".to_string())
+    } else if line.lit {
+        Some("lit".to_string())
+    } else {
+        None
+    };
+    let mut elements = vec![ElementInfo {
+        semantic_id: SLOT_LINE_ID.to_string(),
+        element_type: ElementType::Panel,
+        text: Some(line.title.clone()),
+        value: line.state_words().map(str::to_string),
+        content: None,
+        selected: Some(false),
+        focused: Some(false),
+        index: None,
+        role: Some("slot-line".to_string()),
+        kind: Some(format!("{:?}", line.kind).to_lowercase()),
+        source: Some("OneWindow::slot_line".to_string()),
+        source_name: (!line.sub.is_empty()).then(|| line.sub.clone()),
+        selectable: Some(false),
+        status_kind,
+        action_disabled: None,
+        style: None,
+    }];
+    let glyph = if line.icon.starts_with(APP_ICON_PREFIX) {
+        line.icon.clone()
+    } else {
+        slot_icon(&line.icon).to_string()
+    };
+    let mut icon = ElementInfo::panel("slot-line-icon");
+    icon.semantic_id = format!("{SLOT_LINE_ID}:icon");
+    icon.text = Some(glyph);
+    icon.role = Some("slot-line-icon".to_string());
+    elements.push(icon);
+    if let Some(progress) = line.progress {
+        let mut bar = ElementInfo::panel("slot-line-progress");
+        bar.semantic_id = format!("{SLOT_LINE_ID}:progress");
+        bar.value = Some(format!("{:.2}", progress.clamp(0.0, 1.0)));
+        bar.role = Some("slot-line-progress".to_string());
+        elements.push(bar);
+    }
+    if style.hints {
+        for (key, label) in &line.hints {
+            let name = if label.is_empty() { key } else { label };
+            let mut hint = ElementInfo::button(0, key);
+            hint.semantic_id = format!("{SLOT_LINE_ID}:{name}");
+            hint.role = Some("slot-line-hint".to_string());
+            hint.index = None;
+            if !label.is_empty() {
+                hint.value = Some(label.clone());
+            }
+            elements.push(hint);
+        }
+    }
+    elements
 }
 
 #[cfg(test)]
@@ -541,7 +718,7 @@ mod tests {
         assert_eq!(
             slot_icon(sk_one_window::contract::RECENT_ICON).as_ref(),
             "icons/history.svg",
-            "the Last line draws the history glyph, not the fallback check"
+            "the line holding what last ran draws the history glyph, not the fallback check"
         );
     }
 }

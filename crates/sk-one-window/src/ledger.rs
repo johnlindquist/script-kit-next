@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Ms;
-use crate::contract::UNDOABLE_ICONS;
+use crate::contract::{UNDOABLE_ICONS, words};
 
 /// How a run can be taken back.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -76,15 +76,48 @@ pub struct Entry {
     /// The held message this entry waits on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub held: Option<u64>,
-    /// Came from history rather than this session: shown with its time, not "just now".
+    /// Came from history rather than this session: from an earlier run of the app, or a trace.
     #[serde(default)]
     pub seeded: bool,
-    /// When a seeded entry ran, in words ("9:41 AM").
+    /// When a traced entry ran, in words ("9:41 AM"); history from an earlier run of the app
+    /// says how long ago instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    /// For history from an earlier run of the app: how long before `at` it ran.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub before: Ms,
+    /// The host kept a way to take it back. Only then does ⌘Z offer it; a run marked undoable
+    /// that nobody can undo never says "Undid".
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub undo_kept: bool,
     /// For "Undid · …" entries, the entry that was undone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub undo_of: Option<u64>,
+}
+
+fn is_zero(ms: &Ms) -> bool {
+    *ms == 0
+}
+
+impl Entry {
+    /// How long ago it ran, at `now`.
+    pub fn age(&self, now: Ms) -> Ms {
+        now.saturating_sub(self.at).saturating_add(self.before)
+    }
+
+    /// When it ran, in words: a traced entry's recorded time, else how long ago ("just now",
+    /// ">5m ago").
+    pub fn when_words(&self, now: Ms) -> String {
+        match &self.when {
+            Some(when) if self.seeded => when.clone(),
+            _ => words::ago(self.age(now)),
+        }
+    }
+
+    /// ⌘Z can take it back: it can be undone, it hasn't been, and the host kept how.
+    pub fn can_undo(&self) -> bool {
+        self.risk == Risk::Undo && self.state == EntryState::Done && self.undo_kept
+    }
 }
 
 /// What a new entry needs; the ledger fills in id, time and state.
@@ -97,6 +130,8 @@ pub struct NewEntry {
     pub app: Option<String>,
     pub held: Option<u64>,
     pub undo_of: Option<u64>,
+    /// The host kept a way to take it back.
+    pub undo_kept: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -110,12 +145,21 @@ impl Ledger {
         Self::default()
     }
 
-    /// Seeds history from before this session.
+    /// Seeds history from before this session. Nothing seeded can be undone: its way back
+    /// went with the run of the app that kept it.
     pub fn seed(&mut self, mut entry: Entry) {
         self.next_id += 1;
         entry.id = self.next_id;
         entry.seeded = true;
+        entry.undo_kept = false;
         self.entries.push(entry);
+    }
+
+    /// Saving `id` as a script failed: it no longer says it was saved.
+    pub fn forget_script(&mut self, id: u64) {
+        if let Some(entry) = self.get_mut(id) {
+            entry.script = None;
+        }
     }
 
     pub fn record(&mut self, now: Ms, new: NewEntry) -> u64 {
@@ -143,6 +187,8 @@ impl Ledger {
             held: new.held,
             seeded: false,
             when: None,
+            before: 0,
+            undo_kept: new.undo_kept && new.risk == Risk::Undo,
             undo_of: new.undo_of,
         });
         id
@@ -198,6 +244,35 @@ impl Ledger {
         }
     }
 
+    /// What to remember for the next run of the app: the newest `keep` entries that settled,
+    /// oldest first, each carrying how long ago it ran. Nothing remembered can be undone, and a
+    /// message still waiting is left out: it never went.
+    pub fn remembered(&self, now: Ms, keep: usize) -> Vec<Entry> {
+        let settled: Vec<&Entry> = self
+            .entries
+            .iter()
+            .filter(|e| e.state != EntryState::Holding)
+            .collect();
+        settled[settled.len().saturating_sub(keep)..]
+            .iter()
+            .map(|e| Entry {
+                at: 0,
+                before: e.age(now),
+                undo_kept: false,
+                held: None,
+                ..(*e).clone()
+            })
+            .collect()
+    }
+
+    /// `id` is the last thing that happened again, without changing when it happened.
+    pub fn bring_forward(&mut self, id: u64) {
+        if let Some(ix) = self.entries.iter().position(|e| e.id == id) {
+            let entry = self.entries.remove(ix);
+            self.entries.push(entry);
+        }
+    }
+
     pub fn set_title(&mut self, id: u64, title: String) {
         if let Some(entry) = self.get_mut(id) {
             entry.title = title;
@@ -210,11 +285,12 @@ impl Ledger {
         }
     }
 
-    /// Undo `id` and record that it was undone. Returns the new entry's id.
+    /// Undo `id` and record that it was undone. Returns the new entry's id. Nothing happens
+    /// unless the host kept a way to take it back.
     pub fn undo(&mut self, now: Ms, id: u64) -> Option<u64> {
         let title = {
             let entry = self.get_mut(id)?;
-            if entry.risk != Risk::Undo || entry.state != EntryState::Done {
+            if !entry.can_undo() {
                 return None;
             }
             entry.state = EntryState::Undone;
@@ -288,11 +364,58 @@ mod tests {
                 ..NewEntry::default()
             },
         );
+        assert!(l.undo(25, b).is_none(), "nobody kept a way to undo it");
+        let c = l.record(
+            26,
+            NewEntry {
+                title: "Moved standup".into(),
+                risk: Risk::Undo,
+                undo_kept: true,
+                ..NewEntry::default()
+            },
+        );
+        let b = c;
         let u = l.undo(30, b).unwrap();
         assert_eq!(l.get(b).unwrap().state, EntryState::Undone);
         assert_eq!(l.last().unwrap().id, u);
         assert_eq!(l.last().unwrap().title, "Undid · Moved standup");
         assert!(l.undo(40, b).is_none(), "undoing twice does nothing");
+    }
+
+    /// The next run of the app remembers what ran and how long ago, never a way to undo it, and
+    /// never a message that hadn't gone yet.
+    #[test]
+    fn remembered_runs_keep_their_age_and_lose_their_undo() {
+        let mut l = Ledger::new();
+        l.record(
+            1_000,
+            NewEntry {
+                title: "Moved standup".into(),
+                risk: Risk::Undo,
+                undo_kept: true,
+                ..NewEntry::default()
+            },
+        );
+        l.record(
+            2_000,
+            NewEntry {
+                title: "To Sarah".into(),
+                risk: Risk::Hold,
+                held: Some(1),
+                ..NewEntry::default()
+            },
+        );
+        let kept = l.remembered(61_000, 50);
+        assert_eq!(kept.len(), 1, "a message still waiting is left out");
+        let mut next = Ledger::new();
+        for entry in kept {
+            next.seed(Entry { at: 5, ..entry });
+        }
+        let back = next.last().unwrap();
+        assert_eq!(back.title, "Moved standup");
+        assert_eq!(back.when_words(5), ">1m ago");
+        assert_eq!(back.when_words(5 + 4 * 60_000), ">5m ago");
+        assert!(!back.can_undo());
     }
 
     #[test]

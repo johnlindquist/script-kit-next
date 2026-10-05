@@ -6,18 +6,39 @@ use crate::notice::{Irreversible, Notice};
 
 impl OneWindow {
     /// A notice goes in the ledger; the line says it unless something more pressing holds it.
+    /// A failure said while something waits gets the line once nothing waits any more. A notice
+    /// with no words says nothing.
     pub(super) fn on_notice(&mut self, now: Ms, notice: Notice) {
+        let title = notice.shown_title();
+        if title.is_empty() {
+            return;
+        }
         let said = self.said();
-        self.ledger.record(
+        let failed = notice.icon == crate::contract::FAILED_ICON;
+        let id = self.ledger.record(
             now,
             NewEntry {
                 icon: notice.icon,
-                title: notice.title,
+                title,
                 said,
                 risk: Risk::None,
                 ..NewEntry::default()
             },
         );
+        if failed && self.holds.newest().is_some() {
+            self.missed = Some(id);
+        }
+    }
+
+    /// Once nothing waits, a failure said meanwhile is the last thing that happened again, even
+    /// though the waiting thing finished after it.
+    pub(super) fn give_missed_its_turn(&mut self) {
+        if self.holds.newest().is_some() {
+            return;
+        }
+        if let Some(id) = self.missed.take() {
+            self.ledger.bring_forward(id);
+        }
     }
 
     /// Something that can't be taken back waits in the line; `Effect::Held` `Sent` runs it.
@@ -60,7 +81,7 @@ impl OneWindow {
     }
 
     pub(super) fn undoable(e: &Entry) -> bool {
-        e.risk == Risk::Undo && e.state == EntryState::Done
+        e.can_undo()
     }
 
     /// Whether ⌘Z now takes something back: the input is empty and something waits to go, or
@@ -211,7 +232,25 @@ mod tests {
                 ..Done::default()
             }),
         );
-        let line = w.recent_line(0).unwrap();
+        assert!(
+            w.recent_line(0)
+                .unwrap()
+                .hints
+                .iter()
+                .all(|(key, _)| key != "⌘Z"),
+            "⌘Z is offered only for a run whose undo the host kept"
+        );
+        w.handle(
+            1,
+            Event::Done(Done {
+                icon: "trash".into(),
+                title: "Moved Notes.md to Trash".into(),
+                risk: Some(Risk::Undo),
+                undo_kept: true,
+                ..Done::default()
+            }),
+        );
+        let line = w.recent_line(1).unwrap();
         assert_eq!(
             line.hints[0],
             ("⌘Z".to_string(), ledger_words::UNDO.to_string())
@@ -225,7 +264,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(undone, vec![1]);
+        assert_eq!(undone, vec![2]);
         assert_eq!(
             w.recent_line(ENTER_GUARD_MS).unwrap().title,
             "Undid · Moved Notes.md to Trash"
@@ -254,7 +293,7 @@ mod tests {
             w.views().top().map(|v| v.name.as_str()),
             Some(history::VIEW)
         );
-        let rows = history::history_rows(&w.ledger().search("lin"));
+        let rows = history::history_rows(&w.ledger().search("lin"), 0);
         assert_eq!(rows[0].title, "Open Linear");
         let entry = w
             .ledger()

@@ -613,6 +613,8 @@ pub fn history_entry(h: HistoryIn) -> Entry {
         held: None,
         seeded: true,
         when: h.at,
+        before: 0,
+        undo_kept: false,
         undo_of: None,
     }
 }
@@ -733,6 +735,8 @@ pub fn events_of(line: EvLine, turn_run: Option<&Row>, win: &OneWindow) -> Vec<E
             risk: parse_risk(risk.as_deref()),
             form_kind: form,
             stay,
+            // The prototype keeps a way back for everything it says can be undone.
+            undo_kept: true,
         })],
         Ev::Hold { label, request } => vec![Event::Hold { label, request }],
         Ev::Rewrite { label, text } => vec![Event::Rewrite {

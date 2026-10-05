@@ -1126,7 +1126,11 @@ impl ScriptListApp {
             }
             ("flow_desk_run_cancel", Some(FlowDeskSubject::Run(id))) => {
                 crate::flows::runner::cancel_run(id);
-                self.one_window_notice(crate::line_notice::DONE, "Cancelling run…".to_string(), cx);
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    "Cancelling the run…".to_string(),
+                    cx,
+                );
             }
             ("flow_desk_run_copy_output", Some(FlowDeskSubject::Run(id))) => {
                 if let Some(run) = crate::flows::run_registry::flow_run_registry().get(id) {

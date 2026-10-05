@@ -1,9 +1,12 @@
 /// The front window as the line above the input names it: its title, beside the app's own icon.
+/// A title that ends with the app's own name ("README.md — Zed") drops it, since the line already
+/// says "in Zed".
 fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_one_window::Subject {
     let window_title = app
         .window_title
         .as_deref()
         .map(str::trim)
+        .map(|title| without_app_suffix(title, &app.name))
         .filter(|title| !title.is_empty() && *title != app.name);
     sk_one_window::Subject {
         kind: sk_one_window::SubjectKind::Window,
@@ -17,6 +20,22 @@ fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_on
         icon: app_icon_name(&app.bundle_id),
         ..Default::default()
     }
+}
+
+/// `title` without a trailing " — App", " – App" or " - App" naming `app`.
+fn without_app_suffix<'a>(title: &'a str, app: &str) -> &'a str {
+    if app.is_empty() {
+        return title;
+    }
+    for dash in [" \u{2014} ", " \u{2013} ", " - "] {
+        if let Some(rest) = title
+            .strip_suffix(app)
+            .and_then(|rest| rest.strip_suffix(dash))
+        {
+            return rest.trim_end();
+        }
+    }
+    title
 }
 
 /// The line's icon for an app: its own icon when the launcher knows its bundle.

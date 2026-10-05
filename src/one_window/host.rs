@@ -195,7 +195,7 @@ fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
 }
 
 impl ScriptListApp {
-    fn one_window_now(&mut self, cx: &Context<Self>) -> Ms {
+    pub(super) fn one_window_now(&mut self, cx: &Context<Self>) -> Ms {
         let now = cx.background_executor().now();
         let epoch = *self.one_window_host.epoch.get_or_insert(now);
         let ms =
@@ -273,6 +273,7 @@ impl ScriptListApp {
         let mut runs = Vec::new();
         let mut works = Vec::new();
         let mut first = true;
+        self.one_window_load_lessons(cx);
         let now = self.one_window_now(cx);
         self.one_window_host.acting_on = self.one_window.staged().map(|s| s.subject.clone());
         while let Some(event) = queue.pop_front() {
@@ -319,8 +320,14 @@ impl ScriptListApp {
                     },
                     Effect::Work(work) => works.push(work),
                     Effect::OpenScript { name } => self.one_window_open_script(name, cx),
-                    Effect::SaveScript { name, said, .. } => {
-                        self.one_window_save_script(name, said)
+                    Effect::SaveScript { entry, name, said } => {
+                        if !self.one_window_save_script(name.clone(), said) {
+                            queue.push_back(Event::ScriptNotSaved(entry));
+                            queue.push_back(Event::Notice(sk_one_window::notice::Notice::new(
+                                crate::line_notice::FAILED,
+                                format!("Couldn't save “{name}” as a script."),
+                            )));
+                        }
                     }
                     Effect::TalkAsk { words, last } => self.one_window_talk_ask(words, last, cx),
                     Effect::Paste { text, app } => self.one_window_paste(text, app, cx),
@@ -360,6 +367,7 @@ impl ScriptListApp {
         self.one_window_let_go(cx);
         self.one_window_views_follow(cx);
         self.one_window_after_turn();
+        self.one_window_remember_runs(now, cx);
         cx.notify();
         handled
     }
