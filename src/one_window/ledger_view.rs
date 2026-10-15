@@ -234,6 +234,53 @@ impl ScriptListApp {
 
     /// Something that happened at once and can be taken back: the line offers ⌘Z, and `undo`
     /// runs if the user takes it.
+    /// A File Search change: the line offers ⌘Z from the main menu, and ⌘Z inside File Search
+    /// takes back the latest one. Whichever runs first runs the undo; the other finds it gone.
+    pub(crate) fn file_search_done_undoable(
+        &mut self,
+        icon: &str,
+        title: impl Into<String>,
+        undo: LedgerRun,
+        cx: &mut Context<Self>,
+    ) {
+        let shared: std::rc::Rc<std::cell::RefCell<Option<LedgerRun>>> =
+            std::rc::Rc::new(std::cell::RefCell::new(Some(undo)));
+        let from_line = shared.clone();
+        self.one_window_done_undoable(
+            icon,
+            title,
+            Box::new(move |app, cx| {
+                if let Some(undo) = from_line.borrow_mut().take() {
+                    undo(app, cx);
+                }
+            }),
+            cx,
+        );
+        self.file_search_undo_generation = self.file_search_undo_generation.wrapping_add(1);
+        let from_view = shared;
+        self.file_search_last_undo = Some((
+            self.file_search_undo_generation,
+            Box::new(move |app, cx| {
+                if let Some(undo) = from_view.borrow_mut().take() {
+                    undo(app, cx);
+                }
+            }),
+        ));
+    }
+
+    /// ⌘Z in File Search: takes back its latest change. Returns whether there was one.
+    pub(crate) fn file_search_undo_last(&mut self, cx: &mut Context<Self>) -> bool {
+        match self.file_search_last_undo.take() {
+            Some((_, undo)) => {
+                tracing::info!(target: "script_kit::file_search", event = "undo_last");
+                undo(self, cx);
+                cx.notify();
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(crate) fn one_window_done_undoable(
         &mut self,
         icon: &str,

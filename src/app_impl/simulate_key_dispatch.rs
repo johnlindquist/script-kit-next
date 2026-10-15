@@ -623,6 +623,24 @@ impl ScriptListApp {
                         &format!("SimulateKey: Dispatching '{}' to FileSearchView", key_lower),
                     );
 
+                    // Renaming or choosing a folder: the same ↵ / ⌘↵ / Esc / Tab rules as
+                    // the live keystroke interceptor.
+                    let borrowed_modifiers = gpui::Modifiers {
+                        platform: has_cmd,
+                        shift: has_shift,
+                        alt: _has_alt,
+                        control: _has_ctrl,
+                        ..gpui::Modifiers::default()
+                    };
+                    if view.try_handle_file_search_borrowed_key(
+                        &key_lower,
+                        &borrowed_modifiers,
+                        window,
+                        ctx,
+                    ) {
+                        return DispatchOutcome::success();
+                    }
+
                     if has_cmd && key_lower == "k" {
                         let selected = view.selected_file_search_result_owned().map(|(_, f)| f);
                         logging::log("STDIN", "SimulateKey: Cmd+K - toggle file search actions");
@@ -753,8 +771,14 @@ impl ScriptListApp {
                                         "STDIN",
                                         &format!("SimulateKey: Enter - open file {}", file.path),
                                     );
-                                    let _ = crate::file_search::open_file(&file.path);
-                                    view.close_and_reset_window(ctx);
+                                    if let Err(error) = crate::file_search::open_file(&file.path) {
+                                        view.notice_failed_public(
+                                            format!("Couldn't open it: {error}"),
+                                            ctx,
+                                        );
+                                    } else {
+                                        view.close_and_reset_window(ctx);
+                                    }
                                 } else {
                                     logging::log(
                                         "STDIN",
@@ -1912,6 +1936,24 @@ impl ScriptListApp {
                             ctx,
                             "simulate_key_fallback",
                         );
+                    } else if crate::ui_foundation::is_key_enter(&key_lower)
+                        && !has_cmd
+                        && !has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                        && matches!(view.current_view, AppView::WebcamView { .. })
+                    {
+                        logging::log("STDIN", "SimulateKey: Enter - webcam primary action");
+                        view.webcam_run_primary(ctx);
+                    } else if key_lower == "c"
+                        && has_cmd
+                        && has_shift
+                        && !_has_alt
+                        && !_has_ctrl
+                        && matches!(view.current_view, AppView::WebcamView { .. })
+                    {
+                        logging::log("STDIN", "SimulateKey: Cmd+Shift+C - webcam copy path");
+                        view.webcam_copy_path(ctx);
                     } else if crate::ui_foundation::is_key_escape(&key_lower)
                         && !has_cmd
                         && !has_shift
@@ -1928,7 +1970,12 @@ impl ScriptListApp {
                         // generic Cmd+K fallback above — automation could
                         // enter builtin views but never leave them.
                         let view_name = view.app_view_name();
-                        if let Some(entity) = match &view.current_view {
+                        if view.webcam_step_back(ctx) {
+                            logging::log(
+                                "STDIN",
+                                "SimulateKey: Escape - webcam step back (countdown/review)",
+                            );
+                        } else if let Some(entity) = match &view.current_view {
                             AppView::SelectPrompt { entity, .. }
                                 if !entity.read(ctx).filter_text.is_empty() =>
                             {

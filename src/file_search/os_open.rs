@@ -99,6 +99,8 @@ pub fn reveal_in_finder(path: &str) -> Result<(), String> {
     }
 }
 
+// Only tests call this now that the move dialog that used it is gone.
+#[allow(dead_code)]
 pub(crate) fn terminal_working_directory(path: &str, is_dir: bool) -> String {
     if is_dir {
         return path.to_string();
@@ -115,24 +117,6 @@ pub(crate) fn terminal_working_directory(path: &str, is_dir: bool) -> String {
             }
         })
         .unwrap_or_else(|| ".".to_string())
-}
-
-fn move_destination_default_directory(path: &str, is_dir: bool) -> String {
-    if is_dir {
-        return Path::new(path)
-            .parent()
-            .and_then(|p| {
-                let parent = p.to_string_lossy();
-                if parent.is_empty() {
-                    None
-                } else {
-                    Some(parent.to_string())
-                }
-            })
-            .unwrap_or_else(|| ".".to_string());
-    }
-
-    terminal_working_directory(path, false)
 }
 
 /// Move a path to Trash and return where macOS put it, so the move can be
@@ -274,28 +258,147 @@ pub fn quick_look(path: &str) -> Result<(), String> {
     }
 }
 
-/// Show the "Open With" dialog for a file (macOS)
-#[allow(dead_code)]
-pub fn open_with(path: &str) -> Result<(), String> {
+/// An app that can open a file, for Open With.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenWithApp {
+    pub name: String,
+    pub path: String,
+    /// The app macOS opens this file with by default.
+    pub is_default: bool,
+}
+
+/// The apps macOS says can open `path`, the default one first, then by name.
+pub fn apps_for_open_with(path: &str) -> Result<Vec<OpenWithApp>, String> {
     #[cfg(target_os = "macos")]
     {
-        // Use AppleScript to trigger the "Open With" menu
-        let script = format!(
-            r#"tell application "Finder"
-                activate
-                set theFile to POSIX file "{}"
-                open information window of theFile
-            end tell"#,
-            crate::utils::escape_applescript_string(path)
-        );
-        crate::platform::run_osascript(&script, "file_search_open_with")
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        use cocoa::base::{id, nil};
+        use cocoa::foundation::NSString as _;
+        use objc::{sel, sel_impl};
+
+        unsafe fn url_path(url: id) -> Option<String> {
+            if url == nil {
+                return None;
+            }
+            // SAFETY: `url` is a live NSURL; `path` returns an autoreleased NSString or nil.
+            let ns: id = unsafe { objc::msg_send![url, path] };
+            if ns == nil {
+                return None;
+            }
+            let utf8: *const std::os::raw::c_char = unsafe { objc::msg_send![ns, UTF8String] };
+            (!utf8.is_null()).then(|| {
+                // SAFETY: UTF8String returns a NUL-terminated string valid in this pool.
+                unsafe { std::ffi::CStr::from_ptr(utf8) }
+                    .to_string_lossy()
+                    .into_owned()
+            })
+        }
+
+        if std::fs::symlink_metadata(path).is_err() {
+            return Err("The file isn't there anymore".to_string());
+        }
+        let (default_app, all_apps) = objc::rc::autoreleasepool(|| {
+            // SAFETY: every object is created and used inside this pool; the NSString we
+            // allocate is released, and nil results are checked before use.
+            unsafe {
+                let ns_path = cocoa::foundation::NSString::alloc(nil).init_str(path);
+                if ns_path == nil {
+                    return (None, Vec::new());
+                }
+                let url: id = objc::msg_send![objc::class!(NSURL), fileURLWithPath: ns_path];
+                let _: () = objc::msg_send![ns_path, release];
+                let workspace: id = objc::msg_send![objc::class!(NSWorkspace), sharedWorkspace];
+                if url == nil || workspace == nil {
+                    return (None, Vec::new());
+                }
+                let default_url: id = objc::msg_send![workspace, URLForApplicationToOpenURL: url];
+                let default_app = url_path(default_url);
+                let responds: objc::runtime::BOOL = objc::msg_send![
+                    workspace,
+                    respondsToSelector: sel!(URLsForApplicationsToOpenURL:)
+                ];
+                let mut all = Vec::new();
+                if responds != objc::runtime::NO {
+                    let urls: id = objc::msg_send![workspace, URLsForApplicationsToOpenURL: url];
+                    if urls != nil {
+                        let count: usize = objc::msg_send![urls, count];
+                        for i in 0..count {
+                            let app: id = objc::msg_send![urls, objectAtIndex: i];
+                            if let Some(app_path) = url_path(app) {
+                                all.push(app_path);
+                            }
+                        }
+                    }
+                }
+                (default_app, all)
+            }
+        });
+        Ok(order_open_with_apps(default_app, all_apps))
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         let _ = path;
+        Err("Open With is only supported on macOS".to_string())
+    }
+}
+
+fn app_display_name(app_path: &str) -> String {
+    Path::new(app_path)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| app_path.to_string())
+}
+
+/// Default app first, then the rest by name, each app once.
+pub(crate) fn order_open_with_apps(
+    default_app: Option<String>,
+    apps: Vec<String>,
+) -> Vec<OpenWithApp> {
+    let mut rest: Vec<OpenWithApp> = Vec::new();
+    for app in apps {
+        if Some(&app) == default_app.as_ref() || rest.iter().any(|known| known.path == app) {
+            continue;
+        }
+        rest.push(OpenWithApp {
+            name: app_display_name(&app),
+            path: app,
+            is_default: false,
+        });
+    }
+    rest.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    let mut ordered = Vec::with_capacity(rest.len() + 1);
+    if let Some(default_app) = default_app {
+        ordered.push(OpenWithApp {
+            name: app_display_name(&default_app),
+            path: default_app,
+            is_default: true,
+        });
+    }
+    ordered.extend(rest);
+    ordered
+}
+
+/// Opens `path` with the app at `app_path`.
+pub fn open_with(path: &str, app_path: &str) -> Result<(), String> {
+    crate::runtime_policy::check(ExternalEffect::OpenExternal).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("open")
+            .arg("-a")
+            .arg(app_path)
+            .arg(path)
+            .status()
+            .map_err(|e| format!("Couldn't start it: {e}"))?;
+        if !status.success() {
+            return Err(format!("{} couldn't open it", app_display_name(app_path)));
+        }
+        crate::brain::record_activity("opened file", path);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (path, app_path);
         Err("Open With is only supported on macOS".to_string())
     }
 }
@@ -326,50 +429,6 @@ pub fn show_info(path: &str) -> Result<(), String> {
     }
 }
 
-/// Run an AppleScript and return the text result, or `None` if the user cancelled.
-#[cfg(target_os = "macos")]
-fn run_osascript_capture(script: &str) -> Result<Option<String>, String> {
-    match crate::platform::run_osascript(script, "file_search_dialog") {
-        Ok(stdout) => Ok(Some(stdout)),
-        Err(error) => {
-            let message = error.to_string();
-            if message.contains("User canceled") || message.contains("(-128)") {
-                Ok(None)
-            } else {
-                Err(message)
-            }
-        }
-    }
-}
-
-/// Show a native rename dialog and return the user-entered new name, or `None` if cancelled.
-pub fn prompt_rename_target_name(path: &str) -> Result<Option<String>, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let current_name = Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .ok_or_else(|| "Selected item has no filename".to_string())?;
-
-        let escaped_default = crate::utils::escape_applescript_string(current_name);
-        let script = format!(
-            r#"tell application "System Events"
-                activate
-                display dialog "Rename selected item" default answer "{}" buttons {{"Cancel", "Rename"}} default button "Rename"
-                return text returned of result
-            end tell"#,
-            escaped_default
-        );
-        run_osascript_capture(&script)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        Err("Rename is currently only supported on macOS".to_string())
-    }
-}
-
 /// Rename a file or directory in-place and return the new full path.
 pub fn rename_path(path: &str, new_name: &str) -> Result<String, String> {
     rename_path_with_policy(path, new_name, crate::runtime_policy::owned_evaluation())
@@ -396,83 +455,134 @@ fn rename_path_with_policy(
     if let Some(policy) = policy {
         validate_owned_tree(policy, current_path, &target)?;
     }
+    super::file_ops::validate_new_name(trimmed_name)?;
 
     if target == current_path {
         return Ok(path.to_string());
     }
 
-    std::fs::rename(current_path, &target).map_err(|e| format!("Failed to rename item: {}", e))?;
+    super::file_ops::rename_no_replace(current_path, &target)?;
 
     Ok(target.to_string_lossy().to_string())
 }
 
-/// Show a native move-destination dialog and return the user-entered directory, or `None` if cancelled.
-pub fn prompt_move_destination_dir(path: &str, is_dir: bool) -> Result<Option<String>, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let default_dir = move_destination_default_directory(path, is_dir);
-        let escaped_default = crate::utils::escape_applescript_string(&default_dir);
-        let script = format!(
-            r#"tell application "System Events"
-                activate
-                display dialog "Move selected item to folder" default answer "{}" buttons {{"Cancel", "Move"}} default button "Move"
-                return text returned of result
-            end tell"#,
-            escaped_default
-        );
-        run_osascript_capture(&script)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        let _ = is_dir;
-        Err("Move is currently only supported on macOS".to_string())
-    }
-}
-
-/// Move a file or directory to a new parent folder and return the new full path.
-pub fn move_path(path: &str, destination_dir: &str) -> Result<String, String> {
-    move_path_with_policy(
-        path,
-        destination_dir,
-        crate::runtime_policy::owned_evaluation(),
-    )
-}
-
+#[cfg(test)]
 fn move_path_with_policy(
     path: &str,
     destination_dir: &str,
     policy: Option<&OwnedEvaluationPolicy>,
 ) -> Result<String, String> {
+    place_path_with_policy(
+        PlaceKind::Move,
+        path,
+        destination_dir,
+        super::file_ops::OnConflict::Refuse,
+        policy,
+    )
+    .map(|placed| placed.path.to_string_lossy().to_string())
+    .map_err(String::from)
+}
+
+/// Whether a move or a copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaceKind {
+    Move,
+    Copy,
+}
+
+/// A rename being typed in the main input: the input holds the new name while File Search
+/// keeps its list, and ↵ renames or Esc puts the search back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileRenameEdit {
+    pub path: String,
+    pub previous_display_index: usize,
+    /// The name typed so far.
+    pub typed: String,
+}
+
+/// File Search choosing a folder for Move to… or Copy to…: ↵ on a folder (or ⌘↵ for the folder
+/// being shown) puts the item there; Esc goes back to the search it came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilePlacePick {
+    pub kind: PlaceKind,
+    pub path: String,
+    pub origin_query: String,
+    pub previous_display_index: usize,
+}
+
+/// A move or copy waiting for an answer because its name is taken in the destination.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingPlace {
+    pub kind: PlaceKind,
+    pub path: String,
+    pub destination_dir: String,
+    pub previous_display_index: usize,
+}
+
+/// Moves or copies `path` into `destination_dir`, resolving a taken name with `on_conflict`.
+/// A replaced item goes to the Trash first and is reported in [`super::file_ops::Placed`].
+pub fn place_path(
+    kind: PlaceKind,
+    path: &str,
+    destination_dir: &str,
+    on_conflict: super::file_ops::OnConflict,
+) -> Result<super::file_ops::Placed, super::file_ops::FileOpError> {
+    place_path_with_policy(
+        kind,
+        path,
+        destination_dir,
+        on_conflict,
+        crate::runtime_policy::owned_evaluation(),
+    )
+}
+
+fn place_path_with_policy(
+    kind: PlaceKind,
+    path: &str,
+    destination_dir: &str,
+    on_conflict: super::file_ops::OnConflict,
+    policy: Option<&OwnedEvaluationPolicy>,
+) -> Result<super::file_ops::Placed, super::file_ops::FileOpError> {
+    use super::file_ops::FileOpError;
+
     let current_path = Path::new(path);
     let filename = current_path
         .file_name()
-        .ok_or_else(|| "Selected item has no filename".to_string())?;
+        .ok_or_else(|| FileOpError::Other("Selected item has no filename".to_string()))?;
 
     let expanded_destination = crate::file_search::expand_path(destination_dir)
         .unwrap_or_else(|| destination_dir.to_string());
     let destination_path = Path::new(&expanded_destination);
-    require_owned_paths(policy, &[current_path, destination_path])?;
+    require_owned_paths(policy, &[current_path, destination_path]).map_err(FileOpError::Other)?;
 
     if !destination_path.is_dir() {
-        return Err(format!(
+        return Err(FileOpError::Other(format!(
             "Destination is not a folder: {}",
             destination_path.display()
-        ));
+        )));
     }
 
-    let target = destination_path.join(filename);
     if let Some(policy) = policy {
-        validate_owned_tree(policy, current_path, &target)?;
-    }
-    if target == current_path {
-        return Ok(path.to_string());
+        validate_owned_tree(policy, current_path, &destination_path.join(filename))
+            .map_err(FileOpError::Other)?;
+        if on_conflict == super::file_ops::OnConflict::Replace {
+            // Replacing needs the Trash, which is outside an owned evaluation.
+            return Err(FileOpError::Other(
+                "Replacing isn't available while evaluating".to_string(),
+            ));
+        }
     }
 
-    std::fs::rename(current_path, &target).map_err(|e| format!("Failed to move item: {}", e))?;
-
-    Ok(target.to_string_lossy().to_string())
+    let trash = |p: &Path| move_to_trash(&p.to_string_lossy());
+    let restore = |trashed: &Path, original: &Path| restore_from_trash(trashed, original);
+    match kind {
+        PlaceKind::Move => {
+            super::file_ops::move_into(current_path, destination_path, on_conflict, trash, restore)
+        }
+        PlaceKind::Copy => {
+            super::file_ops::copy_into(current_path, destination_path, on_conflict, trash, restore)
+        }
+    }
 }
 
 fn require_owned_paths(
@@ -628,8 +738,8 @@ fn duplicate_path_with_policy(
 mod tests {
     use super::{
         duplicate_path, duplicate_path_with_policy, escape_windows_cmd_open_target,
-        move_destination_default_directory, move_path_with_policy, quick_look,
-        rename_path_with_policy, terminal_working_directory, OwnedEvaluationPolicy,
+        move_path_with_policy, quick_look, rename_path_with_policy, terminal_working_directory,
+        OwnedEvaluationPolicy,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -896,6 +1006,62 @@ mod tests {
     }
 
     #[test]
+    fn open_with_lists_the_default_app_first_then_by_name_once_each() {
+        let apps = super::order_open_with_apps(
+            Some("/Applications/Preview.app".to_string()),
+            vec![
+                "/Applications/Safari.app".to_string(),
+                "/Applications/Preview.app".to_string(),
+                "/System/Applications/Affinity.app".to_string(),
+                "/Applications/Safari.app".to_string(),
+            ],
+        );
+        let names: Vec<(&str, bool)> = apps
+            .iter()
+            .map(|a| (a.name.as_str(), a.is_default))
+            .collect();
+        assert_eq!(
+            names,
+            vec![("Preview", true), ("Affinity", false), ("Safari", false)]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn open_with_asks_launch_services_for_real_apps() {
+        let temp = tempdir().expect("tempdir");
+        let file = temp.path().join("note.txt");
+        fs::write(&file, "hello").unwrap();
+        let apps = super::apps_for_open_with(file.to_str().unwrap()).expect("app list");
+        assert!(!apps.is_empty(), "macOS always has an app for .txt");
+        assert!(apps[0].is_default, "the default app comes first");
+        assert_eq!(apps.iter().filter(|app| app.is_default).count(), 1);
+        assert!(apps.iter().all(|app| app.path.ends_with(".app")));
+        assert!(super::apps_for_open_with("/definitely/missing.txt").is_err());
+    }
+
+    #[test]
+    fn rename_and_move_never_replace_an_existing_item() {
+        let temp = tempdir().expect("tempdir");
+        let a = temp.path().join("a.txt");
+        let b = temp.path().join("b.txt");
+        let folder = temp.path().join("folder");
+        fs::write(&a, "A").unwrap();
+        fs::write(&b, "B").unwrap();
+        fs::create_dir(&folder).unwrap();
+        fs::write(folder.join("a.txt"), "other A").unwrap();
+
+        let renamed = rename_path_with_policy(a.to_str().unwrap(), "b.txt", None);
+        assert!(renamed.unwrap_err().contains("already in"));
+        assert_eq!(fs::read_to_string(&b).unwrap(), "B");
+
+        let moved = move_path_with_policy(a.to_str().unwrap(), folder.to_str().unwrap(), None);
+        assert!(moved.unwrap_err().contains("already in"));
+        assert_eq!(fs::read_to_string(folder.join("a.txt")).unwrap(), "other A");
+        assert_eq!(fs::read_to_string(&a).unwrap(), "A");
+    }
+
+    #[test]
     fn quick_look_missing_path_returns_error_without_panic() {
         let missing = format!(
             "/tmp/script-kit-gpui-missing-quick-look-{}",
@@ -909,12 +1075,6 @@ mod tests {
     #[test]
     fn test_terminal_working_directory_returns_parent_for_file_paths() {
         let resolved = terminal_working_directory("/tmp/a/b/file.txt", false);
-        assert_eq!(resolved, "/tmp/a/b");
-    }
-
-    #[test]
-    fn test_move_destination_default_directory_returns_parent_for_directories() {
-        let resolved = move_destination_default_directory("/tmp/a/b/folder", true);
         assert_eq!(resolved, "/tmp/a/b");
     }
 

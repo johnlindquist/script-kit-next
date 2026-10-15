@@ -103,7 +103,7 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
             Some("Reloads the current directory listing".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("\u{2318}R")
+        .with_shortcut("\u{2318}\u{21e7}R")
         .with_icon(IconName::Refresh)
         .with_section("Directory"),
         Action::new(
@@ -194,6 +194,8 @@ pub(crate) struct FileSearchSecondaryCommand {
     pub section: &'static str,
     pub key: &'static str,
     pub requires_shift: bool,
+    /// Whether ⌥ must be held too (⌘⌥C is Copy Filename, ⌘C is Copy File).
+    pub requires_alt: bool,
     /// When true, this command is only available for files (not directories).
     pub files_only: bool,
     /// When true, this command is only available on macOS.
@@ -241,8 +243,19 @@ impl FileSearchSecondaryCommand {
 
     /// Whether the given key event matches this command for the given item.
     #[allow(dead_code)] // used by binary target via include!() in main.rs
-    pub(crate) fn matches(self, key: &str, has_cmd: bool, has_shift: bool, is_dir: bool) -> bool {
-        if !has_cmd || has_shift != self.requires_shift || !self.supports(is_dir) {
+    pub(crate) fn matches(
+        self,
+        key: &str,
+        has_cmd: bool,
+        has_shift: bool,
+        has_alt: bool,
+        is_dir: bool,
+    ) -> bool {
+        if !has_cmd
+            || has_shift != self.requires_shift
+            || has_alt != self.requires_alt
+            || !self.supports(is_dir)
+        {
             return false;
         }
         match self.key {
@@ -273,7 +286,20 @@ impl FileSearchSecondaryCommand {
 
 /// The canonical list of secondary commands for the file-search surface.
 /// Order here determines action-list order and footer label order.
-pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9] = [
+pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 13] = [
+    FileSearchSecondaryCommand {
+        action_id: "open_with",
+        title: "Open With\u{2026}",
+        description: "Chooses which app opens this item",
+        shortcut: "\u{2318}O",
+        icon: IconName::FolderOpen,
+        section: "Actions",
+        key: "o",
+        requires_shift: false,
+        requires_alt: false,
+        files_only: false,
+        macos_only: true,
+    },
     FileSearchSecondaryCommand {
         action_id: "rename_path",
         title: "Rename\u{2026}",
@@ -283,18 +309,33 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Edit",
         key: "r",
         requires_shift: false,
+        requires_alt: false,
         files_only: false,
         macos_only: false,
     },
     FileSearchSecondaryCommand {
         action_id: "move_path",
-        title: "Move\u{2026}",
+        title: "Move to\u{2026}",
         description: "Moves the selected file or folder to another folder",
         shortcut: "\u{2318}\u{21e7}M",
         icon: IconName::FolderOpen,
         section: "Edit",
         key: "m",
         requires_shift: true,
+        requires_alt: false,
+        files_only: false,
+        macos_only: false,
+    },
+    FileSearchSecondaryCommand {
+        action_id: "copy_to",
+        title: "Copy to\u{2026}",
+        description: "Copies the selected file or folder to another folder",
+        shortcut: "\u{2318}\u{2325}\u{21e7}C",
+        icon: IconName::Copy,
+        section: "Edit",
+        key: "c",
+        requires_shift: true,
+        requires_alt: true,
         files_only: false,
         macos_only: false,
     },
@@ -307,18 +348,7 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Edit",
         key: "d",
         requires_shift: false,
-        files_only: false,
-        macos_only: false,
-    },
-    FileSearchSecondaryCommand {
-        action_id: "copy_filename",
-        title: "Copy Filename",
-        description: "Copies only the filename to the clipboard",
-        shortcut: "\u{2318}C",
-        icon: IconName::Copy,
-        section: "Share",
-        key: "c",
-        requires_shift: false,
+        requires_alt: false,
         files_only: false,
         macos_only: false,
     },
@@ -331,6 +361,46 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Edit",
         key: "e",
         requires_shift: false,
+        requires_alt: false,
+        files_only: false,
+        macos_only: false,
+    },
+    FileSearchSecondaryCommand {
+        action_id: "copy_file",
+        title: "Copy File",
+        description: "Copies the file itself, ready to paste into Finder, Mail or a chat",
+        shortcut: "\u{2318}C",
+        icon: IconName::Copy,
+        section: "Share",
+        key: "c",
+        requires_shift: false,
+        requires_alt: false,
+        files_only: false,
+        macos_only: false,
+    },
+    FileSearchSecondaryCommand {
+        action_id: "paste_file",
+        title: "Paste File",
+        description: "Pastes the file into the app you were using",
+        shortcut: "\u{2318}\u{21e7}V",
+        icon: IconName::Copy,
+        section: "Share",
+        key: "v",
+        requires_shift: true,
+        requires_alt: false,
+        files_only: false,
+        macos_only: true,
+    },
+    FileSearchSecondaryCommand {
+        action_id: "copy_filename",
+        title: "Copy Filename",
+        description: "Copies only the filename to the clipboard",
+        shortcut: "\u{2318}\u{2325}C",
+        icon: IconName::Copy,
+        section: "Share",
+        key: "c",
+        requires_shift: false,
+        requires_alt: true,
         files_only: false,
         macos_only: false,
     },
@@ -343,6 +413,7 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Share",
         key: "c",
         requires_shift: true,
+        requires_alt: false,
         files_only: false,
         macos_only: false,
     },
@@ -355,6 +426,7 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Destructive",
         key: "backspace_or_delete",
         requires_shift: false,
+        requires_alt: false,
         files_only: false,
         macos_only: false,
     },
@@ -367,6 +439,7 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Actions",
         key: "y",
         requires_shift: false,
+        requires_alt: false,
         files_only: true,
         macos_only: true,
     },
@@ -379,6 +452,7 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         section: "Actions",
         key: "i",
         requires_shift: false,
+        requires_alt: false,
         files_only: false,
         macos_only: true,
     },
@@ -390,12 +464,13 @@ pub(crate) fn resolve_file_search_secondary_action_id(
     key: &str,
     has_cmd: bool,
     has_shift: bool,
+    has_alt: bool,
     file_info: &FileInfo,
 ) -> Option<&'static str> {
     FILE_SEARCH_SECONDARY_COMMANDS
         .iter()
         .copied()
-        .find(|command| command.matches(key, has_cmd, has_shift, file_info.is_dir))
+        .find(|command| command.matches(key, has_cmd, has_shift, has_alt, file_info.is_dir))
         .map(|command| command.action_id)
 }
 
@@ -569,22 +644,6 @@ mod macos_tests {
 
         assert_eq!(show_info.title, "Show Info");
         assert_eq!(show_info.shortcut.as_deref(), Some("⌘I"));
-    }
-
-    #[test]
-    fn test_get_file_context_actions_does_not_expose_open_with() {
-        let file_info = FileInfo {
-            path: "/tmp/example.txt".to_string(),
-            name: "example.txt".to_string(),
-            file_type: FileType::File,
-            is_dir: false,
-        };
-
-        let actions = get_file_context_actions(&file_info);
-        assert!(
-            actions.iter().all(|action| action.id != "file:open_with"),
-            "file:open_with should not be exposed from file-search actions"
-        );
     }
 }
 
@@ -901,11 +960,15 @@ mod secondary_command_contract_tests {
         assert_eq!(
             ids,
             vec![
+                "open_with",
                 "rename_path",
                 "move_path",
+                "copy_to",
                 "duplicate_path",
-                "copy_filename",
                 "open_in_editor",
+                "copy_file",
+                "paste_file",
+                "copy_filename",
                 "copy_path",
                 "move_to_trash",
                 "quick_look",
@@ -923,11 +986,15 @@ mod secondary_command_contract_tests {
         assert_eq!(
             shortcuts,
             vec![
+                "\u{2318}O",
                 "\u{2318}R",
                 "\u{2318}\u{21e7}M",
+                "\u{2318}\u{2325}\u{21e7}C",
                 "\u{2318}D",
-                "\u{2318}C",
                 "\u{2318}E",
+                "\u{2318}C",
+                "\u{2318}\u{21e7}V",
+                "\u{2318}\u{2325}C",
                 "\u{2318}\u{21e7}C",
                 "\u{2318}\u{232b}",
                 "\u{2318}Y",
@@ -1006,11 +1073,33 @@ mod secondary_command_contract_tests {
     // --- Keyboard resolver ---
 
     #[test]
-    fn resolver_cmd_c_resolves_to_copy_filename() {
+    fn resolver_cmd_c_copies_the_file_and_cmd_alt_c_the_name() {
         let dir = make_dir("photos", "/tmp/photos");
         assert_eq!(
-            resolve_file_search_secondary_action_id("c", true, false, &dir),
+            resolve_file_search_secondary_action_id("c", true, false, false, &dir),
+            Some("copy_file")
+        );
+        assert_eq!(
+            resolve_file_search_secondary_action_id("c", true, false, true, &dir),
             Some("copy_filename")
+        );
+        assert_eq!(
+            resolve_file_search_secondary_action_id("c", true, true, true, &dir),
+            Some("copy_to")
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn resolver_open_with_and_paste_file() {
+        let file = make_file("data.csv", "/tmp/data.csv");
+        assert_eq!(
+            resolve_file_search_secondary_action_id("o", true, false, false, &file),
+            Some("open_with")
+        );
+        assert_eq!(
+            resolve_file_search_secondary_action_id("v", true, true, false, &file),
+            Some("paste_file")
         );
     }
 
@@ -1018,7 +1107,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_shift_c_resolves_to_copy_path() {
         let file = make_file("data.csv", "/tmp/data.csv");
         assert_eq!(
-            resolve_file_search_secondary_action_id("c", true, true, &file),
+            resolve_file_search_secondary_action_id("c", true, true, false, &file),
             Some("copy_path")
         );
     }
@@ -1027,7 +1116,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_y_on_directory_returns_none() {
         let dir = make_dir("photos", "/tmp/photos");
         assert_eq!(
-            resolve_file_search_secondary_action_id("y", true, false, &dir),
+            resolve_file_search_secondary_action_id("y", true, false, false, &dir),
             None,
             "Quick Look must not resolve for directories"
         );
@@ -1038,7 +1127,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_y_on_file_returns_quick_look() {
         let file = make_file("photo.png", "/tmp/photo.png");
         assert_eq!(
-            resolve_file_search_secondary_action_id("y", true, false, &file),
+            resolve_file_search_secondary_action_id("y", true, false, false, &file),
             Some("quick_look")
         );
     }
@@ -1047,7 +1136,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_r_resolves_to_rename() {
         let file = make_file("data.csv", "/tmp/data.csv");
         assert_eq!(
-            resolve_file_search_secondary_action_id("r", true, false, &file),
+            resolve_file_search_secondary_action_id("r", true, false, false, &file),
             Some("rename_path")
         );
     }
@@ -1056,7 +1145,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_shift_m_resolves_to_move() {
         let dir = make_dir("photos", "/tmp/photos");
         assert_eq!(
-            resolve_file_search_secondary_action_id("m", true, true, &dir),
+            resolve_file_search_secondary_action_id("m", true, true, false, &dir),
             Some("move_path")
         );
     }
@@ -1065,7 +1154,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_backspace_resolves_to_trash() {
         let file = make_file("temp.log", "/tmp/temp.log");
         assert_eq!(
-            resolve_file_search_secondary_action_id("backspace", true, false, &file),
+            resolve_file_search_secondary_action_id("backspace", true, false, false, &file),
             Some("move_to_trash")
         );
     }
@@ -1074,7 +1163,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_delete_resolves_to_trash() {
         let file = make_file("temp.log", "/tmp/temp.log");
         assert_eq!(
-            resolve_file_search_secondary_action_id("delete", true, false, &file),
+            resolve_file_search_secondary_action_id("delete", true, false, false, &file),
             Some("move_to_trash")
         );
     }
@@ -1083,7 +1172,7 @@ mod secondary_command_contract_tests {
     fn resolver_without_cmd_returns_none() {
         let file = make_file("data.csv", "/tmp/data.csv");
         assert_eq!(
-            resolve_file_search_secondary_action_id("c", false, false, &file),
+            resolve_file_search_secondary_action_id("c", false, false, false, &file),
             None,
             "Without Cmd held, nothing should match"
         );
@@ -1093,7 +1182,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_e_resolves_to_open_in_editor() {
         let dir = make_dir("src", "/tmp/src");
         assert_eq!(
-            resolve_file_search_secondary_action_id("e", true, false, &dir),
+            resolve_file_search_secondary_action_id("e", true, false, false, &dir),
             Some("open_in_editor")
         );
     }
@@ -1102,7 +1191,7 @@ mod secondary_command_contract_tests {
     fn resolver_cmd_t_has_no_terminal_binding() {
         let dir = make_dir("src", "/tmp/src");
         assert_eq!(
-            resolve_file_search_secondary_action_id("t", true, false, &dir),
+            resolve_file_search_secondary_action_id("t", true, false, false, &dir),
             None
         );
     }

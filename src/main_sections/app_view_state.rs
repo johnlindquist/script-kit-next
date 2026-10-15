@@ -1757,6 +1757,12 @@ enum FileSearchThumbnailPreviewState {
         width: u32,
         height: u32,
     },
+    /// The first lines of a text file.
+    Text {
+        path: String,
+        text: SharedString,
+        truncated: bool,
+    },
     /// Thumbnail not available for this path (size/format/decode constraints).
     Unavailable { path: String, message: String },
 }

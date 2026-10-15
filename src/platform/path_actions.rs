@@ -337,6 +337,62 @@ pub fn copy_text(text: &str) -> Result<crate::runtime_policy::CopyReceipt, Strin
     )
 }
 
+/// Puts the file itself on the clipboard (a file URL plus its path as text), so it pastes as a
+/// file in Finder, Mail or Slack and as its path in a text field.
+pub fn copy_file_to_clipboard(path: &Path) -> Result<(), String> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)
+        .map_err(|error| error.to_string())?;
+    let resolved = std::fs::symlink_metadata(path)
+        .map(|_| path.to_path_buf())
+        .map_err(|error| format!("The file isn't there anymore: {error}"))?;
+    copy_file_to_clipboard_impl(&resolved)
+}
+
+#[cfg(target_os = "macos")]
+fn copy_file_to_clipboard_impl(path: &Path) -> Result<(), String> {
+    if require_main_thread("copy_file_to_clipboard") {
+        return Err("The clipboard can only be written from the main thread".to_string());
+    }
+    let path_text = path.to_string_lossy();
+    // SAFETY: main thread verified above; every object is nil-checked before use, the
+    // NSString we allocate is released, and NSURL/NSArray are autoreleased.
+    unsafe {
+        let pasteboard: cocoa::base::id =
+            objc::msg_send![objc::class!(NSPasteboard), generalPasteboard];
+        if pasteboard == cocoa::base::nil {
+            return Err("The clipboard isn't available".to_string());
+        }
+        let ns_path = cocoa::foundation::NSString::alloc(cocoa::base::nil).init_str(&path_text);
+        if ns_path == cocoa::base::nil {
+            return Err("Couldn't read the path".to_string());
+        }
+        let url: cocoa::base::id = objc::msg_send![objc::class!(NSURL), fileURLWithPath: ns_path];
+        if url == cocoa::base::nil {
+            let _: () = objc::msg_send![ns_path, release];
+            return Err("Couldn't make a file URL for it".to_string());
+        }
+        let objects: cocoa::base::id = objc::msg_send![objc::class!(NSArray), arrayWithObject: url];
+        let _: i64 = objc::msg_send![pasteboard, clearContents];
+        let did_write: bool = objc::msg_send![pasteboard, writeObjects: objects];
+        let _: () = objc::msg_send![ns_path, release];
+        if !did_write {
+            return Err("The clipboard didn't accept the file".to_string());
+        }
+        tracing::info!(
+            action = "copy_file_to_clipboard",
+            stage = "completed",
+            "platform clipboard action completed"
+        );
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_file_to_clipboard_impl(path: &Path) -> Result<(), String> {
+    // Other platforms have no portable file pasteboard here; the path is the closest thing.
+    copy_text_to_clipboard_impl(&path.to_string_lossy())
+}
+
 /// Copy text to the system clipboard.
 ///
 /// On macOS this uses `NSPasteboard`. On other platforms it falls back to `arboard`.

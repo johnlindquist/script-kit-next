@@ -25,6 +25,8 @@ mod execution_paths;
 mod execution_scripts;
 #[path = "feedback_route.rs"]
 mod feedback_route;
+#[path = "file_search_modes.rs"]
+mod file_search_modes;
 #[path = "filter_input_change.rs"]
 mod filter_input_change;
 #[path = "filter_input_core.rs"]

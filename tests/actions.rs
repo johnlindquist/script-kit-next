@@ -957,7 +957,7 @@ fn file_search_rename_handler_uses_named_action_state() {
     assert!(
         content.contains("FileSearchRenameHandlerAction::from_action_id(action_id)")
             && content.contains("rename_action.selection_required_message()")
-            && content.contains("rename_action.success_hud(&new_name)")
+            && content.contains("rename_action.success_hud(")
             && content.contains("rename_action.failure_message(e)"),
         "file-search rename handler should derive selection, HUD, and failure copy from the named state"
     );
@@ -975,9 +975,9 @@ fn file_search_move_handler_uses_named_action_state() {
     assert!(
         content.contains("FileSearchMoveHandlerAction::from_action_id(action_id)")
             && content.contains("move_action.selection_required_message()")
-            && content.contains("move_action.success_hud(&destination_dir)")
-            && content.contains("move_action.failure_message(e)"),
-        "file-search move handler should derive selection, HUD, and failure copy from the named state"
+            && content.contains("place_action.success_hud(")
+            && content.contains("place_action.failure_message(&e)"),
+        "file-search move/copy handler should derive selection, HUD, and failure copy from the named state"
     );
 }
 

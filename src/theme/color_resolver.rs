@@ -279,7 +279,6 @@ impl TypographyResolver {
     }
 
     /// Get the monospace font family
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn mono_font(&self) -> &str {
         &self.font_family_mono
     }

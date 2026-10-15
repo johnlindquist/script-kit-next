@@ -2028,4 +2028,59 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&original).unwrap(), "keep me");
         assert!(!trashed.exists(), "the item should leave the Trash");
     }
+
+    #[test]
+    fn text_previews_cover_code_notes_and_dotfiles_but_not_binaries() {
+        for path in [
+            "/a/notes.md",
+            "/a/main.RS",
+            "/a/Makefile",
+            "/a/.zshrc",
+            "/a/icon.svg",
+        ] {
+            assert!(
+                is_text_preview_supported(path),
+                "{path} should preview as text"
+            );
+        }
+        for path in ["/a/photo.png", "/a/archive.zip", "/a/app.dmg", "/a/noext"] {
+            assert!(
+                !is_text_preview_supported(path),
+                "{path} should not preview as text"
+            );
+        }
+    }
+
+    #[test]
+    fn local_files_are_not_cloud_placeholders() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("local.txt");
+        std::fs::write(&file, "here").unwrap();
+        assert!(!is_cloud_placeholder(file.to_str().unwrap()));
+        assert!(!is_cloud_placeholder("/definitely/missing/file.txt"));
+    }
+
+    #[test]
+    fn text_preview_shows_the_first_lines_and_says_when_it_cut() {
+        let (text, more) = text_preview_from_bytes(b"one\ntwo\nthree\n", 2).unwrap();
+        assert_eq!(text, "one\ntwo");
+        assert!(more);
+        let (text, more) = text_preview_from_bytes(b"a\tb", 10).unwrap();
+        assert_eq!(text, "a    b");
+        assert!(!more);
+    }
+
+    #[test]
+    fn binary_data_gets_no_text_preview() {
+        assert!(text_preview_from_bytes(b"PK\x03\x04\x00\x00", 10).is_none());
+        assert!(text_preview_from_bytes(&[0xff, 0xfe, 0x41, 0x42], 10).is_none());
+    }
+
+    #[test]
+    fn a_character_cut_by_the_read_limit_is_dropped() {
+        let mut bytes = "caf\u{e9}".as_bytes().to_vec();
+        bytes.pop();
+        let (text, _) = text_preview_from_bytes(&bytes, 10).unwrap();
+        assert_eq!(text, "caf");
+    }
 }

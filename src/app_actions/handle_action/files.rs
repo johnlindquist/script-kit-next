@@ -4,11 +4,36 @@
 // (open_file, open_directory, quick_look, open_with, show_info, attach_to_ai),
 // copy_filename, __cancel__.
 
+/// Action ids for Open With's app list carry the app's path after this prefix.
+const OPEN_WITH_APP_PREFIX: &str = "open_with_app:";
+
+/// One action per app, the default first.
+fn open_with_actions(apps: &[crate::file_search::OpenWithApp]) -> Vec<crate::actions::Action> {
+    use crate::actions::{Action, ActionCategory};
+    use crate::designs::icon_variations::IconName;
+    apps.iter()
+        .map(|app| {
+            let section = if app.is_default {
+                "Default"
+            } else {
+                "Other Apps"
+            };
+            Action::new(
+                format!("file:{OPEN_WITH_APP_PREFIX}{}", app.path),
+                app.name.clone(),
+                Some(crate::file_search::shorten_path(&app.path)),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section(section)
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileSearchHandlerAction {
     Open,
     QuickLook,
-    OpenWith,
     ShowInfo,
     AttachToAi,
 }
@@ -18,7 +43,6 @@ impl FileSearchHandlerAction {
         match action_id {
             "open_file" | "open_directory" => Some(Self::Open),
             "quick_look" => Some(Self::QuickLook),
-            "open_with" => Some(Self::OpenWith),
             "show_info" => Some(Self::ShowInfo),
             "attach_to_ai" => Some(Self::AttachToAi),
             _ => None,
@@ -27,7 +51,7 @@ impl FileSearchHandlerAction {
 
     fn success_hud(self, action_id: &str) -> Option<&'static str> {
         match self {
-            Self::Open | Self::QuickLook | Self::OpenWith | Self::ShowInfo => {
+            Self::Open | Self::QuickLook | Self::ShowInfo => {
                 file_search_action_success_hud(action_id)
             }
             Self::AttachToAi => None,
@@ -36,7 +60,7 @@ impl FileSearchHandlerAction {
 
     fn error_prefix(self, action_id: &str) -> &'static str {
         match self {
-            Self::Open | Self::QuickLook | Self::OpenWith | Self::ShowInfo => {
+            Self::Open | Self::QuickLook | Self::ShowInfo => {
                 file_search_action_error_hud_prefix(action_id)
                     .unwrap_or("Failed to complete action")
             }
@@ -78,6 +102,7 @@ enum FileSearchRenameHandlerAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileSearchMoveHandlerAction {
     MovePath,
+    CopyTo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,7 +252,7 @@ impl FileSearchRenameHandlerAction {
 
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
-            Self::RenamePath => format!("Failed to rename: {error}"),
+            Self::RenamePath => format!("Couldn't rename it: {error}"),
         }
     }
 }
@@ -236,30 +261,55 @@ impl FileSearchMoveHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
             "move_path" => Some(Self::MovePath),
+            "copy_to" => Some(Self::CopyTo),
             _ => None,
         }
     }
 
+    fn kind(self) -> crate::file_search::PlaceKind {
+        match self {
+            Self::MovePath => crate::file_search::PlaceKind::Move,
+            Self::CopyTo => crate::file_search::PlaceKind::Copy,
+        }
+    }
+
     fn selection_required_message(self) -> &'static str {
+        "No file selected"
+    }
+
+    fn verb(self) -> &'static str {
         match self {
-            Self::MovePath => "No file selected",
+            Self::MovePath => "move",
+            Self::CopyTo => "copy",
         }
     }
 
-    fn success_hud(self, destination_dir: &str) -> String {
-        match self {
-            Self::MovePath => {
-                format!(
-                    "Moved to {}",
-                    crate::file_search::shorten_path(destination_dir)
-                )
+    /// What the line says once the item landed; names the new name when Keep Both chose one.
+    fn success_hud(self, placed_name: Option<&str>, destination_dir: &str) -> String {
+        let past = match self {
+            Self::MovePath => "Moved",
+            Self::CopyTo => "Copied",
+        };
+        let shown = crate::file_search::shorten_path(destination_dir);
+        match placed_name {
+            Some(name) => format!("{past} as \u{201c}{name}\u{201d} to {shown}"),
+            None => format!("{past} to {shown}"),
+        }
+    }
+
+    /// A `FileOpError` already reads as the sentence to show ("“a.txt” is already in b",
+    /// "The destination is on another disk"); anything else keeps the verb in front.
+    fn failure_message(self, error: &crate::file_search::file_ops::FileOpError) -> String {
+        match error {
+            crate::file_search::file_ops::FileOpError::Other(detail)
+                if detail.starts_with("Couldn") =>
+            {
+                detail.clone()
             }
-        }
-    }
-
-    fn failure_message(self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::MovePath => format!("Failed to move: {error}"),
+            crate::file_search::file_ops::FileOpError::Other(detail) => {
+                format!("Couldn't {} it: {detail}", self.verb())
+            }
+            error => error.to_string(),
         }
     }
 }
@@ -500,7 +550,12 @@ impl ScriptListApp {
             return None;
         };
         let parsed = crate::file_search::parse_directory_path(query)?;
-        crate::file_search::expand_path(parsed.directory.trim_end_matches('/'))
+        // `/` trimmed of its slash is empty, which isn't a path; the root stays `/`.
+        let directory = match parsed.directory.trim_end_matches('/') {
+            "" => "/",
+            trimmed => trimmed,
+        };
+        crate::file_search::expand_path(directory)
             .map(|dir| crate::file_search::ensure_trailing_slash(&dir))
     }
 
@@ -674,6 +729,411 @@ impl ScriptListApp {
                 .scroll_to_item(index, gpui::ScrollStrategy::Nearest);
         }
         cx.notify();
+    }
+
+    /// The rename typed in File Search's input: rename and offer ⌘Z.
+    pub(crate) fn finish_file_search_rename_from_view(
+        &mut self,
+        path: &str,
+        new_name: &str,
+        previous_display_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.finish_file_search_rename(
+            FileSearchRenameHandlerAction::RenamePath,
+            path,
+            new_name,
+            previous_display_index,
+            cx,
+        );
+    }
+
+    /// Renames the item to `new_name` unless that name is taken, then offers ⌘Z.
+    fn finish_file_search_rename(
+        &mut self,
+        rename_action: FileSearchRenameHandlerAction,
+        path: &str,
+        new_name: &str,
+        previous_display_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_file_search_action_target();
+        match crate::file_search::rename_path(path, new_name) {
+            Ok(new_path) if new_path == path => {
+                self.restore_file_search_input_focus(cx);
+            }
+            Ok(new_path) => {
+                self.refresh_file_search_after_mutation(
+                    path,
+                    Some(&new_path),
+                    previous_display_index,
+                    cx,
+                );
+                self.restore_file_search_input_focus(cx);
+                let original = path.to_string();
+                self.file_search_done_undoable(
+                    "pencil",
+                    rename_action.success_hud(new_name.trim()),
+                    Box::new(
+                        move |this, cx| match crate::file_search::file_ops::rename_no_replace(
+                            std::path::Path::new(&new_path),
+                            std::path::Path::new(&original),
+                        ) {
+                            Ok(()) => this.refresh_file_search_after_mutation(
+                                &new_path,
+                                Some(&original),
+                                previous_display_index,
+                                cx,
+                            ),
+                            Err(e) => {
+                                this.notice_failed(format!("Couldn't undo the rename: {e}"), cx)
+                            }
+                        },
+                    ),
+                    cx,
+                );
+            }
+            Err(e) if e.contains("is already in") => {
+                self.notice_failed(e, cx);
+                self.restore_file_search_input_focus(cx);
+            }
+            Err(e) => {
+                self.notice_failed(rename_action.failure_message(e), cx);
+                self.restore_file_search_input_focus(cx);
+            }
+        }
+    }
+
+    /// Moves or copies the item into `destination_dir`. A taken name asks whether to keep
+    /// both or replace; anything else either lands with ⌘Z offered or says why it didn't.
+    pub(crate) fn finish_file_search_place(
+        &mut self,
+        kind: crate::file_search::PlaceKind,
+        path: &str,
+        destination_dir: &str,
+        on_conflict: crate::file_search::file_ops::OnConflict,
+        previous_display_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::file_search::file_ops::FileOpError;
+        use crate::file_search::PlaceKind;
+
+        self.clear_file_search_action_target();
+        let place_action = match kind {
+            PlaceKind::Move => FileSearchMoveHandlerAction::MovePath,
+            PlaceKind::Copy => FileSearchMoveHandlerAction::CopyTo,
+        };
+        let verb = place_action.verb();
+        let placed = match crate::file_search::place_path(kind, path, destination_dir, on_conflict)
+        {
+            Ok(placed) => placed,
+            Err(FileOpError::Exists { name, folder }) => {
+                self.ask_file_search_place_conflict(
+                    kind,
+                    path,
+                    destination_dir,
+                    &name,
+                    &folder,
+                    previous_display_index,
+                    window,
+                    cx,
+                );
+                return;
+            }
+            Err(e) => {
+                tracing::warn!(target: "script_kit::file_search", event = "place_failed", verb, error = %e);
+                self.notice_failed(place_action.failure_message(&e), cx);
+                self.restore_file_search_input_focus(cx);
+                return;
+            }
+        };
+        let new_path = placed.path.to_string_lossy().to_string();
+        match kind {
+            PlaceKind::Move => self.refresh_file_search_after_mutation(
+                path,
+                Some(&new_path),
+                previous_display_index,
+                cx,
+            ),
+            PlaceKind::Copy => {
+                self.refresh_file_search_after_insert(&new_path, previous_display_index, cx)
+            }
+        }
+        self.restore_file_search_input_focus(cx);
+
+        let shown_dir = placed
+            .path
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let original_name = std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let placed_name = placed
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let title = place_action.success_hud(
+            (placed_name != original_name).then_some(placed_name.as_str()),
+            &shown_dir,
+        );
+        let original = path.to_string();
+        let replaced = placed.replaced.clone();
+        self.file_search_done_undoable(
+            if kind == PlaceKind::Move {
+                "folder-open"
+            } else {
+                "copy"
+            },
+            title,
+            Box::new(move |this, cx| {
+                let undone = match kind {
+                    PlaceKind::Move => {
+                        let back_dir = std::path::Path::new(&original)
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_default();
+                        crate::file_search::file_ops::move_no_replace(
+                            std::path::Path::new(&new_path),
+                            &back_dir.join(&original_name),
+                        )
+                        .map(|_| ())
+                    }
+                    PlaceKind::Copy => crate::file_search::move_to_trash(&new_path)
+                        .map(|_| ())
+                        .map_err(FileOpError::Other),
+                };
+                if let Err(e) = undone {
+                    this.notice_failed(format!("Couldn't undo the {verb}: {e}"), cx);
+                    return;
+                }
+                if let Some((replaced_path, trashed)) = &replaced {
+                    if let Err(e) = crate::file_search::restore_from_trash(trashed, replaced_path) {
+                        this.notice_failed(
+                            format!("Couldn't bring back the replaced item: {e}"),
+                            cx,
+                        );
+                    }
+                }
+                match kind {
+                    PlaceKind::Move => this.refresh_file_search_after_mutation(
+                        &new_path,
+                        Some(&original),
+                        previous_display_index,
+                        cx,
+                    ),
+                    PlaceKind::Copy => this.refresh_file_search_after_mutation(
+                        &new_path,
+                        None,
+                        previous_display_index,
+                        cx,
+                    ),
+                }
+            }),
+            cx,
+        );
+    }
+
+    /// The destination already has an item with this name: ask whether to keep both or
+    /// replace it (the replaced item goes to the Trash, and ⌘Z brings it back).
+    #[allow(clippy::too_many_arguments)]
+    fn ask_file_search_place_conflict(
+        &mut self,
+        kind: crate::file_search::PlaceKind,
+        path: &str,
+        destination_dir: &str,
+        name: &str,
+        folder: &str,
+        previous_display_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::actions::{Action, ActionCategory};
+        use crate::designs::icon_variations::IconName;
+
+        self.file_search_pending_place = Some(crate::file_search::PendingPlace {
+            kind,
+            path: path.to_string(),
+            destination_dir: destination_dir.to_string(),
+            previous_display_index,
+        });
+        let verb = match kind {
+            crate::file_search::PlaceKind::Move => "Move",
+            crate::file_search::PlaceKind::Copy => "Copy",
+        };
+        let title = format!("\u{201c}{name}\u{201d} is already in {folder}");
+        let actions = vec![
+            Action::new(
+                "file:place_keep_both",
+                "Keep Both",
+                Some(format!("{verb} it with a new name, like Finder")),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Copy)
+            .with_section("Name Taken"),
+            Action::new(
+                "file:place_replace",
+                "Replace",
+                Some(format!(
+                    "Move the item in {folder} to the Trash, then {}",
+                    verb.to_lowercase()
+                )),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Trash)
+            .with_section("Name Taken"),
+            Action::new(
+                "file:place_cancel",
+                "Cancel",
+                Some(format!("Don't {}", verb.to_lowercase())),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Close)
+            .with_section("Name Taken"),
+        ];
+        let placeholder = format!("{verb} \u{201c}{name}\u{201d}");
+        self.stage_file_search_choices(title, placeholder, actions, window, cx);
+    }
+
+    /// The answer to a taken-name question.
+    fn answer_file_search_place_conflict(
+        &mut self,
+        on_conflict: Option<crate::file_search::file_ops::OnConflict>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(pending) = self.file_search_pending_place.take() else {
+            return;
+        };
+        let Some(on_conflict) = on_conflict else {
+            self.restore_file_search_input_focus(cx);
+            return;
+        };
+        self.finish_file_search_place(
+            pending.kind,
+            &pending.path,
+            &pending.destination_dir,
+            on_conflict,
+            pending.previous_display_index,
+            window,
+            cx,
+        );
+    }
+
+    /// File actions that need the window: Rename… and Move to… / Copy to… borrow the main
+    /// input, Open With… stages its app list in place. Other file actions go through
+    /// [`Self::handle_file_action`].
+    pub(crate) fn handle_windowed_file_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> DispatchOutcome {
+        if !matches!(self.current_view, AppView::FileSearchView { .. }) {
+            return DispatchOutcome::not_handled();
+        }
+        match action_id {
+            "rename_path" => {
+                let Some(rename_action) = FileSearchRenameHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                let Some((path, _, _name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        rename_action.selection_required_message(),
+                    );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
+                };
+                self.clear_file_search_action_target();
+                // The new name is typed in the main input, under the same window.
+                self.begin_file_search_rename(path, previous_display_index, window, cx);
+                DispatchOutcome::success()
+            }
+            "move_path" | "copy_to" => {
+                let Some(move_action) = FileSearchMoveHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                let kind = move_action.kind();
+                let Some((path, _, _)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        move_action.selection_required_message(),
+                    );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
+                };
+                self.clear_file_search_action_target();
+                // The folder is chosen in File Search itself.
+                self.begin_file_search_place_pick(kind, path, previous_display_index, window, cx);
+                DispatchOutcome::success()
+            }
+            "open_with" => {
+                let Some((path, _, name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                self.clear_file_search_action_target();
+                let apps = match crate::file_search::apps_for_open_with(&path) {
+                    Ok(apps) if !apps.is_empty() => apps,
+                    Ok(_) => {
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "No app says it can open this",
+                        )
+                    }
+                    Err(e) => {
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            e,
+                        )
+                    }
+                };
+                self.file_search_open_with_target = Some(path);
+                let actions = open_with_actions(&apps);
+                let title = format!("Open \u{201c}{name}\u{201d} With");
+                self.stage_file_search_choices(
+                    title,
+                    "Search apps".to_string(),
+                    actions,
+                    window,
+                    cx,
+                );
+                DispatchOutcome::success()
+            }
+            "place_keep_both" => {
+                self.answer_file_search_place_conflict(
+                    Some(crate::file_search::file_ops::OnConflict::KeepBoth),
+                    window,
+                    cx,
+                );
+                DispatchOutcome::success()
+            }
+            "place_replace" => {
+                self.answer_file_search_place_conflict(
+                    Some(crate::file_search::file_ops::OnConflict::Replace),
+                    window,
+                    cx,
+                );
+                DispatchOutcome::success()
+            }
+            "place_cancel" => {
+                self.answer_file_search_place_conflict(None, window, cx);
+                DispatchOutcome::success()
+            }
+            _ => DispatchOutcome::not_handled(),
+        }
     }
 
     /// Handle file-related actions. Returns `true` if handled.
@@ -872,8 +1332,7 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             // File search specific actions
-            "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info"
-            | "attach_to_ai" => {
+            "open_file" | "open_directory" | "quick_look" | "show_info" | "attach_to_ai" => {
                 let Some(file_action) = FileSearchHandlerAction::from_action_id(action_id) else {
                     return DispatchOutcome::not_handled();
                 };
@@ -883,7 +1342,6 @@ impl ScriptListApp {
                     let result: Result<(), String> = match file_action {
                         FileSearchHandlerAction::Open => crate::file_search::open_file(&path),
                         FileSearchHandlerAction::QuickLook => crate::file_search::quick_look(&path),
-                        FileSearchHandlerAction::OpenWith => crate::file_search::open_with(&path),
                         FileSearchHandlerAction::ShowInfo => crate::file_search::show_info(&path),
                         FileSearchHandlerAction::AttachToAi => {
                             self.open_chat_for_action(
@@ -956,136 +1414,56 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
-            "rename_path" => {
-                let Some(rename_action) = FileSearchRenameHandlerAction::from_action_id(action_id)
-                else {
-                    return DispatchOutcome::not_handled();
-                };
-                let Some((path, _, _name)) = self.resolve_file_search_path_info() else {
+            "copy_file" | "paste_file" => {
+                let Some((path, _, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        rename_action.selection_required_message(),
+                        "No file selected",
                     );
                 };
-                let previous_display_index = match &self.current_view {
-                    AppView::FileSearchView { selected_index, .. } => *selected_index,
-                    _ => 0,
-                };
-
-                cx.spawn(async move |this, cx| {
-                    let new_name = match crate::file_search::prompt_rename_target_name(&path) {
-                        Ok(Some(value)) => value,
-                        Ok(None) => {
-                            let _ = this.update(cx, |this, cx| {
-                                this.clear_file_search_action_target();
-                                this.restore_file_search_input_focus(cx);
-                            });
-                            return;
-                        }
-                        Err(e) => {
-                            let _ = this.update(cx, |this, cx| {
-                                this.clear_file_search_action_target();
-                                this.notice_failed(rename_action.failure_message(e), cx);
-                                this.restore_file_search_input_focus(cx);
-                            });
-                            return;
-                        }
-                    };
-
-                    let _ = this.update(cx, |this, cx| {
-                        match crate::file_search::rename_path(&path, &new_name) {
-                            Ok(new_path) => {
-                                this.clear_file_search_action_target();
-                                this.one_window_notice(
-                                    crate::line_notice::INFO,
-                                    rename_action.success_hud(&new_name),
-                                    cx,
-                                );
-                                this.refresh_file_search_after_mutation(
-                                    &path,
-                                    Some(&new_path),
-                                    previous_display_index,
-                                    cx,
-                                );
-                                this.restore_file_search_input_focus(cx);
-                            }
-                            Err(e) => {
-                                this.file_search_actions_path = None;
-                                this.notice_failed(rename_action.failure_message(e), cx);
-                                this.restore_file_search_input_focus(cx);
-                            }
-                        }
-                    });
-                })
-                .detach();
-
+                self.clear_file_search_action_target();
+                if let Err(e) = crate::platform::copy_file_to_clipboard(std::path::Path::new(&path))
+                {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("Couldn't copy the file: {e}"),
+                    );
+                }
+                if action_id == "paste_file" {
+                    tracing::info!(category = "UI", path = %path, "paste file into frontmost app");
+                    return self.finalize_paste_after_clipboard_ready(
+                        "file",
+                        &path,
+                        PasteCloseBehavior::HideWindow,
+                        cx,
+                    );
+                }
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    format!("Copied \u{201c}{name}\u{201d}"),
+                    cx,
+                );
+                self.restore_file_search_input_focus(cx);
                 DispatchOutcome::success()
             }
-            "move_path" => {
-                let Some(move_action) = FileSearchMoveHandlerAction::from_action_id(action_id)
-                else {
-                    return DispatchOutcome::not_handled();
-                };
-                let Some((path, is_dir, _name)) = self.resolve_file_search_path_info() else {
+            id if id.starts_with(OPEN_WITH_APP_PREFIX) => {
+                let app_path = id.trim_start_matches(OPEN_WITH_APP_PREFIX).to_string();
+                let Some(path) = self.file_search_open_with_target.take() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        move_action.selection_required_message(),
+                        "No file selected",
                     );
                 };
-                let previous_display_index = match &self.current_view {
-                    AppView::FileSearchView { selected_index, .. } => *selected_index,
-                    _ => 0,
-                };
-
-                cx.spawn(async move |this, cx| {
-                    let destination_dir =
-                        match crate::file_search::prompt_move_destination_dir(&path, is_dir) {
-                            Ok(Some(value)) => value,
-                            Ok(None) => {
-                                let _ = this.update(cx, |this, cx| {
-                                    this.clear_file_search_action_target();
-                                    this.restore_file_search_input_focus(cx);
-                                });
-                                return;
-                            }
-                            Err(e) => {
-                                let _ = this.update(cx, |this, cx| {
-                                    this.clear_file_search_action_target();
-                                    this.notice_failed(move_action.failure_message(e), cx);
-                                    this.restore_file_search_input_focus(cx);
-                                });
-                                return;
-                            }
-                        };
-
-                    let _ = this.update(cx, |this, cx| {
-                        match crate::file_search::move_path(&path, &destination_dir) {
-                            Ok(new_path) => {
-                                this.clear_file_search_action_target();
-                                this.one_window_notice(
-                                    crate::line_notice::INFO,
-                                    move_action.success_hud(&destination_dir),
-                                    cx,
-                                );
-                                this.refresh_file_search_after_mutation(
-                                    &path,
-                                    Some(&new_path),
-                                    previous_display_index,
-                                    cx,
-                                );
-                                this.restore_file_search_input_focus(cx);
-                            }
-                            Err(e) => {
-                                this.clear_file_search_action_target();
-                                this.notice_failed(move_action.failure_message(e), cx);
-                                this.restore_file_search_input_focus(cx);
-                            }
-                        }
-                    });
-                })
-                .detach();
-
-                DispatchOutcome::success()
+                match crate::file_search::open_with(&path, &app_path) {
+                    Ok(()) => {
+                        self.hide_main_and_reset(cx);
+                        DispatchOutcome::success()
+                    }
+                    Err(e) => DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("Couldn't open it: {e}"),
+                    ),
+                }
             }
             "move_to_trash" => {
                 let Some(trash_action) = FileSearchTrashHandlerAction::from_action_id(action_id)
@@ -1133,7 +1511,7 @@ impl ScriptListApp {
                 self.refresh_file_search_after_mutation(&path, None, previous_display_index, cx);
                 self.restore_file_search_input_focus(cx);
 
-                self.one_window_done_undoable(
+                self.file_search_done_undoable(
                     "trash",
                     trash_action.success_hud(&name),
                     Box::new(move |this, cx| {

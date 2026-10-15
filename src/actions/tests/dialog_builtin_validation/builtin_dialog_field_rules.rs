@@ -3848,7 +3848,7 @@ mod from_dialog_builtin_action_validation_tests_13 {
                 .iter()
                 .find(|a| a.id == "file:copy_filename")
                 .unwrap();
-            assert_eq!(a.shortcut.as_deref(), Some("⌘C"));
+            assert_eq!(a.shortcut.as_deref(), Some("⌘⌥C"));
         }
 
         // =========================================================================
@@ -9586,7 +9586,7 @@ mod from_dialog_builtin_action_validation_tests_16 {
 
         // --- merged from tests_part_02.rs ---
         #[test]
-        fn cat05_file_copy_filename_shortcut_cmd_c() {
+        fn cat05_file_copy_filename_shortcut_cmd_alt_c() {
             let file = FileInfo {
                 path: "/doc.pdf".into(),
                 name: "doc.pdf".into(),
@@ -9598,7 +9598,7 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 .iter()
                 .find(|a| a.id == "file:copy_filename")
                 .unwrap();
-            assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
+            assert_eq!(cf.shortcut.as_deref(), Some("⌘⌥C"));
         }
 
         // =========================================================================

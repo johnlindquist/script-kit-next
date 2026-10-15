@@ -414,6 +414,8 @@ pub const ROOT_FILE_COPY_NAME_ACTION_ID: &str = "root_file_copy_name";
 pub const ROOT_FILE_QUICK_LOOK_ACTION_ID: &str = "root_file_quick_look";
 pub const ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID: &str = "root_file_search_in_folder";
 pub const ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID: &str = "root_file_browse_parent_folder";
+pub const ROOT_FILE_COPY_FILE_ACTION_ID: &str = "root_file_copy_file";
+pub const ROOT_FILE_PASTE_FILE_ACTION_ID: &str = "root_file_paste_file";
 
 pub fn is_root_file_action_id(action_id: &str) -> bool {
     matches!(
@@ -425,6 +427,8 @@ pub fn is_root_file_action_id(action_id: &str) -> bool {
             | ROOT_FILE_QUICK_LOOK_ACTION_ID
             | ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID
             | ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID
+            | ROOT_FILE_COPY_FILE_ACTION_ID
+            | ROOT_FILE_PASTE_FILE_ACTION_ID
     )
 }
 
@@ -823,6 +827,11 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     ROOT_FILE_QUICK_LOOK_ACTION_ID,
     ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID,
     ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID,
+    ROOT_FILE_COPY_FILE_ACTION_ID,
+    ROOT_FILE_PASTE_FILE_ACTION_ID,
+    "copy_file",
+    "paste_file",
+    "copy_to",
     // Internal
     "__cancel__",
 ];

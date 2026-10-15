@@ -1501,6 +1501,31 @@ impl ScriptListApp {
                 );
                 true
             }
+            crate::action_helpers::ROOT_FILE_COPY_FILE_ACTION_ID
+            | crate::action_helpers::ROOT_FILE_PASTE_FILE_ACTION_ID => {
+                if let Err(error) =
+                    crate::platform::copy_file_to_clipboard(std::path::Path::new(&file.path))
+                {
+                    self.notice_failed(format!("Couldn't copy the file: {error}"), cx);
+                    return true;
+                }
+                if action_id == crate::action_helpers::ROOT_FILE_PASTE_FILE_ACTION_ID {
+                    self.record_root_file_open_use(file, cx);
+                    let _ = self.finalize_paste_after_clipboard_ready(
+                        "root_file",
+                        &file.path,
+                        PasteCloseBehavior::HideWindow,
+                        cx,
+                    );
+                } else {
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
+                        format!("Copied \u{201c}{}\u{201d}", file.name),
+                        cx,
+                    );
+                }
+                true
+            }
             crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.name.clone()));
                 self.one_window_notice(
@@ -1581,14 +1606,20 @@ impl ScriptListApp {
         {
             return false;
         }
-        if !modifiers.platform || modifiers.alt || modifiers.control {
+        if !modifiers.platform || modifiers.control {
             return false;
         }
 
-        let action_id = match (key_lower, modifiers.shift) {
-            ("y", false) => crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
-            ("c", true) => crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
-            ("f", true) => crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+        let action_id = match (key_lower, modifiers.shift, modifiers.alt) {
+            ("y", false, false) => crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
+            ("c", true, false) => crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+            ("c", false, true) => crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID,
+            ("v", true, false) => crate::action_helpers::ROOT_FILE_PASTE_FILE_ACTION_ID,
+            ("f", true, false) => crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+            // ⌘C copies the file unless words are selected in the input.
+            ("c", false, false) if self.gpui_input_state.read(cx).selected_range().is_empty() => {
+                crate::action_helpers::ROOT_FILE_COPY_FILE_ACTION_ID
+            }
             _ => return false,
         };
 

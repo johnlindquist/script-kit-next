@@ -1368,6 +1368,12 @@ impl ScriptListApp {
             .to_string()
     }
 
+    pub(crate) fn theme_mono_font_family(&self) -> String {
+        crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design)
+            .mono_font()
+            .to_string()
+    }
+
     pub(crate) fn theme_font_size_xl(&self) -> f32 {
         crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design)
             .font_size_xl()

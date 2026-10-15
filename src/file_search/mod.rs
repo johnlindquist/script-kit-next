@@ -656,6 +656,7 @@ fn detect_file_type(path: &Path) -> FileType {
 }
 
 mod directory;
+pub mod file_ops;
 mod mdfind;
 mod os_open;
 
@@ -675,9 +676,9 @@ pub use mdfind::{
     SearchFilesStreamingOptions, SearchNoiseFilter,
 };
 pub use os_open::{
-    duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,
-    prompt_rename_target_name, quick_look, rename_path, restore_from_trash, reveal_in_finder,
-    show_info,
+    apps_for_open_with, duplicate_path, move_to_trash, open_file, open_with, place_path,
+    quick_look, rename_path, restore_from_trash, reveal_in_finder, show_info, FilePlacePick,
+    FileRenameEdit, OpenWithApp, PendingPlace, PlaceKind,
 };
 
 pub fn parent_folder_search_query(path: &str) -> Option<String> {
@@ -1292,6 +1293,146 @@ pub fn file_type_icon(file_type: FileType) -> &'static str {
         FileType::Video => "🎬",
         FileType::File => "📃",
         FileType::Other => "📎",
+    }
+}
+
+/// Text-like files File Search previews as their first lines.
+pub fn is_text_preview_supported(path: &str) -> bool {
+    let file = Path::new(path);
+    let name = file
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if matches!(
+        name.as_str(),
+        "makefile"
+            | "dockerfile"
+            | "readme"
+            | "license"
+            | "changelog"
+            | "gemfile"
+            | "procfile"
+            | ".gitignore"
+            | ".gitattributes"
+            | ".editorconfig"
+            | ".env"
+            | ".zshrc"
+            | ".bashrc"
+            | ".profile"
+            | ".npmrc"
+            | ".prettierrc"
+            | ".eslintrc"
+    ) {
+        return true;
+    }
+    let extension = file
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase);
+    matches!(
+        extension.as_deref(),
+        Some(
+            "txt"
+                | "md"
+                | "markdown"
+                | "mdx"
+                | "rst"
+                | "org"
+                | "log"
+                | "csv"
+                | "tsv"
+                | "json"
+                | "jsonl"
+                | "yaml"
+                | "yml"
+                | "toml"
+                | "ini"
+                | "cfg"
+                | "conf"
+                | "xml"
+                | "plist"
+                | "html"
+                | "htm"
+                | "css"
+                | "scss"
+                | "less"
+                | "js"
+                | "mjs"
+                | "cjs"
+                | "jsx"
+                | "ts"
+                | "tsx"
+                | "rs"
+                | "py"
+                | "rb"
+                | "go"
+                | "java"
+                | "kt"
+                | "swift"
+                | "c"
+                | "h"
+                | "cc"
+                | "cpp"
+                | "hpp"
+                | "m"
+                | "mm"
+                | "cs"
+                | "php"
+                | "lua"
+                | "sh"
+                | "bash"
+                | "zsh"
+                | "fish"
+                | "sql"
+                | "graphql"
+                | "vue"
+                | "svelte"
+                | "astro"
+                | "tex"
+                | "env"
+                | "lock"
+                | "gitignore"
+                | "svg"
+        )
+    )
+}
+
+/// The first `max_lines` lines of `bytes` as text, and whether more lines were cut. `None` for
+/// binary data. A character cut in half at the end of the read is dropped, not shown as �.
+pub fn text_preview_from_bytes(bytes: &[u8], max_lines: usize) -> Option<(String, bool)> {
+    if bytes.iter().take(8 * 1024).any(|&byte| byte == 0) {
+        return None;
+    }
+    let valid = match std::str::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(error) if error.error_len().is_none() => {
+            // Only the last character was cut by the read limit.
+            std::str::from_utf8(&bytes[..error.valid_up_to()]).ok()?
+        }
+        Err(_) => return None,
+    };
+    let mut lines = valid.lines();
+    let shown: Vec<&str> = lines.by_ref().take(max_lines).collect();
+    let more = lines.next().is_some();
+    // Tabs render as four spaces so code lines up.
+    Some((shown.join("\n").replace('\t', "    "), more))
+}
+
+/// Whether the file is an iCloud placeholder whose contents aren't on this Mac yet. Reading
+/// one starts a download, so previews leave it alone.
+pub fn is_cloud_placeholder(path: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::macos::fs::MetadataExt as _;
+        /// `SF_DATALESS` from `<sys/stat.h>`: the file's data lives in the cloud.
+        const SF_DATALESS: u32 = 0x4000_0000;
+        std::fs::metadata(path).is_ok_and(|meta| meta.st_flags() & SF_DATALESS != 0)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        false
     }
 }
 

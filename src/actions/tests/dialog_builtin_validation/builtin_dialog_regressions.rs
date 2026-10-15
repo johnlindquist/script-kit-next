@@ -2208,7 +2208,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_file_macos_has_12_actions() {
+    fn file_context_file_macos_has_17_actions() {
         let file_info = FileInfo {
             path: "/tmp/test.txt".to_string(),
             name: "test.txt".to_string(),
@@ -2216,13 +2216,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_file + reveal + rename + move + duplicate + open_in_editor + open_in_quick_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 13
-        assert_eq!(actions.len(), 13);
+        // open_file + reveal + rename + move + duplicate + open_in_editor + open_in_quick_terminal + attach_to_ai + quick_look + show_info + open_with + copy_to + copy_file + paste_file + copy_path + copy_filename + move_to_trash = 17
+        assert_eq!(actions.len(), 17);
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_dir_macos_has_10_actions() {
+    fn file_context_dir_macos_has_15_actions() {
         let file_info = FileInfo {
             path: "/tmp/mydir".to_string(),
             name: "mydir".to_string(),
@@ -2230,8 +2230,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_directory + reveal + rename + move + duplicate + open_in_editor + open_in_quick_terminal + show_info + copy_path + copy_filename + move_to_trash = 11
-        assert_eq!(actions.len(), 11);
+        // open_directory + reveal + rename + move + duplicate + open_in_editor + open_in_quick_terminal + show_info + open_with + copy_to + copy_file + paste_file + copy_path + copy_filename + move_to_trash = 15
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -5938,7 +5938,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
     }
 
     #[test]
-    fn file_context_copy_filename_shortcut_cmd_c() {
+    fn file_context_copy_filename_shortcut_cmd_alt_c() {
         let fi = FileInfo {
             name: "main.rs".into(),
             path: "/path/main.rs".into(),
@@ -5950,7 +5950,7 @@ mod from_dialog_builtin_action_validation_tests_36 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
+        assert_eq!(cf.shortcut.as_deref(), Some("⌘⌥C"));
     }
 
     // =====================================================================
@@ -8623,7 +8623,7 @@ mod from_dialog_builtin_action_validation_tests_39 {
                 .iter()
                 .find(|a| a.id == "file:copy_filename")
                 .unwrap();
-            assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
+            assert_eq!(cf.shortcut.as_deref(), Some("⌘⌥C"));
         }
 
         #[test]
@@ -14308,7 +14308,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
     // =========== 9. File context: macOS file=12 dir=10 action count ===========
 
     #[test]
-    fn file_context_file_has_12_actions() {
+    fn file_context_file_has_17_actions() {
         let file_info = FileInfo {
             name: "test.txt".into(),
             path: "/tmp/test.txt".into(),
@@ -14316,11 +14316,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 17);
     }
 
     #[test]
-    fn file_context_dir_has_10_actions() {
+    fn file_context_dir_has_15_actions() {
         let file_info = FileInfo {
             name: "mydir".into(),
             path: "/tmp/mydir".into(),
@@ -14328,7 +14328,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 11);
+        assert_eq!(actions.len(), 15);
     }
 
     #[test]
@@ -15626,7 +15626,7 @@ mod from_dialog_builtin_action_validation_tests_46 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
+        assert_eq!(cf.shortcut.as_deref(), Some("⌘⌥C"));
     }
 
     #[test]

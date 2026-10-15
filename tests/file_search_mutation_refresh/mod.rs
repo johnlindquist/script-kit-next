@@ -117,38 +117,62 @@ fn parent_directory_abs_helper_exists() {
 // Call sites pass old_path correctly
 // ──────────────────────────────────────────────────────────────────────
 
+/// The body of `fn <name>(` up to the next method, for source-shape checks.
+fn method_body(name: &str) -> &'static str {
+    let start = FILES_SOURCE
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("{name} must exist"));
+    let rest = &FILES_SOURCE[start..];
+    let end = rest[1..]
+        .find("\n    fn ")
+        .into_iter()
+        .chain(rest[1..].find("\n    pub(crate) fn "))
+        .min()
+        .map_or(rest.len(), |at| at + 1);
+    &rest[..end]
+}
+
 #[test]
 fn rename_call_site_passes_old_path() {
+    // ⌘R starts typing the new name; the rename itself happens in the finisher.
     let rename_section = FILES_SOURCE
         .find("            \"rename_path\" => {")
         .expect("rename_path handler must exist");
-    let rename_end = (rename_section + 3000).min(FILES_SOURCE.len());
-    let rename_body = &FILES_SOURCE[rename_section..rename_end];
-
+    let rename_body =
+        &FILES_SOURCE[rename_section..(rename_section + 1500).min(FILES_SOURCE.len())];
     assert!(
-        rename_body.contains("refresh_file_search_after_mutation("),
-        "rename handler must call refresh_file_search_after_mutation"
+        rename_body.contains("begin_file_search_rename("),
+        "rename_path must start a rename in the input"
+    );
+    let finish = method_body("finish_file_search_rename");
+    assert!(
+        finish.contains("refresh_file_search_after_mutation("),
+        "rename finisher must call refresh_file_search_after_mutation"
     );
     assert!(
-        rename_body.contains("&path,") && rename_body.contains("Some(&new_path),"),
+        finish.contains("path,") && finish.contains("Some(&new_path),"),
         "rename must pass old_path then Some(new_path)"
     );
 }
 
 #[test]
 fn move_call_site_passes_old_path() {
+    // Move to… chooses a folder first; the move itself happens in the finisher.
     let move_section = FILES_SOURCE
-        .find("            \"move_path\" => {")
+        .find("            \"move_path\" | \"copy_to\" => {")
         .expect("move_path handler must exist");
-    let move_end = (move_section + 3000).min(FILES_SOURCE.len());
-    let move_body = &FILES_SOURCE[move_section..move_end];
-
+    let move_body = &FILES_SOURCE[move_section..(move_section + 1500).min(FILES_SOURCE.len())];
     assert!(
-        move_body.contains("refresh_file_search_after_mutation("),
-        "move handler must call refresh_file_search_after_mutation"
+        move_body.contains("begin_file_search_place_pick("),
+        "move_path must start choosing a folder"
+    );
+    let finish = method_body("finish_file_search_place");
+    assert!(
+        finish.contains("refresh_file_search_after_mutation("),
+        "move finisher must call refresh_file_search_after_mutation"
     );
     assert!(
-        move_body.contains("&path,") && move_body.contains("Some(&new_path),"),
+        finish.contains("path,") && finish.contains("Some(&new_path),"),
         "move must pass old_path then Some(new_path)"
     );
 }

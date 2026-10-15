@@ -202,6 +202,24 @@ pub(crate) fn root_file_actions_for(
 
     actions.extend([
         Action::new(
+            crate::action_helpers::ROOT_FILE_COPY_FILE_ACTION_ID,
+            "Copy File",
+            Some("Copies the file itself, ready to paste into Finder, Mail or a chat".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}C")
+        .with_icon(IconName::Copy)
+        .with_section("Share"),
+        Action::new(
+            crate::action_helpers::ROOT_FILE_PASTE_FILE_ACTION_ID,
+            "Paste File",
+            Some("Pastes the file into the app you were using".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}V")
+        .with_icon(IconName::Copy)
+        .with_section("Share"),
+        Action::new(
             crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
             "Reveal in Finder",
             Some("Shows this item in Finder".to_string()),
@@ -225,6 +243,7 @@ pub(crate) fn root_file_actions_for(
             Some("Copies only the file or folder name to the clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
+        .with_shortcut("\u{2318}\u{2325}C")
         .with_icon(IconName::Copy)
         .with_section("Share"),
         Action::new(
@@ -948,7 +967,7 @@ impl ScriptListApp {
             self.close_actions_popup(ActionsDialogHost::WebcamPrompt, window, cx);
         } else {
             let theme_arc = std::sync::Arc::clone(&self.theme);
-            let webcam_actions = Self::webcam_actions_for_dialog();
+            let webcam_actions = self.webcam_actions_for_dialog(cx);
 
             // Use native Action rows with default actions config so webcam uses the same
             // filtering/navigation behavior as the main actions dialog.

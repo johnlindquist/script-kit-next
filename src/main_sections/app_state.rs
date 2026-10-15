@@ -1585,6 +1585,18 @@ pub(crate) struct ScriptListApp {
     file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
+    /// A move or copy whose name is taken in the destination, waiting for Keep Both or Replace.
+    file_search_pending_place: Option<crate::file_search::PendingPlace>,
+    /// A rename typed in the main input while File Search stays open.
+    file_search_rename: Option<crate::file_search::FileRenameEdit>,
+    /// File Search choosing the folder for Move to… or Copy to….
+    file_search_place_pick: Option<crate::file_search::FilePlacePick>,
+    /// The file Open With… lists apps for.
+    file_search_open_with_target: Option<String>,
+    /// Takes back File Search's latest file change (rename, move, copy, trash) from ⌘Z while
+    /// File Search is open; the line's ⌘Z covers the main menu.
+    file_search_last_undo: Option<(u64, crate::one_window::ledger_view::LedgerRun)>,
+    file_search_undo_generation: u64,
     // Active sort mode for directory-browse file search views (session-local)
     file_search_sort_mode: crate::actions::FileSearchSortMode,
     // Generation counter for ignoring stale search results

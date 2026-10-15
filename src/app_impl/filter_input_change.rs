@@ -104,6 +104,13 @@ impl ScriptListApp {
             return;
         }
 
+        // While File Search borrows the input for a new name, typing edits the name only:
+        // the search, its list and its query stay as they were.
+        if self.file_search_renaming() {
+            self.file_search_rename_typed(cx);
+            return;
+        }
+
         let mut new_text = self.gpui_input_state.read(cx).value().to_string();
         // A finished `@` token becomes a chip; the sentence keeps every chip's token after the
         // words the input shows.

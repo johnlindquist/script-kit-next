@@ -519,6 +519,12 @@ impl ScriptListApp {
             file_search_current_dir_show_hidden: false,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
+            file_search_pending_place: None,
+            file_search_rename: None,
+            file_search_place_pick: None,
+            file_search_open_with_target: None,
+            file_search_last_undo: None,
+            file_search_undo_generation: 0,
             file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
             file_search_gen: 0,
             #[cfg(any(test, feature = "owned-ui-evaluation"))]
@@ -819,7 +825,13 @@ impl ScriptListApp {
                     let mut consumed = false;
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            consumed = this.try_handle_cwd_pick_nav_key(event, window, cx);
+                            consumed = this.try_handle_file_search_borrowed_key(
+                                &event.keystroke.key,
+                                &event.keystroke.modifiers,
+                                window,
+                                cx,
+                            )
+                                || this.try_handle_cwd_pick_nav_key(event, window, cx);
                         });
                     }
                     if consumed {

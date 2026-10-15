@@ -768,7 +768,7 @@ impl ScriptListApp {
                 #[cfg(target_os = "macos")]
                 {
                     let path_str = temp_path.to_string_lossy().to_string();
-                    if let Err(e) = crate::file_search::open_with(&path_str) {
+                    if let Err(e) = crate::file_search::show_info(&path_str) {
                         tracing::error!(error = %e, "failed to Open With");
                         self.notice_failed(external_action.open_with_failure_message(), cx);
                     }

@@ -444,6 +444,55 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Stages a short list of answers in place of the file-search list, the way ⌘K stages a
+    /// file's actions: `title` goes in the line, ↵ runs the highlighted answer, Esc lets go.
+    pub(crate) fn stage_file_search_choices(
+        &mut self,
+        title: String,
+        placeholder: String,
+        actions: Vec<crate::actions::Action>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.show_actions_popup {
+            self.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
+        }
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let context_title = Some(title.clone());
+        let dialog = cx.new(|cx| {
+            let mut dialog = ActionsDialog::from_actions_with_context(
+                cx.focus_handle(),
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                None,
+                None,
+                theme_arc,
+                crate::designs::DesignVariant::Default,
+                context_title,
+                crate::actions::ActionsDialogConfig::default(),
+            );
+            dialog.set_config(crate::actions::ActionsDialogConfig {
+                search_position: crate::actions::SearchPosition::Top,
+                section_style: crate::actions::SectionStyle::Headers,
+                anchor: crate::actions::AnchorPosition::Top,
+                show_icons: true,
+                search_placeholder: Some(placeholder),
+                show_context_header: false,
+                ..crate::actions::ActionsDialogConfig::default()
+            });
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+        self.one_window_stage_in_view(
+            ActionsDialogHost::FileSearch,
+            dialog,
+            Some(title),
+            window,
+            cx,
+        );
+        cx.notify();
+    }
+
     /// Toggle the actions dialog for a clipboard history entry
     fn toggle_clipboard_actions(
         &mut self,

@@ -267,6 +267,7 @@ impl crate::ScriptListApp {
             "queryStamp":self.root_search.query_stamp(),
             "selectionMode":match self.file_search_selection_mode { crate::FileSearchSelectionMode::AutoFirst => "AutoFirst", crate::FileSearchSelectionMode::UserLockedPath => "UserLockedPath" },
             "presentation":match presentation { crate::FileSearchPresentation::Full => "Full", crate::FileSearchPresentation::Mini => "Mini" },
+            "fileAction":self.owned_file_search_action_evidence(),
             "selectedPath":selected.map(|file| file.path.as_str()),"selectedOrdinal":selection.map(|selection| selection.display_index),
             "selectedSemanticId":selection.map(|selection| format!("file-search-row:{}",selection.display_index)),
             "rows":self.file_search_display_indices.iter().enumerate().filter_map(|(display_index, &result_index)| {
@@ -276,12 +277,31 @@ impl crate::ScriptListApp {
         }))
     }
 
+    /// What File Search is doing with the input besides searching: renaming (with the
+    /// typed name and whether ↵ would rename) or choosing a folder for a move or copy.
+    fn owned_file_search_action_evidence(&self) -> Value {
+        if let Some(edit) = &self.file_search_rename {
+            let preview = crate::file_search::file_ops::rename_preview(&edit.path, &edit.typed);
+            return json!({"mode":"rename","path":edit.path,"typedName":edit.typed,
+                "ready":preview.ready,"title":preview.title});
+        }
+        if let Some(pick) = &self.file_search_place_pick {
+            return json!({"mode":match pick.kind { crate::file_search::PlaceKind::Move => "move", crate::file_search::PlaceKind::Copy => "copy" },
+                "path":pick.path,"originQuery":pick.origin_query});
+        }
+        if let Some(pending) = &self.file_search_pending_place {
+            return json!({"mode":"nameTaken","path":pending.path,"destination":pending.destination_dir});
+        }
+        json!({"mode":"search"})
+    }
+
     pub(crate) fn owned_file_search_preview_evidence(&self) -> Option<Value> {
         let request = self.file_search_preview_request()?;
         let load_state = match &self.file_search_preview_thumbnail {
             crate::FileSearchThumbnailPreviewState::Idle => "idle",
             crate::FileSearchThumbnailPreviewState::Loading { .. } => "loading",
-            crate::FileSearchThumbnailPreviewState::Ready { .. } => "ready",
+            crate::FileSearchThumbnailPreviewState::Ready { .. }
+            | crate::FileSearchThumbnailPreviewState::Text { .. } => "ready",
             crate::FileSearchThumbnailPreviewState::Unavailable { .. } => "failed",
         };
         Some(

@@ -2543,7 +2543,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(cf.shortcut.as_deref(), Some("⌘C"));
+        assert_eq!(cf.shortcut.as_deref(), Some("⌘⌥C"));
     }
 
     // ============================================================
@@ -3365,7 +3365,7 @@ mod from_dialog_builtin_action_validation_tests_23 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(cf.shortcut.as_ref().unwrap(), "⌘C");
+        assert_eq!(cf.shortcut.as_ref().unwrap(), "⌘⌥C");
     }
 
     // ============================================================
@@ -5400,7 +5400,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         };
         let actions = get_file_context_actions(&f);
         // open_file, reveal, rename, move, duplicate, open_in_editor, open_in_quick_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 13
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 17);
     }
 
     #[cfg(target_os = "macos")]
@@ -5415,7 +5415,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let actions = get_file_context_actions(&f);
         // open_directory, reveal, rename, move, duplicate, open_in_editor, open_in_quick_terminal, show_info, copy_path, copy_filename, move_to_trash = 11
         // (no quick_look or attach_to_ai for dirs)
-        assert_eq!(actions.len(), 11);
+        assert_eq!(actions.len(), 15);
     }
 
     // ============================================================
@@ -7684,7 +7684,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     // ─────────────────────────────────────────────
 
     #[test]
-    fn cat27_09_file_copy_filename_shortcut_is_cmd_c() {
+    fn cat27_09_file_copy_filename_shortcut_is_cmd_alt_c() {
         let file = FileInfo {
             name: "test.txt".into(),
             path: "/tmp/test.txt".into(),
@@ -7696,7 +7696,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘C"));
+        assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘⌥C"));
     }
 
     #[test]
@@ -7713,7 +7713,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     }
 
     #[test]
-    fn cat27_09_file_dir_copy_filename_also_cmd_c() {
+    fn cat27_09_file_dir_copy_filename_also_cmd_alt_c() {
         let dir = FileInfo {
             name: "mydir".into(),
             path: "/tmp/mydir".into(),
@@ -7725,7 +7725,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
             .iter()
             .find(|a| a.id == "file:copy_filename")
             .unwrap();
-        assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘C"));
+        assert_eq!(copy_fn.shortcut.as_deref(), Some("⌘⌥C"));
     }
 
     // ─────────────────────────────────────────────

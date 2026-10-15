@@ -36,6 +36,15 @@ impl ScriptListApp {
         self.notice_failed_with_code(message, None, cx);
     }
 
+    /// [`Self::notice_failed`] for views outside the action handlers.
+    pub(crate) fn notice_failed_public(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.notice_failed(message, cx);
+    }
+
     /// Says in the line above the input that something worked.
     fn notice_done(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
         self.one_window_notice(crate::line_notice::DONE, message, cx);
@@ -655,6 +664,21 @@ impl ScriptListApp {
                 &start,
             );
             self.show_outcome_feedback(&favorites_outcome, cx);
+            return;
+        }
+
+        // File actions that borrow the input or stage a choice need the window now.
+        let windowed_file_outcome =
+            self.handle_windowed_file_action(&action_id_stripped, window, cx);
+        if windowed_file_outcome.was_handled() {
+            log_dispatch_outcome(
+                &action_id_stripped,
+                &dctx.trace_id,
+                "file",
+                &windowed_file_outcome,
+                &start,
+            );
+            self.show_outcome_feedback(&windowed_file_outcome, cx);
             return;
         }
 

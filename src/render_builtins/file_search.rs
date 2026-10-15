@@ -113,9 +113,110 @@ enum FileSearchThumbnailLoadFailure {
         max_dimension: u32,
     },
     UnsupportedFormat,
+    /// An iCloud file that isn't downloaded: reading it would start a download.
+    InCloud,
+    /// Looks like text by name but holds binary data.
+    NotText,
     UnableToGenerate {
         reason: String,
     },
+}
+
+/// The first lines of a text file, for the preview pane.
+#[derive(Debug)]
+struct FileSearchTextPreview {
+    text: String,
+    truncated: bool,
+    #[cfg(feature = "owned-ui-evaluation")]
+    content_hash: String,
+}
+
+/// What a preview load produced.
+#[derive(Debug)]
+enum FileSearchPreviewLoaded {
+    Image(FileSearchThumbnailPreviewImage),
+    Text(FileSearchTextPreview),
+}
+
+impl FileSearchPreviewLoaded {
+    #[cfg(feature = "owned-ui-evaluation")]
+    fn content_hash(&self) -> &str {
+        match self {
+            FileSearchPreviewLoaded::Image(image) => image.content_hash.as_str(),
+            FileSearchPreviewLoaded::Text(text) => text.content_hash.as_str(),
+        }
+    }
+}
+
+/// How much of a text file the preview reads, and how many lines it shows.
+const FILE_SEARCH_TEXT_PREVIEW_MAX_BYTES: usize = 16 * 1024;
+const FILE_SEARCH_TEXT_PREVIEW_MAX_LINES: usize = 40;
+
+/// Reads the start of a text file. Never reads an iCloud placeholder.
+fn load_file_search_text_preview(
+    path: &str,
+) -> Result<FileSearchTextPreview, FileSearchThumbnailLoadFailure> {
+    #[cfg(feature = "owned-ui-evaluation")]
+    use sha2::{Digest as _, Sha256};
+    use std::io::Read as _;
+
+    if file_search::is_cloud_placeholder(path) {
+        return Err(FileSearchThumbnailLoadFailure::InCloud);
+    }
+    if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+        policy
+            .require_owned_path(std::path::Path::new(path))
+            .map_err(|error| FileSearchThumbnailLoadFailure::UnableToGenerate {
+                reason: error.to_string(),
+            })?;
+    }
+    let file = std::fs::File::open(path).map_err(|error| {
+        FileSearchThumbnailLoadFailure::UnableToGenerate {
+            reason: error.to_string(),
+        }
+    })?;
+    let mut bytes = Vec::with_capacity(FILE_SEARCH_TEXT_PREVIEW_MAX_BYTES);
+    let read = file
+        .take(FILE_SEARCH_TEXT_PREVIEW_MAX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| FileSearchThumbnailLoadFailure::UnableToGenerate {
+            reason: error.to_string(),
+        })?;
+    let mut truncated = read > FILE_SEARCH_TEXT_PREVIEW_MAX_BYTES;
+    bytes.truncate(FILE_SEARCH_TEXT_PREVIEW_MAX_BYTES);
+    let (text, more) =
+        file_search::text_preview_from_bytes(&bytes, FILE_SEARCH_TEXT_PREVIEW_MAX_LINES)
+            .ok_or(FileSearchThumbnailLoadFailure::NotText)?;
+    truncated |= more;
+    Ok(FileSearchTextPreview {
+        #[cfg(feature = "owned-ui-evaluation")]
+        content_hash: format!("{:x}", Sha256::digest(text.as_bytes())),
+        text,
+        truncated,
+    })
+}
+
+fn load_file_search_preview(
+    path: &str,
+) -> Result<FileSearchPreviewLoaded, FileSearchThumbnailLoadFailure> {
+    if file_search_thumbnail_is_decodable_extension(path) {
+        return load_file_search_thumbnail_preview(
+            path,
+            FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES,
+            FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION,
+        )
+        .map(FileSearchPreviewLoaded::Image);
+    }
+    if file_search::is_text_preview_supported(path) {
+        return load_file_search_text_preview(path).map(FileSearchPreviewLoaded::Text);
+    }
+    Err(FileSearchThumbnailLoadFailure::UnsupportedFormat)
+}
+
+/// Whether the preview pane has something to load for this path.
+fn file_search_preview_supported(path: &str) -> bool {
+    file_search::is_thumbnail_preview_supported(path)
+        || file_search::is_text_preview_supported(path)
 }
 
 impl FileSearchThumbnailLoadFailure {
@@ -137,6 +238,12 @@ impl FileSearchThumbnailLoadFailure {
             }
             FileSearchThumbnailLoadFailure::UnsupportedFormat => {
                 "Preview not available for this format".to_string()
+            }
+            FileSearchThumbnailLoadFailure::InCloud => {
+                "In iCloud, not downloaded. Open it or Quick Look it to download.".to_string()
+            }
+            FileSearchThumbnailLoadFailure::NotText => {
+                "No text preview: this file holds binary data".to_string()
             }
             FileSearchThumbnailLoadFailure::UnableToGenerate { reason } => {
                 format!("Unable to generate preview: {reason}")
@@ -243,6 +350,9 @@ fn load_file_search_thumbnail_preview(
 
     if !file_search_thumbnail_is_decodable_extension(path) {
         return Err(FileSearchThumbnailLoadFailure::UnsupportedFormat);
+    }
+    if file_search::is_cloud_placeholder(path) {
+        return Err(FileSearchThumbnailLoadFailure::InCloud);
     }
 
     if let Some(policy) = crate::runtime_policy::owned_evaluation() {
@@ -481,8 +591,7 @@ impl ScriptListApp {
         selected_file: Option<&file_search::FileResult>,
         cx: &mut Context<Self>,
     ) {
-        let selected_file =
-            selected_file.filter(|file| file_search::is_thumbnail_preview_supported(&file.path));
+        let selected_file = selected_file.filter(|file| file_search_preview_supported(&file.path));
         let Some(file) = selected_file else {
             self.set_file_search_preview_request(None);
             if !matches!(
@@ -551,11 +660,7 @@ impl ScriptListApp {
             let (tx, rx) = std::sync::mpsc::channel();
             let path_for_decode = path.clone();
             std::thread::spawn(move || {
-                let result = load_file_search_thumbnail_preview(
-                    &path_for_decode,
-                    FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES,
-                    FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION,
-                );
+                let result = load_file_search_preview(&path_for_decode);
                 let _ = tx.send(result);
             });
 
@@ -582,7 +687,7 @@ impl ScriptListApp {
                         .map(|loaded| {
                             #[cfg(feature = "owned-ui-evaluation")]
                             {
-                                Some(loaded.content_hash.as_str())
+                                Some(loaded.content_hash())
                             }
                             #[cfg(not(feature = "owned-ui-evaluation"))]
                             {
@@ -629,7 +734,8 @@ impl ScriptListApp {
                             #[cfg(feature = "owned-ui-evaluation")]
                             {
                                 let mut installed_request = request.clone();
-                                installed_request.content_hash = Some(loaded.content_hash);
+                                installed_request.content_hash =
+                                    Some(loaded.content_hash().to_string());
                                 app.set_file_search_preview_request(Some(installed_request));
                             }
                             app.record_main_menu_preview_work_completion(
@@ -637,19 +743,35 @@ impl ScriptListApp {
                                 request.binding.clone(),
                                 "installed",
                             );
-                            tracing::debug!(
-                                path = %path,
-                                width = loaded.width,
-                                height = loaded.height,
-                                "file_search_thumbnail_preview_state_transition: ready"
-                            );
-                            app.file_search_preview_thumbnail =
-                                FileSearchThumbnailPreviewState::Ready {
-                                    path: path.clone(),
-                                    image: loaded.image,
-                                    width: loaded.width,
-                                    height: loaded.height,
-                                };
+                            app.file_search_preview_thumbnail = match loaded {
+                                FileSearchPreviewLoaded::Image(loaded) => {
+                                    tracing::debug!(
+                                        path = %path,
+                                        width = loaded.width,
+                                        height = loaded.height,
+                                        "file_search_thumbnail_preview_state_transition: ready"
+                                    );
+                                    FileSearchThumbnailPreviewState::Ready {
+                                        path: path.clone(),
+                                        image: loaded.image,
+                                        width: loaded.width,
+                                        height: loaded.height,
+                                    }
+                                }
+                                FileSearchPreviewLoaded::Text(loaded) => {
+                                    tracing::debug!(
+                                        path = %path,
+                                        bytes = loaded.text.len(),
+                                        truncated = loaded.truncated,
+                                        "file_search_text_preview_state_transition: ready"
+                                    );
+                                    FileSearchThumbnailPreviewState::Text {
+                                        path: path.clone(),
+                                        text: loaded.text.into(),
+                                        truncated: loaded.truncated,
+                                    }
+                                }
+                            };
                         }
                         Err(error) => {
                             app.record_main_menu_preview_work_completion(
@@ -805,6 +927,15 @@ impl ScriptListApp {
                             window,
                             cx,
                         );
+                        return;
+                    }
+                }
+
+                // Renaming or choosing a folder borrows the input: the interceptor owns
+                // ↵ and Esc, the input owns typing, and no file shortcut may act meanwhile.
+                if this.file_search_renaming() || this.file_search_picking_place() {
+                    let is_space = key.eq_ignore_ascii_case("space") || key_char == Some(" ");
+                    if this.file_search_renaming() || has_cmd || is_space {
                         return;
                     }
                 }
@@ -1017,8 +1148,15 @@ impl ScriptListApp {
                                         &format!("\"{}\" and opened {}", query, file.path),
                                     );
                                 }
-                                let _ = file_search::open_file(&file.path);
-                                this.close_and_reset_window(cx);
+                                if let Err(error) = file_search::open_file(&file.path) {
+                                    // Keep the window so the reason can be read.
+                                    this.notice_failed_public(
+                                        format!("Couldn't open it: {error}"),
+                                        cx,
+                                    );
+                                } else {
+                                    this.close_and_reset_window(cx);
+                                }
                             }
                         }
                         _ => {
@@ -1053,11 +1191,25 @@ impl ScriptListApp {
                                 let file_info = crate::file_search::FileInfo::from_result(&file);
                                 if let Some(action_id) =
                                     crate::actions::resolve_file_search_secondary_action_id(
-                                        key, has_cmd, has_shift, &file_info,
+                                        key,
+                                        has_cmd,
+                                        has_shift,
+                                        event.keystroke.modifiers.alt,
+                                        &file_info,
                                     )
                                 {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action(action_id.to_string(), window, cx);
+                                    // ⌘C with words selected in the input copies the words.
+                                    let input_has_selection = action_id == "copy_file"
+                                        && !this
+                                            .gpui_input_state
+                                            .read(cx)
+                                            .selected_range()
+                                            .is_empty();
+                                    if !input_has_selection {
+                                        this.file_search_actions_path = Some(file.path.clone());
+                                        this.handle_action(action_id.to_string(), window, cx);
+                                        cx.stop_propagation();
+                                    }
                                 }
                             }
                         }
@@ -1172,9 +1324,16 @@ impl ScriptListApp {
                                                                     file_path
                                                                 ),
                                                             );
-                                                            let _ =
-                                                                file_search::open_file(&file_path);
-                                                            this.close_and_reset_window(cx);
+                                                            if let Err(error) =
+                                                                file_search::open_file(&file_path)
+                                                            {
+                                                                this.notice_failed_public(
+                                                                    format!("Couldn't open it: {error}"),
+                                                                    cx,
+                                                                );
+                                                            } else {
+                                                                this.close_and_reset_window(cx);
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1273,8 +1432,7 @@ impl ScriptListApp {
                 FileType::File => "File",
                 FileType::Other => "File",
             };
-            let preview_supports_thumbnail =
-                file_search::is_thumbnail_preview_supported(&file.path);
+            let preview_supports_thumbnail = file_search_preview_supported(&file.path);
             let thumbnail_section = if preview_supports_thumbnail {
                 let preview_body = match &self.file_search_preview_thumbnail {
                     FileSearchThumbnailPreviewState::Ready {
@@ -1349,6 +1507,42 @@ impl ScriptListApp {
                             )
                             .into_any_element()
                     }
+                    FileSearchThumbnailPreviewState::Text {
+                        path,
+                        text,
+                        truncated,
+                    } if path == &file.path => div()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .gap(px(design_spacing.gap_sm))
+                        .child(
+                            div()
+                                .w_full()
+                                .max_h(px(FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX))
+                                .overflow_hidden()
+                                .font_family(self.theme_mono_font_family())
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .whitespace_normal()
+                                .children(text.split('\n').map(|line| {
+                                    div()
+                                        .min_h(px(14.0))
+                                        .whitespace_nowrap()
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .child(SharedString::from(line.to_string()))
+                                })),
+                        )
+                        .when(*truncated, |preview| {
+                            preview.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_dimmed))
+                                    .child("First lines shown"),
+                            )
+                        })
+                        .into_any_element(),
                     FileSearchThumbnailPreviewState::Unavailable { path, message }
                         if path == &file.path =>
                     {
@@ -1364,14 +1558,14 @@ impl ScriptListApp {
                             .w_full()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child("Loading thumbnail...")
+                            .child("Loading preview\u{2026}")
                             .into_any_element()
                     }
                     _ => div()
                         .w_full()
                         .text_sm()
                         .text_color(rgb(text_dimmed))
-                        .child("Loading thumbnail...")
+                        .child("Loading preview\u{2026}")
                         .into_any_element(),
                 };
                 #[cfg(feature = "owned-ui-evaluation")]
@@ -1573,7 +1767,10 @@ impl ScriptListApp {
         // ⌘↵ (Explain) / ⌘⇧↵ (Plan) are now visible in the footer
         // so users can discover them without guessing.
         let ai_hint = "⌘↵ Explain with AI · ⌘⇧↵ Plan with AI";
-        let file_search_hints = if self.is_in_attachment_portal() {
+        let borrowed_hints = self.file_search_borrowed_hints(selected_file.as_ref(), cx);
+        let file_search_hints = if let Some(hints) = borrowed_hints {
+            hints
+        } else if self.is_in_attachment_portal() {
             // Portal mode: simplified footer indicating attach context.
             let primary = if selected_file
                 .as_ref()
