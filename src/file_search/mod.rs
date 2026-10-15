@@ -126,8 +126,13 @@ pub const DEFAULT_SEARCH_LIMIT: usize = 500;
 /// Default cache limit for directory listing (fast operation, can handle more)
 /// Directory listing is cheaper than mdfind search (single readdir vs many stat calls)
 pub const DEFAULT_CACHE_LIMIT: usize = 2000;
-/// Maximum Spotlight results collected for root launcher file rows.
+/// Maximum root launcher file rows a Files source chip can page to.
 pub const ROOT_FILE_SOURCE_LIMIT: usize = 24;
+/// Clean Spotlight rows collected before ranking typed root and `@file:` queries.
+/// Spotlight returns matches in no useful order, so a small pool usually
+/// misses the best match for a broad query; 500 matches the low end of the
+/// usual launcher candidate budget and arrives in about the same time as 24.
+pub const ROOT_FILE_PROVIDER_POOL_LIMIT: usize = 500;
 /// Maximum root launcher file rows rendered under the Files section.
 pub const ROOT_FILE_RENDER_LIMIT: usize = 6;
 /// Maximum frecency-backed recent file rows rendered on the empty root launcher.
@@ -667,7 +672,7 @@ pub use directory::{
 pub use mdfind::{
     new_cancel_token, recent_files_filesystem, search_files, search_files_streaming,
     search_files_streaming_with_options, CancelToken, SearchEvent, SearchFailure,
-    SearchFilesStreamingOptions,
+    SearchFilesStreamingOptions, SearchNoiseFilter,
 };
 pub use os_open::{
     duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,

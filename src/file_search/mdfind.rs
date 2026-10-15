@@ -68,10 +68,38 @@ pub fn new_cancel_token() -> CancelToken {
     Arc::new(AtomicBool::new(false))
 }
 
+/// Spotlight rows a caller never shows. They are dropped as they arrive, before
+/// they count toward the search limit, so build folders and app internals can't
+/// use up the batch that ranking chooses from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SearchNoiseFilter {
+    #[default]
+    KeepAll,
+    /// `is_noisy_typed_file_path`: typed `@file:` and root Files queries.
+    TypedQuery,
+    /// `is_noisy_recent_file_path`: recently-used seeds.
+    RecentlyUsed,
+}
+
+impl SearchNoiseFilter {
+    pub fn rejects(self, path: &str) -> bool {
+        match self {
+            Self::KeepAll => false,
+            Self::TypedQuery => super::is_noisy_typed_file_path(path),
+            Self::RecentlyUsed => super::is_noisy_recent_file_path(path),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SearchFilesStreamingOptions {
     pub skip_metadata: bool,
     pub allow_filesystem_fallback: bool,
+    pub noise: SearchNoiseFilter,
+    /// When Spotlight is still streaming at the source deadline, finish with the
+    /// rows that already arrived instead of failing the batch. Only an empty
+    /// batch still fails with `TimedOut`.
+    pub keep_partial_on_deadline: bool,
 }
 
 impl SearchFilesStreamingOptions {
@@ -79,13 +107,20 @@ impl SearchFilesStreamingOptions {
         Self {
             skip_metadata,
             allow_filesystem_fallback: true,
+            noise: SearchNoiseFilter::KeepAll,
+            keep_partial_on_deadline: false,
         }
     }
 
+    /// Candidate pool for ranked root and `@file:` rows: Spotlight returns
+    /// matches in no useful order, so the pool is collected clean and ranked
+    /// afterwards.
     pub fn root_search() -> Self {
         Self {
             skip_metadata: true,
             allow_filesystem_fallback: false,
+            noise: SearchNoiseFilter::TypedQuery,
+            keep_partial_on_deadline: true,
         }
     }
 }
@@ -227,7 +262,7 @@ fn stream_file_search<F: FnMut(SearchEvent)>(
         child,
         limit,
         cancel,
-        options.skip_metadata,
+        options,
         Instant::now() + MDFIND_TIMEOUT,
         on_event,
     )?;
@@ -250,7 +285,7 @@ fn stream_mdfind_child<F: FnMut(SearchEvent)>(
     mut child: Child,
     limit: usize,
     cancel: &CancelToken,
-    skip_metadata: bool,
+    options: SearchFilesStreamingOptions,
     deadline: Instant,
     on_event: &mut F,
 ) -> Result<usize, SearchFailure> {
@@ -276,13 +311,19 @@ fn stream_mdfind_child<F: FnMut(SearchEvent)>(
         if cancel.load(Ordering::Relaxed) {
             break Err(SearchFailure::Cancelled);
         }
-        if count >= limit {
+        // A partial pool also ends at the deadline while rows are still arriving.
+        if count >= limit
+            || (options.keep_partial_on_deadline && count > 0 && Instant::now() >= deadline)
+        {
             limited = true;
             break Ok(());
         }
         match line_rx.recv_timeout(MDFIND_POLL_INTERVAL) {
             Ok(Ok(Some(line))) => {
-                if let Some(result) = file_result_from_mdfind_line(line, skip_metadata) {
+                if options.noise.rejects(&line) {
+                    continue;
+                }
+                if let Some(result) = file_result_from_mdfind_line(line, options.skip_metadata) {
                     on_event(SearchEvent::Result(result));
                     count += 1;
                 }
@@ -292,6 +333,11 @@ fn stream_mdfind_child<F: FnMut(SearchEvent)>(
             Err(RecvTimeoutError::Disconnected) => break Err(SearchFailure::Disconnected),
             Err(RecvTimeoutError::Timeout) => {
                 if Instant::now() >= deadline {
+                    if options.keep_partial_on_deadline && count > 0 {
+                        // Like reaching the limit: stop mdfind and keep the rows.
+                        limited = true;
+                        break Ok(());
+                    }
                     break Err(std::io::Error::new(
                         std::io::ErrorKind::TimedOut,
                         "mdfind exceeded its source deadline",
@@ -701,7 +747,7 @@ mod tests {
             child,
             10,
             &super::new_cancel_token(),
-            true,
+            SearchFilesStreamingOptions::dedicated_file_search(true),
             super::Instant::now() + super::MDFIND_TIMEOUT,
             &mut |event| {
                 if let super::SearchEvent::Result(row) = event {
@@ -711,6 +757,96 @@ mod tests {
         );
         assert_eq!(rows.len(), 1);
         assert!(matches!(outcome, Err(super::SearchFailure::Source(_))));
+    }
+
+    fn stream_script(
+        script: &str,
+        limit: usize,
+        options: SearchFilesStreamingOptions,
+        deadline: std::time::Duration,
+    ) -> (Vec<String>, Result<usize, super::SearchFailure>) {
+        let child = super::Command::new("/bin/sh")
+            .args(["-c", script])
+            .stdout(super::Stdio::piped())
+            .spawn()
+            .expect("spawn source process");
+        let mut rows = Vec::new();
+        let outcome = super::stream_mdfind_child(
+            child,
+            limit,
+            &super::new_cancel_token(),
+            options,
+            super::Instant::now() + deadline,
+            &mut |event| {
+                if let super::SearchEvent::Result(row) = event {
+                    rows.push(row.path);
+                }
+            },
+        );
+        (rows, outcome)
+    }
+
+    #[test]
+    fn noisy_rows_do_not_use_up_the_ranking_pool() {
+        let (rows, outcome) = stream_script(
+            "printf '/p/node_modules/a.js\\n/p/.git/HEAD\\n/p/target/x.o\\n/p/keep-1.md\\n/p/keep-2.md\\n/p/keep-3.md\\n'",
+            2,
+            SearchFilesStreamingOptions::root_search(),
+            super::MDFIND_TIMEOUT,
+        );
+        assert_eq!(rows, ["/p/keep-1.md", "/p/keep-2.md"]);
+        assert_eq!(outcome.expect("limit reached"), 2);
+    }
+
+    #[test]
+    fn dedicated_search_still_counts_every_row() {
+        let (rows, _) = stream_script(
+            "printf '/p/node_modules/a.js\\n/p/keep-1.md\\n/p/keep-2.md\\n'",
+            2,
+            SearchFilesStreamingOptions::dedicated_file_search(true),
+            super::MDFIND_TIMEOUT,
+        );
+        assert_eq!(rows, ["/p/node_modules/a.js", "/p/keep-1.md"]);
+    }
+
+    #[test]
+    fn ranking_pool_keeps_rows_that_arrived_before_the_deadline() {
+        let started = std::time::Instant::now();
+        let (rows, outcome) = stream_script(
+            // `exec` keeps one process, like mdfind, so killing it closes the pipe.
+            "printf '/p/early.md\\n'; exec sleep 5",
+            500,
+            SearchFilesStreamingOptions::root_search(),
+            std::time::Duration::from_millis(300),
+        );
+        assert_eq!(rows, ["/p/early.md"]);
+        assert_eq!(outcome.expect("partial pool is a success"), 1);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(3),
+            "mdfind is stopped at the deadline"
+        );
+    }
+
+    #[test]
+    fn deadline_with_no_rows_still_fails_and_dedicated_search_stays_strict() {
+        let (_, empty) = stream_script(
+            "exec sleep 5",
+            500,
+            SearchFilesStreamingOptions::root_search(),
+            std::time::Duration::from_millis(200),
+        );
+        assert!(
+            matches!(empty, Err(super::SearchFailure::Source(ref e)) if e.kind() == std::io::ErrorKind::TimedOut)
+        );
+        let (_, strict) = stream_script(
+            "printf '/p/early.md\\n'; exec sleep 5",
+            500,
+            SearchFilesStreamingOptions::dedicated_file_search(true),
+            std::time::Duration::from_millis(200),
+        );
+        assert!(
+            matches!(strict, Err(super::SearchFailure::Source(ref e)) if e.kind() == std::io::ErrorKind::TimedOut)
+        );
     }
 
     #[test]

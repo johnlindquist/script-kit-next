@@ -3,10 +3,9 @@ use super::*;
 const ROOT_FILE_RESULT_CACHE_LIMIT: usize = 24;
 const ROOT_FILE_SEARCH_DEBOUNCE_MS: u64 = 60;
 const SPINE_FILE_SEARCH_DEBOUNCE_MS: u64 = 80;
-/// Spotlight hits collected for a typed `@file:`/`@project:` sub-query before
-/// noise filtering and ranking. Larger than the render limit so ranking has
-/// real choices and build-folder noise can't use up the whole batch.
-const SPINE_FILE_QUERY_SOURCE_LIMIT: usize = crate::file_search::ROOT_FILE_SOURCE_LIMIT * 4;
+/// Clean Spotlight hits collected for a typed `@file:`/`@project:` sub-query
+/// before ranking; noise is dropped before it counts.
+const SPINE_FILE_QUERY_SOURCE_LIMIT: usize = crate::file_search::ROOT_FILE_PROVIDER_POOL_LIMIT;
 
 enum MainFileWorkerEvent {
     Result(crate::file_search::FileResult),
@@ -747,7 +746,7 @@ impl ScriptListApp {
                         crate::file_search::search_files_streaming_with_options(
                             &provider_query,
                             None,
-                            crate::file_search::ROOT_FILE_SOURCE_LIMIT,
+                            crate::file_search::ROOT_FILE_PROVIDER_POOL_LIMIT,
                             producer_cancel,
                             crate::file_search::SearchFilesStreamingOptions::root_search(),
                             emit,
@@ -1378,6 +1377,8 @@ impl SpineFileSearchRequest {
                     SearchFilesStreamingOptions {
                         skip_metadata: true,
                         allow_filesystem_fallback: true,
+                        noise: crate::file_search::SearchNoiseFilter::TypedQuery,
+                        keep_partial_on_deadline: true,
                     },
                     &mut emit,
                 )
@@ -1390,6 +1391,8 @@ impl SpineFileSearchRequest {
                 SearchFilesStreamingOptions {
                     skip_metadata: false,
                     allow_filesystem_fallback: false,
+                    noise: crate::file_search::SearchNoiseFilter::RecentlyUsed,
+                    keep_partial_on_deadline: true,
                 },
                 &mut emit,
             ),
@@ -1405,6 +1408,8 @@ impl SpineFileSearchRequest {
                         SearchFilesStreamingOptions {
                             skip_metadata: false,
                             allow_filesystem_fallback: false,
+                            noise: crate::file_search::SearchNoiseFilter::RecentlyUsed,
+                            keep_partial_on_deadline: true,
                         },
                         &mut emit,
                     );
