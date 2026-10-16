@@ -115,6 +115,49 @@ Agent Chat (double-tap the main hotkey, or `⌘⇧Space`) stages context for the
 - **Add to AI** — surfaces like clipboard history and file search have "Attach to Agent Chat" actions (`⌃⌘A` in clipboard history).
 - Context resolution is tolerant: if one part fails (e.g. no browser detected), the rest still submit and the failure is recorded in a resolution receipt.
 
+## What Agent Chat Can Do
+
+The General, Brain, and Script Kit profiles give the model these tools. Text and Quick AI stay limited to web search.
+
+| Tools | What they do | Profiles |
+|---|---|---|
+| Web search, web fetch | Look things up and read pages | All three |
+| Read, find, grep, ls, desktop search | Read files and search the Mac | All three (General and Brain read only their own workspace) |
+| Create file | Make a new file; never overwrites | General, Brain |
+| Write, edit, shell | Change files and run commands | Script Kit |
+| Script Kit actions | Notes, clipboard history, scripts, settings, launcher state, apps and windows, `kit://` resources, past chats | All three |
+| Your MCP servers | Every server under `mcp.servers` in `config.ts` | All three |
+| Subagents, skills, todo list | Hand work to a helper, load a skill from `~/.agents/skills` or `~/.claude/skills`, keep a task list | All three |
+
+The model also reads `AGENTS.md` (and `.goosehints`) from the chat's working folder.
+
+### Approvals
+
+Pick how much the model may do before it asks: press `⌘K` in a chat and choose one of the modes below. The choice is saved as `ai.agentApprovalMode` in `config.ts`.
+
+- **Ask before changes** (default) asks before anything changes. That covers file writes and edits, commands, notes, settings, clipboard, and subagents. Reading, searching, and the todo list never ask.
+- **Accept file edits** lets file writes and edits through without asking; you can revert them. Commands and other changes still ask.
+- **Full access** never asks.
+
+When a prompt appears, you can allow once, always allow that tool, decline once, or never allow it. "Always" and "never" are remembered for that tool.
+
+Subagents themselves run without asking, so starting one always asks first unless you're in Full access.
+
+### Undo, steer, and retry
+
+These also live in the chat's `⌘K` menu:
+
+- **Revert the model's file changes** puts back every file the latest turn wrote, edited, or created. **Undo the revert** brings them back. A file you changed yourself in the meantime is left alone and reported. Changes made by shell commands can't be reverted.
+- **Edit your last message** goes back to before your last message and puts it in the composer.
+- **Ask again for a new reply** sends your last message again from before the reply.
+- **Steering:** typing while the model is working adds your message to the running turn instead of waiting for it to finish. If the model can't take it mid-turn, it's queued.
+
+### Limits
+
+- MCP server headers and environment values are passed to the agent runtime and can end up in its local session history under the kit.
+- A reopened past chat starts a new session with the earlier transcript attached; it doesn't continue the old session.
+- Going back relies on message timestamps, so two messages sent within the same instant can't be separated.
+
 ## Best Practices
 
 - Re-read `~/.scriptkit/server.json` after every app restart.

@@ -5,9 +5,17 @@
 //! its id in the `X-Script-Kit-Agent-Policy` header; the policy decides which
 //! tools the session sees, which paths they may touch, and how many web
 //! searches one turn may run. Requests without a known policy see no tools.
+//!
+//! A policy that allows `app` also sees Script Kit's own app actions and data
+//! (see [`app`]). `write` and `edit` record what they replace so the user can
+//! revert a turn's file changes (see [`changes`]).
 
+mod app;
+mod changes;
 mod files;
 mod web;
+
+pub(crate) use changes::{ChangeSummary, RevertReport};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -111,13 +119,34 @@ pub(crate) fn register_policy(policy: AgentToolPolicy) -> String {
 
 pub(crate) fn unregister_policy(id: &str) {
     REGISTRY.lock().remove(id);
+    changes::forget(id);
 }
 
-/// A new user turn starts: per-turn budgets reset.
+/// A new user turn starts: per-turn budgets reset and file changes start a
+/// new revertible group.
 pub(crate) fn begin_turn(id: &str) {
     if let Some(state) = REGISTRY.lock().get_mut(id) {
         state.searches_this_turn = 0;
     }
+    changes::begin_turn(id);
+}
+
+#[allow(dead_code)] // The lib target has no one-window host.
+/// Files the session's latest file-changing turn touched.
+pub(crate) fn file_changes(id: &str) -> Option<ChangeSummary> {
+    changes::latest(id)
+}
+
+/// Put back what the session's latest file-changing turn replaced.
+#[allow(dead_code)] // The lib target has no one-window host.
+pub(crate) fn revert_file_changes(id: &str) -> Result<RevertReport, String> {
+    changes::revert_latest(id)
+}
+
+/// Bring back what the last revert replaced.
+#[allow(dead_code)] // The lib target has no one-window host.
+pub(crate) fn undo_file_revert(id: &str) -> Result<RevertReport, String> {
+    changes::undo_revert(id)
 }
 
 fn policy_for(id: Option<&str>) -> Option<AgentToolPolicy> {
@@ -151,7 +180,11 @@ pub(crate) enum AgentRpcReply {
     Accepted,
 }
 
-pub(crate) fn handle_rpc(policy_id: Option<&str>, body: &str) -> AgentRpcReply {
+pub(crate) fn handle_rpc(
+    policy_id: Option<&str>,
+    body: &str,
+    runtime: Option<&crate::mcp_protocol::McpRuntimeContext>,
+) -> AgentRpcReply {
     let message: Value = match serde_json::from_str(body) {
         Ok(message) => message,
         Err(error) => {
@@ -185,7 +218,7 @@ pub(crate) fn handle_rpc(policy_id: Option<&str>, body: &str) -> AgentRpcReply {
         })),
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": tool_list(policy_for(policy_id).as_ref()) })),
-        "tools/call" => Ok(call_tool(policy_id, &params)),
+        "tools/call" => Ok(call_tool(policy_id, &params, runtime)),
         _ => Err((-32601, format!("Method not found: {method}"))),
     };
     let reply = match outcome {
@@ -203,7 +236,11 @@ struct ToolDef {
     name: &'static str,
     description: &'static str,
     schema: fn() -> Value,
+    read_only: bool,
 }
+
+/// Profile tool id that admits Script Kit's app actions and data.
+pub(crate) const APP_TOOLS_ID: &str = "app";
 
 const TOOLS: &[ToolDef] = &[
     ToolDef {
@@ -217,6 +254,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["query"]
         }),
+        read_only: true,
     },
     ToolDef {
         name: "web_fetch",
@@ -229,6 +267,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["url"]
         }),
+        read_only: true,
     },
     ToolDef {
         name: "read",
@@ -242,6 +281,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["path"]
         }),
+        read_only: true,
     },
     ToolDef {
         name: "ls",
@@ -250,6 +290,7 @@ const TOOLS: &[ToolDef] = &[
             "type": "object",
             "properties": { "path": { "type": "string", "description": "Directory (defaults to the working directory)" } }
         }),
+        read_only: true,
     },
     ToolDef {
         name: "find",
@@ -262,6 +303,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["pattern"]
         }),
+        read_only: true,
     },
     ToolDef {
         name: "grep",
@@ -275,6 +317,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["pattern"]
         }),
+        read_only: true,
     },
     ToolDef {
         name: "create_file",
@@ -287,6 +330,7 @@ const TOOLS: &[ToolDef] = &[
             },
             "required": ["path", "content"]
         }),
+        read_only: false,
     },
     ToolDef {
         name: "desktop_search",
@@ -296,6 +340,35 @@ const TOOLS: &[ToolDef] = &[
             "properties": { "query": { "type": "string" } },
             "required": ["query"]
         }),
+        read_only: true,
+    },
+    ToolDef {
+        name: "write",
+        description: "Write a whole file, creating it (and its folders) if needed. Replaces existing content; prefer edit for small changes. The user can revert your file changes.",
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "content": { "type": "string" }
+            },
+            "required": ["path", "content"]
+        }),
+        read_only: false,
+    },
+    ToolDef {
+        name: "edit",
+        description: "Replace exact text in a file. old_string must match exactly once (include surrounding lines) unless replace_all is true. Read the file first.",
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" },
+                "old_string": { "type": "string" },
+                "new_string": { "type": "string" },
+                "replace_all": { "type": "boolean" }
+            },
+            "required": ["path", "old_string", "new_string"]
+        }),
+        read_only: false,
     },
 ];
 
@@ -303,25 +376,56 @@ fn tool_list(policy: Option<&AgentToolPolicy>) -> Vec<Value> {
     let Some(policy) = policy else {
         return Vec::new();
     };
-    TOOLS
+    let mut listed: Vec<Value> = TOOLS
         .iter()
         .filter(|tool| policy.allows(tool.name))
-        .map(|tool| {
-            json!({
-                "name": tool.name,
-                "description": tool.description,
-                "inputSchema": (tool.schema)(),
-            })
-        })
-        .collect()
+        .map(|tool| listed_tool(tool.name, tool.description, (tool.schema)(), tool.read_only))
+        .collect();
+    if policy.allows(APP_TOOLS_ID) {
+        listed.extend(
+            app::tools().into_iter().map(|tool| {
+                listed_tool(&tool.name, &tool.description, tool.schema, tool.read_only)
+            }),
+        );
+    }
+    listed
 }
 
-fn call_tool(policy_id: Option<&str>, params: &Value) -> Value {
+/// One `tools/list` entry. Annotations let the engine run read-only tools
+/// without asking while an approval mode asks before everything else.
+fn listed_tool(name: &str, description: &str, schema: Value, read_only: bool) -> Value {
+    json!({
+        "name": name,
+        "description": description,
+        "inputSchema": schema,
+        "annotations": {
+            "readOnlyHint": read_only,
+            "destructiveHint": !read_only,
+            "openWorldHint": false,
+        },
+    })
+}
+
+fn call_tool(
+    policy_id: Option<&str>,
+    params: &Value,
+    runtime: Option<&crate::mcp_protocol::McpRuntimeContext>,
+) -> Value {
     let name = params
         .get("name")
         .and_then(Value::as_str)
         .unwrap_or_default();
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
+    let builtin = TOOLS.iter().any(|tool| tool.name == name);
+    if !builtin {
+        let app_tool = policy_for(policy_id)
+            .filter(|policy| policy.allows(APP_TOOLS_ID))
+            .and_then(|_| app::find(name));
+        return match app_tool {
+            Some(tool) => app::call(&tool, args, runtime).unwrap_or_else(tool_error),
+            None => tool_error(format!("The {name} tool is not available in this session.")),
+        };
+    }
     let Some(policy) = policy_for(policy_id).filter(|policy| policy.allows(name)) else {
         return tool_error(format!("The {name} tool is not available in this session."));
     };
@@ -339,7 +443,9 @@ fn call_tool(policy_id: Option<&str>, params: &Value) -> Value {
         "ls" => files::ls(&policy, &args),
         "find" => files::find(&policy, &args),
         "grep" => files::grep(&policy, &args),
-        "create_file" => files::create_file(&policy, &args),
+        "create_file" => files::create_file(&policy, policy_id, &args),
+        "write" => files::write(&policy, policy_id, &args),
+        "edit" => files::edit(&policy, policy_id, &args),
         "desktop_search" => files::desktop_search(&args),
         _ => Err(format!("Unknown tool: {name}")),
     };
@@ -375,7 +481,7 @@ mod tests {
     }
 
     fn rpc(policy_id: Option<&str>, body: Value) -> Value {
-        match handle_rpc(policy_id, &body.to_string()) {
+        match handle_rpc(policy_id, &body.to_string(), None) {
             AgentRpcReply::Json(text) => serde_json::from_str(&text).unwrap(),
             AgentRpcReply::Accepted => Value::Null,
         }
@@ -386,7 +492,8 @@ mod tests {
         assert_eq!(
             handle_rpc(
                 None,
-                r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+                None
             ),
             AgentRpcReply::Accepted
         );
@@ -423,6 +530,85 @@ mod tests {
         );
         assert_eq!(call["result"]["isError"], true);
         unregister_policy(&id);
+    }
+
+    #[test]
+    fn write_and_edit_stay_in_the_write_roots_and_can_be_reverted() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let file = root.join("notes.txt");
+        std::fs::write(&file, "alpha beta").unwrap();
+        let id = register_policy(AgentToolPolicy {
+            allowed_tools: vec!["write".into(), "edit".into()],
+            cwd: root.clone(),
+            read_roots: Some(vec![root.clone()]),
+            write_roots: Some(vec![root.clone()]),
+            web_search_budget: None,
+        });
+        begin_turn(&id);
+        let edit = rpc(
+            Some(&id),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"edit","arguments":{"path":"notes.txt","old_string":"beta","new_string":"gamma"}}}),
+        );
+        assert_eq!(edit["result"]["isError"], false, "{edit}");
+        let outside = rpc(
+            Some(&id),
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"write","arguments":{"path":"/tmp/sk-agent-outside.txt","content":"x"}}}),
+        );
+        assert_eq!(outside["result"]["isError"], true);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "alpha gamma");
+        assert_eq!(file_changes(&id).unwrap().paths, vec![file.clone()]);
+        revert_file_changes(&id).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "alpha beta");
+        undo_file_revert(&id).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "alpha gamma");
+        unregister_policy(&id);
+    }
+
+    #[test]
+    fn app_tools_need_the_app_grant_and_carry_read_only_hints() {
+        let without = register_policy(policy(&["read"], None));
+        let listed = rpc(
+            Some(&without),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
+        );
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            listed["result"]["tools"][0]["annotations"]["readOnlyHint"],
+            true
+        );
+        let call = rpc(
+            Some(&without),
+            json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"kit_resources","arguments":{}}}),
+        );
+        assert_eq!(call["result"]["isError"], true);
+        unregister_policy(&without);
+
+        let with = register_policy(policy(&[APP_TOOLS_ID], None));
+        let listed = rpc(
+            Some(&with),
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}),
+        );
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        let find = |name: &str| tools.iter().find(|tool| tool["name"] == name).cloned();
+        assert_eq!(
+            find("kit_read").unwrap()["annotations"]["readOnlyHint"],
+            true
+        );
+        assert_eq!(
+            find("kit_notes_delete").unwrap()["annotations"]["readOnlyHint"],
+            false
+        );
+        let call = rpc(
+            Some(&with),
+            json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"kit_resources","arguments":{}}}),
+        );
+        assert_eq!(call["result"]["isError"], false, "{call}");
+        assert!(call["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("kit://calendar"));
+        unregister_policy(&with);
     }
 
     #[test]

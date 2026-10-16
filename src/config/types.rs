@@ -1168,6 +1168,11 @@ pub struct AiPreferences {
     /// built-in `quick-ai` id keeps the pinned fast zero-context default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_ai_profile_id: Option<String>,
+
+    /// How much the model may do before it asks: `askBeforeChanges` (default),
+    /// `acceptEdits`, or `fullAccess`. See `ai::agent_chat::approval`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_approval_mode: Option<String>,
 }
 
 /// A pre-configured Agent Chat profile authored in `config.ts`.

@@ -6,6 +6,8 @@ pub(crate) mod auth_recovery;
 pub mod binary;
 pub(crate) mod events;
 pub(crate) mod launch_spec;
+#[cfg(test)]
+mod live_tests;
 pub(crate) mod oneshot;
 pub(crate) mod protocol;
 pub(crate) mod recipe;

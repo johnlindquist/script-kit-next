@@ -91,6 +91,8 @@ pub(crate) enum AgentChatEvent {
     SignInStarted { provider: String },
     /// The provider sign-in finished; the waiting turn is continuing.
     SignInCompleted { provider: String },
+    /// The model wants to run a tool and the person decides.
+    ApprovalRequested(Box<super::permission_broker::AgentChatApprovalRequest>),
     /// The turn reached a typed non-failure terminal outcome.
     TurnCompleted {
         outcome: crate::ai::reliability::AiTurnRuntimeOutcome,

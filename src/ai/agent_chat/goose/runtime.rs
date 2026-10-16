@@ -17,6 +17,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::ai::agent_chat::approval::AgentApprovalMode;
 use crate::ai::agent_chat::events::{AgentChatEvent, AgentChatEventRx};
 use crate::ai::agent_chat::reveal::REVEAL_CHUNK_DELAY_MS;
 use crate::ai::agent_chat::runtime::{
@@ -53,6 +54,24 @@ enum GooseCommand {
     },
     CancelTurn {
         ui_thread_id: String,
+    },
+    /// Switch how much the model may do before it asks.
+    SetApprovalMode {
+        mode: AgentApprovalMode,
+    },
+    /// Add a message to the turn that is running.
+    Steer {
+        blocks: Vec<crate::ai::agent_chat::content::ContentBlock>,
+        reply: async_channel::Sender<std::result::Result<(), String>>,
+    },
+    /// List the user messages the session can go back to.
+    ForkPoints {
+        event_tx: AgentChatEventTx,
+    },
+    /// Continue in a copy of the session that ends just before a user message.
+    ForkTo {
+        entry_id: String,
+        event_tx: AgentChatEventTx,
     },
 }
 
@@ -174,6 +193,43 @@ impl AgentChatConnection for GooseRuntime {
         self.send(GooseCommand::PrepareSession { event_tx })?;
         Ok(event_rx)
     }
+
+    fn fork_points(&self) -> crate::ai::reliability::AiAdapterResult<AgentChatEventRx> {
+        let (event_tx, event_rx) = async_channel::bounded(4);
+        self.send(GooseCommand::ForkPoints { event_tx })?;
+        Ok(event_rx)
+    }
+
+    fn fork_to_entry(
+        &self,
+        entry_id: String,
+    ) -> crate::ai::reliability::AiAdapterResult<AgentChatEventRx> {
+        let (event_tx, event_rx) = async_channel::bounded(4);
+        self.send(GooseCommand::ForkTo { entry_id, event_tx })?;
+        Ok(event_rx)
+    }
+
+    fn steer(
+        &self,
+        blocks: Vec<crate::ai::agent_chat::content::ContentBlock>,
+    ) -> crate::ai::reliability::AiAdapterResult<
+        async_channel::Receiver<std::result::Result<(), String>>,
+    > {
+        let (reply, rx) = async_channel::bounded(1);
+        self.send(GooseCommand::Steer { blocks, reply })?;
+        Ok(rx)
+    }
+
+    fn set_approval_mode(
+        &self,
+        mode: AgentApprovalMode,
+    ) -> crate::ai::reliability::AiAdapterResult<()> {
+        self.send(GooseCommand::SetApprovalMode { mode })
+    }
+
+    fn tool_session_id(&self) -> Option<String> {
+        self.spec.agent_policy_id.clone()
+    }
 }
 
 impl Drop for GooseRuntime {
@@ -234,6 +290,9 @@ struct Shared {
     pending: HashMap<u64, oneshot::Sender<Result<Value, AcpError>>>,
     active_turn: Option<ActiveTurn>,
     session_id: Option<String>,
+    /// The run goose is executing for this session (needed to steer it).
+    active_run_id: Option<String>,
+    approval_mode: AgentApprovalMode,
     /// A credential hint goose printed on stderr, kept so an exit it explains
     /// classifies as a sign-in problem rather than a dropped connection.
     stderr_auth_hint: Option<String>,
@@ -364,7 +423,10 @@ async fn run_event_loop(
     let stdout = child.stdout.take().context("goose stdout unavailable")?;
     let stderr = child.stderr.take().context("goose stderr unavailable")?;
 
-    let shared: SharedState = Arc::new(Mutex::new(Shared::default()));
+    let shared: SharedState = Arc::new(Mutex::new(Shared {
+        approval_mode: spec.approval_mode,
+        ..Shared::default()
+    }));
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Value>();
 
     tokio::spawn(async move {
@@ -545,6 +607,57 @@ async fn run_event_loop(
                     }
                 }
             }
+            GooseCommand::SetApprovalMode { mode } => {
+                shared.lock().approval_mode = mode;
+                if let Some(state) = session.as_ref() {
+                    let result = connection
+                        .call(
+                            "session/set_mode",
+                            json!({ "sessionId": state.session_id, "modeId": mode.goose_mode() }),
+                            CONFIG_TIMEOUT,
+                        )
+                        .await;
+                    tracing::info!(
+                        target: "script_kit::agent_chat",
+                        event = "goose_approval_mode_set",
+                        mode = mode.id(),
+                        ok = result.is_ok(),
+                    );
+                }
+            }
+            GooseCommand::Steer { blocks, reply } => {
+                let outcome = steer(&mut connection, &shared, &blocks).await;
+                let _ = reply.send(outcome).await;
+            }
+            GooseCommand::ForkPoints { event_tx } => {
+                let event = match session.as_ref() {
+                    Some(state) => match export_session(&mut connection, &state.session_id).await {
+                        Ok(exported) => AgentChatEvent::ForkPointsAvailable {
+                            entries: user_fork_points(&exported),
+                        },
+                        Err(failure) => AgentChatEvent::TurnFailed { failure: *failure },
+                    },
+                    None => AgentChatEvent::ForkPointsAvailable {
+                        entries: Vec::new(),
+                    },
+                };
+                let _ = tokio::time::timeout(SEND_TIMEOUT, event_tx.send(event)).await;
+            }
+            GooseCommand::ForkTo { entry_id, event_tx } => {
+                let event = match session.as_mut() {
+                    Some(state) => {
+                        match fork_before(&mut connection, &spec, state, &entry_id).await {
+                            Ok(text) => AgentChatEvent::ForkCompleted { text },
+                            Err(failure) => AgentChatEvent::TurnFailed { failure: *failure },
+                        }
+                    }
+                    None => AgentChatEvent::failed(
+                        ProtocolComponent::Goose,
+                        "there is no conversation to go back in yet",
+                    ),
+                };
+                let _ = tokio::time::timeout(SEND_TIMEOUT, event_tx.send(event)).await;
+            }
         }
     }
 
@@ -605,6 +718,14 @@ async fn ensure_session<'a>(
                     .ok();
             }
         }
+        let mode = connection.shared.lock().approval_mode;
+        let _ = connection
+            .call(
+                "session/set_mode",
+                json!({ "sessionId": state.session_id, "modeId": mode.goose_mode() }),
+                CONFIG_TIMEOUT,
+            )
+            .await;
         tracing::info!(
             target: "script_kit::agent_chat",
             event = "goose_acp_session_ready",
@@ -680,6 +801,7 @@ async fn read_stdout(
     // Citation markers can span chunks; track them per turn.
     let mut in_citation = false;
     let mut citation_turn = 0_u64;
+    let mut tool_names = ToolNames::new();
     while let Ok(Some(line)) = lines.next_line().await {
         let parsed = match parse_line(&line) {
             Ok(parsed) => parsed,
@@ -724,6 +846,15 @@ async fn read_stdout(
                 if method != "session/update" {
                     continue;
                 }
+                if let Some(run) = active_run_update(&params) {
+                    let mut shared = shared.lock();
+                    if shared.session_id.as_deref()
+                        == params.get("sessionId").and_then(Value::as_str)
+                    {
+                        shared.active_run_id = run;
+                    }
+                    continue;
+                }
                 let active = {
                     let shared = shared.lock();
                     let same_session = shared.session_id.as_deref()
@@ -751,6 +882,7 @@ async fn read_stdout(
                     citation_turn = active.prompt_request_id;
                     in_citation = false;
                 }
+                remember_tool_name(&mut tool_names, update);
                 let cleaned = strip_citation_markers(update, &mut in_citation);
                 let update = cleaned.as_ref().unwrap_or(update);
                 send_events_traced(&active.event_tx, &active.trace, map_session_update(update))
@@ -759,12 +891,31 @@ async fn read_stdout(
             AcpLine::Request { id, method, params } => {
                 let reply = match method.as_str() {
                     "session/request_permission" => {
-                        let policy = shared
-                            .lock()
-                            .active_turn
-                            .as_ref()
-                            .map(|turn| turn.tool_policy);
-                        response(&id, permission_outcome(&params, policy))
+                        let (active, mode) = {
+                            let shared = shared.lock();
+                            (shared.active_turn.clone(), shared.approval_mode)
+                        };
+                        let named = with_known_tool_name(&params, &tool_names);
+                        let params = named.unwrap_or(params);
+                        match permission_route(
+                            &params,
+                            active.as_ref().map(|t| t.tool_policy),
+                            mode,
+                        ) {
+                            PermissionRoute::Answer(outcome) => response(&id, outcome),
+                            PermissionRoute::AskUser => match active {
+                                Some(active) => {
+                                    tokio::spawn(ask_user_permission(
+                                        id,
+                                        params,
+                                        active.event_tx,
+                                        out_tx.clone(),
+                                    ));
+                                    continue;
+                                }
+                                None => response(&id, permission_outcome(&params, false)),
+                            },
+                        }
                     }
                     _ => error_response(&id, -32601, "Method not supported by Script Kit"),
                 };
@@ -831,17 +982,371 @@ fn stderr_auth_hint(line: &str) -> Option<String> {
     (is_auth && !trimmed.is_empty()).then(|| trimmed.chars().take(300).collect())
 }
 
-/// Answer goose's permission request under the turn's tool policy.
+enum PermissionRoute {
+    /// Script Kit answers without asking.
+    Answer(Value),
+    /// The person decides.
+    AskUser,
+}
+
+/// Decide who answers goose's permission request.
 ///
-/// Sessions run in goose's `auto` mode, so goose normally never asks. When it
-/// does, a tool the policy admits gets a one-time allow; anything else, or a
-/// request with no live turn, is rejected.
-fn permission_outcome(params: &Value, policy: Option<AgentChatToolPolicy>) -> Value {
+/// A tool the turn's policy forbids, or a request with no live turn, is
+/// rejected. A tool the approval mode lets through is allowed once. Anything
+/// else goes to the person.
+fn permission_route(
+    params: &Value,
+    policy: Option<AgentChatToolPolicy>,
+    mode: AgentApprovalMode,
+) -> PermissionRoute {
     let tool_name = params
         .get("toolCall")
         .and_then(super::events::tool_name)
         .unwrap_or_default();
-    let allowed = policy.is_some_and(|policy| policy.allows_tool(&tool_name));
+    let Some(policy) = policy else {
+        return PermissionRoute::Answer(permission_outcome(params, false));
+    };
+    if !policy.allows_tool(&tool_name) {
+        return PermissionRoute::Answer(permission_outcome(params, false));
+    }
+    if !policy.allows_permission_prompts()
+        || mode.allows_without_asking(&tool_name)
+        || is_bookkeeping_tool(&tool_name)
+    {
+        return PermissionRoute::Answer(permission_outcome(params, true));
+    }
+    PermissionRoute::AskUser
+}
+
+/// Tools that only change the session's own notes or what it has loaded:
+/// the todo list, skills, and recipe sources. They never ask.
+fn is_bookkeeping_tool(tool_name: &str) -> bool {
+    matches!(tool_name, "todo__todo_write" | "load" | "load_skill")
+}
+
+/// Show goose's question in the chat and send back the person's answer. A
+/// closed chat or Stop counts as no.
+async fn ask_user_permission(
+    id: Value,
+    params: Value,
+    event_tx: AgentChatEventTx,
+    out_tx: mpsc::UnboundedSender<Value>,
+) {
+    let (reply_tx, reply_rx) = async_channel::bounded(1);
+    let request = approval_request(&params, reply_tx);
+    let sent = tokio::time::timeout(
+        SEND_TIMEOUT,
+        event_tx.send(AgentChatEvent::ApprovalRequested(Box::new(request))),
+    )
+    .await
+    .is_ok_and(|sent| sent.is_ok());
+    let choice = if sent {
+        reply_rx.recv().await.ok().flatten()
+    } else {
+        None
+    };
+    let outcome = match choice {
+        Some(option_id) => json!({ "outcome": { "outcome": "selected", "optionId": option_id } }),
+        None => json!({ "outcome": { "outcome": "cancelled" } }),
+    };
+    let _ = out_tx.send(response(&id, outcome));
+}
+
+/// The question as the chat shows it: what the tool is and what it would do.
+fn approval_request(
+    params: &Value,
+    reply_tx: async_channel::Sender<Option<String>>,
+) -> crate::ai::agent_chat::ui::AgentChatApprovalRequest {
+    static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let tool_call = params.get("toolCall").cloned().unwrap_or(Value::Null);
+    let tool_name = super::events::tool_name(&tool_call).unwrap_or_else(|| "tool".into());
+    let title = tool_call
+        .get("title")
+        .and_then(Value::as_str)
+        .filter(|title| !title.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("Run {tool_name}"));
+    let body = tool_call
+        .get("rawInput")
+        .filter(|input| !input.is_null())
+        .map(|input| match input.get("command").and_then(Value::as_str) {
+            Some(command) => command.to_string(),
+            None => serde_json::to_string_pretty(input).unwrap_or_default(),
+        })
+        .unwrap_or_default();
+    let options = params
+        .get("options")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|option| {
+            let option_id = option.get("optionId").and_then(Value::as_str)?;
+            let kind = option
+                .get("kind")
+                .and_then(Value::as_str)
+                .unwrap_or(option_id);
+            Some(crate::ai::agent_chat::ui::AgentChatApprovalOption {
+                option_id: option_id.to_string(),
+                name: approval_option_name(kind).to_string(),
+                kind: approval_option_kind(kind).to_string(),
+            })
+        })
+        .collect();
+    crate::ai::agent_chat::ui::AgentChatApprovalRequest {
+        id: NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        title,
+        body,
+        preview: None,
+        options,
+        reply_tx,
+    }
+}
+
+fn approval_option_name(kind: &str) -> &'static str {
+    match kind {
+        "allow_once" => "Allow",
+        "allow_always" => "Always allow this tool",
+        "reject_always" => "Never allow this tool",
+        _ => "Don't allow",
+    }
+}
+
+fn approval_option_kind(kind: &str) -> &'static str {
+    match kind {
+        "allow_once" => "AllowOnce",
+        "allow_always" => "AllowAlways",
+        "reject_always" => "RejectAlways",
+        _ => "RejectOnce",
+    }
+}
+
+/// `Some(run)` when a `session_info_update` reports the session's active run.
+/// Tool names by tool-call id, newest kept. goose names the tool in its
+/// `tool_call` update but its permission request carries only the id.
+type ToolNames = std::collections::VecDeque<(String, String)>;
+const TOOL_NAMES_KEPT: usize = 256;
+
+fn remember_tool_name(names: &mut ToolNames, update: &Value) {
+    let Some(id) = update.get("toolCallId").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(name) = update
+        .get("_meta")
+        .and_then(|meta| meta.get("goose"))
+        .and_then(|goose| goose.get("toolCall"))
+        .and_then(|tool| tool.get("toolName"))
+        .and_then(Value::as_str)
+    else {
+        return;
+    };
+    if names.iter().any(|(known, _)| known == id) {
+        return;
+    }
+    if names.len() >= TOOL_NAMES_KEPT {
+        names.pop_front();
+    }
+    names.push_back((id.to_string(), name.to_string()));
+}
+
+/// The permission request with goose's tool name filled in from the earlier
+/// `tool_call` update, when the request itself does not name the tool.
+fn with_known_tool_name(params: &Value, names: &ToolNames) -> Option<Value> {
+    let tool_call = params.get("toolCall")?;
+    if super::events::tool_name(tool_call).is_some() {
+        return None;
+    }
+    let id = tool_call.get("toolCallId").and_then(Value::as_str)?;
+    let (_, name) = names.iter().rev().find(|(known, _)| known == id)?;
+    let mut params = params.clone();
+    params["toolCall"]["_meta"] = json!({"goose": {"toolCall": {"toolName": name}}});
+    Some(params)
+}
+
+fn active_run_update(params: &Value) -> Option<Option<String>> {
+    let update = params.get("update")?;
+    if update.get("sessionUpdate").and_then(Value::as_str) != Some("session_info_update") {
+        return None;
+    }
+    let run = update.get("_meta")?.get("goose")?.get("activeRunId")?;
+    Some(run.as_str().map(str::to_string))
+}
+
+async fn steer(
+    connection: &mut Connection,
+    shared: &SharedState,
+    blocks: &[crate::ai::agent_chat::content::ContentBlock],
+) -> std::result::Result<(), String> {
+    let (session_id, run_id) = {
+        let shared = shared.lock();
+        (shared.session_id.clone(), shared.active_run_id.clone())
+    };
+    let (Some(session_id), Some(run_id)) = (session_id, run_id) else {
+        return Err("nothing is running to add to".into());
+    };
+    let mut params = prompt_params(&session_id, blocks).map_err(|error| error.to_string())?;
+    params["expectedRunId"] = json!(run_id);
+    connection
+        .call("_goose/unstable/session/steer", params, CONFIG_TIMEOUT)
+        .await
+        .map(|_| ())
+        .map_err(|error| match error {
+            CallError::Acp(error) => error.detail(),
+            CallError::Closed => "goose closed".into(),
+            CallError::Timeout => "goose did not answer in time".into(),
+        })
+}
+
+async fn export_session(
+    connection: &mut Connection,
+    session_id: &str,
+) -> std::result::Result<Value, SessionFailure> {
+    let exported = connection
+        .call(
+            "_goose/unstable/session/export",
+            json!({ "sessionId": session_id, "format": "json" }),
+            CONFIG_TIMEOUT,
+        )
+        .await
+        .map_err(|error| Box::new(error.failure("_goose/unstable/session/export")))?;
+    let data = exported.get("data").and_then(Value::as_str).unwrap_or("{}");
+    serde_json::from_str(data).map_err(|error| {
+        Box::new(crate::ai::reliability::protocol_failure_with_detail(
+            ProtocolComponent::Goose,
+            crate::ai::reliability::ProtocolFailureFacts::MalformedResponse,
+            &format!("goose session export was not JSON: {error}"),
+        ))
+    })
+}
+
+/// The messages of an exported goose session.
+fn exported_messages(exported: &Value) -> &[Value] {
+    let conversation = exported.get("conversation");
+    conversation
+        .and_then(Value::as_array)
+        .or_else(|| {
+            conversation
+                .and_then(|c| c.get("messages"))
+                .and_then(Value::as_array)
+        })
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+/// The text the person typed in one exported message, or `None` when it is
+/// not a visible user message (tool results, hidden context).
+fn user_text(message: &Value) -> Option<String> {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    if message
+        .get("metadata")
+        .and_then(|metadata| metadata.get("userVisible"))
+        .and_then(Value::as_bool)
+        == Some(false)
+    {
+        return None;
+    }
+    let content = message.get("content").and_then(Value::as_array)?;
+    let texts: Vec<&str> = content
+        .iter()
+        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|block| block.get("text").and_then(Value::as_str))
+        .collect();
+    let only_text = content.iter().all(|block| {
+        matches!(
+            block.get("type").and_then(Value::as_str),
+            Some("text") | Some("image")
+        )
+    });
+    (only_text && !texts.is_empty()).then(|| texts.join("\n"))
+}
+
+/// Fork points for every visible user message. The entry id is the message's
+/// creation time, which `session/fork` cuts before.
+fn user_fork_points(exported: &Value) -> Vec<crate::ai::agent_chat::events::AgentChatForkPoint> {
+    exported_messages(exported)
+        .iter()
+        .filter_map(|message| {
+            let text = user_text(message)?;
+            let created = message.get("created").and_then(Value::as_i64)?;
+            Some(crate::ai::agent_chat::events::AgentChatForkPoint {
+                entry_id: created.to_string(),
+                text,
+            })
+        })
+        .collect()
+}
+
+/// Continue in a copy of the session that ends just before the user message
+/// created at `entry_id`. The original session stays in goose's history.
+async fn fork_before(
+    connection: &mut Connection,
+    spec: &GooseLaunchSpec,
+    state: &mut SessionState,
+    entry_id: &str,
+) -> std::result::Result<String, SessionFailure> {
+    let before: i64 = entry_id.parse().map_err(|_| {
+        Box::new(crate::ai::reliability::protocol_failure_with_detail(
+            ProtocolComponent::Goose,
+            crate::ai::reliability::ProtocolFailureFacts::MalformedResponse,
+            "unknown rewind point",
+        ))
+    })?;
+    let exported = export_session(connection, &state.session_id).await?;
+    let text = exported_messages(&exported)
+        .iter()
+        .find(|message| message.get("created").and_then(Value::as_i64) == Some(before))
+        .and_then(user_text)
+        .unwrap_or_default();
+    let forked = connection
+        .call(
+            "session/fork",
+            json!({
+                "sessionId": state.session_id,
+                "cwd": spec.cwd,
+                "mcpServers": [],
+                "_meta": { "conversationBefore": before },
+            }),
+            HANDSHAKE_TIMEOUT,
+        )
+        .await
+        .map_err(|error| Box::new(error.failure("session/fork")))?;
+    let Some(session_id) = forked.get("sessionId").and_then(Value::as_str) else {
+        return Err(Box::new(
+            crate::ai::reliability::protocol_failure_with_detail(
+                ProtocolComponent::Goose,
+                crate::ai::reliability::ProtocolFailureFacts::MalformedResponse,
+                "goose session/fork returned no sessionId",
+            ),
+        ));
+    };
+    {
+        let mut shared = connection.shared.lock();
+        shared.session_id = Some(session_id.to_string());
+        shared.active_run_id = None;
+    }
+    state.session_id = session_id.to_string();
+    if let Some(options) = forked.get("configOptions") {
+        state.config_options = options.clone();
+    }
+    let mode = connection.shared.lock().approval_mode;
+    let _ = connection
+        .call(
+            "session/set_mode",
+            json!({ "sessionId": state.session_id, "modeId": mode.goose_mode() }),
+            CONFIG_TIMEOUT,
+        )
+        .await;
+    tracing::info!(
+        target: "script_kit::agent_chat",
+        event = "goose_session_forked",
+        before,
+    );
+    Ok(text)
+}
+
+/// A fixed answer to goose's permission request.
+fn permission_outcome(params: &Value, allowed: bool) -> Value {
     let wanted = if allowed {
         ["allow_once", "allow_always"]
     } else {
@@ -1100,8 +1605,14 @@ async fn fail_commands_until_closed(
     while let Ok(command) = rx.recv().await {
         let event_tx = match command {
             GooseCommand::PrepareSession { event_tx }
-            | GooseCommand::StartTurn { event_tx, .. } => event_tx,
-            GooseCommand::CancelTurn { .. } => continue,
+            | GooseCommand::StartTurn { event_tx, .. }
+            | GooseCommand::ForkPoints { event_tx }
+            | GooseCommand::ForkTo { event_tx, .. } => event_tx,
+            GooseCommand::Steer { reply, .. } => {
+                let _ = reply.send(Err("goose is not running".into())).await;
+                continue;
+            }
+            GooseCommand::CancelTurn { .. } | GooseCommand::SetApprovalMode { .. } => continue,
         };
         let _ = tokio::time::timeout(
             SEND_TIMEOUT,
@@ -1137,38 +1648,181 @@ mod tests {
     }
 
     #[test]
-    fn permission_requests_follow_the_turn_tool_policy() {
-        let params = json!({
-            "toolCall": {"toolCallId": "t1", "_meta": {"goose": {"toolCall": {"toolName": "developer__shell"}}}},
+    fn permission_requests_follow_the_turn_tool_policy_and_approval_mode() {
+        let request = |tool: &str| {
+            json!({
+                "toolCall": {"toolCallId": "t1", "_meta": {"goose": {"toolCall": {"toolName": tool}}}},
+                "options": [
+                    {"optionId": "yes", "name": "Allow", "kind": "allow_once"},
+                    {"optionId": "no", "name": "Reject", "kind": "reject_once"}
+                ]
+            })
+        };
+        let answer = |route: PermissionRoute| match route {
+            PermissionRoute::Answer(outcome) => {
+                outcome["outcome"]["optionId"].as_str().map(str::to_string)
+            }
+            PermissionRoute::AskUser => None,
+        };
+        let ask = AgentApprovalMode::AskBeforeChanges;
+        let shell = request("developer__shell");
+        assert!(matches!(
+            permission_route(&shell, Some(AgentChatToolPolicy::Full), ask),
+            PermissionRoute::AskUser
+        ));
+        assert_eq!(
+            answer(permission_route(
+                &shell,
+                Some(AgentChatToolPolicy::WebSearchOnly),
+                ask
+            ))
+            .as_deref(),
+            Some("no")
+        );
+        assert_eq!(
+            answer(permission_route(&shell, None, ask)).as_deref(),
+            Some("no")
+        );
+        assert_eq!(
+            answer(permission_route(
+                &shell,
+                Some(AgentChatToolPolicy::Full),
+                AgentApprovalMode::FullAccess
+            ))
+            .as_deref(),
+            Some("yes")
+        );
+        let edit = request("scriptkit__edit");
+        assert_eq!(
+            answer(permission_route(
+                &edit,
+                Some(AgentChatToolPolicy::Full),
+                AgentApprovalMode::AcceptEdits
+            ))
+            .as_deref(),
+            Some("yes")
+        );
+        assert!(matches!(
+            permission_route(
+                &shell,
+                Some(AgentChatToolPolicy::Full),
+                AgentApprovalMode::AcceptEdits
+            ),
+            PermissionRoute::AskUser
+        ));
+        assert_eq!(
+            answer(permission_route(
+                &request("todo__todo_write"),
+                Some(AgentChatToolPolicy::Full),
+                ask
+            ))
+            .as_deref(),
+            Some("yes")
+        );
+        assert!(matches!(
+            permission_route(&request("delegate"), Some(AgentChatToolPolicy::Full), ask),
+            PermissionRoute::AskUser
+        ));
+        let search = request("scriptkit__web_search");
+        assert_eq!(
+            answer(permission_route(
+                &search,
+                Some(AgentChatToolPolicy::WebSearchOnly),
+                ask
+            ))
+            .as_deref(),
+            Some("yes")
+        );
+    }
+
+    #[test]
+    fn approval_request_reads_goose_options_and_command() {
+        let (tx, _rx) = async_channel::bounded(1);
+        let request = approval_request(
+            &json!({
+                "toolCall": {"title": "Run a command", "rawInput": {"command": "rm -rf build"}},
+                "options": [
+                    {"optionId": "allow_always", "kind": "allow_always"},
+                    {"optionId": "allow_once", "kind": "allow_once"},
+                    {"optionId": "reject_once", "kind": "reject_once"}
+                ]
+            }),
+            tx,
+        );
+        assert_eq!(request.title, "Run a command");
+        assert_eq!(request.body, "rm -rf build");
+        assert!(request.options[0].is_persistent_allow());
+        assert!(request.options[2].is_reject());
+    }
+
+    #[test]
+    fn fork_points_are_visible_user_messages_with_their_times() {
+        let exported = json!({"conversation": [
+            {"role": "user", "created": 100, "content": [{"type": "text", "text": "first"}], "metadata": {"userVisible": true}},
+            {"role": "assistant", "created": 101, "content": [{"type": "text", "text": "hi"}]},
+            {"role": "user", "created": 102, "content": [{"type": "toolResponse", "id": "x"}]},
+            {"role": "user", "created": 103, "content": [{"type": "text", "text": "hidden"}], "metadata": {"userVisible": false}},
+            {"role": "user", "created": 104, "content": [{"type": "text", "text": "second"}]}
+        ]});
+        let points = user_fork_points(&exported);
+        let ids: Vec<_> = points
+            .iter()
+            .map(|p| (p.entry_id.as_str(), p.text.as_str()))
+            .collect();
+        assert_eq!(ids, vec![("100", "first"), ("104", "second")]);
+    }
+
+    #[test]
+    fn permission_requests_learn_the_tool_name_from_the_earlier_tool_call() {
+        let mut names = ToolNames::new();
+        remember_tool_name(
+            &mut names,
+            &json!({"sessionUpdate": "tool_call", "toolCallId": "c1", "_meta": {"goose": {"toolCall": {"toolName": "todo__todo_write"}}}}),
+        );
+        // goose 1.52's permission request: a title and the call id, no name.
+        let asked = json!({
+            "toolCall": {"toolCallId": "c1", "title": "todo: todo write"},
             "options": [
-                {"optionId": "yes", "name": "Allow", "kind": "allow_once"},
-                {"optionId": "no", "name": "Reject", "kind": "reject_once"}
+                {"optionId": "allow_once", "name": "allow_once", "kind": "allow_once"},
+                {"optionId": "reject_once", "name": "reject_once", "kind": "reject_once"}
             ]
         });
+        let named = with_known_tool_name(&asked, &names).expect("name filled in");
+        let answer = |route: PermissionRoute| match route {
+            PermissionRoute::Answer(outcome) => {
+                outcome["outcome"]["optionId"].as_str().map(str::to_string)
+            }
+            PermissionRoute::AskUser => None,
+        };
+        let ask = AgentApprovalMode::AskBeforeChanges;
         assert_eq!(
-            permission_outcome(&params, Some(AgentChatToolPolicy::Full))["outcome"]["optionId"],
-            "yes"
+            answer(permission_route(
+                &named,
+                Some(AgentChatToolPolicy::Full),
+                ask
+            ))
+            .as_deref(),
+            Some("allow_once")
         );
-        assert_eq!(
-            permission_outcome(&params, Some(AgentChatToolPolicy::WebSearchOnly))["outcome"]
-                ["optionId"],
-            "no"
-        );
-        assert_eq!(
-            permission_outcome(&params, None)["outcome"]["optionId"],
-            "no"
-        );
-        let search = json!({
-            "toolCall": {"toolCallId": "t2", "_meta": {"goose": {"toolCall": {"toolName": "scriptkit__web_search"}}}},
-            "options": [
-                {"optionId": "yes", "name": "Allow", "kind": "allow_once"},
-                {"optionId": "no", "name": "Reject", "kind": "reject_once"}
-            ]
-        });
-        assert_eq!(
-            permission_outcome(&search, Some(AgentChatToolPolicy::WebSearchOnly))["outcome"]
-                ["optionId"],
-            "yes"
-        );
+        let unknown = json!({"toolCall": {"toolCallId": "c9", "title": "scriptkit: write"}});
+        assert!(with_known_tool_name(&unknown, &names).is_none());
+        assert!(matches!(
+            permission_route(
+                &unknown,
+                Some(AgentChatToolPolicy::Full),
+                AgentApprovalMode::AcceptEdits
+            ),
+            PermissionRoute::AskUser
+        ));
+    }
+
+    #[test]
+    fn active_run_updates_are_recognised() {
+        let started = json!({"update": {"sessionUpdate": "session_info_update", "_meta": {"goose": {"activeRunId": "r1"}}}});
+        assert_eq!(active_run_update(&started), Some(Some("r1".into())));
+        let ended = json!({"update": {"sessionUpdate": "session_info_update", "_meta": {"goose": {"activeRunId": null}}}});
+        assert_eq!(active_run_update(&ended), Some(None));
+        let chunk = json!({"update": {"sessionUpdate": "agent_message_chunk"}});
+        assert_eq!(active_run_update(&chunk), None);
     }
 }

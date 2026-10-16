@@ -272,7 +272,11 @@ pub(super) fn grep(policy: &AgentToolPolicy, args: &Value) -> Result<String, Str
     Ok(out)
 }
 
-pub(super) fn create_file(policy: &AgentToolPolicy, args: &Value) -> Result<String, String> {
+pub(super) fn create_file(
+    policy: &AgentToolPolicy,
+    session: Option<&str>,
+    args: &Value,
+) -> Result<String, String> {
     let content = args
         .get("content")
         .and_then(Value::as_str)
@@ -298,10 +302,85 @@ pub(super) fn create_file(policy: &AgentToolPolicy, args: &Value) -> Result<Stri
         })?;
     file.write_all(content.as_bytes())
         .map_err(|error| format!("{}: {error}", path.display()))?;
+    super::changes::record(session, &path, None, content.as_bytes());
     Ok(format!(
         "Created {} ({} bytes).",
         path.display(),
         content.len()
+    ))
+}
+
+/// Write a whole file, creating it if needed. The previous content is kept
+/// so the user can revert the turn.
+pub(super) fn write(
+    policy: &AgentToolPolicy,
+    session: Option<&str>,
+    args: &Value,
+) -> Result<String, String> {
+    let content = args
+        .get("content")
+        .and_then(Value::as_str)
+        .ok_or("write needs content")?;
+    let path = resolve(policy, arg_str(args, "path"), Access::Write)?;
+    if path.is_dir() {
+        return Err(format!("{} is a directory", path.display()));
+    }
+    let existed = path.exists();
+    super::changes::apply(session, &path, content.as_bytes())?;
+    Ok(format!(
+        "{} {} ({} bytes).",
+        if existed { "Wrote" } else { "Created" },
+        path.display(),
+        content.len()
+    ))
+}
+
+/// Replace exact text in a file. `old_string` must match once unless
+/// `replace_all` is set; an empty `old_string` is refused.
+pub(super) fn edit(
+    policy: &AgentToolPolicy,
+    session: Option<&str>,
+    args: &Value,
+) -> Result<String, String> {
+    let old = args
+        .get("old_string")
+        .and_then(Value::as_str)
+        .filter(|old| !old.is_empty())
+        .ok_or("edit needs a non-empty old_string")?;
+    let new = args
+        .get("new_string")
+        .and_then(Value::as_str)
+        .ok_or("edit needs new_string")?;
+    let replace_all = args
+        .get("replace_all")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let path = resolve(policy, arg_str(args, "path"), Access::Write)?;
+    let text = read_text(&path, MAX_READ_BYTES)?;
+    let count = text.matches(old).count();
+    if count == 0 {
+        return Err(format!(
+            "old_string was not found in {}; read the file and copy the text exactly",
+            path.display()
+        ));
+    }
+    if count > 1 && !replace_all {
+        return Err(format!(
+            "old_string matches {count} places in {}; add surrounding lines to make it unique or set replace_all",
+            path.display()
+        ));
+    }
+    let updated = if replace_all {
+        text.replace(old, new)
+    } else {
+        text.replacen(old, new, 1)
+    };
+    super::changes::apply(session, &path, updated.as_bytes())?;
+    Ok(format!(
+        "Edited {} ({} replacement{}).",
+        path.display(),
+        if replace_all { count } else { 1 },
+        if replace_all && count != 1 { "s" } else { "" }
     ))
 }
 
@@ -362,16 +441,27 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let denied = create_file(
             &policy(temp.path(), false),
+            None,
             &json!({"path": "a.txt", "content": "x"}),
         );
         assert!(denied.is_err());
         let allowed = policy(temp.path(), true);
-        create_file(&allowed, &json!({"path": "sub/a.txt", "content": "x"})).unwrap();
+        create_file(
+            &allowed,
+            None,
+            &json!({"path": "sub/a.txt", "content": "x"}),
+        )
+        .unwrap();
         assert_eq!(
             std::fs::read_to_string(temp.path().join("sub/a.txt")).unwrap(),
             "x"
         );
-        assert!(create_file(&allowed, &json!({"path": "sub/a.txt", "content": "y"})).is_err());
+        assert!(create_file(
+            &allowed,
+            None,
+            &json!({"path": "sub/a.txt", "content": "y"})
+        )
+        .is_err());
     }
 
     #[test]

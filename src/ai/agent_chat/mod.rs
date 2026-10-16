@@ -1,6 +1,7 @@
 //! Backend-neutral Agent Chat profile and launch contracts.
 
 pub(crate) mod agent_chat_recovery;
+pub mod approval;
 pub(crate) mod content;
 pub mod events;
 pub mod goose;

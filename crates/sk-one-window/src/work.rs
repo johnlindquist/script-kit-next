@@ -93,6 +93,15 @@ pub enum WorkEvent {
     /// The account the model needs you to sign in to, or none.
     ModelSignIn(Option<String>),
     Models(Models),
+    /// What else the host can do to the chat, offered under ⌘K.
+    ChatMore(Vec<Row>),
+    /// The chat went back to before one of your messages. `text` was that
+    /// message: it goes again when `resend`, otherwise it waits in the input.
+    ChatRewound {
+        turns: Vec<Turn>,
+        text: String,
+        resend: bool,
+    },
     OpenPastChats {
         query: String,
     },

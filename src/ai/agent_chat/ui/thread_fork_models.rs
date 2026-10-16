@@ -37,6 +37,39 @@ impl AgentChatThread {
         fork_points.iter().find(|point| point.text == user_text)
     }
 
+    /// Go back to before your latest message. `true` when the request went out;
+    /// the transcript changes when the engine finishes (`fork_generation`).
+    pub(crate) fn rewind_last_message(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(entry_id) = self.fork_points.last().map(|point| point.entry_id.clone()) else {
+            return false;
+        };
+        self.fork_to_message(&entry_id, cx)
+    }
+
+    /// What's in the composer (a rewound message waits here for editing).
+    pub(crate) fn input_text(&self) -> String {
+        self.input.text().to_string()
+    }
+
+    /// Whether there is a message to go back before.
+    pub(crate) fn can_rewind(&self) -> bool {
+        !self.fork_points.is_empty()
+            && self.pending_fork_ordinal.is_none()
+            && matches!(self.status, AgentChatThreadStatus::Idle)
+    }
+
+    /// The id Script Kit's agent tools record this session's file changes under.
+    pub(crate) fn tool_session_id(&self) -> Option<String> {
+        self.connection.tool_session_id()
+    }
+
+    /// Change how much the model may do before it asks, for this session.
+    pub(crate) fn set_approval_mode(&self, mode: crate::ai::agent_chat::approval::AgentApprovalMode) {
+        if let Err(error) = self.connection.set_approval_mode(mode) {
+            tracing::warn!(target: "script_kit::tab_ai", event = "agent_chat_approval_mode_failed", %error);
+        }
+    }
+
     /// Refresh the rewindable user-message list from the agent session.
     /// No-op (with a debug log) for connections without rewind support.
     pub(crate) fn refresh_fork_points(&mut self, cx: &mut Context<Self>) {
@@ -170,6 +203,7 @@ impl AgentChatThread {
     /// context-free lets focused tests exercise the same production mutation.
     fn apply_fork_completed_state(&mut self, text: String) -> Option<usize> {
         let ordinal = self.pending_fork_ordinal.take()?;
+        self.fork_generation = self.fork_generation.wrapping_add(1);
         Self::truncate_messages_at_user_ordinal(&mut self.messages, ordinal);
         self.active_tool_calls.clear();
         self.tool_call_lookup.clear();

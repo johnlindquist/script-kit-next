@@ -37,6 +37,8 @@ pub(crate) struct GooseLaunchSpec {
     /// borrow their parent session's policy and must not release it.
     pub owns_agent_policy: bool,
     pub surface: crate::ai::phase_trace::AiSurface,
+    /// How much the model may do before it asks; applied to the session.
+    pub approval_mode: crate::ai::agent_chat::approval::AgentApprovalMode,
 }
 
 impl GooseLaunchSpec {
@@ -53,6 +55,7 @@ impl GooseLaunchSpec {
             agent_policy_id: None,
             owns_agent_policy: true,
             surface: crate::ai::phase_trace::AiSurface::AgentChat,
+            approval_mode: crate::ai::agent_chat::approval::AgentApprovalMode::AskBeforeChanges,
         }
     }
 }

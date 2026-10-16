@@ -141,6 +141,10 @@ pub struct Chat {
     pub acting: Option<Vec<Row>>,
     /// What's typed, which filters what ⌘K offers.
     pub filter: String,
+    /// What else the host can do to this chat (revert the model's file
+    /// changes, edit your last message, how much the model may do), offered
+    /// under ⌘K with the whole chat.
+    pub more: Vec<Row>,
 }
 
 /// Next steps for a reply when Jev hasn't ranked any.
@@ -167,6 +171,7 @@ impl Chat {
             models: Models::default(),
             acting: None,
             filter: String::new(),
+            more: Vec::new(),
         };
         let sentence = sentence.trim();
         if !sentence.is_empty() {
@@ -193,6 +198,22 @@ impl Chat {
             chat.next = default_next();
         }
         chat
+    }
+
+    /// The chat went back to before one of your messages: these turns stay.
+    pub fn rewound(&mut self, turns: Vec<Turn>) {
+        let answered = turns.last().is_some_and(|t| t.who == Who::Model);
+        self.turns = turns;
+        self.asks = None;
+        self.acting = None;
+        self.sel = 0;
+        if answered {
+            self.phase = Phase::Ready;
+            self.next = default_next();
+        } else {
+            self.phase = Phase::Idle;
+            self.next = Vec::new();
+        }
     }
 
     pub fn spec(&self, typed: &str) -> ViewSpec {
@@ -329,7 +350,7 @@ impl Chat {
                 .cloned()
                 .collect(),
         };
-        let mut rows = Vec::new();
+        let mut rows = self.more.clone();
         if !self.turns.is_empty() {
             rows.push(Row::new(EXPORT_KEY, "Export the chat as Markdown").with_icon("export"));
         }
@@ -536,6 +557,32 @@ mod tests {
     use super::*;
     use crate::asks::Choice;
     use crate::stage::SubjectKind;
+
+    #[test]
+    fn the_hosts_rows_lead_the_whole_chat_group_under_cmd_k() {
+        let mut chat = Chat::open("hello");
+        chat.more = vec![Row::new("chat:revert", "Revert the model's file changes")];
+        chat.toggle_acting();
+        let (_, rows) = chat.rows();
+        let revert = rows.iter().position(|r| r.key == "chat:revert").unwrap();
+        let export = rows.iter().position(|r| r.key == EXPORT_KEY).unwrap();
+        assert!(revert < export);
+        assert!(matches!(chat.press_enter(""), ChatKey::Step(row) if row.key == "chat:revert"));
+    }
+
+    #[test]
+    fn rewinding_keeps_the_turns_before_and_waits_for_you() {
+        let mut chat = Chat::open("first");
+        chat.rewound(vec![
+            Turn::new(Who::You, "first"),
+            Turn::new(Who::Model, "hi"),
+        ]);
+        assert_eq!(chat.turns.len(), 2);
+        assert_eq!(chat.phase, Phase::Ready);
+        chat.rewound(Vec::new());
+        assert!(chat.turns.is_empty());
+        assert_eq!(chat.phase, Phase::Idle);
+    }
 
     #[test]
     fn a_sentence_opens_the_chat_writing_its_first_turn() {

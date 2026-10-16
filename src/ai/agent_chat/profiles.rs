@@ -103,17 +103,27 @@ pub fn advanced_provider_model_catalog() -> Vec<ProviderCatalogEntry> {
         },
     ]
 }
-pub const GENERAL_TOOLS: [&str; 7] = [
+// Full profiles also get Script Kit's app actions and data (`app`), the
+// user's `config.ts` MCP servers (`mcp`), subagents, skills, and a todo list.
+// Actions that change something ask first.
+pub const GENERAL_TOOLS: [&str; 13] = [
     "web_search",
+    "web_fetch",
     "desktop_search",
     "read",
     "create_file",
     "grep",
     "find",
     "ls",
+    "app",
+    "mcp",
+    "subagents",
+    "skills",
+    "todo",
 ];
-pub const SCRIPT_KIT_TOOLS: [&str; 9] = [
+pub const SCRIPT_KIT_TOOLS: [&str; 15] = [
     "web_search",
+    "web_fetch",
     "read",
     "write",
     "edit",
@@ -122,6 +132,11 @@ pub const SCRIPT_KIT_TOOLS: [&str; 9] = [
     "find",
     "ls",
     "hashline_edit",
+    "app",
+    "mcp",
+    "subagents",
+    "skills",
+    "todo",
 ];
 /// The Text/mini profile is a locked-down text rewriter, but users also ask it
 /// live-info questions (e.g. "When is the next nba game?") and expect web access.
@@ -132,14 +147,20 @@ pub const TEXT_TOOLS: [&str; 1] = ["web_search"];
 /// The Brain profile answers from memory first: same safe toolset as General
 /// (read-only beyond its workspace), tuned for quick palette-launched
 /// questions that lean on staged brain recall.
-pub const BRAIN_TOOLS: [&str; 7] = [
+pub const BRAIN_TOOLS: [&str; 13] = [
     "web_search",
+    "web_fetch",
     "desktop_search",
     "read",
     "create_file",
     "grep",
     "find",
     "ls",
+    "app",
+    "mcp",
+    "subagents",
+    "skills",
+    "todo",
 ];
 
 pub const GENERAL_BLOCKED_ACTION_MESSAGE: &str =
@@ -148,10 +169,10 @@ pub const BRAIN_BLOCKED_ACTION_MESSAGE: &str =
     "This action is blocked in the Brain profile. Please switch profiles to modify Script Kit.";
 pub const TEXT_BLOCKED_ACTION_MESSAGE: &str = "The Text profile can only transform captured focused text or search the web for public current information.";
 
-const BRAIN_APPEND_SYSTEM_PROMPT: &str = "You are the Brain profile: Script Kit's memory-aware assistant. Turns may include a 'Brain recall' block — relevant excerpts auto-retrieved from the user's local knowledge (their notes and past conversations with you). Treat recall as your own memory: answer personal or project questions from it directly and confidently, mention naturally where a memory came from (e.g. 'your note Egghead publish checklist'), and prefer newer memories when they conflict. If recall doesn't cover the question, say so plainly and answer from general knowledge or search — never invent memories. Users usually arrive here by typing a quick question into the launcher, so lead with the answer and keep replies tight. You may search the web, search the desktop, read files, and create files inside your workspace. Do not load skills, modify Script Kit, run shell commands, or write outside your workspace.";
+const BRAIN_APPEND_SYSTEM_PROMPT: &str = "You are the Brain profile: Script Kit's memory-aware assistant. Turns may include a 'Brain recall' block — relevant excerpts auto-retrieved from the user's local knowledge (their notes and past conversations with you). Treat recall as your own memory: answer personal or project questions from it directly and confidently, mention naturally where a memory came from (e.g. 'your note Egghead publish checklist'), and prefer newer memories when they conflict. If recall doesn't cover the question, say so plainly and answer from general knowledge or search — never invent memories. Users usually arrive here by typing a quick question into the launcher, so lead with the answer and keep replies tight. You may search the web, search the desktop, read files, create files inside your workspace, use Script Kit's app tools (notes, clipboard history, calendar, scripts, settings, past chats), the user's MCP servers, skills and subagents. Tools that change something ask the user first. Do not run shell commands or edit files outside your workspace.";
 
-const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, and inspect local context. Do not load skills, modify Script Kit, run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
-const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks.";
+const GENERAL_APPEND_SYSTEM_PROMPT: &str = "You are the General Agent Chat profile for Script Kit. Answer everyday questions directly and helpfully. You may search the web, search the desktop, read files, create new files inside the General workspace, inspect local context, and use Script Kit's app tools (notes, clipboard history, calendar, scripts, settings, past chats), the user's MCP servers, skills and subagents. Tools that change something ask the user first. Do not run shell commands, edit existing files, or write outside the General workspace. If a tool or requested action is blocked, say: \"This action is blocked in the General profile. Please switch profiles to modify Script Kit.\"";
+const SCRIPT_KIT_APPEND_SYSTEM_PROMPT: &str = "You are the Script Kit Agent Chat profile. Help manage ~/.scriptkit, including config.ts, scripts, scriptlets, plugins, and package.json. Make focused minimal edits. Explain risks before destructive file operations. Do not install packages or run long commands unless the user asks. Script Kit's app tools, the user's MCP servers, skills and subagents are available; tools that change something ask the user first, and the user can revert your file edits.";
 pub const QUICK_AI_BLOCKED_ACTION_MESSAGE: &str = "Quick AI answers from the model plus web search only — no files or local context. Open Agent Chat for anything more.";
 
 /// Quick AI mirrors the Text profile's network posture: exactly one read-only

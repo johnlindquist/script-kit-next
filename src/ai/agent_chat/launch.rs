@@ -165,6 +165,7 @@ pub(crate) fn resolve_focused_text_launch(
         agent_chat_notify_when_hidden: ai.agent_chat_notify_when_hidden,
         cwd: ai.cwd.clone(),
         quick_ai_profile_id: None,
+        agent_approval_mode: ai.agent_approval_mode.clone(),
     };
 
     AgentChatLaunch::from_profile(resolve_effective_profile(&text_ai, ctx))

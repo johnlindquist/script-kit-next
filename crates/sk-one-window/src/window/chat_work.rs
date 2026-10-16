@@ -55,6 +55,13 @@ impl OneWindow {
             WorkEvent::ModelAsks(asks) => self.with_chat(|c| c.asked(asks)),
             WorkEvent::ModelSignIn(provider) => self.with_chat(|c| c.needs_sign_in(provider)),
             WorkEvent::Models(models) => self.with_chat(|c| c.models = models),
+            // An open ⌘K list keeps what it showed; the next ⌘K has the new rows.
+            WorkEvent::ChatMore(rows) => self.with_chat(|c| c.more = rows),
+            WorkEvent::ChatRewound {
+                turns,
+                text,
+                resend,
+            } => self.chat_rewound(now, turns, text, resend, fx),
             WorkEvent::OpenPastChats { query } => {
                 self.open_past_chats(now, &query, fx);
                 true
@@ -76,6 +83,31 @@ impl OneWindow {
             },
             _ => false,
         }
+    }
+
+    /// The chat went back to before one of your messages: the turns after it are gone, and the
+    /// message goes again or waits in the input for you to change it.
+    fn chat_rewound(
+        &mut self,
+        now: Ms,
+        turns: Vec<chat::Turn>,
+        text: String,
+        resend: bool,
+        fx: &mut Vec<Effect>,
+    ) -> bool {
+        let Some(c) = self.work.chat.as_mut() else {
+            return false;
+        };
+        c.rewound(turns);
+        if resend && !text.trim().is_empty() {
+            let with = c.ask(&text);
+            fx.push(ask_effect(text, with));
+            self.clear_view_input(now, fx);
+        } else {
+            fx.push(Effect::SetInput(text.clone()));
+            self.text = text;
+        }
+        true
     }
 
     /// The chat already on top takes what comes in; otherwise a new chat opens about it. Words

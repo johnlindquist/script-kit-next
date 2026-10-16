@@ -72,6 +72,28 @@ pub(crate) trait AgentChatConnection: Send + Sync + 'static {
         let _ = entry_id;
         Err(anyhow::anyhow!("this agent connection does not support rewind").into())
     }
+    /// Add a message to the running turn. The receiver answers once the
+    /// engine accepted (or refused) it.
+    fn steer(
+        &self,
+        blocks: Vec<ContentBlock>,
+    ) -> AiAdapterResult<async_channel::Receiver<Result<(), String>>> {
+        let _ = blocks;
+        Err(anyhow::anyhow!("this agent connection cannot add to a running turn").into())
+    }
+    /// Change how much the model may do before it asks.
+    fn set_approval_mode(
+        &self,
+        mode: crate::ai::agent_chat::approval::AgentApprovalMode,
+    ) -> AiAdapterResult<()> {
+        let _ = mode;
+        Ok(())
+    }
+    /// The id Script Kit's agent tools know this session by (file changes
+    /// are recorded under it), if the session uses them.
+    fn tool_session_id(&self) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]

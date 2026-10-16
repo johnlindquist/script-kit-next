@@ -96,6 +96,7 @@ impl AgentChatThread {
             standing_approvals: Vec::new(),
             fork_points: Vec::new(),
             pending_fork_ordinal: None,
+            fork_generation: 0,
             selected_agent: None,
             available_agents: Vec::new(),
             launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
@@ -340,6 +341,9 @@ impl AgentChatThread {
     /// Reuses the same helper methods as `apply_event` but skips `cx.notify()`.
     pub(super) fn apply_event_test(&mut self, event: super::AgentChatEvent) {
         match event {
+            super::AgentChatEvent::ApprovalRequested(request) => {
+                self.present_permission_request(*request);
+            }
             super::AgentChatEvent::UserMessageDelta(chunk) => {
                 self.append_chunk(AgentChatThreadMessageRole::System, chunk);
                 self.set_status(AgentChatThreadStatus::Streaming);

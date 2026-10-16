@@ -327,6 +327,7 @@ fn test_thread_with_profile(
         standing_approvals: Vec::new(),
         fork_points: Vec::new(),
         pending_fork_ordinal: None,
+        fork_generation: 0,
         selected_agent: None,
         available_agents: Vec::new(),
         launch_requirements: crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),

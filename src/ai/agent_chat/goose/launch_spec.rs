@@ -60,8 +60,9 @@ pub(crate) fn goose_process_env(root: &Path) -> HashMap<String, String> {
         // entries a separately installed goose would share.
         ("GOOSE_DISABLE_KEYRING".to_string(), "1".to_string()),
         ("GOOSE_TELEMETRY_ENABLED".to_string(), "false".to_string()),
-        // Profiles already limit tools; approval prompts would stall turns.
-        ("GOOSE_MODE".to_string(), "auto".to_string()),
+        // The default for processes that never set a session mode (one-shot
+        // helpers); chat sessions set theirs from the approval mode.
+        ("GOOSE_MODE".to_string(), "smart_approve".to_string()),
     ]);
     env.extend(provider_credential_env());
     env
@@ -88,6 +89,57 @@ extensions:\n\
 \x20   display_name: Developer\n\
 \x20   bundled: true\n";
     std::fs::write(config_path, managed)
+}
+
+/// goose runs subagents without approvals, so outside full access a
+/// delegation must itself be approved: seed `delegate` as ask-before in
+/// goose's permission file unless the person already chose for it.
+pub(crate) fn ensure_goose_permission_defaults(root: &Path) -> std::io::Result<()> {
+    use serde_yaml::{Mapping, Value};
+    let path = root.join("config").join("permission.yaml");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut doc: Value = serde_yaml::from_str(&existing).unwrap_or(Value::Null);
+    if !doc.is_mapping() {
+        doc = Value::Mapping(Mapping::new());
+    }
+    let Some(root_map) = doc.as_mapping_mut() else {
+        return Ok(());
+    };
+    let user = root_map
+        .entry(Value::from("user"))
+        .or_insert_with(|| Value::Mapping(Mapping::new()));
+    if !user.is_mapping() {
+        *user = Value::Mapping(Mapping::new());
+    }
+    let Some(user) = user.as_mapping_mut() else {
+        return Ok(());
+    };
+    let decided = ["always_allow", "ask_before", "never_allow"]
+        .iter()
+        .any(|list| {
+            user.get(*list)
+                .and_then(Value::as_sequence)
+                .is_some_and(|items| items.iter().any(|item| item.as_str() == Some("delegate")))
+        });
+    if decided {
+        return Ok(());
+    }
+    for list in ["always_allow", "never_allow"] {
+        user.entry(Value::from(list))
+            .or_insert_with(|| Value::Sequence(Vec::new()));
+    }
+    let ask = user
+        .entry(Value::from("ask_before"))
+        .or_insert_with(|| Value::Sequence(Vec::new()));
+    if !ask.is_sequence() {
+        *ask = Value::Sequence(Vec::new());
+    }
+    if let Some(ask) = ask.as_sequence_mut() {
+        ask.push(Value::from("delegate"));
+    }
+    std::fs::create_dir_all(root.join("config"))?;
+    let text = serde_yaml::to_string(&doc).map_err(std::io::Error::other)?;
+    std::fs::write(path, text)
 }
 
 /// A profile translated for goose, before per-process tool policy wiring.
@@ -137,6 +189,7 @@ impl GooseProfileLaunch {
             model: model.as_deref(),
             tools: &tools,
             endpoint: None,
+            user_mcp: &[],
         });
         Self {
             spec,
@@ -151,8 +204,19 @@ impl GooseProfileLaunch {
     /// policy for this session and point the recipe at the tools endpoint.
     pub(crate) fn spec_for_spawn(&self) -> GooseLaunchSpec {
         let mut spec = self.spec.clone();
-        if let Err(error) = ensure_goose_root(&goose_root_from_env(&spec.env)) {
+        spec.approval_mode = crate::ai::agent_chat::approval::AgentApprovalMode::current();
+        spec.env.insert(
+            "GOOSE_MODE".to_string(),
+            spec.approval_mode.goose_mode().to_string(),
+        );
+        let root = goose_root_from_env(&spec.env);
+        if let Err(error) = ensure_goose_root(&root) {
             tracing::warn!(target: "script_kit::agent_chat", event = "goose_root_prepare_failed", %error);
+        }
+        if self.tools.platform.contains(&"summon") {
+            if let Err(error) = ensure_goose_permission_defaults(&root) {
+                tracing::warn!(target: "script_kit::agent_chat", event = "goose_permissions_prepare_failed", %error);
+            }
         }
         let endpoint = if self.tools.script_kit.is_empty() {
             None
@@ -181,12 +245,18 @@ impl GooseProfileLaunch {
                 "Script Kit MCP server is not running; session starts without Script Kit tools"
             );
         }
+        let user_mcp = if self.tools.user_mcp {
+            super::recipe::user_mcp_extensions(&crate::config::load_config().get_mcp())
+        } else {
+            Vec::new()
+        };
         spec.recipe = build_recipe(RecipeInput {
             profile: &self.profile,
             provider: self.provider.as_deref(),
             model: self.model.as_deref(),
             tools: &self.tools,
             endpoint: endpoint.as_ref(),
+            user_mcp: &user_mcp,
         });
         spec
     }
@@ -224,6 +294,30 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(temp.path().join("config/config.yaml")).unwrap(),
             edited
+        );
+    }
+
+    #[test]
+    fn delegation_asks_first_unless_the_person_already_chose() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join("config")).unwrap();
+        std::fs::write(
+            temp.path().join("config/permission.yaml"),
+            "smart_approve:\n  ask_before:\n  - shell\n",
+        )
+        .unwrap();
+        ensure_goose_permission_defaults(temp.path()).unwrap();
+        let text = std::fs::read_to_string(temp.path().join("config/permission.yaml")).unwrap();
+        let doc: serde_yaml::Value = serde_yaml::from_str(&text).unwrap();
+        assert_eq!(doc["user"]["ask_before"][0], "delegate");
+        assert_eq!(doc["smart_approve"]["ask_before"][0], "shell");
+
+        let chosen = "user:\n  always_allow:\n  - delegate\n";
+        std::fs::write(temp.path().join("config/permission.yaml"), chosen).unwrap();
+        ensure_goose_permission_defaults(temp.path()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("config/permission.yaml")).unwrap(),
+            chosen
         );
     }
 

@@ -470,7 +470,7 @@ fn handle_connection(
             handle_rpc_request(&mut reader, &mut stream, &headers, runtime_context)
         }
         ("POST", crate::mcp_agent_tools::AGENT_TOOLS_PATH) => {
-            handle_agent_tools_request(&mut reader, &mut stream, &headers)
+            handle_agent_tools_request(&mut reader, &mut stream, &headers, &runtime_context)
         }
         // Streamable HTTP clients may probe for a server-sent event stream or
         // close their session; agent tools answer every call inline.
@@ -489,6 +489,7 @@ fn handle_agent_tools_request(
     reader: &mut BufReader<TcpStream>,
     stream: &mut TcpStream,
     headers: &std::collections::HashMap<String, String>,
+    runtime_context: &McpRuntimeContext,
 ) -> Result<()> {
     let content_length: usize = headers
         .get("content-length")
@@ -499,7 +500,11 @@ fn handle_agent_tools_request(
     let policy_id = headers
         .get(crate::mcp_agent_tools::POLICY_HEADER)
         .map(String::as_str);
-    match crate::mcp_agent_tools::handle_rpc(policy_id, &String::from_utf8_lossy(&body)) {
+    match crate::mcp_agent_tools::handle_rpc(
+        policy_id,
+        &String::from_utf8_lossy(&body),
+        Some(runtime_context),
+    ) {
         crate::mcp_agent_tools::AgentRpcReply::Json(reply) => {
             send_response(stream, 200, "OK", &reply)
         }

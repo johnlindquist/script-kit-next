@@ -25,7 +25,14 @@ pub(crate) enum ToolHost {
     ScriptKit(&'static str),
     /// Served by goose's developer extension under this name.
     Developer(&'static str),
+    /// A goose platform extension (subagents, skills, todo list).
+    Platform(&'static str),
+    /// The MCP servers the user configured in `config.ts`.
+    UserMcp,
 }
+
+/// Profile tool id for the user's own MCP servers.
+pub(crate) const USER_MCP_TOOL_ID: &str = "mcp";
 
 /// Map a profile tool id onto the extension that serves it.
 ///
@@ -41,9 +48,16 @@ pub(crate) fn tool_host(tool_id: &str) -> Option<ToolHost> {
         "find" => ToolHost::ScriptKit("find"),
         "ls" => ToolHost::ScriptKit("ls"),
         "create_file" => ToolHost::ScriptKit("create_file"),
-        "write" => ToolHost::Developer("write"),
-        "edit" | "hashline_edit" => ToolHost::Developer("edit"),
+        // Script Kit serves file changes itself so a turn's changes can be
+        // reverted and stay inside the profile's write roots.
+        "write" => ToolHost::ScriptKit("write"),
+        "edit" | "hashline_edit" => ToolHost::ScriptKit("edit"),
+        "app" => ToolHost::ScriptKit("app"),
         "bash" | "shell" => ToolHost::Developer("shell"),
+        "subagents" | "delegate" => ToolHost::Platform("summon"),
+        "skills" => ToolHost::Platform("skills"),
+        "todo" => ToolHost::Platform("todo"),
+        USER_MCP_TOOL_ID => ToolHost::UserMcp,
         _ => return None,
     })
 }
@@ -76,6 +90,8 @@ pub(crate) const AGENT_POLICY_HEADER: &str = "X-Script-Kit-Agent-Policy";
 pub(crate) struct RecipeTools {
     pub script_kit: Vec<&'static str>,
     pub developer: Vec<&'static str>,
+    pub platform: Vec<&'static str>,
+    pub user_mcp: bool,
     pub unknown: Vec<String>,
 }
 
@@ -89,6 +105,10 @@ pub(crate) fn recipe_tools(tool_ids: &[String]) -> RecipeTools {
             Some(ToolHost::Developer(name)) if !tools.developer.contains(&name) => {
                 tools.developer.push(name);
             }
+            Some(ToolHost::Platform(name)) if !tools.platform.contains(&name) => {
+                tools.platform.push(name);
+            }
+            Some(ToolHost::UserMcp) => tools.user_mcp = true,
             Some(_) => {}
             None => tools.unknown.push(tool_id.clone()),
         }
@@ -107,7 +127,7 @@ pub(crate) fn profile_tool_ids(profile: &ResolvedAgentChatProfile) -> Option<Vec
 }
 
 /// Tools a profile gets when it does not restrict tools at all.
-pub(crate) const UNRESTRICTED_PROFILE_TOOLS: [&str; 9] = [
+pub(crate) const UNRESTRICTED_PROFILE_TOOLS: [&str; 14] = [
     "web_search",
     "web_fetch",
     "read",
@@ -117,7 +137,57 @@ pub(crate) const UNRESTRICTED_PROFILE_TOOLS: [&str; 9] = [
     "write",
     "edit",
     "bash",
+    "app",
+    "mcp",
+    "subagents",
+    "skills",
+    "todo",
 ];
+
+/// The user's `config.ts` MCP servers as goose extensions. Names Script Kit
+/// already uses for its own extensions are skipped.
+pub(crate) fn user_mcp_extensions(config: &crate::config::McpConfig) -> Vec<Value> {
+    let mut servers: Vec<_> = config.enabled_servers().collect();
+    servers.sort_by_key(|(left, _)| *left);
+    servers
+        .into_iter()
+        .filter(|(id, _)| {
+            !matches!(
+                id.as_str(),
+                SCRIPT_KIT_TOOLS_EXTENSION
+                    | GOOSE_DEVELOPER_EXTENSION
+                    | "summon"
+                    | "skills"
+                    | "todo"
+            )
+        })
+        .map(|(id, server)| match server {
+            crate::config::McpServerConfig::Stdio(stdio) => {
+                let mut extension = json!({
+                    "type": "stdio",
+                    "name": id,
+                    "description": stdio.description.clone().unwrap_or_default(),
+                    "cmd": stdio.command,
+                    "args": stdio.args,
+                    "envs": stdio.env,
+                    "timeout": 300,
+                });
+                if let Some(cwd) = stdio.cwd.as_deref() {
+                    extension["cwd"] = json!(cwd);
+                }
+                extension
+            }
+            crate::config::McpServerConfig::Http(http) => json!({
+                "type": "streamable_http",
+                "name": id,
+                "description": http.description.clone().unwrap_or_default(),
+                "uri": http.endpoint,
+                "headers": http.headers,
+                "timeout": 300,
+            }),
+        })
+        .collect()
+}
 
 pub(crate) fn profile_instructions(profile: &ResolvedAgentChatProfile) -> String {
     let mut sections = Vec::new();
@@ -163,6 +233,8 @@ pub(crate) struct RecipeInput<'a> {
     pub model: Option<&'a str>,
     pub tools: &'a RecipeTools,
     pub endpoint: Option<&'a ScriptKitToolsEndpoint>,
+    /// Extensions for the user's MCP servers, used when the profile allows `mcp`.
+    pub user_mcp: &'a [Value],
 }
 
 pub(crate) fn build_recipe(input: RecipeInput<'_>) -> Value {
@@ -178,10 +250,21 @@ pub(crate) fn build_recipe(input: RecipeInput<'_>) -> Value {
                     "Authorization": format!("Bearer {}", endpoint.bearer_token),
                     AGENT_POLICY_HEADER: endpoint.policy_id,
                 },
-                "timeout": 120,
-                "available_tools": input.tools.script_kit,
+                // The endpoint lists only what the session's policy allows.
+                "timeout": 300,
             }));
         }
+    }
+    for name in &input.tools.platform {
+        extensions.push(json!({
+            "type": "platform",
+            "name": name,
+            "description": "",
+            "bundled": true,
+        }));
+    }
+    if input.tools.user_mcp {
+        extensions.extend(input.user_mcp.iter().cloned());
     }
     if !input.tools.developer.is_empty() {
         extensions.push(json!({
@@ -251,23 +334,53 @@ mod tests {
             model: Some("gpt-6-luna"),
             tools: &tools,
             endpoint: Some(&endpoint()),
+            user_mcp: &[json!({"type": "stdio", "name": "github"})],
         });
 
         let extensions = recipe["extensions"].as_array().expect("extensions");
         assert_eq!(extensions.len(), 1, "{recipe:#}");
         assert_eq!(extensions[0]["name"], SCRIPT_KIT_TOOLS_EXTENSION);
-        assert_eq!(extensions[0]["available_tools"], json!(["web_search"]));
+        assert_eq!(tools.script_kit, vec!["web_search"]);
         assert_eq!(extensions[0]["headers"][AGENT_POLICY_HEADER], "policy-1");
         assert_eq!(recipe["settings"]["goose_provider"], "chatgpt_codex");
     }
 
     #[test]
-    fn script_kit_recipe_routes_mutating_tools_to_the_developer_extension() {
+    fn script_kit_recipe_serves_edits_itself_and_adds_agent_extensions() {
         let profile = built_in_script_kit_profile(&ctx());
         let tools = recipe_tools(&profile_tool_ids(&profile).expect("script kit restricts tools"));
-        assert_eq!(tools.developer, vec!["write", "edit", "shell"]);
-        assert!(tools.script_kit.contains(&"read"));
+        assert_eq!(tools.developer, vec!["shell"]);
+        for tool in ["read", "write", "edit", "app"] {
+            assert!(tools.script_kit.contains(&tool), "{tool}");
+        }
+        assert_eq!(tools.platform, vec!["summon", "skills", "todo"]);
+        assert!(tools.user_mcp);
         assert!(tools.unknown.is_empty(), "{:?}", tools.unknown);
+        let recipe = build_recipe(RecipeInput {
+            profile: &profile,
+            provider: None,
+            model: None,
+            tools: &tools,
+            endpoint: Some(&endpoint()),
+            user_mcp: &[json!({"type": "stdio", "name": "github"})],
+        });
+        let names: Vec<_> = recipe["extensions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|extension| extension["name"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "scriptkit",
+                "summon",
+                "skills",
+                "todo",
+                "github",
+                "developer"
+            ]
+        );
     }
 
     #[test]
@@ -279,9 +392,30 @@ mod tests {
             model: None,
             tools: &RecipeTools::default(),
             endpoint: Some(&endpoint()),
+            user_mcp: &[],
         });
         assert_eq!(recipe["extensions"], json!([]));
         assert!(recipe.get("settings").is_none());
+    }
+
+    #[test]
+    fn config_mcp_servers_become_goose_extensions() {
+        let config: crate::config::McpConfig = serde_json::from_value(json!({
+            "servers": {
+                "github": {"transport": "stdio", "command": "npx", "args": ["-y", "gh-mcp"], "env": {"TOKEN": "t"}},
+                "linear": {"transport": "http", "endpoint": "https://mcp.linear.app/mcp", "headers": {"Authorization": "Bearer x"}},
+                "off": {"transport": "stdio", "command": "x", "enabled": false},
+                "scriptkit": {"transport": "stdio", "command": "x"}
+            }
+        }))
+        .unwrap();
+        let extensions = user_mcp_extensions(&config);
+        assert_eq!(extensions.len(), 2, "{extensions:#?}");
+        assert_eq!(extensions[0]["type"], "stdio");
+        assert_eq!(extensions[0]["cmd"], "npx");
+        assert_eq!(extensions[0]["envs"]["TOKEN"], "t");
+        assert_eq!(extensions[1]["type"], "streamable_http");
+        assert_eq!(extensions[1]["uri"], "https://mcp.linear.app/mcp");
     }
 
     #[test]

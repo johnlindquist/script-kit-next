@@ -39,7 +39,7 @@ pub(crate) struct ModelThread {
     pub(crate) thread: Entity<AgentChatThread>,
     fixture: Option<AgentChatFixtureControl>,
     heard: Option<(String, Status)>,
-    news: super::chat_host::Heard,
+    pub(crate) news: super::chat_host::Heard,
     _observer: Subscription,
 }
 
@@ -241,6 +241,9 @@ impl ScriptListApp {
             WorkEffect::ReopenChat { id } => self.one_window_reopen_chat(id, cx),
             WorkEffect::PastChat { id, act } => self.one_window_past_chat(id, act, cx),
             WorkEffect::ChatStep { row, reply } => {
+                if self.one_window_chat_more(&row.key, cx) {
+                    return;
+                }
                 let done = match row.key.as_str() {
                     chat::EXPORT_KEY => match self.one_window_export_chat(cx) {
                         Some(done) => done,

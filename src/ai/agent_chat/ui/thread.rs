@@ -514,6 +514,8 @@ pub(crate) struct AgentChatThread {
     /// Ordinal (index into `fork_points`) of an in-flight rewind request.
     /// Consumed when the matching `ForkCompleted` event arrives.
     pending_fork_ordinal: Option<usize>,
+    /// Bumped each time the session went back to before a message.
+    pub(crate) fork_generation: u64,
 
     /// The resolved catalog entry for the selected agent. Retained so
     /// runtime `SetupRequired` events can build recovery cards with
@@ -1274,6 +1276,7 @@ impl AgentChatThread {
             standing_approvals: Vec::new(),
             fork_points: Vec::new(),
             pending_fork_ordinal: None,
+            fork_generation: 0,
             selected_agent: init.selected_agent,
             available_agents: init.available_agents,
             launch_requirements: init.launch_requirements,
@@ -1745,6 +1748,12 @@ impl AgentChatThread {
             }
         }
 
+        if matches!(self.status, AgentChatThreadStatus::Streaming)
+            && self.pending_context_items.is_empty()
+        {
+            self.steer_running_turn(trimmed.to_string(), cx);
+            return Ok(());
+        }
         if matches!(
             self.status,
             AgentChatThreadStatus::Streaming | AgentChatThreadStatus::WaitingForPermission
@@ -1768,6 +1777,48 @@ impl AgentChatThread {
 
         let context_job = self.take_pending_context_for_background_resolution();
         self.submit_captured_turn(trimmed.to_string(), context_job, true, None, cx)
+    }
+
+    /// Add words to the turn the model is working on: it reads them at its
+    /// next step. When the engine can't take them, they wait for the next turn.
+    fn steer_running_turn(&mut self, text: String, cx: &mut Context<Self>) {
+        let rx = match self
+            .connection
+            .steer(vec![ContentBlock::Text(TextContent::new(text.clone()))])
+        {
+            Ok(rx) => rx,
+            Err(_) => {
+                self.queue_current_composer(text);
+                self.notify_semantic_change(cx);
+                return;
+            }
+        };
+        self.input.clear();
+        self.notify_semantic_change(cx);
+        cx.spawn(async move |this, cx| {
+            let accepted = matches!(rx.recv().await, Ok(Ok(())));
+            let _ = this.update(cx, |this, cx| {
+                if accepted {
+                    let _ = this.flush_streaming_text_buffer();
+                    let id = this.alloc_id();
+                    this.messages.push(AgentChatThreadMessage::new(
+                        id,
+                        AgentChatThreadMessageRole::User,
+                        text.clone(),
+                    ));
+                    this.publish_sdk_new_message(id, AgentChatThreadMessageRole::User, text);
+                    tracing::info!(target: "script_kit::tab_ai", event = "agent_chat_turn_steered");
+                } else {
+                    // The turn ended first or the engine refused: send it next.
+                    this.queued_messages
+                        .push_back(AgentChatQueuedMessage::new(text, Vec::new()));
+                    tracing::info!(target: "script_kit::tab_ai", event = "agent_chat_steer_queued");
+                    let _ = this.submit_next_queued_if_ready(cx);
+                }
+                this.notify_semantic_change(cx);
+            });
+        })
+        .detach();
     }
 
     fn queue_current_composer(&mut self, text: String) {
@@ -2645,43 +2696,51 @@ impl AgentChatThread {
                 cx.update(|cx| {
                     if let Some(entity) = entity_ref.upgrade() {
                         entity.update(cx, |this, cx| {
-                            // WP-B2: a web-search-only session's single tool
-                            // never needs approval, so ANY approval request is
-                            // for a forbidden tool. Reject it before showing UI
-                            // or recording a standing approval, and never render
-                            // its (raw-arg-bearing) preview.
-                            if !this
-                                .session_policy
-                                .tool_policy()
-                                .allows_permission_prompts()
-                            {
-                                tracing::error!(
-                                    target: "script_kit::quick_ai",
-                                    event = "quick_ai_forbidden_permission_request_rejected",
-                                    policy = ?this.session_policy,
-                                    request_id = request.id,
-                                );
-                                let _ = request.reply_tx.send_blocking(None);
-                                return;
+                            if this.present_permission_request(request) {
+                                this.notify_semantic_change(cx);
                             }
-                            this.status = AgentChatThreadStatus::WaitingForPermission;
-                            // Compute the notification body and id from the owned
-                            // request before moving it into `pending_permission`,
-                            // so we never have to re-borrow-and-expect it back out.
-                            let request_id = request.id;
-                            let body = this.permission_notification_body(&request);
-                            this.pending_permission = Some(request);
-                            this.maybe_notify_agent_chat_event(
-                                AgentChatNotificationEvent::WaitingForPermission { request_id },
-                                "Agent Chat — approval needed",
-                                body,
-                            );
-                            this.notify_semantic_change(cx);
                         });
                     }
                 });
             }
         }));
+    }
+
+    /// Show the model's question and wait for the person. Returns whether
+    /// anything changed.
+    pub(super) fn present_permission_request(&mut self, request: AgentChatApprovalRequest) -> bool {
+        // WP-B2: a web-search-only session's single tool never needs approval,
+        // so ANY approval request is for a forbidden tool. Reject it before
+        // showing UI or recording a standing approval, and never render its
+        // (raw-arg-bearing) preview.
+        if !self
+            .session_policy
+            .tool_policy()
+            .allows_permission_prompts()
+        {
+            tracing::error!(
+                target: "script_kit::quick_ai",
+                event = "quick_ai_forbidden_permission_request_rejected",
+                policy = ?self.session_policy,
+                request_id = request.id,
+            );
+            let _ = request.reply_tx.send_blocking(None);
+            return false;
+        }
+        // A newer question replaces an unanswered one, which counts as no.
+        if let Some(previous) = self.pending_permission.take() {
+            let _ = previous.reply_tx.try_send(None);
+        }
+        self.status = AgentChatThreadStatus::WaitingForPermission;
+        let request_id = request.id;
+        let body = self.permission_notification_body(&request);
+        self.pending_permission = Some(request);
+        self.maybe_notify_agent_chat_event(
+            AgentChatNotificationEvent::WaitingForPermission { request_id },
+            "Agent Chat — approval needed",
+            body,
+        );
+        true
     }
 
     fn append_assistant_stream_delta(&mut self, delta: String) -> bool {
@@ -2818,6 +2877,10 @@ impl AgentChatThread {
                     self.fork_points = entries;
                     changed = true;
                 }
+            }
+            AgentChatEvent::ApprovalRequested(request) => {
+                changed |= self.flush_streaming_text_buffer();
+                changed |= self.present_permission_request(*request);
             }
             AgentChatEvent::ForkCompleted { text } => {
                 changed |= self.flush_streaming_text_buffer();
