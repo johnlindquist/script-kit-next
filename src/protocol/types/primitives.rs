@@ -314,6 +314,8 @@ pub enum WindowActionType {
     MoveToNextDisplay,
     #[serde(rename = "moveToPreviousDisplay")]
     MoveToPreviousDisplay,
+    /// Undo the most recent window change Script Kit made.
+    Restore,
 }
 
 /// Tile position for window tiling operations
@@ -349,4 +351,28 @@ pub enum TilePosition {
     AlmostMaximize,
     // Full screen
     Maximize,
+    // Fourths (four columns)
+    LeftFourth,
+    CenterLeftFourth,
+    CenterRightFourth,
+    RightFourth,
+    FirstThreeFourths,
+    LastThreeFourths,
+    // Sixths (three columns, two rows)
+    TopLeftSixth,
+    TopCenterSixth,
+    TopRightSixth,
+    BottomLeftSixth,
+    BottomCenterSixth,
+    BottomRightSixth,
+    // Relative to the window's current frame
+    MaximizeHeight,
+    MaximizeWidth,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    ReasonableSize,
+    MakeLarger,
+    MakeSmaller,
 }

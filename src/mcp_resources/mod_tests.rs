@@ -2090,6 +2090,7 @@ mod tests {
             "maximizeWindow",
             "moveToNextDisplay",
             "moveToPreviousDisplay",
+            "restoreWindow",
             "getMenuBar",
             "executeMenuAction",
         ] {

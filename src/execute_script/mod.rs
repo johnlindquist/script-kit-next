@@ -1,32 +1,18 @@
 // Script execution: process spawning, stdin protocol dispatch, and result handling.
 
 // --- merged from part_000.rs ---
+use window_control::ProtocolPlacement;
+
+fn protocol_placement(pos: &protocol::TilePosition) -> ProtocolPlacement {
+    window_control::protocol_placement(pos)
+}
+
+/// The fixed tile for a protocol position (adjustments have none).
+#[cfg(test)]
 fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_control::TilePosition {
-    use protocol::TilePosition as P;
-    use window_control::TilePosition as WC;
-    match pos {
-        P::Left => WC::LeftHalf,
-        P::Right => WC::RightHalf,
-        P::Top => WC::TopHalf,
-        P::Bottom => WC::BottomHalf,
-        P::TopLeft => WC::TopLeft,
-        P::TopRight => WC::TopRight,
-        P::BottomLeft => WC::BottomLeft,
-        P::BottomRight => WC::BottomRight,
-        P::LeftThird => WC::LeftThird,
-        P::CenterThird => WC::CenterThird,
-        P::RightThird => WC::RightThird,
-        P::TopThird => WC::TopThird,
-        P::MiddleThird => WC::MiddleThird,
-        P::BottomThird => WC::BottomThird,
-        P::FirstTwoThirds => WC::FirstTwoThirds,
-        P::LastTwoThirds => WC::LastTwoThirds,
-        P::TopTwoThirds => WC::TopTwoThirds,
-        P::BottomTwoThirds => WC::BottomTwoThirds,
-        P::Center => WC::Center,
-        P::AlmostMaximize => WC::AlmostMaximize,
-        // Maximize fills the entire visible screen area (fullscreen)
-        P::Maximize => WC::Fullscreen,
+    match protocol_placement(pos) {
+        ProtocolPlacement::Tile(position) => position,
+        ProtocolPlacement::Adjust(adjustment) => panic!("{adjustment:?} is not a fixed tile"),
     }
 }
 
@@ -73,7 +59,12 @@ fn dispatch_legacy_window_action(
             let (id, pos) = window_id
                 .zip(tile_position)
                 .ok_or_else(|| anyhow::anyhow!("Missing window_id or tile_position"))?;
-            window_control::tile_window(id, protocol_tile_to_window_control(pos))
+            match protocol_placement(pos) {
+                ProtocolPlacement::Tile(position) => window_control::tile_window(id, position),
+                ProtocolPlacement::Adjust(adjustment) => {
+                    window_control::adjust_window(id, adjustment)
+                }
+            }
         }
         protocol::WindowActionType::MoveToNextDisplay => {
             let id = window_id.ok_or_else(|| anyhow::anyhow!("Missing window_id"))?;
@@ -83,6 +74,8 @@ fn dispatch_legacy_window_action(
             let id = window_id.ok_or_else(|| anyhow::anyhow!("Missing window_id"))?;
             window_control::move_to_previous_display(id)
         }
+        protocol::WindowActionType::Restore => window_control::undo_last_window_transaction()
+            .and_then(window_control::TransactionReceipt::into_legacy_result),
     }
 }
 

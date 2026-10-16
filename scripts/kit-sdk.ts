@@ -574,7 +574,31 @@ export type TilePosition =
   | 'center'
   | 'almost-maximize'
   // Full screen
-  | 'maximize';
+  | 'maximize'
+  // Fourths (four columns)
+  | 'left-fourth'
+  | 'center-left-fourth'
+  | 'center-right-fourth'
+  | 'right-fourth'
+  | 'first-three-fourths'
+  | 'last-three-fourths'
+  // Sixths (three columns, two rows)
+  | 'top-left-sixth'
+  | 'top-center-sixth'
+  | 'top-right-sixth'
+  | 'bottom-left-sixth'
+  | 'bottom-center-sixth'
+  | 'bottom-right-sixth'
+  // Relative to where the window is now
+  | 'maximize-height'
+  | 'maximize-width'
+  | 'move-left'
+  | 'move-right'
+  | 'move-up'
+  | 'move-down'
+  | 'reasonable-size'
+  | 'make-larger'
+  | 'make-smaller';
 
 /**
  * Information about a display/monitor
@@ -3924,7 +3948,7 @@ interface WindowListMessage {
 interface WindowActionMessage {
   type: 'windowAction';
   requestId: string;
-  action: 'focus' | 'close' | 'minimize' | 'maximize' | 'resize' | 'move' | 'tile' | 'moveToNextDisplay' | 'moveToPreviousDisplay';
+  action: 'focus' | 'close' | 'minimize' | 'maximize' | 'resize' | 'move' | 'tile' | 'moveToNextDisplay' | 'moveToPreviousDisplay' | 'restore';
   windowId?: number;
   bounds?: TargetWindowBounds;
   tilePosition?: TilePosition;
@@ -5104,6 +5128,12 @@ declare global {
    * @param windowId - The ID of the window to move
    */
   function moveToPreviousDisplay(windowId: number): Promise<void>;
+
+  /**
+   * Undo the most recent window change Script Kit made (tile, move, resize,
+   * minimize), putting that window back where it was.
+   */
+  function restoreWindow(): Promise<void>;
 
   /**
    * Read the native menu bar of an app without pressing anything.
@@ -8798,6 +8828,9 @@ globalThis.getWindows = async function getWindows(): Promise<SystemWindowInfo[]>
 };
 
 function autoSubmitWindowActionResult(message: WindowActionMessage): WindowActionResultMessage {
+  if (message.action === 'restore') {
+    return { type: 'windowActionResult', requestId: message.requestId, success: true };
+  }
   const windowIndex = autoSubmitWindows.findIndex(
     (window) => window.windowId === message.windowId,
   );
@@ -9008,6 +9041,13 @@ globalThis.moveToNextDisplay = async function moveToNextDisplay(windowId: number
  */
 globalThis.moveToPreviousDisplay = async function moveToPreviousDisplay(windowId: number): Promise<void> {
   return performWindowAction('moveToPreviousDisplay', windowId);
+};
+
+/**
+ * Undo the most recent window change Script Kit made.
+ */
+globalThis.restoreWindow = async function restoreWindow(): Promise<void> {
+  return performWindowAction('restore', 0);
 };
 
 // =============================================================================

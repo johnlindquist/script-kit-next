@@ -1902,3 +1902,43 @@ Happy scripting! 🚀
 // --- merged from part_006.rs ---
 #[cfg(test)]
 include!("mod_tests.rs");
+
+#[cfg(test)]
+mod window_management_extension_tests {
+    /// Every shipped window command parses, and each `tileWindow` position it
+    /// uses is one the app understands.
+    #[test]
+    fn every_window_command_parses_and_uses_a_known_position() {
+        let scriptlets = crate::scriptlets::parse_markdown_as_scriptlets(
+            super::EMBEDDED_WINDOW_MANAGEMENT_EXTENSION,
+            None,
+        );
+        assert!(scriptlets.len() >= 48, "{}", scriptlets.len());
+        for name in [
+            "Tile {{app}} Left Fourth",
+            "Make {{app}} Larger",
+            "Restore Window",
+        ] {
+            assert!(scriptlets.iter().any(|s| s.name == name), "{name}");
+        }
+        let mut positions = 0;
+        for scriptlet in &scriptlets {
+            for part in scriptlet
+                .scriptlet_content
+                .split("tileWindow(win.windowId, '")
+                .skip(1)
+            {
+                let position = part.split('\'').next().unwrap_or_default();
+                let parsed: Result<crate::protocol::TilePosition, _> =
+                    serde_json::from_value(serde_json::json!(position));
+                assert!(
+                    parsed.is_ok(),
+                    "{} uses unknown position {position}",
+                    scriptlet.name
+                );
+                positions += 1;
+            }
+        }
+        assert!(positions >= 40, "{positions}");
+    }
+}

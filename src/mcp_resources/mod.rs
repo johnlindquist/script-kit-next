@@ -2131,6 +2131,12 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
                 "window-management",
             ),
             (
+                "restoreWindow",
+                "await restoreWindow(): Promise<void>",
+                "Undo the most recent window change Script Kit made, putting that window back.",
+                "window-management",
+            ),
+            (
                 "getMenuBar",
                 "await getMenuBar(bundleId?: string): Promise<MenuBarItem[]>",
                 "Read native menu structure without selecting a menu action.",
@@ -2399,6 +2405,7 @@ fn sdk_capability_from_function(entry: &SdkFunctionRef) -> SdkCapability {
         | "maximizeWindow"
         | "moveToNextDisplay"
         | "moveToPreviousDisplay"
+        | "restoreWindow"
         | "getMenuBar"
         | "executeMenuAction" => vec!["accessibility".into()],
         "captureScreenshot" => vec!["screen-recording".into()],
@@ -2428,6 +2435,7 @@ fn sdk_capability_from_function(entry: &SdkFunctionRef) -> SdkCapability {
         | "getFrontmostWindow"
         | "moveToNextDisplay"
         | "moveToPreviousDisplay"
+        | "restoreWindow"
         | "getMenuBar"
         | "executeMenuAction"
         | "computer"

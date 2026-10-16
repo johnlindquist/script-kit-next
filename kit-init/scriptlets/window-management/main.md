@@ -331,6 +331,311 @@ if (win) {
 }
 ```
 
+## Tile {{app}} Left Fourth
+
+<!--
+description: Tile {{app}} to the leftmost quarter of the screen
+icon: panel-left
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'left-fourth');
+}
+```
+
+## Tile {{app}} Center Left Fourth
+
+<!--
+description: Tile {{app}} to the second quarter from the left
+icon: columns-3
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'center-left-fourth');
+}
+```
+
+## Tile {{app}} Center Right Fourth
+
+<!--
+description: Tile {{app}} to the third quarter from the left
+icon: columns-3
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'center-right-fourth');
+}
+```
+
+## Tile {{app}} Right Fourth
+
+<!--
+description: Tile {{app}} to the rightmost quarter of the screen
+icon: panel-right
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'right-fourth');
+}
+```
+
+## Tile {{app}} Left Three Fourths
+
+<!--
+description: Tile {{app}} to the left three quarters of the screen
+icon: panel-left
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'first-three-fourths');
+}
+```
+
+## Tile {{app}} Right Three Fourths
+
+<!--
+description: Tile {{app}} to the right three quarters of the screen
+icon: panel-right
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'last-three-fourths');
+}
+```
+
+## Tile {{app}} Top Left Sixth
+
+<!--
+description: Tile {{app}} to the top-left sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'top-left-sixth');
+}
+```
+
+## Tile {{app}} Top Center Sixth
+
+<!--
+description: Tile {{app}} to the top-center sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'top-center-sixth');
+}
+```
+
+## Tile {{app}} Top Right Sixth
+
+<!--
+description: Tile {{app}} to the top-right sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'top-right-sixth');
+}
+```
+
+## Tile {{app}} Bottom Left Sixth
+
+<!--
+description: Tile {{app}} to the bottom-left sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'bottom-left-sixth');
+}
+```
+
+## Tile {{app}} Bottom Center Sixth
+
+<!--
+description: Tile {{app}} to the bottom-center sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'bottom-center-sixth');
+}
+```
+
+## Tile {{app}} Bottom Right Sixth
+
+<!--
+description: Tile {{app}} to the bottom-right sixth of the screen
+icon: layout-grid
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'bottom-right-sixth');
+}
+```
+
+## Maximize {{app}} Height
+
+<!--
+description: Stretch {{app}} to the full screen height, keeping its width
+icon: move-vertical
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'maximize-height');
+}
+```
+
+## Maximize {{app}} Width
+
+<!--
+description: Stretch {{app}} to the full screen width, keeping its height
+icon: move-horizontal
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'maximize-width');
+}
+```
+
+## Move {{app}} Left
+
+<!--
+description: Move {{app}} against the left edge, keeping its size
+icon: arrow-left-to-line
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'move-left');
+}
+```
+
+## Move {{app}} Right
+
+<!--
+description: Move {{app}} against the right edge, keeping its size
+icon: arrow-right-to-line
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'move-right');
+}
+```
+
+## Move {{app}} Up
+
+<!--
+description: Move {{app}} against the top edge, keeping its size
+icon: arrow-up-to-line
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'move-up');
+}
+```
+
+## Move {{app}} Down
+
+<!--
+description: Move {{app}} against the bottom edge, keeping its size
+icon: arrow-down-to-line
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'move-down');
+}
+```
+
+## Reasonable Size for {{app}}
+
+<!--
+description: Center {{app}} at a comfortable size (60% of the screen, at most 1024×900)
+icon: focus
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'reasonable-size');
+}
+```
+
+## Make {{app}} Larger
+
+<!--
+description: Grow {{app}} a little on every side
+icon: zoom-in
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'make-larger');
+}
+```
+
+## Make {{app}} Smaller
+
+<!--
+description: Shrink {{app}} a little on every side
+icon: zoom-out
+-->
+
+```ts
+const win = await getFrontmostWindow();
+if (win) {
+  await tileWindow(win.windowId, 'make-smaller');
+}
+```
+
+## Restore Window
+
+<!--
+description: Undo the last window change Script Kit made
+icon: undo-2
+-->
+
+```ts
+await restoreWindow();
+```
+
 ## Minimize {{app}}
 
 <!--

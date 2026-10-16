@@ -20,6 +20,7 @@
 #![allow(dead_code)]
 
 mod actions;
+mod adjust;
 mod app_profiles;
 mod ax;
 mod cache;
@@ -63,6 +64,11 @@ fn snap_lock<'a, T>(
 pub use actions::{
     close_window, focus_window, maximize_window, minimize_window, move_to_next_display,
     move_to_previous_display, move_window, resize_window, tile_window,
+};
+#[allow(unused_imports)]
+pub use adjust::{
+    adjust_window, adjusted_bounds, protocol_placement, ProtocolPlacement, WindowAdjustment,
+    WindowEdge,
 };
 pub use display_topology::list_displays;
 // Snapshot APIs remain part of the public library even when the binary does not call them.
