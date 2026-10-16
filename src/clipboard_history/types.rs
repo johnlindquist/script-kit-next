@@ -7,7 +7,9 @@ use chrono::{Datelike, Local, NaiveDate, TimeZone};
 use itertools::Itertools;
 
 #[allow(unused_imports)]
-pub use sk_clipboard::{classify_content, ClipboardEntry, ClipboardEntryMeta, ContentType};
+pub use sk_clipboard::{
+    classify_content, parse_color, ClipboardEntry, ClipboardEntryMeta, ContentType, Rgba,
+};
 
 /// Time grouping for clipboard entries (like Raycast)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

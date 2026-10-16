@@ -4164,7 +4164,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
         let actions = get_clipboard_history_context_actions(&entry);
         // Text on macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look, pin,
         // keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 14);
     }
 
     #[cfg(target_os = "macos")]
@@ -4182,7 +4182,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
         // Image on macOS: paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
         // open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today, ocr,
         // save_file, delete, delete_multiple, delete_all = 16 (no save_snippet for images)
-        assert_eq!(actions.len(), 16);
+        assert_eq!(actions.len(), 17);
     }
 
     #[cfg(target_os = "macos")]
@@ -9831,7 +9831,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
             //           pin, keep_in_today, save_snippet, save_file, delete, delete_multiple,
             //           delete_all = 13
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]
@@ -9904,7 +9904,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
             //   open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today, ocr,
             //   save_file, delete, delete_multiple, delete_all = 16 (no save_snippet for images)
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 16);
+            assert_eq!(actions.len(), 17);
         }
 
         #[test]

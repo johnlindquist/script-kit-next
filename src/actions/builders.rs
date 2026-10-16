@@ -22,8 +22,13 @@ mod scriptlet;
 mod shared;
 
 pub use chat::{ChatModelInfo, ChatPromptInfo};
-pub use clipboard::ClipboardEntryInfo;
-pub use emoji::{emoji_tone_action_id, get_emoji_context_actions, EmojiActionInfo};
+pub use clipboard::{
+    get_clipboard_delete_recent_route, ClipboardEntryInfo, RecentWindow, DELETE_RECENT_ACTION_ID,
+};
+pub use emoji::{
+    emoji_tone_action_id, emoji_unicode_text, get_emoji_context_actions, EmojiActionInfo,
+    EmojiPickerAction,
+};
 pub use notes::{NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo};
 pub use shared::to_deeplink_name;
 

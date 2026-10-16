@@ -348,8 +348,8 @@ fn clipboard_text_exact_action_count() {
     #[cfg(target_os = "macos")]
     assert_eq!(
         actions.len(),
-        13,
-        "macOS text clipboard should have 13 actions"
+        14,
+        "macOS text clipboard should have 14 actions"
     );
     #[cfg(not(target_os = "macos"))]
     assert_eq!(
@@ -374,8 +374,8 @@ fn clipboard_image_exact_action_count() {
     #[cfg(target_os = "macos")]
     assert_eq!(
         actions.len(),
-        16,
-        "macOS image clipboard should have 16 actions"
+        17,
+        "macOS image clipboard should have 17 actions"
     );
     #[cfg(not(target_os = "macos"))]
     assert_eq!(

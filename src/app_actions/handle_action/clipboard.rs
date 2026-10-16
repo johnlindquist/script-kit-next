@@ -508,7 +508,11 @@ impl ScriptListApp {
                                 .map(|(_, entry)| entry.id.clone());
                         }
 
-                        self.one_window_notice(crate::line_notice::INFO, pin_action.success_hud().to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            pin_action.success_hud().to_string(),
+                            cx,
+                        );
                         cx.notify();
                     }
                     Err(e) => {
@@ -527,10 +531,18 @@ impl ScriptListApp {
                 match clipboard_history::keep_entry_in_today(&entry.id, chrono::Utc::now()) {
                     Ok(true) => {
                         tracing::info!(entry_id = %entry.id, "clipboard entry kept to Today via action");
-                        self.one_window_notice(crate::line_notice::INFO, "Kept in Today".to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            "Kept in Today".to_string(),
+                            cx,
+                        );
                     }
                     Ok(false) => {
-                        self.one_window_notice(crate::line_notice::INFO, "Already on Today".to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            "Already on Today".to_string(),
+                            cx,
+                        );
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to keep clipboard entry in Today");
@@ -563,7 +575,11 @@ impl ScriptListApp {
                 let share_result = share_action.share(content);
 
                 match share_result {
-                    Ok(()) => self.one_window_notice(crate::line_notice::INFO, share_action.success_hud().to_string(), cx),
+                    Ok(()) => self.one_window_notice(
+                        crate::line_notice::INFO,
+                        share_action.success_hud().to_string(),
+                        cx,
+                    ),
                     Err(message) => {
                         self.notice_failed(message, cx);
                     }
@@ -803,10 +819,7 @@ impl ScriptListApp {
                         ClipboardCleanShotHandlerAction::Annotate => {
                             if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
                                 tracing::error!(error = %e, "failed to copy image");
-                                self.notice_failed(
-                                    cleanshot_action.copy_failure_message(),
-                                    cx,
-                                );
+                                self.notice_failed(cleanshot_action.copy_failure_message(), cx);
                                 return DispatchOutcome::success();
                             }
                             "cleanshot://open-from-clipboard".to_string()
@@ -814,19 +827,13 @@ impl ScriptListApp {
                         ClipboardCleanShotHandlerAction::Upload => {
                             let Some(content) = clipboard_history::get_entry_content(&entry.id)
                             else {
-                                self.notice_failed(
-                                    cleanshot_action.copy_failure_message(),
-                                    cx,
-                                );
+                                self.notice_failed(cleanshot_action.copy_failure_message(), cx);
                                 return DispatchOutcome::success();
                             };
 
                             let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
                             else {
-                                self.notice_failed(
-                                    cleanshot_action.decode_failure_message(),
-                                    cx,
-                                );
+                                self.notice_failed(cleanshot_action.decode_failure_message(), cx);
                                 return DispatchOutcome::success();
                             };
 
@@ -853,7 +860,11 @@ impl ScriptListApp {
 
                     match std::process::Command::new("open").arg(url).spawn() {
                         Ok(_) => {
-                            self.one_window_notice(crate::line_notice::INFO, cleanshot_action.success_hud().to_string(), cx);
+                            self.one_window_notice(
+                                crate::line_notice::INFO,
+                                cleanshot_action.success_hud().to_string(),
+                                cx,
+                            );
                             self.hide_main_and_reset(cx);
                         }
                         Err(e) => {
@@ -921,7 +932,11 @@ impl ScriptListApp {
                     match script_kit_gpui::ocr::extract_text_from_rgba(width, height, &rgba_bytes) {
                         Ok(text) => {
                             if text.trim().is_empty() {
-                                tracing::debug!(category = "UI", event = "clipboard_ocr_empty", "no text found in image");
+                                tracing::debug!(
+                                    category = "UI",
+                                    event = "clipboard_ocr_empty",
+                                    "no text found in image"
+                                );
                                 self.notice_failed(ocr_action.empty_text_message(), cx);
                             } else {
                                 tracing::debug!(chars = text.len(), "extracted OCR text");
@@ -1027,7 +1042,11 @@ impl ScriptListApp {
                         // Update selection respecting active filter
                         self.refresh_clipboard_selection_after_delete();
 
-                        self.one_window_notice(crate::line_notice::INFO, delete_action.success_hud().to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            delete_action.success_hud().to_string(),
+                            cx,
+                        );
                         cx.notify();
                     }
                     Err(e) => {
@@ -1074,7 +1093,11 @@ impl ScriptListApp {
                                 // Reset selection respecting active filter
                                 this.refresh_clipboard_selection_after_delete();
 
-                                this.one_window_notice(crate::line_notice::INFO, bulk_delete_action.success_hud(unpinned_count), cx);
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
+                                    bulk_delete_action.success_hud(unpinned_count),
+                                    cx,
+                                );
                                 cx.notify();
                             }
                             Err(e) => {
@@ -1083,6 +1106,98 @@ impl ScriptListApp {
                             }
                         }
                     }),
+                    cx,
+                );
+                DispatchOutcome::success()
+            }
+
+            "clipboard_open_link"
+            | "clipboard_reveal_file"
+            | "clipboard_copy_json"
+            | "clipboard_copy_color_hex"
+            | "clipboard_copy_color_rgb"
+            | "clipboard_copy_color_hsl" => {
+                let Some(entry) = selected_clipboard_entry else {
+                    self.notice_failed("Select a clipboard entry first", cx);
+                    return DispatchOutcome::success();
+                };
+                let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
+                    self.notice_failed("That clipboard entry is no longer available", cx);
+                    return DispatchOutcome::success();
+                };
+                match clipboard_history::entry_transform(action_id, content.trim()) {
+                    Ok(clipboard_history::EntryTransform::Open(target)) => {
+                        match clipboard_history::open_entry_target(
+                            &target,
+                            action_id == "clipboard_reveal_file",
+                        ) {
+                            Ok(()) => self.close_and_reset_window(cx),
+                            Err(error) => self.notice_failed(error, cx),
+                        }
+                    }
+                    Ok(clipboard_history::EntryTransform::Copy { text, message }) => {
+                        match crate::platform::copy_text(&text) {
+                            Ok(receipt) => self.one_window_notice(
+                                crate::line_notice::INFO,
+                                receipt.feedback(message),
+                                cx,
+                            ),
+                            Err(error) => self.notice_failed(format!("Couldn't copy: {error}"), cx),
+                        }
+                    }
+                    Err(message) => self.notice_failed(message, cx),
+                }
+                DispatchOutcome::success()
+            }
+
+            id if crate::actions::RecentWindow::from_action_id(id).is_some() => {
+                let Some(window) = crate::actions::RecentWindow::from_action_id(id) else {
+                    return DispatchOutcome::not_handled();
+                };
+                let since = chrono::Utc::now().timestamp_millis() - window.millis();
+                let count = self
+                    .cached_clipboard_entries
+                    .iter()
+                    .filter(|entry| !entry.pinned && entry.timestamp >= since)
+                    .count();
+                if count == 0 {
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
+                        format!(
+                            "Nothing unpinned was copied in the {}",
+                            window.title().to_lowercase()
+                        ),
+                        cx,
+                    );
+                    return DispatchOutcome::success();
+                }
+                let noun = if count == 1 { "entry" } else { "entries" };
+                self.one_window_hold(
+                    "trash",
+                    format!(
+                        "Deleting {count} {noun} from the {}",
+                        window.title().to_lowercase()
+                    ),
+                    Box::new(
+                        move |this, cx| match clipboard_history::clear_unpinned_history_since(since)
+                        {
+                            Ok(deleted) => {
+                                this.cached_clipboard_entries =
+                                    clipboard_history::get_cached_entries(CLIPBOARD_CACHE_SIZE);
+                                this.refresh_clipboard_selection_after_delete();
+                                let noun = if deleted == 1 { "entry" } else { "entries" };
+                                this.one_window_notice(
+                                    crate::line_notice::INFO,
+                                    format!("Deleted {deleted} {noun}"),
+                                    cx,
+                                );
+                                cx.notify();
+                            }
+                            Err(error) => {
+                                this.notice_failed(format!("Couldn't delete entries: {error}"), cx)
+                            }
+                        },
+                    ),
                     cx,
                 );
                 DispatchOutcome::success()
@@ -1213,10 +1328,7 @@ impl ScriptListApp {
                 if !scriptlets_dir.exists() {
                     if let Err(e) = std::fs::create_dir_all(&scriptlets_dir) {
                         tracing::error!(error = %e, "failed to create scriptlets dir");
-                        self.notice_failed(
-                            save_snippet_action.create_failure_message(e),
-                            cx,
-                        );
+                        self.notice_failed(save_snippet_action.create_failure_message(e), cx);
                         return DispatchOutcome::success();
                     }
                 }
@@ -1257,7 +1369,11 @@ impl ScriptListApp {
                 match result {
                     Ok(()) => {
                         tracing::info!(keyword = %keyword, "created snippet");
-                        self.one_window_notice(crate::line_notice::INFO, save_snippet_action.success_hud(&keyword), cx);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            save_snippet_action.success_hud(&keyword),
+                            cx,
+                        );
                         // Refresh scripts to pick up new snippet
                         self.refresh_scripts(cx);
                     }
@@ -1519,7 +1635,11 @@ impl ClipboardBulkDeleteResult {
     ) {
         match self.outcome() {
             ClipboardBulkDeleteOutcome::Complete => {
-                app.one_window_notice(crate::line_notice::INFO, action.success_hud(self.deleted), cx);
+                app.one_window_notice(
+                    crate::line_notice::INFO,
+                    action.success_hud(self.deleted),
+                    cx,
+                );
             }
             ClipboardBulkDeleteOutcome::PartialFailure => {
                 app.notice_failed(

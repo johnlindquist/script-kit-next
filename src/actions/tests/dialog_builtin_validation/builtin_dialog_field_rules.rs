@@ -7975,7 +7975,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach, quick_look,
             // pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
-            assert_eq!(actions.len(), 13, "Text on macOS: {}", actions.len());
+            assert_eq!(actions.len(), 14, "Text on macOS: {}", actions.len());
         }
 
         #[cfg(target_os = "macos")]
@@ -7994,7 +7994,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             // open_with, annotate_cleanshot, upload_cleanshot,
             // pin, keep_in_today, ocr, save_file, delete, delete_multiple, delete_all = 16
             // (save_snippet is text-only; images get ocr instead)
-            assert_eq!(actions.len(), 16, "Image on macOS: {}", actions.len());
+            assert_eq!(actions.len(), 17, "Image on macOS: {}", actions.len());
         }
 
         #[cfg(target_os = "macos")]
@@ -11671,7 +11671,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let actions = get_clipboard_history_context_actions(&entry);
             // paste, copy, paste_keep_open, share, attach_to_ai, quick_look,
             // pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 13
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 14);
         }
 
         #[cfg(target_os = "macos")]
@@ -11690,7 +11690,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
             // open_with, annotate_cleanshot, upload_cleanshot, pin, keep_in_today,
             // ocr, save_file, delete, delete_multiple, delete_all = 16
             // (save_snippet is text-only; images get ocr instead)
-            assert_eq!(actions.len(), 16);
+            assert_eq!(actions.len(), 17);
         }
 
         // ================================================================

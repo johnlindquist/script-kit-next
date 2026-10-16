@@ -10120,7 +10120,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
         // Cross-platform: paste, copy, keep_open, share, attach_to_ai, pin, keep_in_today, save_snippet, save_file, delete, delete_multiple, delete_all = 12
         // macOS adds: quick_look = +1 = 13
         #[cfg(target_os = "macos")]
-        assert_eq!(actions.len(), 13);
+        assert_eq!(actions.len(), 14);
         #[cfg(not(target_os = "macos"))]
         assert_eq!(actions.len(), 12);
     }
@@ -10140,7 +10140,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
         // macOS additionally adds: open_with, annotate_cleanshot, upload_cleanshot (quick_look is
         // on both text and image), so macOS image = text(13) - 1 + 4 = 16
         #[cfg(target_os = "macos")]
-        assert_eq!(actions.len(), 16);
+        assert_eq!(actions.len(), 17);
         #[cfg(not(target_os = "macos"))]
         assert_eq!(actions.len(), 12);
     }

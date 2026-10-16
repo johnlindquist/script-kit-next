@@ -1445,17 +1445,29 @@ impl ActionsDialog {
             ),
         );
 
-        Self::from_actions_with_context(
+        let mut dialog = Self::from_actions_with_context(
             focus_handle,
             on_select,
-            actions,
+            actions.clone(),
             None,
             None,
             theme,
             DesignVariant::Default,
-            Some(context_title),
+            Some(context_title.clone()),
             config,
-        )
+        );
+        dialog.set_root_route(ActionsDialogRoute {
+            id: "clipboard_entry".to_string(),
+            actions,
+            context_title: Some(context_title),
+            search_placeholder: None,
+            initial_selected_action_id: None,
+        });
+        dialog.register_drill_down_route(
+            super::builders::DELETE_RECENT_ACTION_ID,
+            super::builders::get_clipboard_delete_recent_route(),
+        );
+        dialog
     }
 
     /// Create ActionsDialog for an emoji picker entry with emoji-specific actions

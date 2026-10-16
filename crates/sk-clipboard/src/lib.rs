@@ -2,4 +2,7 @@
 
 mod types;
 
-pub use types::{ClipboardEntry, ClipboardEntryMeta, ContentType, classify_content};
+pub use types::{
+    ClipboardEntry, ClipboardEntryMeta, ContentType, Rgba, classify_content, classify_text,
+    parse_color,
+};

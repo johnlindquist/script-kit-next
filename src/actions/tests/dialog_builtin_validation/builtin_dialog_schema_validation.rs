@@ -7683,7 +7683,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             //           delete_all = 13
             // Non-macOS: no quick_look = 12
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 14);
             #[cfg(not(target_os = "macos"))]
             assert_eq!(actions.len(), 12);
         }
@@ -7704,7 +7704,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             //           open_with, annotate_cleanshot, upload_cleanshot, unpin, keep_in_today,
             //           ocr, save_file, delete, delete_multiple, delete_all = 16
             #[cfg(target_os = "macos")]
-            assert_eq!(actions.len(), 16);
+            assert_eq!(actions.len(), 17);
             // Non-macOS: no quick_look, open_with, annotate_cleanshot, upload_cleanshot = 12
             #[cfg(not(target_os = "macos"))]
             assert_eq!(actions.len(), 12);

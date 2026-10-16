@@ -38,7 +38,9 @@ mod quick_look;
 mod rejection;
 mod sediment;
 pub use sediment::keep_entry_in_today;
+mod entry_actions;
 mod temp_file;
+pub use entry_actions::{entry_transform, open_entry_target, EntryTransform};
 mod types;
 mod uri;
 
@@ -49,9 +51,9 @@ mod uri;
 // Types
 #[allow(unused_imports)]
 pub use types::{
-    classify_timestamp, group_entries_by_time, root_clipboard_entry_is_eligible,
+    classify_timestamp, group_entries_by_time, parse_color, root_clipboard_entry_is_eligible,
     root_clipboard_history_query_is_eligible, ClipboardEntry, ClipboardEntryMeta, ContentType,
-    RootClipboardHistorySectionOptions, TimeGroup,
+    Rgba, RootClipboardHistorySectionOptions, TimeGroup,
 };
 
 // Clipboard source exclusions
@@ -87,11 +89,11 @@ pub(crate) use cache::{
 #[allow(unused_imports)]
 pub use database::{
     add_entry, cached_entry_ids_whose_text_contains, clear_history, clear_unpinned_history,
-    entry_ids_whose_text_contains, get_clipboard_history, get_clipboard_history_meta,
-    get_clipboard_history_page, get_entry_by_id, get_entry_content, get_total_entry_count,
-    pin_entry, remove_entry, search_root_clipboard_history_meta,
-    search_root_clipboard_history_meta_direct, trim_oversize_text_entries, unpin_entry,
-    update_ocr_text,
+    clear_unpinned_history_since, entry_ids_whose_text_contains, get_clipboard_history,
+    get_clipboard_history_meta, get_clipboard_history_page, get_entry_by_id, get_entry_content,
+    get_entry_copy_count, get_total_entry_count, pin_entry, remove_entry,
+    search_root_clipboard_history_meta, search_root_clipboard_history_meta_direct,
+    trim_oversize_text_entries, unpin_entry, update_ocr_text,
 };
 
 // Image operations

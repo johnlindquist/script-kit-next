@@ -27,6 +27,52 @@ pub struct EmojiActionInfo {
     pub skin_tone: SkinTone,
 }
 
+/// A parsed `emoji:*` action id.
+#[allow(dead_code)] // Matched by the binary's action handler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmojiPickerAction {
+    Paste { keep_open: bool },
+    Copy,
+    CopyName,
+    CopyUnicode,
+    CopySection,
+    Pin(crate::emoji_pins::PinEdit),
+    Forget,
+    Tone(SkinTone),
+}
+
+impl EmojiPickerAction {
+    #[allow(dead_code)] // Called by the binary's action handler.
+    pub fn from_action_id(action_id: &str) -> Option<Self> {
+        use crate::emoji_pins::PinEdit;
+        let id = action_id.strip_prefix("emoji:").unwrap_or(action_id);
+        Some(match id {
+            "emoji_paste" => Self::Paste { keep_open: false },
+            "emoji_paste_keep_open" => Self::Paste { keep_open: true },
+            "emoji_copy" => Self::Copy,
+            "emoji_copy_name" => Self::CopyName,
+            "emoji_copy_unicode" => Self::CopyUnicode,
+            "emoji_copy_section" => Self::CopySection,
+            "emoji_pin" => Self::Pin(PinEdit::Pin),
+            "emoji_unpin" => Self::Pin(PinEdit::Unpin),
+            "emoji_pin_move_up" => Self::Pin(PinEdit::MoveUp),
+            "emoji_pin_move_down" => Self::Pin(PinEdit::MoveDown),
+            "emoji_forget" => Self::Forget,
+            _ => Self::Tone(SkinTone::from_id(id.strip_prefix("emoji_tone_")?)?),
+        })
+    }
+}
+
+/// `U+1F44B U+1F3FD` for the emoji's code points.
+#[allow(dead_code)] // Called by the binary's action handler.
+pub fn emoji_unicode_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| format!("U+{:04X}", ch as u32))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Action id that sets the default skin tone.
 pub fn emoji_tone_action_id(tone: SkinTone) -> String {
     format!("emoji:emoji_tone_{}", tone.id())
@@ -281,5 +327,38 @@ mod tests {
             1
         );
         assert!(actions.iter().any(|a| a.id == "emoji:emoji_forget"));
+    }
+
+    #[test]
+    fn emoji_action_ids_parse_with_or_without_the_namespace() {
+        use crate::emoji_pins::PinEdit;
+        assert_eq!(
+            EmojiPickerAction::from_action_id("emoji:emoji_paste_keep_open"),
+            Some(EmojiPickerAction::Paste { keep_open: true })
+        );
+        assert_eq!(
+            EmojiPickerAction::from_action_id("emoji_pin_move_down"),
+            Some(EmojiPickerAction::Pin(PinEdit::MoveDown))
+        );
+        assert_eq!(
+            EmojiPickerAction::from_action_id(&emoji_tone_action_id(SkinTone::MediumDark)),
+            Some(EmojiPickerAction::Tone(SkinTone::MediumDark))
+        );
+        assert_eq!(EmojiPickerAction::from_action_id("emoji_tone_purple"), None);
+        assert_eq!(EmojiPickerAction::from_action_id("clipboard_copy"), None);
+        assert_eq!(emoji_unicode_text("\u{1F44B}\u{1F3FD}"), "U+1F44B U+1F3FD");
+        // Every row the builder offers parses.
+        let wave = crate::emoji::emoji_by_value("\u{1F44B}").unwrap();
+        let mut info = emoji_info(true, None);
+        info.pin_position = Some((1, 3));
+        info.tones = wave.tones;
+        info.frequent = true;
+        for action in get_emoji_context_actions(&info) {
+            assert!(
+                EmojiPickerAction::from_action_id(&action.id).is_some(),
+                "{}",
+                action.id
+            );
+        }
     }
 }

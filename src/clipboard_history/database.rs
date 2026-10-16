@@ -362,6 +362,13 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
         );
     }
 
+    // Copied text is filed by what it is: a lone link, color, or path gets
+    // its own type so filters and actions can tell them apart.
+    let content_type = match content_type {
+        ContentType::Text => sk_clipboard::classify_text(content),
+        other => other,
+    };
+
     let conn = get_connection()?;
     let conn = conn.lock().map_err(db_lock_err)?;
 
@@ -369,11 +376,20 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
     let content_hash = compute_content_hash(content);
 
     // Check if entry with same hash exists (O(1) dedup via index)
-    // Also fetch pinned/OCR text to preserve it in cache update
+    // Also fetch pinned/OCR text to preserve it in cache update. Text-like
+    // entries match across their types, so an entry saved as plain text
+    // before classification existed is reused (and re-typed), not repeated.
+    let type_clause = if content_type == ContentType::Image {
+        "content_type = 'image'"
+    } else {
+        "content_type IN ('text', 'link', 'file', 'color')"
+    };
     let existing: Option<(String, bool, Option<String>)> = conn
         .query_row(
-            "SELECT id, pinned, ocr_text FROM history WHERE content_type = ? AND content_hash = ?",
-            params![content_type.as_str(), &content_hash],
+            &format!(
+                "SELECT id, pinned, ocr_text FROM history WHERE {type_clause} AND content_hash = ?"
+            ),
+            params![&content_hash],
             |row| {
                 Ok((
                     row.get(0)?,
@@ -390,8 +406,8 @@ pub fn add_entry(content: &str, content_type: ContentType) -> Result<String> {
 
     if let Some((existing_id, existing_pinned, existing_ocr_text)) = existing {
         conn.execute(
-            "UPDATE history SET timestamp = ?, copy_count = copy_count + 1 WHERE id = ?",
-            params![timestamp, &existing_id],
+            "UPDATE history SET timestamp = ?, copy_count = copy_count + 1, content_type = ? WHERE id = ?",
+            params![timestamp, content_type.as_str(), &existing_id],
         )
         .context("Failed to update existing entry timestamp")?;
         debug!(id = %existing_id, "Updated existing clipboard entry timestamp");
@@ -981,6 +997,52 @@ pub fn clear_unpinned_history() -> Result<()> {
     Ok(())
 }
 
+/// Delete unpinned entries copied at or after `since_ms` ("Delete Recent
+/// Entries"). Pinned and Brain-kept entries stay. Returns how many went.
+pub fn clear_unpinned_history_since(since_ms: i64) -> Result<usize> {
+    use super::blob_store::{delete_blob, is_blob_content};
+
+    let conn = get_connection()?;
+    let conn = conn.lock().map_err(db_lock_err)?;
+    let blob_contents: Vec<String> = {
+        let mut stmt = conn.prepare(
+            "SELECT content FROM history WHERE pinned = 0 AND brain_kept = 0 AND timestamp >= ?1 AND content LIKE 'blob:%'",
+        )?;
+        let rows = stmt.query_map(params![since_ms], |row| row.get(0))?;
+        rows.filter_map(|r| r.ok()).collect()
+    };
+    let deleted = conn
+        .execute(
+            "DELETE FROM history WHERE pinned = 0 AND brain_kept = 0 AND timestamp >= ?1",
+            params![since_ms],
+        )
+        .context("Failed to delete recent clipboard entries")?;
+    drop(conn);
+    for content in &blob_contents {
+        if is_blob_content(content) {
+            delete_blob(content);
+        }
+    }
+    info!(
+        deleted_count = deleted,
+        since_ms, "Deleted recent clipboard entries"
+    );
+    clear_all_caches();
+    Ok(deleted)
+}
+
+/// How many times an entry has been copied (1 for a single copy).
+pub fn get_entry_copy_count(id: &str) -> Option<i64> {
+    let conn = get_connection().ok()?;
+    let conn = conn.lock().ok()?;
+    conn.query_row(
+        "SELECT copy_count FROM history WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    )
+    .ok()
+}
+
 /// Update OCR text for an entry (async OCR results)
 #[allow(dead_code)] // Used by downstream subtasks (OCR)
 pub fn update_ocr_text(id: &str, text: &str) -> Result<()> {
@@ -1439,6 +1501,68 @@ mod tests {
         assert!(get_entry_by_id(&brain_id).is_some());
         assert!(get_entry_by_id(&pinned_id).is_some());
 
+        reset_test_clipboard_db();
+    }
+
+    #[test]
+    fn copied_links_colors_and_paths_get_their_own_type_without_duplicates() {
+        let _guard = test_db_lock();
+        let dir = tempfile::tempdir().expect("tempdir");
+        init_test_clipboard_db(&dir.path().join("clipboard.sqlite")).expect("test db");
+        let link = add_entry("https://example.com/page", ContentType::Text).unwrap();
+        let color = add_entry("#FF8800", ContentType::Text).unwrap();
+        let prose = add_entry("read https://example.com later", ContentType::Text).unwrap();
+        let kind = |id: &str| get_entry_by_id(id).unwrap().content_type;
+        assert_eq!(kind(&link), ContentType::Link);
+        assert_eq!(kind(&color), ContentType::Color);
+        assert_eq!(kind(&prose), ContentType::Text);
+
+        // An entry saved as plain text by an earlier version is reused and re-typed.
+        {
+            let conn = get_connection().unwrap();
+            let conn = conn.lock().unwrap();
+            conn.execute(
+                "UPDATE history SET content_type = 'text' WHERE id = ?1",
+                params![&link],
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            add_entry("https://example.com/page", ContentType::Text).unwrap(),
+            link
+        );
+        assert_eq!(kind(&link), ContentType::Link);
+        assert_eq!(get_entry_copy_count(&link), Some(2));
+        assert_eq!(get_total_entry_count(), 3);
+        reset_test_clipboard_db();
+    }
+
+    #[test]
+    fn deleting_recent_entries_keeps_older_and_pinned_ones() {
+        let _guard = test_db_lock();
+        let dir = tempfile::tempdir().expect("tempdir");
+        init_test_clipboard_db(&dir.path().join("clipboard.sqlite")).expect("test db");
+        let old = add_entry("from yesterday", ContentType::Text).unwrap();
+        let recent = add_entry("just now", ContentType::Text).unwrap();
+        let pinned = add_entry("pinned just now", ContentType::Text).unwrap();
+        pin_entry(&pinned).unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        {
+            let conn = get_connection().unwrap();
+            let conn = conn.lock().unwrap();
+            conn.execute(
+                "UPDATE history SET timestamp = ?1 WHERE id = ?2",
+                params![now - 24 * 60 * 60 * 1000, &old],
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            clear_unpinned_history_since(now - 15 * 60 * 1000).unwrap(),
+            1
+        );
+        assert!(get_entry_by_id(&old).is_some());
+        assert!(get_entry_by_id(&recent).is_none());
+        assert!(get_entry_by_id(&pinned).is_some());
         reset_test_clipboard_db();
     }
 

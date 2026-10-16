@@ -28,7 +28,9 @@ pub(crate) use builders::get_canonical_note_search_actions;
 #[allow(unused_imports)] // used by binary target via include!() in main.rs
 pub(crate) use builders::resolve_file_search_secondary_action_id;
 #[allow(unused_imports)] // Used by the binary's emoji picker through include!()-ed code.
-pub(crate) use builders::{emoji_tone_action_id, EmojiActionInfo};
+pub(crate) use builders::{
+    emoji_tone_action_id, emoji_unicode_text, EmojiActionInfo, EmojiPickerAction, RecentWindow,
+};
 #[allow(unused_imports)]
 // Used by actions builder tests; the legacy AI window consumer is gone.
 pub use builders::{
