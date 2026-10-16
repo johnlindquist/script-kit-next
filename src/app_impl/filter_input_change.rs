@@ -391,7 +391,9 @@ impl ScriptListApp {
                     "mouse"
                 };
                 let emoji_count =
-                    crate::emoji::filtered_ordered_emojis(&new_text, *selected_category).len();
+                    crate::emoji::display_ordered_emojis(&new_text, *selected_category, &self.emoji_head)
+                        .emojis
+                        .len();
 
                 Self::scroll_builtin_to_top_with_log(
                     &self.emoji_scroll_handle,

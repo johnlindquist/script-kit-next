@@ -1,10 +1,70 @@
 #[cfg(test)]
 mod tests {
+    use super::EmojiCategory::*;
     use super::*;
 
     #[test]
-    fn test_emoji_database_has_296_entries() {
-        assert_eq!(EMOJIS.len(), 296);
+    fn the_dataset_is_the_full_unicode_set() {
+        let all = parse_emoji_data(EMOJI_DATA);
+        assert!(all.len() > 1900, "{}", all.len());
+        assert!(EMOJIS.len() > 1800, "{}", EMOJIS.len());
+        assert!(EMOJIS.iter().any(|emoji| emoji.emoji == "\u{1F600}"));
+        assert!(
+            all.iter()
+                .filter(|emoji| emoji.supports_skin_tones())
+                .count()
+                > 300
+        );
+    }
+
+    #[test]
+    fn emoji_newer_than_the_mac_are_left_out() {
+        assert_eq!(emoji_version_for_macos(14, 2), 150);
+        assert_eq!(emoji_version_for_macos(14, 4), 151);
+        assert_eq!(emoji_version_for_macos(15, 4), 160);
+        let all = parse_emoji_data(EMOJI_DATA);
+        let newest = all.iter().map(|emoji| emoji.version).max().unwrap();
+        let supported = supported_emoji_version();
+        assert!(EMOJIS.iter().all(|emoji| emoji.version <= supported));
+        if newest > supported {
+            assert!(EMOJIS.len() < all.len());
+        }
+    }
+
+    #[test]
+    fn skin_tones_apply_to_emoji_that_take_them() {
+        let wave = emoji_by_value("\u{1F44B}").unwrap();
+        assert_eq!(wave.with_tone(SkinTone::None), "\u{1F44B}");
+        assert_eq!(wave.with_tone(SkinTone::Medium), "\u{1F44B}\u{1F3FD}");
+        assert_eq!(
+            emoji_for_variant("\u{1F44B}\u{1F3FF}").unwrap().emoji,
+            "\u{1F44B}"
+        );
+        let rocket = emoji_by_value("\u{1F680}").unwrap();
+        assert!(!rocket.supports_skin_tones());
+        assert_eq!(rocket.with_tone(SkinTone::Dark), "\u{1F680}");
+        for tone in SkinTone::iter() {
+            assert_eq!(SkinTone::from_id(tone.id()), Some(tone));
+        }
+    }
+
+    #[test]
+    fn search_ranks_whole_words_and_names_first() {
+        assert_eq!(search_emojis("cat")[0].emoji, "\u{1F408}");
+        assert_eq!(search_emojis("thumbs up")[0].emoji, "\u{1F44D}");
+        assert_eq!(search_emojis("rocket")[0].emoji, "\u{1F680}");
+        // Every word must match: an unrelated second word leaves nothing.
+        assert!(search_emojis("rocket zebra").is_empty());
+        // Keywords match from the start of a word, never the middle
+        // ("cat" doesn't find "location" or "dedicate").
+        for emoji in search_emojis("cat") {
+            let keyword_word = emoji.keywords.iter().any(|keyword| {
+                keyword
+                    .split_whitespace()
+                    .any(|word| word.to_lowercase().starts_with("cat"))
+            });
+            assert!(keyword_word || emoji.name.contains("cat"), "{}", emoji.name);
+        }
     }
 
     #[test]
@@ -101,12 +161,11 @@ mod tests {
 
     #[test]
     fn test_filtered_grid_row_count_matches_current_dataset() {
-        // Unfiltered: 9 category headers + cell rows for all 296 emojis
-        let total = filtered_grid_row_count("", None);
+        let total = filtered_grid_row_count("", None, &EmojiHead::default());
         assert!(total > 0, "unfiltered grid should have rows");
 
         // "heart" filter should return a smaller count
-        let heart = filtered_grid_row_count("heart", None);
+        let heart = filtered_grid_row_count("heart", None, &EmojiHead::default());
         assert!(
             heart < total,
             "heart filter should have fewer rows than unfiltered"
@@ -114,7 +173,7 @@ mod tests {
         assert!(heart > 0, "heart filter should have some rows");
 
         // "pizza" filter should be very small
-        let pizza = filtered_grid_row_count("pizza", None);
+        let pizza = filtered_grid_row_count("pizza", None, &EmojiHead::default());
         assert!(pizza > 0 && pizza <= 4, "pizza filter should have 1-4 rows");
     }
 
@@ -232,88 +291,103 @@ mod tests {
         assert_eq!(layout.move_index(last, EmojiNavDirection::Right), last);
     }
 
-    #[test]
-    fn display_grid_layout_maps_frequent_head_block_to_single_section() {
-        // Choose two emoji values from different categories so the head
-        // block would be split by the category-aware grouping if it
-        // weren't handled as its own section. The frequent block must
-        // map to one contiguous region above the first category header.
-        let frequent = vec!["❤️".to_string(), "🔥".to_string()];
-        let display = display_ordered_emojis("", None, &frequent);
-        assert_eq!(display.frequent_count, 2);
-
-        let layout = build_display_grid_layout(&display, GRID_COLS);
-
-        // First two items live in the same head row: a single cell row
-        // whose visible_row_index == 1 (header row is 0).
-        let row_0 = layout.item_to_row[0];
-        let row_1 = layout.item_to_row[1];
-        assert_eq!(row_0, row_1, "frequent head must be one contiguous row");
-        assert_eq!(layout.rows[row_0].visible_row_index, 1);
-        assert_eq!(layout.rows[row_0].start_index, 0);
-        assert_eq!(layout.rows[row_0].count, 2);
-
-        // Item 2 is the first category cell — it must sit below a
-        // category header row (visible_row_index jumps by at least 2:
-        // one for the end of the head block and one for the category
-        // header).
-        let row_2 = layout.item_to_row[2];
-        assert!(
-            layout.rows[row_2].visible_row_index >= 3,
-            "first category cell must sit below the Frequently Used \
-             head block AND its own category header row"
-        );
-
-        // Navigating Down from the head block must land on a category
-        // cell (not on a header row).
-        let down = layout.move_index(0, EmojiNavDirection::Down);
-        assert!(
-            down >= display.frequent_count,
-            "Down from the head block must enter the category region, \
-             landed at {down} (frequent_count={})",
-            display.frequent_count
-        );
-        // And the reverse direction round-trips cleanly.
-        let up = layout.move_index(down, EmojiNavDirection::Up);
-        assert!(
-            up < display.frequent_count,
-            "Up from first category cell must re-enter the Frequently \
-             Used head block, landed at {up}"
-        );
+    fn head(pinned: &[&str], frequent: &[&str]) -> EmojiHead {
+        EmojiHead {
+            pinned: pinned.iter().map(|value| value.to_string()).collect(),
+            frequent: frequent.iter().map(|value| value.to_string()).collect(),
+        }
     }
 
     #[test]
-    fn display_grid_layout_matches_build_emoji_grid_when_no_frequent() {
-        // With an empty frequent list the new builder must behave
-        // identically to the legacy builder. This guards the "no regression
-        // when the feature is dormant" invariant.
-        let display = display_ordered_emojis("", None, &[]);
-        assert_eq!(display.frequent_count, 0);
+    fn browsing_shows_pinned_then_frequent_then_categories_without_repeats() {
+        let display = display_ordered_emojis(
+            "",
+            None,
+            &head(
+                &["\u{1F680}", "\u{1F44B}\u{1F3FD}"],
+                &["\u{1F680}", "\u{1F525}"],
+            ),
+        );
+        let titles: Vec<&str> = display.sections.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(
+            &titles[..3],
+            &[PINNED_LABEL, FREQUENTLY_USED_LABEL, "Smileys & Emotion"]
+        );
+        assert_eq!(display.pinned_count(), 2);
+        // The rocket is pinned, so Frequently Used doesn't repeat it.
+        assert_eq!(display.frequent_count(), 1);
+        // A toned pin resolves to its base emoji.
+        assert_eq!(display.emojis[1].emoji, "\u{1F44B}");
+        let rockets = display
+            .emojis
+            .iter()
+            .filter(|e| e.emoji == "\u{1F680}")
+            .count();
+        assert_eq!(rockets, 1);
+        assert_eq!(display.emojis.len(), EMOJIS.len());
+    }
 
+    #[test]
+    fn searching_shows_one_ranked_results_section() {
+        let display = display_ordered_emojis("rocket", None, &head(&["\u{1F525}"], &[]));
+        assert_eq!(display.sections.len(), 1);
+        assert_eq!(display.sections[0].title, RESULTS_LABEL);
+        assert_eq!(display.emojis[0].emoji, "\u{1F680}");
+        let category = display_ordered_emojis("", Some(Flags), &head(&["\u{1F680}"], &[]));
+        assert_eq!(category.sections.len(), 1);
+        assert!(category.emojis.iter().all(|emoji| emoji.category == Flags));
+    }
+
+    #[test]
+    fn display_grid_layout_keeps_head_sections_separate() {
+        let display =
+            display_ordered_emojis("", None, &head(&["\u{2764}\u{FE0F}"], &["\u{1F525}"]));
+        let layout = build_display_grid_layout(&display, GRID_COLS);
+        // Pinned header (0), pinned row (1), Frequently Used header (2), its row (3).
+        assert_eq!(layout.rows[layout.item_to_row[0]].visible_row_index, 1);
+        assert_eq!(layout.rows[layout.item_to_row[1]].visible_row_index, 3);
+        assert!(layout.rows[layout.item_to_row[2]].visible_row_index >= 5);
+        assert_eq!(
+            display.row_count(GRID_COLS),
+            layout.rows.last().unwrap().visible_row_index + 1
+        );
+        let down = layout.move_index(0, EmojiNavDirection::Down);
+        assert_eq!(down, 1);
+        assert_eq!(layout.move_index(down, EmojiNavDirection::Up), 0);
+    }
+
+    #[test]
+    fn display_grid_layout_matches_build_emoji_grid_when_no_head() {
+        let display = display_ordered_emojis("", None, &EmojiHead::default());
+        assert_eq!(display.frequent_count(), 0);
         let base = filtered_ordered_emojis("", None);
         let legacy = build_emoji_grid_layout(&base, GRID_COLS, |e| e.category);
         let new = build_display_grid_layout(&display, GRID_COLS);
-
         assert_eq!(legacy.rows, new.rows);
         assert_eq!(legacy.item_to_row, new.item_to_row);
     }
 
     #[test]
     fn compute_display_scroll_row_matches_layout_visible_row_index() {
-        // With a frequent head block the single-step scroll helper must
-        // agree with the layout's visible_row_index for every item.
-        let frequent = vec!["❤️".to_string(), "🔥".to_string(), "🎉".to_string()];
-        let display = display_ordered_emojis("", None, &frequent);
-        let layout = build_display_grid_layout(&display, GRID_COLS);
-
-        for ix in 0..display.emojis.len() {
-            let expected = layout.scroll_row_for_index(ix);
-            let actual = compute_display_scroll_row(ix, &display);
-            assert_eq!(
-                actual, expected,
-                "scroll row mismatch at ix={} (expected {expected}, got {actual})",
-                ix
-            );
+        for display in [
+            display_ordered_emojis(
+                "",
+                None,
+                &head(
+                    &["\u{1F680}"],
+                    &["\u{2764}\u{FE0F}", "\u{1F525}", "\u{1F389}"],
+                ),
+            ),
+            display_ordered_emojis("heart", None, &EmojiHead::default()),
+        ] {
+            let layout = build_display_grid_layout(&display, GRID_COLS);
+            for ix in 0..display.emojis.len() {
+                assert_eq!(
+                    compute_display_scroll_row(ix, &display),
+                    layout.scroll_row_for_index(ix),
+                    "ix={ix}"
+                );
+            }
         }
     }
 

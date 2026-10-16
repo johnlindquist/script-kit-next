@@ -180,6 +180,16 @@ pub fn record_emoji_use(emoji: &str) -> anyhow::Result<()> {
     save_emoji_usage(&store)
 }
 
+/// Drop `emoji` from Frequently Used ("Reset Ranking").
+pub fn forget_emoji_use(emoji: &str) -> anyhow::Result<bool> {
+    let mut store = load_emoji_usage().unwrap_or_default();
+    let removed = store.entries.remove(emoji).is_some();
+    if removed {
+        save_emoji_usage(&store)?;
+    }
+    Ok(removed)
+}
+
 /// Build the frequent-emoji snapshot from disk. On missing or corrupt files we
 /// fall back to an empty snapshot so the picker never blocks on usage I/O.
 pub fn load_frequent_snapshot(limit: usize) -> Vec<String> {

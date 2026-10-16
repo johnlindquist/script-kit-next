@@ -91,20 +91,16 @@ fn emoji_picker_state_arm_derives_dataset_count_from_unfiltered_emojis() {
 }
 
 #[test]
-fn emoji_picker_state_arm_derives_visible_count_from_search_emojis() {
-    // The `visible_choice_count` slot MUST be populated from a
-    // `visible_count` binding that calls `search_emojis(filter)` and
-    // then applies the same `selected_category` narrowing as the
-    // dataset count. Losing the `search_emojis(filter)` call here
-    // would silently make `visibleChoiceCount` match the dataset
-    // size, collapsing the asymmetry in the other direction.
+fn emoji_picker_state_arm_derives_visible_count_from_the_display_order() {
+    // `visible_choice_count` must count what the grid shows: the same
+    // display order render, navigation, and actions use (search results,
+    // or pinned + frequent + categories), so it can't drift from the grid.
     let body = emoji_picker_state_arm();
     assert!(
-        body.contains("let visible_count = crate::emoji::search_emojis(filter)"),
-        "EmojiPickerView state arm must bind `visible_count` via \
-         `crate::emoji::search_emojis(filter)`. This is the single \
-         filter-aware accessor and matches the shape of the \
-         collect_elements arm in `src/app_layout/collect_elements.rs`."
+        body.contains("let visible_count = crate::emoji::display_ordered_emojis("),
+        "EmojiPickerView state arm must bind `visible_count` from \
+         `crate::emoji::display_ordered_emojis`, matching the grid and the \
+         collect_elements arm."
     );
 }
 

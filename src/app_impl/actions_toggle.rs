@@ -477,6 +477,17 @@ impl ScriptListApp {
             return false;
         }
 
+        if matches!(&self.current_view, AppView::EmojiPickerView { .. }) {
+            if self.show_actions_popup || self.selected_emoji_action_info().is_some() {
+                self.toggle_emoji_actions(window, cx);
+                return true;
+            }
+            if let Some(reason) = self.actions_toggle_dead_without_selection_reason() {
+                self.one_window_notice(crate::line_notice::INFO, reason.to_string(), cx);
+            }
+            return false;
+        }
+
         if matches!(&self.current_view, AppView::FavoritesBrowseView { .. }) {
             if self.selected_favorite_id().is_some() || self.show_actions_popup {
                 self.toggle_favorites_actions(window, cx);

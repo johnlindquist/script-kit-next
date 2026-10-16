@@ -2362,14 +2362,13 @@ impl ScriptListApp {
                                     .unwrap_or(true)
                             })
                             .count();
-                        let visible_count = crate::emoji::search_emojis(filter)
-                            .into_iter()
-                            .filter(|emoji| {
-                                selected_category
-                                    .map(|category| emoji.category == category)
-                                    .unwrap_or(true)
-                            })
-                            .count();
+                        let visible_count = crate::emoji::display_ordered_emojis(
+                            filter,
+                            *selected_category,
+                            &self.emoji_head,
+                        )
+                        .emojis
+                        .len();
                         (
                             "emojiPicker".to_string(),
                             Some("emoji-picker".to_string()),

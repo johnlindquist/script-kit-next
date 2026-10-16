@@ -506,105 +506,44 @@ fn clipboard_paste_destination_uses_named_plan_states() {
 }
 
 #[test]
-fn emoji_entry_actions_use_named_plan_states() {
-    let content =
+fn emoji_picker_actions_are_dispatched() {
+    // The emoji handler once existed without being compiled in, so ⌘K rows
+    // like Pin and Copy Unicode did nothing. Keep it wired.
+    let dispatch = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read handle_action");
+    assert!(dispatch.contains("include!(\"emoji.rs\");"));
+    assert!(dispatch.contains("self.handle_emoji_action(&action_id, cx)"));
+
+    let builder =
         fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
-
-    assert!(
-        content.contains("enum EmojiEntryActionPlan")
-            && content.contains("PinnedWithCategory")
-            && content.contains("PinnedWithoutCategory")
-            && content.contains("UnpinnedWithCategory")
-            && content.contains("UnpinnedWithoutCategory"),
-        "emoji pin/unpin and section-copy actions should be driven by named entry action plan states"
-    );
-    assert!(
-        content.contains("EmojiEntryActionPlan::from_info(emoji)")
-            && content.contains("fn pin_action")
-            && content.contains("fn has_category"),
-        "emoji context actions should derive pin and category rows from the named plan"
-    );
-}
-
-#[test]
-fn emoji_pin_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
+    let handler = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
         .expect("Failed to read emoji action handler");
+    for id in [
+        "emoji_paste",
+        "emoji_copy",
+        "emoji_paste_keep_open",
+        "emoji_pin",
+        "emoji_unpin",
+        "emoji_pin_move_up",
+        "emoji_pin_move_down",
+        "emoji_forget",
+        "emoji_copy_name",
+        "emoji_copy_unicode",
+        "emoji_copy_section",
+    ] {
+        assert!(
+            builder.contains(&format!("\"emoji:{id}\"")),
+            "builder offers {id}"
+        );
+        assert!(
+            handler.contains(&format!("\"{id}\"")),
+            "handler handles {id}"
+        );
+    }
+    assert!(builder.contains("emoji:emoji_tone_") && handler.contains("emoji_tone_"));
 
-    assert!(
-        content.contains("enum EmojiPinHandlerAction")
-            && content.contains("Pin")
-            && content.contains("Unpin"),
-        "emoji pin/unpin handler should be driven by named action states"
-    );
-    assert!(
-        content.contains("EmojiPinHandlerAction::from_action_id(action_id)")
-            && content.contains("pin_action.apply(&mut self.pinned_emojis, &emoji.value)")
-            && content.contains("pin_action.success_hud(&emoji.value)")
-            && content.contains("pin_action.selection_required_message()")
-            && content.contains("pin_action.failure_message(error)"),
-        "emoji pin/unpin handler should derive mutation, HUD copy, and error copy from the named action state"
-    );
-}
-
-#[test]
-fn emoji_copy_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
-        .expect("Failed to read emoji action handler");
-
-    assert!(
-        content.contains("enum EmojiCopyHandlerAction")
-            && content.contains("Emoji")
-            && content.contains("Unicode")
-            && content.contains("Section"),
-        "emoji copy/Unicode/section handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("EmojiCopyHandlerAction::from_action_id(action_id)")
-            && content.contains("copy_action.payload(&emoji)")
-            && content.contains("copy_action.selection_required_message()")
-            && content.contains("clipboard_text")
-            && content.contains("hud_text"),
-        "emoji copy handler should derive selection, clipboard, and HUD copy from the named state"
-    );
-}
-
-#[test]
-fn emoji_paste_handler_uses_named_action_states() {
-    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
-        .expect("Failed to read emoji action handler");
-
-    assert!(
-        content.contains("enum EmojiPasteHandlerAction")
-            && content.contains("Paste")
-            && content.contains("PasteKeepOpen"),
-        "emoji paste/paste-keep-open handlers should be driven by named action states"
-    );
-    assert!(
-        content.contains("EmojiPasteHandlerAction::from_action_id(action_id)")
-            && content.contains("paste_action.selection_required_message()")
-            && content.contains("paste_action.trace_action()")
-            && content.contains("paste_action.close_behavior()"),
-        "emoji paste handler should derive empty-selection copy, tracing action, and close behavior from the named state"
-    );
-}
-
-#[test]
-fn emoji_paste_destination_uses_named_plan_states() {
-    let content =
-        fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
-
-    assert!(
-        content.contains("enum EmojiPasteDestinationPlan")
-            && content.contains("FrontmostApp")
-            && content.contains("ActiveAppFallback"),
-        "emoji paste title should be driven by named destination plan states"
-    );
-    assert!(
-        content.contains("EmojiPasteDestinationPlan::from_info(emoji)")
-            && content.contains("paste_destination_plan.title(emoji)"),
-        "emoji paste action title should derive from the named destination plan"
-    );
+    let toggle = fs::read_to_string("src/app_impl/actions_toggle.rs").unwrap();
+    assert!(toggle.contains("self.toggle_emoji_actions(window, cx)"));
 }
 
 #[test]
@@ -1948,7 +1887,7 @@ fn surface_open_builtins_use_named_action_states() {
             && content.contains(
                 "self.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx)"
             )
-            && content.contains("crate::emoji_usage::load_frequent_snapshot")
+            && content.contains("self.refresh_emoji_head_snapshot()")
             && content.contains("self.open_webcam(cx)")
             && content.contains("self.open_file_search(String::new(), cx)")
             && content.contains("AppView::SettingsView")

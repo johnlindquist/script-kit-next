@@ -1,283 +1,305 @@
-// Emoji action handlers for handle_action dispatch.
-//
-// Contains all `emoji_*` action handling: paste, copy, paste-keep-open, pin, unpin.
+// Emoji picker actions: paste, copy, copy name/unicode/section, pin, reorder
+// pins, forget usage, and the default skin tone.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EmojiPinHandlerAction {
-    Pin,
-    Unpin,
+enum EmojiPickerAction {
+    Paste { keep_open: bool },
+    Copy,
+    CopyName,
+    CopyUnicode,
+    CopySection,
+    Pin(crate::emoji_pins::PinEdit),
+    Forget,
+    Tone(crate::emoji::SkinTone),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EmojiCopyHandlerAction {
-    Emoji,
-    Unicode,
-    Section,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EmojiPasteHandlerAction {
-    Paste,
-    PasteKeepOpen,
-}
-
-struct EmojiCopyPayload {
-    clipboard_text: String,
-    hud_text: String,
-}
-
-impl EmojiPasteHandlerAction {
+impl EmojiPickerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
-        match action_id {
-            "emoji_paste" => Some(Self::Paste),
-            "emoji_paste_keep_open" => Some(Self::PasteKeepOpen),
-            _ => None,
-        }
-    }
-
-    fn selection_required_message(self) -> &'static str {
-        match self {
-            Self::Paste | Self::PasteKeepOpen => "No emoji selected",
-        }
-    }
-
-    fn trace_action(self) -> &'static str {
-        match self {
-            Self::Paste => "emoji_paste",
-            Self::PasteKeepOpen => "emoji_paste_keep_open",
-        }
-    }
-
-    fn close_behavior(self) -> PasteCloseBehavior {
-        match self {
-            Self::Paste => PasteCloseBehavior::HideWindow,
-            Self::PasteKeepOpen => PasteCloseBehavior::KeepWindowOpen,
-        }
+        use crate::emoji_pins::PinEdit;
+        let id = action_id.strip_prefix("emoji:").unwrap_or(action_id);
+        Some(match id {
+            "emoji_paste" => Self::Paste { keep_open: false },
+            "emoji_paste_keep_open" => Self::Paste { keep_open: true },
+            "emoji_copy" => Self::Copy,
+            "emoji_copy_name" => Self::CopyName,
+            "emoji_copy_unicode" => Self::CopyUnicode,
+            "emoji_copy_section" => Self::CopySection,
+            "emoji_pin" => Self::Pin(PinEdit::Pin),
+            "emoji_unpin" => Self::Pin(PinEdit::Unpin),
+            "emoji_pin_move_up" => Self::Pin(PinEdit::MoveUp),
+            "emoji_pin_move_down" => Self::Pin(PinEdit::MoveDown),
+            "emoji_forget" => Self::Forget,
+            _ => Self::Tone(crate::emoji::SkinTone::from_id(id.strip_prefix("emoji_tone_")?)?),
+        })
     }
 }
 
-impl EmojiPinHandlerAction {
-    fn from_action_id(action_id: &str) -> Option<Self> {
-        match action_id {
-            "emoji_pin" => Some(Self::Pin),
-            "emoji_unpin" => Some(Self::Unpin),
-            _ => None,
-        }
-    }
-
-    fn apply(self, pinned_emojis: &mut std::collections::HashSet<String>, emoji_value: &str) {
-        match self {
-            Self::Pin => {
-                pinned_emojis.insert(emoji_value.to_string());
-            }
-            Self::Unpin => {
-                pinned_emojis.remove(emoji_value);
-            }
-        }
-    }
-
-    fn error_prefix(self) -> &'static str {
-        match self {
-            Self::Pin => "Failed to pin emoji",
-            Self::Unpin => "Failed to unpin emoji",
-        }
-    }
-
-    fn selection_required_message(self) -> &'static str {
-        match self {
-            Self::Pin | Self::Unpin => "No emoji selected",
-        }
-    }
-
-    fn failure_message(self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::Pin | Self::Unpin => format!("{}: {error}", self.error_prefix()),
-        }
-    }
-
-    fn success_hud(self, emoji_value: &str) -> String {
-        match self {
-            Self::Pin => format!("Pinned {emoji_value}"),
-            Self::Unpin => format!("Unpinned {emoji_value}"),
-        }
-    }
-}
-
-impl EmojiCopyHandlerAction {
-    fn from_action_id(action_id: &str) -> Option<Self> {
-        match action_id {
-            "emoji_copy" => Some(Self::Emoji),
-            "emoji_copy_unicode" => Some(Self::Unicode),
-            "emoji_copy_section" => Some(Self::Section),
-            _ => None,
-        }
-    }
-
-    fn payload(
-        self,
-        emoji: &crate::actions::EmojiActionInfo,
-    ) -> Result<EmojiCopyPayload, &'static str> {
-        match self {
-            Self::Emoji => Ok(EmojiCopyPayload {
-                clipboard_text: emoji.value.clone(),
-                hud_text: format!("Copied {}", emoji.value),
-            }),
-            Self::Unicode => {
-                use itertools::Itertools as _;
-                let unicode_str = emoji
-                    .value
-                    .chars()
-                    .map(|c| format!("U+{:04X}", c as u32))
-                    .join(" ");
-
-                Ok(EmojiCopyPayload {
-                    clipboard_text: unicode_str.clone(),
-                    hud_text: format!("Copied {unicode_str}"),
-                })
-            }
-            Self::Section => {
-                let Some(category) = emoji.category else {
-                    return Err("No category for this emoji");
-                };
-                let category_emojis = crate::emoji::emojis_by_category(category);
-                let all_emojis = {
-                    use itertools::Itertools as _;
-                    category_emojis.iter().map(|e| e.emoji).join("")
-                };
-
-                Ok(EmojiCopyPayload {
-                    clipboard_text: all_emojis,
-                    hud_text: format!("Copied {} emojis from {}", category_emojis.len(), category),
-                })
-            }
-        }
-    }
-
-    fn selection_required_message(self) -> &'static str {
-        match self {
-            Self::Emoji | Self::Unicode | Self::Section => "No emoji selected",
-        }
-    }
+/// `U+1F44B U+1F3FD` for the emoji's code points.
+fn emoji_unicode_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| format!("U+{:04X}", ch as u32))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 impl ScriptListApp {
-    /// Build an EmojiActionInfo for the currently selected emoji in the picker view.
-    fn selected_emoji_action_info(&self) -> Option<crate::actions::EmojiActionInfo> {
-        let (filter, selected_index, selected_category) = match &self.current_view {
-            AppView::EmojiPickerView {
-                filter,
-                selected_index,
-                selected_category,
-            } => (filter.as_str(), *selected_index, *selected_category),
-            _ => return None,
+    /// The emoji picker's current display order.
+    fn emoji_display(&self) -> Option<crate::emoji::DisplayOrder> {
+        let AppView::EmojiPickerView {
+            filter,
+            selected_category,
+            ..
+        } = &self.current_view
+        else {
+            return None;
         };
+        Some(crate::emoji::display_ordered_emojis(
+            filter,
+            *selected_category,
+            &self.emoji_head,
+        ))
+    }
 
-        let (ordered_emojis, _pin_count) =
-            crate::emoji::filtered_ordered_emojis_with_pins(filter, selected_category, &self.pinned_emojis);
-        let emoji = ordered_emojis.get(selected_index)?;
+    /// Reload what leads the picker: pins from disk and the current
+    /// Frequently Used ranking.
+    fn refresh_emoji_head_snapshot(&mut self) {
+        self.emoji_head = crate::emoji::EmojiHead {
+            pinned: crate::emoji_pins::load_pinned_emojis().unwrap_or_else(|error| {
+                tracing::warn!(%error, "failed to load pinned emoji");
+                Vec::new()
+            }),
+            frequent: crate::emoji_usage::load_frequent_snapshot(
+                crate::emoji_usage::EMOJI_FREQUENT_LIMIT,
+            ),
+        };
+    }
 
-        let frontmost_app_name =
-            crate::frontmost_app_tracker::get_last_real_app().map(|app| app.name);
-
+    /// The selected emoji as the actions see it.
+    fn selected_emoji_action_info(&self) -> Option<crate::actions::EmojiActionInfo> {
+        let AppView::EmojiPickerView { selected_index, .. } = &self.current_view else {
+            return None;
+        };
+        let display = self.emoji_display()?;
+        let emoji = display.emojis.get(*selected_index)?;
+        let pin_position = self
+            .emoji_head
+            .pinned
+            .iter()
+            .position(|pin| crate::emoji::emoji_for_variant(pin).is_some_and(|e| e.emoji == emoji.emoji))
+            .map(|position| (position, self.emoji_head.pinned.len()));
         Some(crate::actions::EmojiActionInfo {
-            value: emoji.emoji.to_string(),
+            value: emoji.with_tone(self.emoji_skin_tone).to_string(),
+            base: emoji.emoji.to_string(),
             name: emoji.name.to_string(),
-            pinned: self.pinned_emojis.contains(emoji.emoji),
-            frontmost_app_name,
+            pinned: pin_position.is_some(),
+            pin_position,
+            frequent: display
+                .section_of(*selected_index)
+                .is_some_and(|section| section.head == Some(crate::emoji::EmojiHeadKind::Frequent)),
+            frontmost_app_name: crate::frontmost_app_tracker::get_last_real_app()
+                .map(|app| app.name),
             category: Some(emoji.category),
+            tones: emoji.tones,
+            skin_tone: self.emoji_skin_tone,
         })
     }
 
-    /// Handle emoji-specific actions. Returns a DispatchOutcome.
-    fn handle_emoji_action(
+    /// Keep the selection on `base` after the sections change.
+    fn select_emoji_in_picker(&mut self, base: &str) {
+        let Some(display) = self.emoji_display() else {
+            return;
+        };
+        let Some(index) = display.emojis.iter().position(|emoji| emoji.emoji == base) else {
+            return;
+        };
+        if let AppView::EmojiPickerView { selected_index, .. } = &mut self.current_view {
+            *selected_index = index;
+        }
+        let row = crate::emoji::compute_display_scroll_row(index, &display);
+        self.emoji_scroll_handle
+            .scroll_to_item(row, gpui::ScrollStrategy::Nearest);
+    }
+
+    /// Insert the emoji into the app behind Script Kit and record the use.
+    fn paste_emoji_from_picker(
         &mut self,
-        action_id: &str,
-        selected_emoji: Option<crate::actions::EmojiActionInfo>,
+        value: &str,
+        base: &str,
+        name: &str,
+        keep_open: bool,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
-        match action_id {
-            "emoji_paste" | "emoji_paste_keep_open" => {
-                let Some(paste_action) = EmojiPasteHandlerAction::from_action_id(action_id) else {
-                    return DispatchOutcome::not_handled();
-                };
-                let Some(emoji) = selected_emoji else {
-                    self.notice_failed(paste_action.selection_required_message(), cx);
+        if let Err(error) = crate::emoji_usage::record_emoji_use(base) {
+            tracing::debug!(emoji = base, %error, "failed to record emoji usage");
+        }
+        let receipt = match crate::platform::copy_text(value) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("Failed to copy emoji: {error}"),
+                )
+            }
+        };
+        if receipt.destination() == crate::runtime_policy::CopyDestination::OwnedProcessLocal {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                receipt.feedback(format!("Copied {value}")),
+                cx,
+            );
+            return DispatchOutcome::success();
+        }
+        self.finalize_paste_after_clipboard_ready(
+            "emoji",
+            name,
+            if keep_open {
+                PasteCloseBehavior::KeepWindowOpen
+            } else {
+                PasteCloseBehavior::HideWindow
+            },
+            cx,
+        )
+    }
+
+    /// Handle `emoji:*` actions. Returns not-handled for other ids.
+    fn handle_emoji_action(&mut self, action_id: &str, cx: &mut Context<Self>) -> DispatchOutcome {
+        let Some(action) = EmojiPickerAction::from_action_id(action_id) else {
+            return DispatchOutcome::not_handled();
+        };
+        let Some(emoji) = self.selected_emoji_action_info() else {
+            self.notice_failed("No emoji selected", cx);
+            return DispatchOutcome::success();
+        };
+        tracing::info!(target: "script_kit::emoji", action = %action_id, emoji = %emoji.value, "emoji action");
+
+        let copy = |this: &mut Self, text: String, message: String, cx: &mut Context<Self>| {
+            match crate::platform::copy_text(&text) {
+                Ok(receipt) => {
+                    this.one_window_notice(crate::line_notice::INFO, receipt.feedback(message), cx);
+                    DispatchOutcome::success()
+                }
+                Err(error) => DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("Failed to copy: {error}"),
+                ),
+            }
+        };
+
+        match action {
+            EmojiPickerAction::Paste { keep_open } => {
+                self.paste_emoji_from_picker(&emoji.value, &emoji.base, &emoji.name, keep_open, cx)
+            }
+            EmojiPickerAction::Copy => {
+                if let Err(error) = crate::emoji_usage::record_emoji_use(&emoji.base) {
+                    tracing::debug!(emoji = %emoji.base, %error, "failed to record emoji usage");
+                }
+                copy(self, emoji.value.clone(), format!("Copied {}", emoji.value), cx)
+            }
+            EmojiPickerAction::CopyName => {
+                copy(self, emoji.name.clone(), format!("Copied \u{201c}{}\u{201d}", emoji.name), cx)
+            }
+            EmojiPickerAction::CopyUnicode => {
+                let text = emoji_unicode_text(&emoji.value);
+                copy(self, text.clone(), format!("Copied {text}"), cx)
+            }
+            EmojiPickerAction::CopySection => {
+                let Some(category) = emoji.category else {
+                    self.notice_failed("This emoji has no category", cx);
                     return DispatchOutcome::success();
                 };
-
-                if let Err(error) = crate::runtime_policy::check(
-                    crate::runtime_policy::ExternalEffect::NativeInput,
-                ) {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        error.to_string(),
-                    );
-                }
-
-                tracing::info!(
-                    action = paste_action.trace_action(),
-                    emoji = %emoji.value,
-                    emoji_name = %emoji.name,
-                    "emoji action"
-                );
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(emoji.value.clone()));
-                self.finalize_paste_after_clipboard_ready(
-                    "emoji",
-                    &emoji.name,
-                    paste_action.close_behavior(),
+                let all = crate::emoji::emojis_by_category(category);
+                let text: String = all.iter().map(|e| e.with_tone(self.emoji_skin_tone)).collect();
+                copy(
+                    self,
+                    text,
+                    format!("Copied {} emoji from {}", all.len(), category.display_name()),
                     cx,
                 )
             }
-            "emoji_copy" | "emoji_copy_unicode" | "emoji_copy_section" => {
-                let Some(copy_action) = EmojiCopyHandlerAction::from_action_id(action_id) else {
-                    return DispatchOutcome::not_handled();
-                };
-                let Some(emoji) = selected_emoji else {
-                    self.notice_failed(copy_action.selection_required_message(), cx);
-                    return DispatchOutcome::success();
-                };
-
-                let payload = match copy_action.payload(&emoji) {
-                    Ok(payload) => payload,
-                    Err(message) => {
-                        self.notice_failed(message, cx);
+            EmojiPickerAction::Pin(edit) => {
+                let mut pins = std::mem::take(&mut self.emoji_head.pinned);
+                // Pins are stored without a skin tone.
+                pins.retain(|pin| {
+                    !(crate::emoji::emoji_for_variant(pin).is_some_and(|e| e.emoji == emoji.base)
+                        && pin != &emoji.base)
+                });
+                let changed = crate::emoji_pins::apply_pin_edit(&mut pins, &emoji.base, edit);
+                self.emoji_head.pinned = pins;
+                if changed {
+                    if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.emoji_head.pinned) {
+                        self.notice_failed(format!("Couldn't save pinned emoji: {error}"), cx);
                         return DispatchOutcome::success();
                     }
-                };
-
-                tracing::info!(action = %action_id, emoji = %emoji.value, "emoji action");
-                match crate::platform::copy_text(&payload.clipboard_text) {
-                    Ok(receipt) => {
-                        self.one_window_notice(crate::line_notice::INFO, receipt.feedback(payload.hud_text), cx);
-                        DispatchOutcome::success()
-                    }
-                    Err(error) => DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Failed to copy emoji: {error}"),
-                    ),
-                }
-            }
-            "emoji_pin" | "emoji_unpin" => {
-                let Some(pin_action) = EmojiPinHandlerAction::from_action_id(action_id) else {
-                    return DispatchOutcome::not_handled();
-                };
-                let Some(emoji) = selected_emoji else {
-                    self.notice_failed(pin_action.selection_required_message(), cx);
-                    return DispatchOutcome::success();
-                };
-
-                tracing::info!(action = %action_id, emoji = %emoji.value, "emoji action");
-                pin_action.apply(&mut self.pinned_emojis, &emoji.value);
-                if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.pinned_emojis) {
-                    tracing::error!(error = %error, emoji = %emoji.value, action = %action_id, "failed to update pinned emoji");
-                    self.notice_failed(pin_action.failure_message(error), cx);
-                } else {
-                    self.one_window_notice(crate::line_notice::INFO, pin_action.success_hud(&emoji.value), cx);
+                    self.select_emoji_in_picker(&emoji.base);
+                    let message = match edit {
+                        crate::emoji_pins::PinEdit::Pin => format!("Pinned {}", emoji.value),
+                        crate::emoji_pins::PinEdit::Unpin => format!("Unpinned {}", emoji.value),
+                        _ => format!("Moved {}", emoji.value),
+                    };
+                    self.one_window_notice(crate::line_notice::INFO, message, cx);
                     cx.notify();
                 }
                 DispatchOutcome::success()
             }
-            _ => DispatchOutcome::not_handled(),
+            EmojiPickerAction::Forget => {
+                match crate::emoji_usage::forget_emoji_use(&emoji.base) {
+                    Ok(_) => {
+                        self.emoji_head.frequent.retain(|value| value != &emoji.base);
+                        self.select_emoji_in_picker(&emoji.base);
+                        self.one_window_notice(
+                            crate::line_notice::INFO,
+                            format!("Removed {} from Frequently Used", emoji.value),
+                            cx,
+                        );
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        self.notice_failed(format!("Couldn't reset its ranking: {error}"), cx)
+                    }
+                }
+                DispatchOutcome::success()
+            }
+            EmojiPickerAction::Tone(tone) => {
+                self.emoji_skin_tone = tone;
+                if let Err(error) = crate::emoji_pins::save_skin_tone(tone) {
+                    self.notice_failed(format!("Couldn't save the skin tone: {error}"), cx);
+                } else {
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
+                        format!("Skin tone: {}", tone.title()),
+                        cx,
+                    );
+                }
+                cx.notify();
+                DispatchOutcome::success()
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod emoji_action_tests {
+    use super::*;
+
+    #[test]
+    fn emoji_action_ids_parse_with_or_without_the_namespace() {
+        assert_eq!(
+            EmojiPickerAction::from_action_id("emoji:emoji_paste_keep_open"),
+            Some(EmojiPickerAction::Paste { keep_open: true })
+        );
+        assert_eq!(
+            EmojiPickerAction::from_action_id("emoji_pin_move_down"),
+            Some(EmojiPickerAction::Pin(crate::emoji_pins::PinEdit::MoveDown))
+        );
+        assert_eq!(
+            EmojiPickerAction::from_action_id(&crate::actions::emoji_tone_action_id(
+                crate::emoji::SkinTone::MediumDark
+            )),
+            Some(EmojiPickerAction::Tone(crate::emoji::SkinTone::MediumDark))
+        );
+        assert_eq!(EmojiPickerAction::from_action_id("emoji_tone_purple"), None);
+        assert_eq!(EmojiPickerAction::from_action_id("clipboard_copy"), None);
+        assert_eq!(emoji_unicode_text("\u{1F44B}\u{1F3FD}"), "U+1F44B U+1F3FD");
     }
 }

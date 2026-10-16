@@ -492,7 +492,8 @@ impl ScriptListApp {
             arg_prompt_geometry: std::rc::Rc::new(std::cell::Cell::new(None)),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
             emoji_scroll_handle: UniformListScrollHandle::new(),
-            emoji_frequent_snapshot: Vec::new(),
+            emoji_head: crate::emoji::EmojiHead::default(),
+            emoji_skin_tone: crate::emoji::SkinTone::None,
             window_list_scroll_handle: UniformListScrollHandle::new(),
             tips_list_scroll_handle: UniformListScrollHandle::new(),
             browser_tabs_scroll_handle: UniformListScrollHandle::new(),
@@ -1386,7 +1387,7 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            let frequent_snapshot = this.emoji_frequent_snapshot.clone();
+                            let emoji_head = this.emoji_head.clone();
                             if let AppView::EmojiPickerView {
                                 selected_index,
                                 filter,
@@ -1396,7 +1397,7 @@ impl ScriptListApp {
                                 let display = crate::emoji::display_ordered_emojis(
                                     filter,
                                     *selected_category,
-                                    &frequent_snapshot,
+                                    &emoji_head,
                                 );
                                 let filtered_len = display.emojis.len();
                                 if filtered_len == 0 {
@@ -1462,7 +1463,7 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            let emoji_frequent_snapshot = this.emoji_frequent_snapshot.clone();
+                            let emoji_head = this.emoji_head.clone();
                             // Only intercept in views that use Input + list navigation
                             match &mut this.current_view {
                                 AppView::FileSearchView {
@@ -1894,7 +1895,7 @@ impl ScriptListApp {
                                     let display = crate::emoji::display_ordered_emojis(
                                         filter,
                                         *selected_category,
-                                        &emoji_frequent_snapshot,
+                                        &emoji_head,
                                     );
                                     let filtered_len = display.emojis.len();
                                     if filtered_len == 0 {

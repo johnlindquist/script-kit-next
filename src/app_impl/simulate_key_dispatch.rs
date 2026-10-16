@@ -1654,7 +1654,7 @@ impl ScriptListApp {
                     // opened. Same tool-gap class as ClipboardHistoryView
                     // (Run 7 Pass #17).
                     logging::log("STDIN", "SimulateKey: Cmd+K - toggle emoji actions");
-                    view.toggle_actions(ctx, window);
+                    view.toggle_emoji_actions(window, ctx);
                 }
                 AppView::EmojiPickerView {
                     filter,
@@ -1689,23 +1689,26 @@ impl ScriptListApp {
                     let filter_clone = filter.clone();
                     let cat = *selected_category;
                     let old_idx = *selected_index;
-                    let ordered = crate::emoji::filtered_ordered_emojis(&filter_clone, cat);
-                    let filtered_len = ordered.len();
+                    let display =
+                        crate::emoji::display_ordered_emojis(&filter_clone, cat, &view.emoji_head);
+                    let filtered_len = display.emojis.len();
                     if filtered_len == 0 {
                         return DispatchOutcome::success();
                     }
-                    let cols = crate::emoji::GRID_COLS;
-                    let new_idx = match key_lower.as_str() {
-                        "up" | "arrowup" => old_idx.saturating_sub(cols),
-                        "down" | "arrowdown" => {
-                            (old_idx + cols).min(filtered_len.saturating_sub(1))
-                        }
-                        "left" | "arrowleft" => old_idx.saturating_sub(1),
-                        "right" | "arrowright" => (old_idx + 1).min(filtered_len.saturating_sub(1)),
+                    let layout = crate::emoji::build_display_grid_layout(
+                        &display,
+                        crate::emoji::GRID_COLS,
+                    );
+                    let direction = match key_lower.as_str() {
+                        "up" | "arrowup" => crate::emoji::EmojiNavDirection::Up,
+                        "down" | "arrowdown" => crate::emoji::EmojiNavDirection::Down,
+                        "left" | "arrowleft" => crate::emoji::EmojiNavDirection::Left,
+                        "right" | "arrowright" => crate::emoji::EmojiNavDirection::Right,
                         "enter" => {
-                            if let Some(emoji) = ordered.get(old_idx) {
+                            // Automation copies instead of typing into another app.
+                            if let Some(emoji) = display.emojis.get(old_idx) {
                                 ctx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                    emoji.emoji.to_string(),
+                                    emoji.with_tone(view.emoji_skin_tone).to_string(),
                                 ));
                                 view.close_and_reset_window(ctx);
                             }
@@ -1722,12 +1725,13 @@ impl ScriptListApp {
                             return DispatchOutcome::success();
                         }
                     };
+                    let new_idx = layout.move_index(old_idx.min(filtered_len - 1), direction);
                     // Apply new index
                     if let AppView::EmojiPickerView { selected_index, .. } = &mut view.current_view
                     {
                         *selected_index = new_idx;
                     }
-                    let row = crate::emoji::compute_scroll_row(new_idx, &ordered);
+                    let row = layout.scroll_row_for_index(new_idx);
                     view.emoji_scroll_handle
                         .scroll_to_item(row, ScrollStrategy::Nearest);
                     view.input_mode = InputMode::Keyboard;

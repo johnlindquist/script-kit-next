@@ -1510,7 +1510,11 @@ pub(crate) struct ScriptListApp {
     // navigation + Enter all consume the same Vec so selection indices stay
     // stable while the view is open. See Oracle-Session
     // `emoji-picker-frecency-recency` — "freeze ranking at view-open time".
-    emoji_frequent_snapshot: Vec<String>,
+    // Also holds the pinned emoji (in the order you arranged them), so the
+    // Pinned and Frequently Used sections freeze together.
+    emoji_head: crate::emoji::EmojiHead,
+    // Default skin tone applied to emoji that take one.
+    emoji_skin_tone: crate::emoji::SkinTone,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for the Tips browser list

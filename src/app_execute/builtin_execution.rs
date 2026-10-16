@@ -2780,9 +2780,8 @@ impl ScriptListApp {
                     "{}",
                     action.log_message()
                 );
-                self.emoji_frequent_snapshot = crate::emoji_usage::load_frequent_snapshot(
-                    crate::emoji_usage::EMOJI_FREQUENT_LIMIT,
-                );
+                self.emoji_skin_tone = crate::emoji_pins::load_skin_tone();
+                self.refresh_emoji_head_snapshot();
                 self.open_builtin_filterable_view(
                     AppView::EmojiPickerView {
                         filter: String::new(),

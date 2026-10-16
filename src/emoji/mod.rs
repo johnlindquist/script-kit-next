@@ -6,6 +6,10 @@ pub struct Emoji {
     pub name: &'static str,
     pub keywords: &'static [&'static str],
     pub category: EmojiCategory,
+    /// Light-to-dark skin-tone variants, when the emoji takes a skin tone.
+    pub tones: Option<[&'static str; 5]>,
+    /// Emoji version that introduced it, in tenths (`15.1` -> 151).
+    pub version: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter)]
@@ -37,1173 +41,205 @@ impl EmojiCategory {
     }
 }
 
-macro_rules! emoji {
-    ($emoji:expr, $name:expr, $category:expr, [$($keyword:expr),+ $(,)?]) => {
-        Emoji {
-            emoji: $emoji,
-            name: $name,
-            keywords: &[$($keyword),+],
-            category: $category,
-        }
-    };
-}
-
 use strum::IntoEnumIterator;
-use EmojiCategory::*;
 
 /// Returns an iterator over all emoji categories in declaration order.
 pub fn all_categories() -> impl Iterator<Item = EmojiCategory> {
     EmojiCategory::iter()
 }
 
-pub const EMOJIS: &[Emoji] = &[
-    emoji!(
-        "😀",
-        "grinning face",
-        SmileysEmotion,
-        ["happy", "smile", "face"]
-    ),
-    emoji!(
-        "😃",
-        "grinning face with big eyes",
-        SmileysEmotion,
-        ["happy", "joy", "eyes"]
-    ),
-    emoji!(
-        "😄",
-        "grinning face with smiling eyes",
-        SmileysEmotion,
-        ["smile", "eyes", "cheerful"]
-    ),
-    emoji!(
-        "😁",
-        "beaming face with smiling eyes",
-        SmileysEmotion,
-        ["beam", "smile", "teeth"]
-    ),
-    emoji!(
-        "😆",
-        "grinning squinting face",
-        SmileysEmotion,
-        ["laugh", "squint", "face"]
-    ),
-    emoji!(
-        "😅",
-        "grinning face with sweat",
-        SmileysEmotion,
-        ["relief", "sweat", "laugh"]
-    ),
-    emoji!(
-        "😂",
-        "face with tears of joy",
-        SmileysEmotion,
-        ["laugh", "tears", "funny"]
-    ),
-    emoji!(
-        "🤣",
-        "rolling on the floor laughing",
-        SmileysEmotion,
-        ["rofl", "laugh", "hilarious"]
-    ),
-    emoji!(
-        "😊",
-        "smiling face with smiling eyes",
-        SmileysEmotion,
-        ["blush", "smile", "warm"]
-    ),
-    emoji!(
-        "😇",
-        "smiling face with halo",
-        SmileysEmotion,
-        ["angel", "innocent", "halo"]
-    ),
-    emoji!(
-        "🙂",
-        "slightly smiling face",
-        SmileysEmotion,
-        ["smile", "friendly", "calm"]
-    ),
-    emoji!(
-        "🙃",
-        "upside-down face",
-        SmileysEmotion,
-        ["silly", "sarcasm", "playful"]
-    ),
-    emoji!(
-        "😉",
-        "winking face",
-        SmileysEmotion,
-        ["wink", "flirt", "playful"]
-    ),
-    emoji!(
-        "😌",
-        "relieved face",
-        SmileysEmotion,
-        ["relaxed", "calm", "relief"]
-    ),
-    emoji!(
-        "😍",
-        "smiling face with heart-eyes",
-        SmileysEmotion,
-        ["love", "crush", "adore"]
-    ),
-    emoji!(
-        "🥰",
-        "smiling face with hearts",
-        SmileysEmotion,
-        ["love", "affection", "hearts"]
-    ),
-    emoji!(
-        "😘",
-        "face blowing a kiss",
-        SmileysEmotion,
-        ["kiss", "love", "flirty"]
-    ),
-    emoji!(
-        "😗",
-        "kissing face",
-        SmileysEmotion,
-        ["kiss", "smooch", "love"]
-    ),
-    emoji!(
-        "😙",
-        "kissing face with smiling eyes",
-        SmileysEmotion,
-        ["kiss", "smile", "affection"]
-    ),
-    emoji!(
-        "😚",
-        "kissing face with closed eyes",
-        SmileysEmotion,
-        ["kiss", "shy", "love"]
-    ),
-    emoji!(
-        "😋",
-        "face savoring food",
-        SmileysEmotion,
-        ["yum", "food", "delicious"]
-    ),
-    emoji!(
-        "😛",
-        "face with tongue",
-        SmileysEmotion,
-        ["tongue", "playful", "tease"]
-    ),
-    emoji!(
-        "😜",
-        "winking face with tongue",
-        SmileysEmotion,
-        ["wink", "tongue", "joke"]
-    ),
-    emoji!(
-        "🤪",
-        "zany face",
-        SmileysEmotion,
-        ["crazy", "wild", "silly"]
-    ),
-    emoji!(
-        "😝",
-        "squinting face with tongue",
-        SmileysEmotion,
-        ["tongue", "silly", "tease"]
-    ),
-    emoji!(
-        "🤑",
-        "money-mouth face",
-        SmileysEmotion,
-        ["money", "rich", "cash"]
-    ),
-    emoji!(
-        "🤗",
-        "hugging face",
-        SmileysEmotion,
-        ["hug", "warm", "care"]
-    ),
-    emoji!(
-        "🤭",
-        "face with hand over mouth",
-        SmileysEmotion,
-        ["oops", "giggle", "surprised"]
-    ),
-    emoji!(
-        "🤫",
-        "shushing face",
-        SmileysEmotion,
-        ["quiet", "secret", "shh"]
-    ),
-    emoji!(
-        "🤔",
-        "thinking face",
-        SmileysEmotion,
-        ["think", "hmm", "question"]
-    ),
-    emoji!(
-        "🤐",
-        "zipper-mouth face",
-        SmileysEmotion,
-        ["silent", "secret", "zip"]
-    ),
-    emoji!(
-        "🤨",
-        "face with raised eyebrow",
-        SmileysEmotion,
-        ["skeptical", "doubt", "hmm"]
-    ),
-    emoji!(
-        "😐",
-        "neutral face",
-        SmileysEmotion,
-        ["meh", "neutral", "flat"]
-    ),
-    emoji!(
-        "😑",
-        "expressionless face",
-        SmileysEmotion,
-        ["blank", "deadpan", "neutral"]
-    ),
-    emoji!(
-        "😶",
-        "face without mouth",
-        SmileysEmotion,
-        ["speechless", "silent", "quiet"]
-    ),
-    emoji!(
-        "😏",
-        "smirking face",
-        SmileysEmotion,
-        ["smirk", "flirt", "sly"]
-    ),
-    emoji!(
-        "😒",
-        "unamused face",
-        SmileysEmotion,
-        ["annoyed", "meh", "sideeye"]
-    ),
-    emoji!(
-        "🙄",
-        "face with rolling eyes",
-        SmileysEmotion,
-        ["eyeroll", "annoyed", "sarcasm"]
-    ),
-    emoji!(
-        "😬",
-        "grimacing face",
-        SmileysEmotion,
-        ["awkward", "oops", "tense"]
-    ),
-    emoji!(
-        "😮",
-        "face with open mouth",
-        SmileysEmotion,
-        ["wow", "surprised", "shock"]
-    ),
-    emoji!(
-        "😯",
-        "hushed face",
-        SmileysEmotion,
-        ["quiet", "surprised", "wow"]
-    ),
-    emoji!(
-        "😲",
-        "astonished face",
-        SmileysEmotion,
-        ["astonished", "surprised", "amazed"]
-    ),
-    emoji!(
-        "😳",
-        "flushed face",
-        SmileysEmotion,
-        ["embarrassed", "blush", "shy"]
-    ),
-    emoji!(
-        "🥺",
-        "pleading face",
-        SmileysEmotion,
-        ["please", "puppy", "beg"]
-    ),
-    emoji!(
-        "😢",
-        "crying face",
-        SmileysEmotion,
-        ["sad", "tear", "upset"]
-    ),
-    emoji!(
-        "😭",
-        "loudly crying face",
-        SmileysEmotion,
-        ["cry", "sob", "sad"]
-    ),
-    emoji!(
-        "😤",
-        "face with steam from nose",
-        SmileysEmotion,
-        ["frustrated", "triumph", "huff"]
-    ),
-    emoji!(
-        "😠",
-        "angry face",
-        SmileysEmotion,
-        ["angry", "mad", "upset"]
-    ),
-    emoji!(
-        "😡",
-        "pouting face",
-        SmileysEmotion,
-        ["rage", "angry", "mad"]
-    ),
-    emoji!(
-        "🤬",
-        "face with symbols on mouth",
-        SmileysEmotion,
-        ["swear", "cursing", "rage"]
-    ),
-    emoji!(
-        "😱",
-        "face screaming in fear",
-        SmileysEmotion,
-        ["scared", "shock", "scream"]
-    ),
-    emoji!(
-        "😨",
-        "fearful face",
-        SmileysEmotion,
-        ["fear", "anxious", "scared"]
-    ),
-    emoji!(
-        "😰",
-        "anxious face with sweat",
-        SmileysEmotion,
-        ["stress", "anxious", "sweat"]
-    ),
-    emoji!(
-        "😥",
-        "sad but relieved face",
-        SmileysEmotion,
-        ["relief", "sad", "whew"]
-    ),
-    emoji!(
-        "😓",
-        "downcast face with sweat",
-        SmileysEmotion,
-        ["tired", "sweat", "sad"]
-    ),
-    emoji!(
-        "🤯",
-        "exploding head",
-        SmileysEmotion,
-        ["mindblown", "shock", "wow"]
-    ),
-    emoji!(
-        "😴",
-        "sleeping face",
-        SmileysEmotion,
-        ["sleep", "tired", "zzz"]
-    ),
-    emoji!(
-        "🤤",
-        "drooling face",
-        SmileysEmotion,
-        ["drool", "hungry", "desire"]
-    ),
-    emoji!(
-        "😪",
-        "sleepy face",
-        SmileysEmotion,
-        ["sleepy", "drowsy", "tired"]
-    ),
-    emoji!(
-        "🤢",
-        "nauseated face",
-        SmileysEmotion,
-        ["sick", "nausea", "gross"]
-    ),
-    emoji!(
-        "🤮",
-        "face vomiting",
-        SmileysEmotion,
-        ["vomit", "sick", "ill"]
-    ),
-    emoji!(
-        "🤧",
-        "sneezing face",
-        SmileysEmotion,
-        ["sneeze", "sick", "cold"]
-    ),
-    emoji!("🥵", "hot face", SmileysEmotion, ["hot", "sweat", "heat"]),
-    emoji!(
-        "🥶",
-        "cold face",
-        SmileysEmotion,
-        ["cold", "freezing", "chill"]
-    ),
-    emoji!(
-        "😵",
-        "dizzy face",
-        SmileysEmotion,
-        ["dizzy", "confused", "woozy"]
-    ),
-    emoji!(
-        "🥴",
-        "woozy face",
-        SmileysEmotion,
-        ["woozy", "drunk", "dizzy"]
-    ),
-    emoji!(
-        "😎",
-        "smiling face with sunglasses",
-        SmileysEmotion,
-        ["cool", "sunglasses", "chill"]
-    ),
-    emoji!("🤓", "nerd face", SmileysEmotion, ["nerd", "smart", "geek"]),
-    emoji!(
-        "🧐",
-        "face with monocle",
-        SmileysEmotion,
-        ["inspect", "fancy", "curious"]
-    ),
-    emoji!(
-        "🤠",
-        "cowboy hat face",
-        SmileysEmotion,
-        ["cowboy", "western", "hat"]
-    ),
-    emoji!(
-        "🥳",
-        "partying face",
-        SmileysEmotion,
-        ["party", "celebrate", "birthday"]
-    ),
-    emoji!(
-        "😈",
-        "smiling face with horns",
-        SmileysEmotion,
-        ["devil", "mischief", "horns"]
-    ),
-    emoji!(
-        "👿",
-        "angry face with horns",
-        SmileysEmotion,
-        ["devil", "angry", "horns"]
-    ),
-    emoji!("💀", "skull", SmileysEmotion, ["dead", "skull", "spooky"]),
-    emoji!(
-        "☠️",
-        "skull and crossbones",
-        SmileysEmotion,
-        ["danger", "pirate", "poison"]
-    ),
-    emoji!(
-        "💩",
-        "pile of poo",
-        SmileysEmotion,
-        ["poo", "funny", "toilet"]
-    ),
-    emoji!(
-        "🤡",
-        "clown face",
-        SmileysEmotion,
-        ["clown", "circus", "silly"]
-    ),
-    emoji!(
-        "👻",
-        "ghost",
-        SmileysEmotion,
-        ["ghost", "spooky", "halloween"]
-    ),
-    emoji!("👽", "alien", SmileysEmotion, ["alien", "ufo", "space"]),
-    emoji!("🤖", "robot", SmileysEmotion, ["robot", "ai", "bot"]),
-    emoji!(
-        "😺",
-        "grinning cat",
-        SmileysEmotion,
-        ["cat", "smile", "pet"]
-    ),
-    emoji!(
-        "😸",
-        "grinning cat with smiling eyes",
-        SmileysEmotion,
-        ["cat", "joy", "pet"]
-    ),
-    emoji!(
-        "😹",
-        "cat with tears of joy",
-        SmileysEmotion,
-        ["cat", "laugh", "tears"]
-    ),
-    emoji!(
-        "😻",
-        "smiling cat with heart-eyes",
-        SmileysEmotion,
-        ["cat", "love", "heart"]
-    ),
-    emoji!(
-        "😼",
-        "cat with wry smile",
-        SmileysEmotion,
-        ["cat", "smirk", "pet"]
-    ),
-    emoji!("😽", "kissing cat", SmileysEmotion, ["cat", "kiss", "love"]),
-    emoji!(
-        "🙀",
-        "weary cat",
-        SmileysEmotion,
-        ["cat", "shock", "scared"]
-    ),
-    emoji!("😿", "crying cat", SmileysEmotion, ["cat", "sad", "tears"]),
-    emoji!("😾", "pouting cat", SmileysEmotion, ["cat", "angry", "mad"]),
-    emoji!("❤️", "red heart", Symbols, ["heart", "love", "red"]),
-    emoji!("🧡", "orange heart", Symbols, ["heart", "love", "orange"]),
-    emoji!("💛", "yellow heart", Symbols, ["heart", "love", "yellow"]),
-    emoji!("💚", "green heart", Symbols, ["heart", "love", "green"]),
-    emoji!("💙", "blue heart", Symbols, ["heart", "love", "blue"]),
-    emoji!("💜", "purple heart", Symbols, ["heart", "love", "purple"]),
-    emoji!("🖤", "black heart", Symbols, ["heart", "love", "black"]),
-    emoji!("🤍", "white heart", Symbols, ["heart", "love", "white"]),
-    emoji!("🤎", "brown heart", Symbols, ["heart", "love", "brown"]),
-    emoji!(
-        "💔",
-        "broken heart",
-        Symbols,
-        ["heartbreak", "sad", "breakup"]
-    ),
-    emoji!(
-        "❣️",
-        "heart exclamation",
-        Symbols,
-        ["heart", "emphasis", "love"]
-    ),
-    emoji!("💕", "two hearts", Symbols, ["hearts", "love", "affection"]),
-    emoji!(
-        "💞",
-        "revolving hearts",
-        Symbols,
-        ["hearts", "romance", "love"]
-    ),
-    emoji!("💓", "beating heart", Symbols, ["heart", "pulse", "love"]),
-    emoji!("💗", "growing heart", Symbols, ["heart", "love", "grow"]),
-    emoji!(
-        "💖",
-        "sparkling heart",
-        Symbols,
-        ["heart", "sparkle", "love"]
-    ),
-    emoji!(
-        "💘",
-        "heart with arrow",
-        Symbols,
-        ["cupid", "heart", "romance"]
-    ),
-    emoji!(
-        "💝",
-        "heart with ribbon",
-        Symbols,
-        ["gift", "heart", "love"]
-    ),
-    emoji!("💯", "hundred points", Symbols, ["100", "perfect", "score"]),
-    emoji!("💥", "collision", Symbols, ["boom", "impact", "explode"]),
-    emoji!("💫", "dizzy", Symbols, ["dizzy", "star", "sparkle"]),
-    emoji!("💦", "sweat droplets", Symbols, ["sweat", "water", "drops"]),
-    emoji!("💨", "dashing away", Symbols, ["speed", "dash", "wind"]),
-    emoji!(
-        "👋",
-        "waving hand",
-        PeopleBody,
-        ["wave", "hello", "goodbye"]
-    ),
-    emoji!(
-        "🤚",
-        "raised back of hand",
-        PeopleBody,
-        ["hand", "raised", "stop"]
-    ),
-    emoji!(
-        "🖐️",
-        "hand with fingers splayed",
-        PeopleBody,
-        ["hand", "five", "palm"]
-    ),
-    emoji!(
-        "✋",
-        "raised hand",
-        PeopleBody,
-        ["hand", "stop", "highfive"]
-    ),
-    emoji!(
-        "🖖",
-        "vulcan salute",
-        PeopleBody,
-        ["vulcan", "spock", "salute"]
-    ),
-    emoji!("👌", "ok hand", PeopleBody, ["ok", "hand", "perfect"]),
-    emoji!(
-        "🤌",
-        "pinched fingers",
-        PeopleBody,
-        ["gesture", "pinched", "italian"]
-    ),
-    emoji!(
-        "🤏",
-        "pinching hand",
-        PeopleBody,
-        ["small", "pinch", "tiny"]
-    ),
-    emoji!(
-        "✌️",
-        "victory hand",
-        PeopleBody,
-        ["peace", "victory", "hand"]
-    ),
-    emoji!(
-        "🤞",
-        "crossed fingers",
-        PeopleBody,
-        ["luck", "hope", "fingers"]
-    ),
-    emoji!(
-        "🫰",
-        "hand with index finger and thumb crossed",
-        PeopleBody,
-        ["heart", "finger", "gesture"]
-    ),
-    emoji!(
-        "🤟",
-        "love-you gesture",
-        PeopleBody,
-        ["ily", "hand", "love"]
-    ),
-    emoji!(
-        "🤘",
-        "sign of the horns",
-        PeopleBody,
-        ["rock", "metal", "hand"]
-    ),
-    emoji!("🤙", "call me hand", PeopleBody, ["call", "phone", "shaka"]),
-    emoji!(
-        "👈",
-        "backhand index pointing left",
-        PeopleBody,
-        ["left", "point", "hand"]
-    ),
-    emoji!(
-        "👉",
-        "backhand index pointing right",
-        PeopleBody,
-        ["right", "point", "hand"]
-    ),
-    emoji!(
-        "👆",
-        "backhand index pointing up",
-        PeopleBody,
-        ["up", "point", "hand"]
-    ),
-    emoji!(
-        "👇",
-        "backhand index pointing down",
-        PeopleBody,
-        ["down", "point", "hand"]
-    ),
-    emoji!(
-        "☝️",
-        "index pointing up",
-        PeopleBody,
-        ["up", "index", "point"]
-    ),
-    emoji!("👍", "thumbs up", PeopleBody, ["approve", "like", "yes"]),
-    emoji!("👎", "thumbs down", PeopleBody, ["dislike", "no", "reject"]),
-    emoji!("👊", "oncoming fist", PeopleBody, ["fist", "punch", "bump"]),
-    emoji!(
-        "✊",
-        "raised fist",
-        PeopleBody,
-        ["fist", "power", "solidarity"]
-    ),
-    emoji!(
-        "🤛",
-        "left-facing fist",
-        PeopleBody,
-        ["fist", "left", "bump"]
-    ),
-    emoji!(
-        "🤜",
-        "right-facing fist",
-        PeopleBody,
-        ["fist", "right", "bump"]
-    ),
-    emoji!(
-        "👏",
-        "clapping hands",
-        PeopleBody,
-        ["clap", "applause", "praise"]
-    ),
-    emoji!(
-        "🙌",
-        "raising hands",
-        PeopleBody,
-        ["hooray", "celebrate", "hands"]
-    ),
-    emoji!("👐", "open hands", PeopleBody, ["open", "hug", "hands"]),
-    emoji!(
-        "🤲",
-        "palms up together",
-        PeopleBody,
-        ["offer", "prayer", "hands"]
-    ),
-    emoji!(
-        "🤝",
-        "handshake",
-        PeopleBody,
-        ["deal", "agreement", "greet"]
-    ),
-    emoji!(
-        "🙏",
-        "folded hands",
-        PeopleBody,
-        ["please", "thanks", "pray"]
-    ),
-    emoji!(
-        "💪",
-        "flexed biceps",
-        PeopleBody,
-        ["strong", "muscle", "gym"]
-    ),
-    emoji!(
-        "🦾",
-        "mechanical arm",
-        PeopleBody,
-        ["prosthetic", "robot", "strength"]
-    ),
-    emoji!("🧠", "brain", PeopleBody, ["brain", "smart", "mind"]),
-    emoji!("👀", "eyes", PeopleBody, ["look", "watch", "see"]),
-    emoji!("👁️", "eye", PeopleBody, ["eye", "vision", "watch"]),
-    emoji!("👄", "mouth", PeopleBody, ["lips", "mouth", "speak"]),
-    emoji!("👅", "tongue", PeopleBody, ["tongue", "taste", "playful"]),
-    emoji!("👂", "ear", PeopleBody, ["listen", "ear", "hear"]),
-    emoji!("👃", "nose", PeopleBody, ["smell", "nose", "face"]),
-    emoji!("🫶", "heart hands", PeopleBody, ["heart", "hands", "love"]),
-    emoji!("🐶", "dog face", AnimalsNature, ["dog", "pet", "puppy"]),
-    emoji!("🐱", "cat face", AnimalsNature, ["cat", "pet", "kitty"]),
-    emoji!(
-        "🐭",
-        "mouse face",
-        AnimalsNature,
-        ["mouse", "animal", "small"]
-    ),
-    emoji!(
-        "🐹",
-        "hamster face",
-        AnimalsNature,
-        ["hamster", "pet", "cute"]
-    ),
-    emoji!(
-        "🐰",
-        "rabbit face",
-        AnimalsNature,
-        ["rabbit", "bunny", "cute"]
-    ),
-    emoji!("🦊", "fox", AnimalsNature, ["fox", "animal", "wild"]),
-    emoji!("🐻", "bear", AnimalsNature, ["bear", "animal", "wild"]),
-    emoji!("🐼", "panda", AnimalsNature, ["panda", "bear", "cute"]),
-    emoji!(
-        "🐨",
-        "koala",
-        AnimalsNature,
-        ["koala", "animal", "australia"]
-    ),
-    emoji!("🐯", "tiger face", AnimalsNature, ["tiger", "cat", "wild"]),
-    emoji!("🦁", "lion", AnimalsNature, ["lion", "cat", "wild"]),
-    emoji!("🐮", "cow face", AnimalsNature, ["cow", "farm", "animal"]),
-    emoji!("🐷", "pig face", AnimalsNature, ["pig", "farm", "animal"]),
-    emoji!("🐸", "frog", AnimalsNature, ["frog", "animal", "green"]),
-    emoji!(
-        "🐵",
-        "monkey face",
-        AnimalsNature,
-        ["monkey", "animal", "primate"]
-    ),
-    emoji!(
-        "🦋",
-        "butterfly",
-        AnimalsNature,
-        ["butterfly", "insect", "nature"]
-    ),
-    emoji!(
-        "🌸",
-        "cherry blossom",
-        AnimalsNature,
-        ["flower", "spring", "pink"]
-    ),
-    emoji!(
-        "🌻",
-        "sunflower",
-        AnimalsNature,
-        ["flower", "sun", "nature"]
-    ),
-    emoji!("🌈", "rainbow", AnimalsNature, ["rainbow", "color", "sky"]),
-    emoji!(
-        "🌙",
-        "crescent moon",
-        AnimalsNature,
-        ["moon", "night", "sky"]
-    ),
-    emoji!("☀️", "sun", AnimalsNature, ["sun", "weather", "bright"]),
-    emoji!("🔥", "fire", AnimalsNature, ["fire", "lit", "hot"]),
-    emoji!("🍎", "red apple", FoodDrink, ["apple", "fruit", "food"]),
-    emoji!("🍕", "pizza", FoodDrink, ["pizza", "food", "slice"]),
-    emoji!("🍔", "hamburger", FoodDrink, ["burger", "food", "meal"]),
-    emoji!("🍟", "french fries", FoodDrink, ["fries", "food", "snack"]),
-    emoji!("🌮", "taco", FoodDrink, ["taco", "food", "mexican"]),
-    emoji!("🍣", "sushi", FoodDrink, ["sushi", "food", "japanese"]),
-    emoji!(
-        "🍜",
-        "steaming bowl",
-        FoodDrink,
-        ["ramen", "noodles", "soup"]
-    ),
-    emoji!("🍩", "doughnut", FoodDrink, ["donut", "sweet", "dessert"]),
-    emoji!("🍪", "cookie", FoodDrink, ["cookie", "sweet", "dessert"]),
-    emoji!("☕", "hot beverage", FoodDrink, ["coffee", "tea", "drink"]),
-    emoji!("🍺", "beer mug", FoodDrink, ["beer", "drink", "bar"]),
-    emoji!("🍷", "wine glass", FoodDrink, ["wine", "drink", "glass"]),
-    emoji!("🥤", "cup with straw", FoodDrink, ["drink", "soda", "cold"]),
-    emoji!("🧋", "bubble tea", FoodDrink, ["boba", "tea", "drink"]),
-    emoji!("🍿", "popcorn", FoodDrink, ["snack", "movie", "popcorn"]),
-    emoji!("📱", "mobile phone", Objects, ["phone", "mobile", "device"]),
-    emoji!("💻", "laptop", Objects, ["computer", "laptop", "work"]),
-    emoji!("⌚", "watch", Objects, ["watch", "time", "wearable"]),
-    emoji!("📷", "camera", Objects, ["camera", "photo", "picture"]),
-    emoji!("🎧", "headphone", Objects, ["headphones", "music", "audio"]),
-    emoji!("🔋", "battery", Objects, ["battery", "power", "charge"]),
-    emoji!(
-        "🔌",
-        "electric plug",
-        Objects,
-        ["plug", "power", "electric"]
-    ),
-    emoji!("💡", "light bulb", Objects, ["idea", "light", "bulb"]),
-    emoji!(
-        "🧯",
-        "fire extinguisher",
-        Objects,
-        ["safety", "fire", "tool"]
-    ),
-    emoji!(
-        "🛒",
-        "shopping cart",
-        Objects,
-        ["shopping", "cart", "store"]
-    ),
-    emoji!(
-        "🥹",
-        "face holding back tears",
-        SmileysEmotion,
-        ["tears", "emotional", "moved"]
-    ),
-    emoji!(
-        "🫠",
-        "melting face",
-        SmileysEmotion,
-        ["melt", "awkward", "heat"]
-    ),
-    emoji!(
-        "🫥",
-        "dotted line face",
-        SmileysEmotion,
-        ["invisible", "faded", "awkward"]
-    ),
-    emoji!(
-        "🫨",
-        "shaking face",
-        SmileysEmotion,
-        ["shaking", "shocked", "vibrating"]
-    ),
-    emoji!(
-        "🤥",
-        "lying face",
-        SmileysEmotion,
-        ["lie", "pinocchio", "dishonest"]
-    ),
-    emoji!(
-        "😮‍💨",
-        "face exhaling",
-        SmileysEmotion,
-        ["exhale", "relief", "sigh"]
-    ),
-    emoji!(
-        "😶‍🌫️",
-        "face in clouds",
-        SmileysEmotion,
-        ["foggy", "confused", "dazed"]
-    ),
-    emoji!(
-        "😵‍💫",
-        "face with spiral eyes",
-        SmileysEmotion,
-        ["spiral", "dizzy", "hypnotized"]
-    ),
-    emoji!(
-        "🫵",
-        "index pointing at the viewer",
-        PeopleBody,
-        ["you", "point", "finger"]
-    ),
-    emoji!(
-        "🫱",
-        "rightwards hand",
-        PeopleBody,
-        ["hand", "right", "reach"]
-    ),
-    emoji!(
-        "🫲",
-        "leftwards hand",
-        PeopleBody,
-        ["hand", "left", "reach"]
-    ),
-    emoji!("🦶", "foot", PeopleBody, ["foot", "body", "kick"]),
-    emoji!("🦵", "leg", PeopleBody, ["leg", "body", "step"]),
-    emoji!(
-        "🦻",
-        "ear with hearing aid",
-        PeopleBody,
-        ["ear", "hearing", "accessibility"]
-    ),
-    emoji!("🫦", "biting lip", PeopleBody, ["lip", "nervous", "flirty"]),
-    emoji!(
-        "🫀",
-        "anatomical heart",
-        PeopleBody,
-        ["heart", "organ", "anatomy"]
-    ),
-    emoji!("🐺", "wolf", AnimalsNature, ["wolf", "wild", "canine"]),
-    emoji!("🐗", "boar", AnimalsNature, ["boar", "wild", "pig"]),
-    emoji!(
-        "🐴",
-        "horse face",
-        AnimalsNature,
-        ["horse", "animal", "farm"]
-    ),
-    emoji!("🦄", "unicorn", AnimalsNature, ["unicorn", "magic", "myth"]),
-    emoji!("🐔", "chicken", AnimalsNature, ["chicken", "bird", "farm"]),
-    emoji!("🐧", "penguin", AnimalsNature, ["penguin", "bird", "cold"]),
-    emoji!("🐦", "bird", AnimalsNature, ["bird", "animal", "tweet"]),
-    emoji!("🐢", "turtle", AnimalsNature, ["turtle", "animal", "slow"]),
-    emoji!(
-        "🐬",
-        "dolphin",
-        AnimalsNature,
-        ["dolphin", "ocean", "smart"]
-    ),
-    emoji!("🍌", "banana", FoodDrink, ["banana", "fruit", "food"]),
-    emoji!("🍇", "grapes", FoodDrink, ["grapes", "fruit", "food"]),
-    emoji!(
-        "🍓",
-        "strawberry",
-        FoodDrink,
-        ["strawberry", "fruit", "sweet"]
-    ),
-    emoji!("🥑", "avocado", FoodDrink, ["avocado", "fruit", "food"]),
-    emoji!("🥓", "bacon", FoodDrink, ["bacon", "meat", "breakfast"]),
-    emoji!("🍗", "poultry leg", FoodDrink, ["chicken", "meat", "food"]),
-    emoji!("🍞", "bread", FoodDrink, ["bread", "food", "baked"]),
-    emoji!("🧀", "cheese wedge", FoodDrink, ["cheese", "dairy", "food"]),
-    emoji!("🍰", "shortcake", FoodDrink, ["cake", "dessert", "sweet"]),
-    emoji!("🥗", "green salad", FoodDrink, ["salad", "healthy", "food"]),
-    emoji!(
-        "🚗",
-        "automobile",
-        TravelPlaces,
-        ["car", "vehicle", "drive"]
-    ),
-    emoji!("🚕", "taxi", TravelPlaces, ["taxi", "cab", "vehicle"]),
-    emoji!(
-        "🚙",
-        "sport utility vehicle",
-        TravelPlaces,
-        ["suv", "car", "vehicle"]
-    ),
-    emoji!("🚌", "bus", TravelPlaces, ["bus", "transit", "vehicle"]),
-    emoji!(
-        "🚎",
-        "trolleybus",
-        TravelPlaces,
-        ["trolley", "bus", "transit"]
-    ),
-    emoji!(
-        "🚓",
-        "police car",
-        TravelPlaces,
-        ["police", "car", "emergency"]
-    ),
-    emoji!(
-        "🚑",
-        "ambulance",
-        TravelPlaces,
-        ["ambulance", "medical", "emergency"]
-    ),
-    emoji!(
-        "🚒",
-        "fire engine",
-        TravelPlaces,
-        ["fire", "truck", "emergency"]
-    ),
-    emoji!(
-        "🚚",
-        "delivery truck",
-        TravelPlaces,
-        ["truck", "delivery", "shipping"]
-    ),
-    emoji!("🚲", "bicycle", TravelPlaces, ["bike", "bicycle", "ride"]),
-    emoji!(
-        "✈️",
-        "airplane",
-        TravelPlaces,
-        ["plane", "travel", "flight"]
-    ),
-    emoji!("🚀", "rocket", TravelPlaces, ["rocket", "space", "launch"]),
-    emoji!(
-        "🚂",
-        "locomotive",
-        TravelPlaces,
-        ["train", "locomotive", "rail"]
-    ),
-    emoji!(
-        "🚉",
-        "railway station",
-        TravelPlaces,
-        ["station", "train", "travel"]
-    ),
-    emoji!("🏠", "house", TravelPlaces, ["house", "home", "building"]),
-    emoji!("🏨", "hotel", TravelPlaces, ["hotel", "building", "travel"]),
-    emoji!(
-        "🗽",
-        "statue of liberty",
-        TravelPlaces,
-        ["landmark", "nyc", "statue"]
-    ),
-    emoji!("⛵", "sailboat", TravelPlaces, ["boat", "sail", "water"]),
-    emoji!(
-        "⚽",
-        "soccer ball",
-        Activities,
-        ["soccer", "football", "sport"]
-    ),
-    emoji!(
-        "🏀",
-        "basketball",
-        Activities,
-        ["basketball", "sport", "ball"]
-    ),
-    emoji!(
-        "🏈",
-        "american football",
-        Activities,
-        ["football", "sport", "nfl"]
-    ),
-    emoji!("⚾", "baseball", Activities, ["baseball", "sport", "ball"]),
-    emoji!("🎾", "tennis", Activities, ["tennis", "sport", "racket"]),
-    emoji!(
-        "🏐",
-        "volleyball",
-        Activities,
-        ["volleyball", "sport", "ball"]
-    ),
-    emoji!(
-        "🏓",
-        "ping pong",
-        Activities,
-        ["pingpong", "table tennis", "sport"]
-    ),
-    emoji!(
-        "🏸",
-        "badminton",
-        Activities,
-        ["badminton", "sport", "racket"]
-    ),
-    emoji!(
-        "🥊",
-        "boxing glove",
-        Activities,
-        ["boxing", "fight", "sport"]
-    ),
-    emoji!(
-        "🎮",
-        "video game",
-        Activities,
-        ["gaming", "controller", "play"]
-    ),
-    emoji!("🎯", "direct hit", Activities, ["target", "dart", "game"]),
-    emoji!("🎲", "game die", Activities, ["dice", "game", "luck"]),
-    emoji!(
-        "🖥️",
-        "desktop computer",
-        Objects,
-        ["desktop", "computer", "monitor"]
-    ),
-    emoji!("🖨️", "printer", Objects, ["printer", "print", "office"]),
-    emoji!(
-        "🕹️",
-        "joystick",
-        Objects,
-        ["joystick", "game", "controller"]
-    ),
-    emoji!("💽", "computer disk", Objects, ["disk", "storage", "data"]),
-    emoji!("📺", "television", Objects, ["tv", "screen", "video"]),
-    emoji!("📚", "books", Objects, ["books", "study", "read"]),
-    emoji!("✏️", "pencil", Objects, ["pencil", "write", "school"]),
-    emoji!("🧰", "toolbox", Objects, ["toolbox", "tools", "repair"]),
-    emoji!("🧲", "magnet", Objects, ["magnet", "science", "metal"]),
-    emoji!("🧪", "test tube", Objects, ["test", "science", "lab"]),
-    emoji!("✨", "sparkles", Symbols, ["sparkle", "shine", "magic"]),
-    emoji!("⭐", "star", Symbols, ["star", "favorite", "rating"]),
-    emoji!("🌟", "glowing star", Symbols, ["star", "glow", "sparkle"]),
-    emoji!("🔔", "bell", Symbols, ["bell", "notification", "alert"]),
-    emoji!("🎵", "musical note", Symbols, ["music", "note", "song"]),
-    emoji!("✅", "check mark button", Symbols, ["check", "done", "yes"]),
-    emoji!("❌", "cross mark", Symbols, ["cross", "no", "cancel"]),
-    emoji!("⚠️", "warning", Symbols, ["warning", "alert", "caution"]),
-    emoji!(
-        "🚫",
-        "prohibited",
-        Symbols,
-        ["prohibited", "no", "forbidden"]
-    ),
-    emoji!(
-        "♻️",
-        "recycling symbol",
-        Symbols,
-        ["recycle", "green", "eco"]
-    ),
-    emoji!("🆗", "OK button", Symbols, ["ok", "button", "agree"]),
-    emoji!(
-        "🇺🇸",
-        "flag: United States",
-        Flags,
-        ["flag", "usa", "america"]
-    ),
-    emoji!("🇨🇦", "flag: Canada", Flags, ["flag", "canada", "country"]),
-    emoji!(
-        "🇬🇧",
-        "flag: United Kingdom",
-        Flags,
-        ["flag", "uk", "britain"]
-    ),
-    emoji!("🇫🇷", "flag: France", Flags, ["flag", "france", "country"]),
-    emoji!("🇩🇪", "flag: Germany", Flags, ["flag", "germany", "country"]),
-    emoji!("🇯🇵", "flag: Japan", Flags, ["flag", "japan", "country"]),
-    emoji!(
-        "🇰🇷",
-        "flag: South Korea",
-        Flags,
-        ["flag", "korea", "country"]
-    ),
-    emoji!("🇮🇳", "flag: India", Flags, ["flag", "india", "country"]),
-    emoji!("🇧🇷", "flag: Brazil", Flags, ["flag", "brazil", "country"]),
-    emoji!(
-        "🇦🇺",
-        "flag: Australia",
-        Flags,
-        ["flag", "australia", "country"]
-    ),
-];
+/// Skin tone applied to emoji that support one (hands, people, gestures).
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumIter,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum SkinTone {
+    #[default]
+    None,
+    Light,
+    MediumLight,
+    Medium,
+    MediumDark,
+    Dark,
+}
+
+impl SkinTone {
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::None => "No Skin Tone",
+            Self::Light => "Light",
+            Self::MediumLight => "Medium-Light",
+            Self::Medium => "Medium",
+            Self::MediumDark => "Medium-Dark",
+            Self::Dark => "Dark",
+        }
+    }
+
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Light => "light",
+            Self::MediumLight => "medium_light",
+            Self::Medium => "medium",
+            Self::MediumDark => "medium_dark",
+            Self::Dark => "dark",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::iter().find(|tone| tone.id() == id)
+    }
+
+    /// Index into an emoji's light-to-dark variants, or `None` for no tone.
+    const fn variant_index(self) -> Option<usize> {
+        match self {
+            Self::None => None,
+            Self::Light => Some(0),
+            Self::MediumLight => Some(1),
+            Self::Medium => Some(2),
+            Self::MediumDark => Some(3),
+            Self::Dark => Some(4),
+        }
+    }
+}
+
+/// The full Unicode emoji set, generated from Unicode's `emoji-test.txt` and
+/// CLDR keywords by `scripts/emoji/generate_emoji_data.py`.
+const EMOJI_DATA: &str = include_str!("emoji_data.tsv");
+
+/// Every emoji this Mac can draw, in Unicode order. Emoji newer than the
+/// running macOS supports are left out so the grid never shows empty boxes.
+pub static EMOJIS: std::sync::LazyLock<Vec<Emoji>> = std::sync::LazyLock::new(|| {
+    let supported = supported_emoji_version();
+    parse_emoji_data(EMOJI_DATA)
+        .into_iter()
+        .filter(|emoji| emoji.version <= supported)
+        .collect()
+});
+
+fn parse_category(group: &str) -> Option<EmojiCategory> {
+    Some(match group {
+        "SmileysEmotion" => EmojiCategory::SmileysEmotion,
+        "PeopleBody" => EmojiCategory::PeopleBody,
+        "AnimalsNature" => EmojiCategory::AnimalsNature,
+        "FoodDrink" => EmojiCategory::FoodDrink,
+        "TravelPlaces" => EmojiCategory::TravelPlaces,
+        "Activities" => EmojiCategory::Activities,
+        "Objects" => EmojiCategory::Objects,
+        "Symbols" => EmojiCategory::Symbols,
+        "Flags" => EmojiCategory::Flags,
+        _ => return None,
+    })
+}
+
+/// Emoji version as tenths (`15.1` -> 151) so it compares exactly.
+fn parse_version(version: &str) -> Option<u16> {
+    let (major, minor) = version.split_once('.')?;
+    Some(major.parse::<u16>().ok()? * 10 + minor.parse::<u16>().ok()?)
+}
+
+fn parse_emoji_data(data: &'static str) -> Vec<Emoji> {
+    data.lines()
+        .filter_map(|line| {
+            let mut columns = line.split('\t');
+            let emoji = columns.next()?;
+            let name = columns.next()?;
+            let category = parse_category(columns.next()?)?;
+            let version = parse_version(columns.next()?)?;
+            let tones = columns.next()?;
+            let keywords = columns.next().unwrap_or_default();
+            let tones = {
+                let variants: Vec<&'static str> =
+                    tones.split(' ').filter(|v| !v.is_empty()).collect();
+                <[&'static str; 5]>::try_from(variants).ok()
+            };
+            let keywords: Vec<&'static str> = keywords
+                .split('|')
+                .filter(|word| !word.is_empty())
+                .collect();
+            Some(Emoji {
+                emoji,
+                name,
+                keywords: Box::leak(keywords.into_boxed_slice()),
+                category,
+                tones,
+                version,
+            })
+        })
+        .collect()
+}
+
+/// Newest emoji version the running macOS can draw, as tenths.
+///
+/// Apple ships new emoji in point releases: 14.0 in macOS 12.3, 15.0 in 13.3,
+/// 15.1 in 14.4, 16.0 in 15.4. Later releases are assumed to keep pace.
+fn supported_emoji_version() -> u16 {
+    let (major, minor) = macos_version().unwrap_or((26, 0));
+    emoji_version_for_macos(major, minor)
+}
+
+pub(crate) fn emoji_version_for_macos(major: u32, minor: u32) -> u16 {
+    match (major, minor) {
+        (0..=11, _) => 131,
+        (12, 0..=2) => 131,
+        (12, _) => 140,
+        (13, 0..=2) => 140,
+        (13, _) => 150,
+        (14, 0..=3) => 150,
+        (14, _) => 151,
+        (15, 0..=3) => 151,
+        (15, _) => 160,
+        (16..=26, 0..=3) => 160,
+        (16..=26, _) => 170,
+        _ => 180,
+    }
+}
+
+fn macos_version() -> Option<(u32, u32)> {
+    let text = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()?
+        .stdout;
+    let text = String::from_utf8(text).ok()?;
+    let mut parts = text.trim().split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().and_then(|part| part.parse().ok()).unwrap_or(0);
+    Some((major, minor))
+}
+
+impl Emoji {
+    /// The emoji with `tone` applied, or the plain emoji when it has no tones.
+    pub fn with_tone(&self, tone: SkinTone) -> &'static str {
+        match (tone.variant_index(), self.tones) {
+            (Some(index), Some(variants)) => variants[index],
+            _ => self.emoji,
+        }
+    }
+
+    pub fn supports_skin_tones(&self) -> bool {
+        self.tones.is_some()
+    }
+}
+
+/// The emoji record for `value`, which may be a skin-tone variant.
+pub fn emoji_for_variant(value: &str) -> Option<Emoji> {
+    EMOJIS
+        .iter()
+        .find(|emoji| {
+            emoji.emoji == value || emoji.tones.is_some_and(|tones| tones.contains(&value))
+        })
+        .copied()
+}
 
 pub fn emojis_by_category(category: EmojiCategory) -> Vec<&'static Emoji> {
     EMOJIS
@@ -1272,62 +308,159 @@ pub fn emoji_by_value(emoji: &str) -> Option<Emoji> {
     EMOJIS.iter().find(|e| e.emoji == emoji).copied()
 }
 
-/// Composite display order used by render + navigation + Enter commit. When
-/// `filter` is empty, `selected_category` is `None`, and `frequent` is
-/// non-empty, the returned vector has two logical sections:
+/// Label for the pinned head section.
+pub const PINNED_LABEL: &str = "Pinned";
+/// Label for the ranked search results section.
+pub const RESULTS_LABEL: &str = "Results";
+
+/// What leads the picker before the categories: your pinned emoji, in the
+/// order you arranged them, then the ones you use most. Frozen while the
+/// picker is open so selection indices stay stable.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EmojiHead {
+    pub pinned: Vec<String>,
+    pub frequent: Vec<String>,
+}
+
+/// One titled run of emoji in the picker grid.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmojiSection {
+    pub title: String,
+    /// Which head block this is, if any; categories and results are `None`.
+    pub head: Option<EmojiHeadKind>,
+    pub count: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EmojiHeadKind {
+    Pinned,
+    Frequent,
+}
+
+/// The emoji in display order and the sections they fall into. Render,
+/// navigation, and actions all use this so the selected index means the
+/// same emoji everywhere.
 ///
-/// 1. **Frequently Used** — resolved from `frequent` in order; silently drops
-///    unknown strings. (`frequent_count` on the returned `DisplayOrder`.)
-/// 2. **Categories** — the normal category-ordered list with any emoji that
-///    appeared in section 1 removed so the user never sees the same glyph
-///    twice.
-///
-/// Every other combination (non-empty filter, explicit category, empty
-/// snapshot) falls back to the existing category-ordered list with
-/// `frequent_count == 0`, so search and category browsing stay predictable.
+/// - Searching shows one ranked Results section.
+/// - Browsing all emoji shows Pinned, then Frequently Used, then each
+///   category, never repeating an emoji.
+/// - Browsing one category shows just that category.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DisplayOrder {
     pub emojis: Vec<Emoji>,
-    /// Number of leading emojis that come from the Frequently Used section.
-    pub frequent_count: usize,
+    pub sections: Vec<EmojiSection>,
+}
+
+impl DisplayOrder {
+    /// Number of leading emojis in the Frequently Used section (0 if none).
+    pub fn frequent_count(&self) -> usize {
+        self.head_count(EmojiHeadKind::Frequent)
+    }
+
+    /// Number of leading emojis in the Pinned section (0 if none).
+    pub fn pinned_count(&self) -> usize {
+        self.head_count(EmojiHeadKind::Pinned)
+    }
+
+    fn head_count(&self, kind: EmojiHeadKind) -> usize {
+        self.sections
+            .iter()
+            .find(|section| section.head == Some(kind))
+            .map_or(0, |section| section.count)
+    }
+
+    /// Which section `index` falls in.
+    pub fn section_of(&self, index: usize) -> Option<&EmojiSection> {
+        let mut start = 0;
+        for section in &self.sections {
+            if index < start + section.count {
+                return Some(section);
+            }
+            start += section.count;
+        }
+        None
+    }
+
+    /// Number of rendered rows: one header plus the cell rows per section.
+    pub fn row_count(&self, cols: usize) -> usize {
+        self.sections
+            .iter()
+            .map(|section| 1 + section.count.div_ceil(cols))
+            .sum()
+    }
 }
 
 pub fn display_ordered_emojis(
     filter: &str,
     selected_category: Option<EmojiCategory>,
-    frequent: &[String],
+    head: &EmojiHead,
 ) -> DisplayOrder {
-    let base = filtered_ordered_emojis(filter, selected_category);
-
-    let can_show_frequent =
-        filter.trim().is_empty() && selected_category.is_none() && !frequent.is_empty();
-
-    if !can_show_frequent {
-        return DisplayOrder {
-            emojis: base,
-            frequent_count: 0,
+    let mut emojis = Vec::new();
+    let mut sections = Vec::new();
+    let mut push =
+        |title: &str, kind: Option<EmojiHeadKind>, items: Vec<Emoji>, emojis: &mut Vec<Emoji>| {
+            if items.is_empty() {
+                return;
+            }
+            sections.push(EmojiSection {
+                title: title.to_string(),
+                head: kind,
+                count: items.len(),
+            });
+            emojis.extend(items);
         };
+
+    if !filter.trim().is_empty() {
+        let results = search_emojis(filter)
+            .into_iter()
+            .filter(|emoji| selected_category.is_none_or(|category| emoji.category == category))
+            .copied()
+            .collect();
+        push(RESULTS_LABEL, None, results, &mut emojis);
+        return DisplayOrder { emojis, sections };
+    }
+
+    if let Some(category) = selected_category {
+        push(
+            category.display_name(),
+            None,
+            emojis_by_category(category).into_iter().copied().collect(),
+            &mut emojis,
+        );
+        return DisplayOrder { emojis, sections };
     }
 
     let mut seen = std::collections::HashSet::new();
-    let mut frequent_emojis: Vec<Emoji> = Vec::with_capacity(frequent.len());
-    for value in frequent {
-        if !seen.insert(value.clone()) {
-            continue;
-        }
-        if let Some(emoji) = emoji_by_value(value) {
-            frequent_emojis.push(emoji);
-        }
+    let mut resolve = |values: &[String]| -> Vec<Emoji> {
+        values
+            .iter()
+            .filter_map(|value| emoji_for_variant(value))
+            .filter(|emoji| seen.insert(emoji.emoji))
+            .collect()
+    };
+    let pinned = resolve(&head.pinned);
+    let frequent = resolve(&head.frequent);
+    push(
+        PINNED_LABEL,
+        Some(EmojiHeadKind::Pinned),
+        pinned,
+        &mut emojis,
+    );
+    push(
+        FREQUENTLY_USED_LABEL,
+        Some(EmojiHeadKind::Frequent),
+        frequent,
+        &mut emojis,
+    );
+    for category in all_categories() {
+        let items = emojis_by_category(category)
+            .into_iter()
+            .filter(|emoji| !seen.contains(emoji.emoji))
+            .copied()
+            .collect();
+        push(category.display_name(), None, items, &mut emojis);
     }
-
-    let mut combined = Vec::with_capacity(frequent_emojis.len() + base.len());
-    let frequent_count = frequent_emojis.len();
-    combined.extend_from_slice(&frequent_emojis);
-    combined.extend(base.into_iter().filter(|e| !seen.contains(e.emoji)));
-    DisplayOrder {
-        emojis: combined,
-        frequent_count,
-    }
+    DisplayOrder { emojis, sections }
 }
 
 /// Compute the uniform-list row index that contains `selected_index`.
@@ -1356,27 +489,14 @@ pub fn compute_scroll_row(selected_index: usize, ordered: &[Emoji]) -> usize {
 }
 
 /// Return the number of rendered grid rows (headers + cell rows) for a given
-/// filter and optional category. Used by window sizing so the picker is sized
+/// filter, category, and head. Used by window sizing so the picker is sized
 /// by actual visual rows, not raw emoji count.
-pub fn filtered_grid_row_count(filter: &str, selected_category: Option<EmojiCategory>) -> usize {
-    let ordered = filtered_ordered_emojis(filter, selected_category);
-    let mut row_count = 0;
-    let mut flat_offset = 0;
-
-    for category in all_categories() {
-        let category_count = ordered[flat_offset..]
-            .iter()
-            .take_while(|e| e.category == category)
-            .count();
-        if category_count == 0 {
-            continue;
-        }
-        // 1 header row + ceil(count / GRID_COLS) cell rows
-        row_count += 1 + category_count.div_ceil(GRID_COLS);
-        flat_offset += category_count;
-    }
-
-    row_count
+pub fn filtered_grid_row_count(
+    filter: &str,
+    selected_category: Option<EmojiCategory>,
+    head: &EmojiHead,
+) -> usize {
+    display_ordered_emojis(filter, selected_category, head).row_count(GRID_COLS)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1400,127 +520,49 @@ pub struct EmojiGridLayout {
     pub item_to_row: Vec<usize>,
 }
 
-/// Build a grid layout for a display-ordered emoji list that may have a
-/// leading "Frequently Used" head block.
-///
-/// The head block is rendered under a single synthetic section header and
-/// treated as one contiguous region for Up/Down navigation. The remaining
-/// emojis are grouped by category exactly like [`build_emoji_grid_layout`].
-///
-/// Passing `frequent_count == 0` produces the same layout as calling
-/// [`build_emoji_grid_layout`] directly, so callers can unconditionally
-/// route through this helper without branching on snapshot presence.
+/// Build the grid layout for a display order: one header row per section,
+/// then its cells in rows of `cols`.
 pub fn build_display_grid_layout(display: &DisplayOrder, cols: usize) -> EmojiGridLayout {
-    let emojis = &display.emojis;
-    let frequent_count = display.frequent_count.min(emojis.len());
-
     let mut rows: Vec<EmojiCellRow> = Vec::new();
-    let mut item_to_row = vec![0usize; emojis.len()];
+    let mut item_to_row = vec![0usize; display.emojis.len()];
     let mut visible_row_index = 0usize;
-
-    if frequent_count > 0 {
+    let mut start = 0usize;
+    for section in &display.sections {
         visible_row_index += 1;
         let mut row_offset = 0usize;
-        while row_offset < frequent_count {
-            let count = (frequent_count - row_offset).min(cols);
-            let start_index = row_offset;
+        while row_offset < section.count {
+            let count = (section.count - row_offset).min(cols);
+            let start_index = start + row_offset;
             let cell_row_index = rows.len();
-
             rows.push(EmojiCellRow {
                 visible_row_index,
                 start_index,
                 count,
             });
-
             for entry in item_to_row.iter_mut().skip(start_index).take(count) {
                 *entry = cell_row_index;
             }
-
             visible_row_index += 1;
             row_offset += count;
         }
+        start += section.count;
     }
-
-    let mut flat_offset = frequent_count;
-    for category in all_categories() {
-        let category_count = emojis[flat_offset..]
-            .iter()
-            .take_while(|emoji| emoji.category == category)
-            .count();
-
-        if category_count == 0 {
-            continue;
-        }
-
-        visible_row_index += 1;
-
-        let mut row_offset = 0usize;
-        while row_offset < category_count {
-            let count = (category_count - row_offset).min(cols);
-            let start_index = flat_offset + row_offset;
-            let cell_row_index = rows.len();
-
-            rows.push(EmojiCellRow {
-                visible_row_index,
-                start_index,
-                count,
-            });
-
-            for entry in item_to_row.iter_mut().skip(start_index).take(count) {
-                *entry = cell_row_index;
-            }
-
-            visible_row_index += 1;
-            row_offset += count;
-        }
-
-        flat_offset += category_count;
-    }
-
     EmojiGridLayout { rows, item_to_row }
 }
 
-/// Single-step scroll row helper mirroring [`compute_scroll_row`] for a
-/// [`DisplayOrder`]. Returns the visible row index of `selected_index`
-/// accounting for the Frequently Used head block (if any) and category
-/// header rows.
+/// The visible row of `selected_index`, counting section header rows.
 pub fn compute_display_scroll_row(selected_index: usize, display: &DisplayOrder) -> usize {
     let cols = GRID_COLS;
-    let emojis = &display.emojis;
-    let frequent_count = display.frequent_count.min(emojis.len());
-
-    if selected_index < frequent_count {
-        // 1 header row for "Frequently Used" + cell-row offset within the block.
-        return 1 + selected_index / cols;
-    }
-
-    let head_rows = if frequent_count > 0 {
-        1 + frequent_count.div_ceil(cols)
-    } else {
-        0
-    };
-
-    let tail_index = selected_index - frequent_count;
-    let mut flat_offset: usize = 0;
-    let mut row_offset: usize = head_rows;
-    for cat in all_categories() {
-        let cat_count = emojis[frequent_count..]
-            .iter()
-            .filter(|e| e.category == cat)
-            .count();
-        if cat_count == 0 {
-            continue;
+    let mut start = 0usize;
+    let mut row = 0usize;
+    for section in &display.sections {
+        if selected_index < start + section.count {
+            return row + 1 + (selected_index - start) / cols;
         }
-        if flat_offset + cat_count > tail_index {
-            let idx_in_cat = tail_index - flat_offset;
-            let cell_row = idx_in_cat / cols;
-            row_offset += 1 + cell_row;
-            return row_offset;
-        }
-        row_offset += 1 + cat_count.div_ceil(cols);
-        flat_offset += cat_count;
+        row += 1 + section.count.div_ceil(cols);
+        start += section.count;
     }
-    row_offset
+    row
 }
 
 pub fn build_emoji_grid_layout<T>(
@@ -1630,22 +672,60 @@ impl EmojiGridLayout {
     }
 }
 
-pub fn search_emojis(query: &str) -> Vec<&Emoji> {
-    let query = query.trim().to_ascii_lowercase();
+pub fn search_emojis(query: &str) -> Vec<&'static Emoji> {
+    let query = query.trim().to_lowercase();
     if query.is_empty() {
         return EMOJIS.iter().collect();
     }
-
-    EMOJIS
+    let terms: Vec<&str> = query.split_whitespace().collect();
+    let mut scored: Vec<(u32, usize, &'static Emoji)> = EMOJIS
         .iter()
-        .filter(|emoji| {
-            emoji.name.to_ascii_lowercase().contains(&query)
-                || emoji
-                    .keywords
-                    .iter()
-                    .any(|keyword| keyword.to_ascii_lowercase().contains(&query))
+        .enumerate()
+        .filter_map(|(order, emoji)| {
+            match_score(emoji, &query, &terms).map(|score| (score, order, emoji))
         })
-        .collect()
+        .collect();
+    scored.sort_by(|left, right| right.0.cmp(&left.0).then(left.1.cmp(&right.1)));
+    scored.into_iter().map(|(_, _, emoji)| emoji).collect()
+}
+
+/// How well `emoji` matches: every term must start a word of its name or a
+/// keyword. Whole-word and name matches rank above prefixes and keywords.
+fn match_score(emoji: &Emoji, query: &str, terms: &[&str]) -> Option<u32> {
+    let name = emoji.name.to_lowercase();
+    let name_words: Vec<&str> = name
+        .split(|ch: char| !ch.is_alphanumeric() && ch != '\'' && ch != '+')
+        .filter(|word| !word.is_empty())
+        .collect();
+    let mut score = 0;
+    for term in terms {
+        let term_score = if name_words.contains(term) {
+            6
+        } else if emoji.keywords.contains(term) {
+            // The generator stores keywords lowercase.
+            5
+        } else if name_words.iter().any(|word| word.starts_with(term)) {
+            4
+        } else if emoji.keywords.iter().any(|keyword| {
+            keyword
+                .split_whitespace()
+                .any(|word| word.starts_with(term))
+        }) {
+            2
+        } else if term.chars().count() >= 3 && name.contains(term) {
+            1
+        } else {
+            return None;
+        };
+        score += term_score;
+    }
+    if name == query {
+        score += 20;
+    } else if name.starts_with(query) {
+        score += 8;
+    }
+    // Shorter names are the more general match ("cat" before "cat with wry smile").
+    Some(score * 100 + 100u32.saturating_sub(name.len() as u32))
 }
 
 #[cfg(test)]

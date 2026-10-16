@@ -133,8 +133,16 @@ fn enter_key_dispatches_paste_not_copy_in_emoji_picker() {
 
     let enter_pos = enter_check.unwrap();
     let after_enter = &source[enter_pos..];
-    let finalizer = after_enter.find("finalize_paste_after_clipboard_ready(");
-    let close_behavior = after_enter.find("PasteCloseBehavior::HideWindow");
+    assert!(
+        after_enter.contains("paste_emoji_from_picker("),
+        "Enter must insert through paste_emoji_from_picker"
+    );
+    let actions = read_source("src/app_actions/handle_action/emoji.rs");
+    let helper = &actions[actions
+        .find("fn paste_emoji_from_picker(")
+        .expect("paste_emoji_from_picker exists")..];
+    let finalizer = helper.find("finalize_paste_after_clipboard_ready(");
+    let close_behavior = helper.find("PasteCloseBehavior::HideWindow");
 
     assert!(
         finalizer.is_some(),

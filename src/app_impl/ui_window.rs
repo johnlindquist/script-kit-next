@@ -1600,7 +1600,11 @@ impl ScriptListApp {
                 selected_category,
                 ..
             } => {
-                let row_count = crate::emoji::filtered_grid_row_count(filter, *selected_category);
+                let row_count = crate::emoji::filtered_grid_row_count(
+                    filter,
+                    *selected_category,
+                    &self.emoji_head,
+                );
                 Some((ViewType::MainWindow, row_count))
             }
             AppView::AppLauncherView { filter, .. } => {

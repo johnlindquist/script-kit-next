@@ -22,8 +22,8 @@ fn test_render_emoji_picker_builds_category_headers_and_six_cell_rows() {
         "EmojiGridRow should include Cells variant with start index and count"
     );
     assert!(
-        source.contains("(category_count - row_offset).min(cols)"),
-        "emoji grid should chunk category rows using shared GRID_COLS constant"
+        source.contains("(section.count - row_offset).min(cols)"),
+        "emoji grid should chunk each section's rows using shared GRID_COLS constant"
     );
 }
 
@@ -37,8 +37,13 @@ fn test_render_emoji_picker_handles_enter_copy() {
     );
 
     assert!(
-        source.contains("crate::platform::copy_text(emoji.emoji)"),
-        "render_emoji_picker should copy selected emoji on Enter/click"
+        source.matches("paste_emoji_from_picker(").count() >= 2,
+        "Enter and click should both insert through paste_emoji_from_picker"
+    );
+    let actions = fs::read_to_string("src/app_actions/handle_action/emoji.rs").unwrap();
+    assert!(
+        actions.contains("crate::platform::copy_text(value)"),
+        "paste_emoji_from_picker should copy the emoji (with its skin tone)"
     );
 }
 

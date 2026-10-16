@@ -23,7 +23,7 @@ mod shared;
 
 pub use chat::{ChatModelInfo, ChatPromptInfo};
 pub use clipboard::ClipboardEntryInfo;
-pub use emoji::{get_emoji_context_actions, EmojiActionInfo};
+pub use emoji::{emoji_tone_action_id, get_emoji_context_actions, EmojiActionInfo};
 pub use notes::{NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo};
 pub use shared::to_deeplink_name;
 

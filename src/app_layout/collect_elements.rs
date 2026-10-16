@@ -699,15 +699,15 @@ impl ScriptListApp {
                 selected_index,
                 selected_category,
             } => {
-                let rows: Vec<String> = crate::emoji::search_emojis(filter.as_str())
-                    .into_iter()
-                    .filter(|emoji| {
-                        selected_category
-                            .map(|category| emoji.category == category)
-                            .unwrap_or(true)
-                    })
-                    .map(|emoji| emoji.name.to_string())
-                    .collect();
+                let rows: Vec<String> = crate::emoji::display_ordered_emojis(
+                    filter,
+                    *selected_category,
+                    &self.emoji_head,
+                )
+                .emojis
+                .iter()
+                .map(|emoji| emoji.name.to_string())
+                .collect();
                 ElementCollectionOutcome::complete_from(
                     "emojiPicker",
                     self.collect_named_rows(

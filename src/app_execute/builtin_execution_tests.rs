@@ -134,6 +134,8 @@ mod builtin_execution_ai_feedback_tests {
             name: "rocket",
             keywords: &["launch", "ship"],
             category: EmojiCategory::TravelPlaces,
+            tones: None,
+            version: 6,
         };
 
         assert_eq!(emoji_picker_label(&emoji), "🚀  rocket");

@@ -44,6 +44,7 @@ pub mod dev_marker;
 pub mod editor;
 pub mod effects;
 pub mod emoji;
+pub mod emoji_pins;
 pub mod emoji_usage;
 pub mod error;
 pub mod executor;

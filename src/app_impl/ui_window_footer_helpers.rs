@@ -273,7 +273,8 @@ fn has_selected_emoji_entry(app: &ScriptListApp) -> bool {
         return false;
     };
 
-    crate::emoji::filtered_ordered_emojis(filter, *selected_category)
+    crate::emoji::display_ordered_emojis(filter, *selected_category, &app.emoji_head)
+        .emojis
         .get(*selected_index)
         .is_some()
 }

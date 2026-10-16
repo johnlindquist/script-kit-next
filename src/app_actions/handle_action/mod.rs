@@ -633,6 +633,15 @@ impl ScriptListApp {
         let should_transition_to_script_list =
             should_transition_to_script_list_after_action(&self.current_view) && !is_prompt_action;
 
+        if action_id.starts_with("emoji:") {
+            let outcome = self.handle_emoji_action(&action_id, cx);
+            if outcome.was_handled() {
+                log_dispatch_outcome(&action_id, &dctx.trace_id, "emoji", &outcome, &start);
+                self.show_outcome_feedback(&outcome, cx);
+                return;
+            }
+        }
+
         let selected_clipboard_entry = if action_id_stripped.starts_with("clipboard_") {
             self.selected_clipboard_entry()
         } else {
@@ -773,6 +782,7 @@ fn log_dispatch_outcome(
 
 // Include semantic submodules — each adds `impl ScriptListApp` methods.
 include!("clipboard.rs");
+include!("emoji.rs");
 include!("paste.rs");
 include!("favorites.rs");
 include!("scripts.rs");
