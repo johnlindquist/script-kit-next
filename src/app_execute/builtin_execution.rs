@@ -6213,16 +6213,16 @@ impl ScriptListApp {
                                 );
                             }
                         }
-                        DictationModelProgressEvent::Extracting => {
+                        DictationModelProgressEvent::Verifying => {
                             let prompt_visible = this.is_dictation_model_prompt_visible();
                             this.update_dictation_model_prompt_if_visible(
-                                crate::dictation::DictationModelStatus::Extracting,
+                                crate::dictation::DictationModelStatus::Verifying,
                                 cx,
                             );
                             if !prompt_visible {
                                 this.one_window_notice(
                                     crate::line_notice::INFO,
-                                    "Extracting dictation model\u{2026}".to_string(),
+                                    "Checking dictation model\u{2026}".to_string(),
                                     cx,
                                 );
                             }
@@ -6305,18 +6305,18 @@ impl ScriptListApp {
                                                 }
                                             }
                                         }
-                                        crate::dictation::download::DownloadPhase::Extracting => {
+                                        crate::dictation::download::DownloadPhase::Verifying => {
                                             tracing::info!(
                                                 category = "DICTATION",
-                                                "Extracting dictation model"
+                                                "Verifying dictation model"
                                             );
-                                            let snapshot = DictationModelUiSnapshot::extracting();
+                                            let snapshot = DictationModelUiSnapshot::verifying();
                                             let now = std::time::Instant::now();
-                                            // Extracting is critical — use blocking send
+                                            // Verifying is critical — use blocking send
                                             // so it always reaches the UI.
                                             if progress_tx
                                                 .send_blocking(
-                                                    DictationModelProgressEvent::Extracting,
+                                                    DictationModelProgressEvent::Verifying,
                                                 )
                                                 .is_ok()
                                             {
@@ -6561,13 +6561,13 @@ impl ScriptListApp {
                     ],
                 )
             }
-            DictationModelStatus::Extracting => (
-                "Installing local dictation model\u{2026}".to_string(),
-                "Download finished. Installing model files locally.".to_string(),
+            DictationModelStatus::Verifying => (
+                "Checking dictation model\u{2026}".to_string(),
+                "Download finished. Checking the file before first use.".to_string(),
                 vec![Choice {
                     name: "Hide".to_string(),
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
-                    description: Some("Extraction continues in background".to_string()),
+                    description: Some("Verification continues in background".to_string()),
                     key: None,
                     semantic_id: Some(builtin_choice_semantic_id(
                         BUILTIN_DICTATION_MODEL_PROMPT_ID,
@@ -6919,8 +6919,7 @@ impl ScriptListApp {
         model_id: crate::dictation::DictationModelId,
     ) -> (String, String, Vec<Choice>) {
         let model = crate::dictation::dictation_model_entry(model_id);
-        let archive_size =
-            crate::dictation::download::format_bytes(crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE);
+        let archive_size = crate::dictation::download::format_bytes(model.download_size_bytes());
         let mut choices = Vec::new();
         let title = if state.ready {
             "Dictation ready".to_string()

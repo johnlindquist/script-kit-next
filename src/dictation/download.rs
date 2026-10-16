@@ -1,12 +1,14 @@
-//! Parakeet model download and extraction.
+//! Dictation model downloads.
 //!
-//! Downloads the Parakeet ONNX model archive from a remote server and
-//! extracts it to the Script Kit models directory.  Supports resumable
-//! downloads and reports progress via a callback.
+//! Downloads single-file GGUF speech models into the Script Kit models
+//! directory. Transfers resume via HTTP Range, every file is checked against
+//! its published SHA-256 before it is moved into place, and progress is
+//! reported via a callback.
 
 use crate::dictation::transcription::{
-    resolve_default_model_path, resolve_whisper_model_path, PARAKEET_MODEL_ARCHIVE_SIZE,
-    PARAKEET_MODEL_URL, WHISPER_MODEL_SIZE, WHISPER_MODEL_URL,
+    resolve_default_model_path, resolve_whisper_model_path, PARAKEET_MODEL_SHA256,
+    PARAKEET_MODEL_SIZE, PARAKEET_MODEL_URL, WHISPER_MODEL_SHA256, WHISPER_MODEL_SIZE,
+    WHISPER_MODEL_URL,
 };
 use anyhow::{Context, Result};
 use std::io::Read;
@@ -188,9 +190,9 @@ pub fn classify_download_error(error: &anyhow::Error) -> String {
 pub enum DownloadPhase {
     /// HTTP download in progress.
     Downloading,
-    /// Archive extraction in progress.
-    Extracting,
-    /// Download and extraction complete.
+    /// Checking the downloaded file against its published SHA-256.
+    Verifying,
+    /// Download and verification complete.
     Complete,
     /// Download was cancelled by the caller.
     Cancelled,
@@ -198,111 +200,88 @@ pub enum DownloadPhase {
     Failed(String),
 }
 
-/// Download and extract the Parakeet model to the default models directory.
-///
-/// - `on_progress` is called periodically with download progress.
-/// - `cancel` can be set to `true` to abort the download.
-///
-/// Returns the path to the extracted model directory on success.
+/// A single-file model download: where it comes from, where it goes, and
+/// how to check it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelFileSpec {
+    pub url: &'static str,
+    pub size: u64,
+    /// Lowercase hex SHA-256 of the complete file.
+    pub sha256: &'static str,
+}
+
+/// Download spec for the Parakeet model file.
+pub const PARAKEET_MODEL_SPEC: ModelFileSpec = ModelFileSpec {
+    url: PARAKEET_MODEL_URL,
+    size: PARAKEET_MODEL_SIZE,
+    sha256: PARAKEET_MODEL_SHA256,
+};
+
+/// Download spec for the Whisper Medium model file.
+pub const WHISPER_MODEL_SPEC: ModelFileSpec = ModelFileSpec {
+    url: WHISPER_MODEL_URL,
+    size: WHISPER_MODEL_SIZE,
+    sha256: WHISPER_MODEL_SHA256,
+};
+
+/// Download the Parakeet model file to the models directory.
 pub fn download_parakeet_model(
     on_progress: impl Fn(DownloadPhase, DownloadProgress) + Send,
     cancel: Arc<AtomicBool>,
 ) -> Result<PathBuf> {
-    let model_dir = resolve_default_model_path();
-    let models_parent = model_dir
-        .parent()
-        .context("cannot resolve models parent directory")?;
-
-    // Ensure models directory exists.
-    std::fs::create_dir_all(models_parent).with_context(|| {
-        format!(
-            "failed to create models directory: {}",
-            models_parent.display()
-        )
-    })?;
-
-    let partial_path = models_parent.join("parakeet-v3-int8.tar.gz.partial");
-    let extracting_path = models_parent.join("parakeet-tdt-0.6b-v3-int8.extracting");
-
-    // Clean up stale extraction directory from a previous interrupted run.
-    if extracting_path.exists() {
-        let _ = std::fs::remove_dir_all(&extracting_path);
-    }
-
-    // Phase 1: Download
-    download_archive(
-        PARAKEET_MODEL_URL,
-        &partial_path,
-        PARAKEET_MODEL_ARCHIVE_SIZE,
-        &on_progress,
-        &cancel,
-    )?;
-
-    if cancel.load(Ordering::Relaxed) {
-        on_progress(
-            DownloadPhase::Cancelled,
-            DownloadProgress {
-                downloaded: 0,
-                total: 0,
-            },
-        );
-        return Err(anyhow::anyhow!("model download cancelled"));
-    }
-
-    // Phase 2: Extract
-    on_progress(
-        DownloadPhase::Extracting,
-        DownloadProgress {
-            downloaded: PARAKEET_MODEL_ARCHIVE_SIZE,
-            total: PARAKEET_MODEL_ARCHIVE_SIZE,
-        },
-    );
-
-    extract_tar_gz(&partial_path, &extracting_path, &model_dir)?;
-
-    // Clean up the archive.
-    let _ = std::fs::remove_file(&partial_path);
-
-    on_progress(
-        DownloadPhase::Complete,
-        DownloadProgress {
-            downloaded: PARAKEET_MODEL_ARCHIVE_SIZE,
-            total: PARAKEET_MODEL_ARCHIVE_SIZE,
-        },
-    );
-
-    tracing::info!(
-        category = "DICTATION",
-        model_dir = %model_dir.display(),
-        "Parakeet model download and extraction complete"
-    );
-
-    Ok(model_dir)
+    download_model_file(
+        &PARAKEET_MODEL_SPEC,
+        &resolve_default_model_path(),
+        on_progress,
+        cancel,
+    )
 }
 
-/// Return the size of the resumable Parakeet archive partial, when present.
-pub fn parakeet_partial_archive_size() -> Option<u64> {
-    let model_dir = resolve_default_model_path();
-    let models_parent = model_dir.parent()?;
-    let partial_path = models_parent.join("parakeet-v3-int8.tar.gz.partial");
-    let len = std::fs::metadata(partial_path).ok()?.len();
-    (len > 0).then_some(len)
-}
-
-/// Download the Whisper Medium (q4_1) model file to the models directory.
-///
-/// Unlike the Parakeet archive there is no extraction step: the file is
-/// downloaded to a `.partial` sibling (resumable via HTTP Range) and then
-/// atomically renamed into place.
+/// Download the Whisper Medium model file to the models directory.
 pub fn download_whisper_model(
     on_progress: impl Fn(DownloadPhase, DownloadProgress) + Send,
     cancel: Arc<AtomicBool>,
 ) -> Result<PathBuf> {
-    let model_path = resolve_whisper_model_path();
+    download_model_file(
+        &WHISPER_MODEL_SPEC,
+        &resolve_whisper_model_path(),
+        on_progress,
+        cancel,
+    )
+}
+
+/// Path of the resumable partial download that sits beside `model_path`.
+pub fn partial_download_path(model_path: &Path) -> PathBuf {
+    let mut name = model_path
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(".partial");
+    model_path.with_file_name(name)
+}
+
+/// Size of the resumable partial download for `model_path`, when present.
+pub fn partial_download_size(model_path: &Path) -> Option<u64> {
+    let len = std::fs::metadata(partial_download_path(model_path))
+        .ok()?
+        .len();
+    (len > 0).then_some(len)
+}
+
+/// Download one model file: resumable transfer into a `.partial` sibling,
+/// SHA-256 check, then an atomic rename into place.
+///
+/// A partial whose hash does not match is deleted so the next attempt starts
+/// clean instead of resuming corrupt bytes.
+pub fn download_model_file(
+    spec: &ModelFileSpec,
+    model_path: &Path,
+    on_progress: impl Fn(DownloadPhase, DownloadProgress) + Send,
+    cancel: Arc<AtomicBool>,
+) -> Result<PathBuf> {
     let models_parent = model_path
         .parent()
         .context("cannot resolve models parent directory")?;
-
     std::fs::create_dir_all(models_parent).with_context(|| {
         format!(
             "failed to create models directory: {}",
@@ -310,15 +289,8 @@ pub fn download_whisper_model(
         )
     })?;
 
-    let partial_path = models_parent.join("whisper-medium-q4_1.bin.partial");
-
-    download_archive(
-        WHISPER_MODEL_URL,
-        &partial_path,
-        WHISPER_MODEL_SIZE,
-        &on_progress,
-        &cancel,
-    )?;
+    let partial_path = partial_download_path(model_path);
+    download_archive(spec.url, &partial_path, spec.size, &on_progress, &cancel)?;
 
     if cancel.load(Ordering::Relaxed) {
         on_progress(
@@ -331,7 +303,23 @@ pub fn download_whisper_model(
         return Err(anyhow::anyhow!("model download cancelled"));
     }
 
-    std::fs::rename(&partial_path, &model_path).with_context(|| {
+    on_progress(
+        DownloadPhase::Verifying,
+        DownloadProgress {
+            downloaded: spec.size,
+            total: spec.size,
+        },
+    );
+    let actual = sha256_file_hex(&partial_path)?;
+    if !actual.eq_ignore_ascii_case(spec.sha256) {
+        let _ = std::fs::remove_file(&partial_path);
+        anyhow::bail!(
+            "downloaded model failed its checksum (expected {}, got {actual}); the partial file was removed, try again",
+            spec.sha256
+        );
+    }
+
+    std::fs::rename(&partial_path, model_path).with_context(|| {
         format!(
             "failed to move downloaded model into place at {}",
             model_path.display()
@@ -341,30 +329,44 @@ pub fn download_whisper_model(
     on_progress(
         DownloadPhase::Complete,
         DownloadProgress {
-            downloaded: WHISPER_MODEL_SIZE,
-            total: WHISPER_MODEL_SIZE,
+            downloaded: spec.size,
+            total: spec.size,
         },
     );
 
     tracing::info!(
         category = "DICTATION",
         model_path = %model_path.display(),
-        "Whisper model download complete"
+        "Dictation model download complete and verified"
     );
 
-    Ok(model_path)
+    Ok(model_path.to_path_buf())
 }
 
-/// Return the size of the resumable Whisper model partial, when present.
-pub fn whisper_partial_model_size() -> Option<u64> {
-    let model_path = resolve_whisper_model_path();
-    let models_parent = model_path.parent()?;
-    let partial_path = models_parent.join("whisper-medium-q4_1.bin.partial");
-    let len = std::fs::metadata(partial_path).ok()?.len();
-    (len > 0).then_some(len)
+/// Lowercase hex SHA-256 of a file, streamed in 1 MiB blocks.
+pub fn sha256_file_hex(path: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path)
+        .with_context(|| format!("failed to open {} for verification", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        let n = file
+            .read(&mut buf)
+            .with_context(|| format!("failed to read {} for verification", path.display()))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 
-/// Download the archive file with resume support.
+/// Download a file with resume support.
 fn download_archive(
     url: &str,
     partial_path: &Path,
@@ -384,7 +386,7 @@ fn download_archive(
     if resume_from >= expected_size && expected_size > 0 {
         tracing::info!(
             category = "DICTATION",
-            "Parakeet model archive already fully downloaded"
+            "Dictation model file already fully downloaded"
         );
         return Ok(());
     }
@@ -394,7 +396,7 @@ fn download_archive(
         url,
         resume_from,
         expected_size,
-        "Starting Parakeet model download"
+        "Starting dictation model download"
     );
 
     let agent = ureq::Agent::config_builder()
@@ -473,82 +475,123 @@ fn download_archive(
     Ok(())
 }
 
-/// Extract a `.tar.gz` archive, promoting a single inner directory to the
-/// final model path (matching the vercel-voice extraction behavior).
-fn extract_tar_gz(archive_path: &Path, extracting_dir: &Path, final_dir: &Path) -> Result<()> {
-    tracing::info!(
-        category = "DICTATION",
-        archive = %archive_path.display(),
-        dest = %final_dir.display(),
-        "Extracting Parakeet model archive"
-    );
-
-    std::fs::create_dir_all(extracting_dir).with_context(|| {
-        format!(
-            "failed to create extraction directory: {}",
-            extracting_dir.display()
-        )
-    })?;
-
-    let file = std::fs::File::open(archive_path)
-        .with_context(|| format!("failed to open archive: {}", archive_path.display()))?;
-    let decoder = flate2::read::GzDecoder::new(file);
-    let mut archive = tar::Archive::new(decoder);
-
-    archive
-        .unpack(extracting_dir)
-        .with_context(|| format!("failed to extract archive to {}", extracting_dir.display()))?;
-
-    // Check if the archive contained a single top-level directory.
-    // If so, promote it to the final path (e.g. archive contains
-    // `parakeet-tdt-0.6b-v3-int8/` → move that to `final_dir`).
-    let entries: Vec<_> = std::fs::read_dir(extracting_dir)
-        .context("failed to read extraction directory")?
-        .filter_map(|e| e.ok())
-        .collect();
-
-    if entries.len() == 1 && entries[0].path().is_dir() {
-        let inner = entries[0].path();
-        // Remove any stale final_dir first.
-        if final_dir.exists() {
-            std::fs::remove_dir_all(final_dir).with_context(|| {
-                format!("failed to remove stale model dir: {}", final_dir.display())
-            })?;
-        }
-        std::fs::rename(&inner, final_dir).with_context(|| {
-            format!(
-                "failed to rename {} to {}",
-                inner.display(),
-                final_dir.display()
-            )
-        })?;
-    } else {
-        // Multiple entries — rename the whole extraction dir.
-        if final_dir.exists() {
-            std::fs::remove_dir_all(final_dir).with_context(|| {
-                format!("failed to remove stale model dir: {}", final_dir.display())
-            })?;
-        }
-        std::fs::rename(extracting_dir, final_dir).with_context(|| {
-            format!(
-                "failed to rename {} to {}",
-                extracting_dir.display(),
-                final_dir.display()
-            )
-        })?;
-    }
-
-    // Clean up extraction dir if it still exists (single-dir case).
-    if extracting_dir.exists() {
-        let _ = std::fs::remove_dir_all(extracting_dir);
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partial_download_path_is_a_sibling_with_partial_suffix() {
+        let path = Path::new("/models/parakeet-tdt-0.6b-v3-Q8_0.gguf");
+        assert_eq!(
+            partial_download_path(path),
+            PathBuf::from("/models/parakeet-tdt-0.6b-v3-Q8_0.gguf.partial")
+        );
+    }
+
+    #[test]
+    fn sha256_file_hex_matches_known_digest() {
+        let file = tempfile::NamedTempFile::new().expect("temp file");
+        std::fs::write(file.path(), b"abc").expect("write");
+        assert_eq!(
+            sha256_file_hex(file.path()).expect("hash"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    /// Network check of the real download path: seeds a `.partial` with all
+    /// but the last 4 MiB of a local copy of the Parakeet GGUF, then lets
+    /// `download_model_file` resume over HTTP Range (through the host's
+    /// redirect), verify the SHA-256 and rename into place.
+    #[test]
+    #[ignore = "network: set SK_DICTATION_SEED_GGUF to a local parakeet-tdt-0.6b-v3-Q8_0.gguf"]
+    fn download_resumes_partial_and_verifies_checksum() {
+        let Ok(seed) = std::env::var("SK_DICTATION_SEED_GGUF") else {
+            eprintln!("skipping: SK_DICTATION_SEED_GGUF not set");
+            return;
+        };
+        let dir = tempfile::TempDir::new().expect("temp dir");
+        let model_path = dir.path().join("parakeet-tdt-0.6b-v3-Q8_0.gguf");
+        let keep = PARAKEET_MODEL_SIZE - 4 * 1024 * 1024;
+        {
+            use std::io::Write as _;
+            let mut src = std::fs::File::open(&seed).expect("open seed");
+            let mut dst =
+                std::fs::File::create(partial_download_path(&model_path)).expect("partial");
+            let mut remaining = keep;
+            let mut buf = vec![0u8; 1024 * 1024];
+            while remaining > 0 {
+                let want = remaining.min(buf.len() as u64) as usize;
+                src.read_exact(&mut buf[..want]).expect("read seed");
+                dst.write_all(&buf[..want]).expect("write partial");
+                remaining -= want as u64;
+            }
+        }
+        let phases = std::sync::Mutex::new(Vec::new());
+        let first_progress = std::sync::Mutex::new(None);
+        let path = download_model_file(
+            &PARAKEET_MODEL_SPEC,
+            &model_path,
+            |phase, progress| {
+                if phase == DownloadPhase::Downloading {
+                    first_progress
+                        .lock()
+                        .expect("lock")
+                        .get_or_insert(progress.downloaded);
+                }
+                let mut phases = phases.lock().expect("lock");
+                if phases.last() != Some(&phase) {
+                    phases.push(phase);
+                }
+            },
+            Arc::new(AtomicBool::new(false)),
+        )
+        .expect("download");
+        assert_eq!(path, model_path);
+        assert!(model_path.is_file());
+        assert!(!partial_download_path(&model_path).exists());
+        let first = first_progress.lock().expect("lock").unwrap_or_default();
+        assert!(
+            first > keep,
+            "download must resume from the partial, first progress {first}"
+        );
+        assert_eq!(
+            *phases.lock().expect("lock"),
+            vec![
+                DownloadPhase::Downloading,
+                DownloadPhase::Verifying,
+                DownloadPhase::Complete
+            ]
+        );
+    }
+
+    #[test]
+    fn checksum_mismatch_removes_partial() {
+        let dir = tempfile::TempDir::new().expect("temp dir");
+        let model_path = dir.path().join("tiny.gguf");
+        std::fs::write(partial_download_path(&model_path), b"abc").expect("partial");
+        let spec = ModelFileSpec {
+            url: "https://invalid.example/never-fetched",
+            size: 3,
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        };
+        let error = download_model_file(
+            &spec,
+            &model_path,
+            |_, _| {},
+            Arc::new(AtomicBool::new(false)),
+        )
+        .expect_err("checksum must fail");
+        assert!(error.to_string().contains("checksum"), "{error}");
+        assert!(!partial_download_path(&model_path).exists());
+        assert!(!model_path.exists());
+    }
+
+    #[test]
+    fn model_specs_match_catalog_constants() {
+        assert_eq!(PARAKEET_MODEL_SPEC.size, PARAKEET_MODEL_SIZE);
+        assert_eq!(WHISPER_MODEL_SPEC.size, WHISPER_MODEL_SIZE);
+        assert_ne!(PARAKEET_MODEL_SPEC.sha256, WHISPER_MODEL_SPEC.sha256);
+    }
 
     #[test]
     fn format_progress_bar_half() {

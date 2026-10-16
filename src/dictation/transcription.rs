@@ -2,49 +2,64 @@ use crate::dictation::types::{CapturedAudioChunk, DictationDestination, Dictatio
 use crate::setup::get_kit_path;
 use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use transcribe_rs::onnx::parakeet::ParakeetModel;
-use transcribe_rs::onnx::Quantization;
-use transcribe_rs::transcriber::{EnergyAdaptiveChunked, EnergyAdaptiveConfig, Transcriber as _};
-use transcribe_rs::whisper_cpp::{
-    WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams,
-};
-use transcribe_rs::{SpeechModel, TranscribeOptions};
 
 /// Version-agnostic transcription engine trait.
 ///
-/// Implementations wrap a specific speech-to-text backend (e.g. Whisper via
-/// `transcribe-rs`).  The rest of the app depends only on this trait so that
-/// swapping engines does not ripple beyond `transcription.rs`.
+/// Implementations wrap a specific speech-to-text backend. The rest of the
+/// app depends only on this trait so that swapping engines does not ripple
+/// beyond `transcription.rs`.
 pub trait DictationEngine: Send {
     fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String>;
 
     /// Transcribe long audio in energy-split chunks, reporting fractional
     /// progress (0.0–1.0) after each chunk completes.
     ///
-    /// Both bundled backends degrade on very long single passes — Parakeet's
-    /// conformer encoder is O(T²) over the whole buffer and can drop trailing
-    /// speech, and Whisper's internal windowing gives no progress signal — so
-    /// finalize routes recordings longer than
-    /// [`LONG_AUDIO_CHUNK_TARGET_SECS`] through this path instead.
+    /// Finalize routes recordings longer than [`LONG_AUDIO_CHUNK_TARGET_SECS`]
+    /// through this path so the HUD gets real progress ticks and no single
+    /// pass exceeds the range the models were trained on.
     fn transcribe_long(
         &mut self,
         samples: &[f32],
         initial_prompt: Option<&str>,
         progress: &mut dyn FnMut(f32),
     ) -> Result<String> {
-        let _ = progress;
-        self.transcribe(samples, initial_prompt)
+        let chunks = plan_long_audio_chunks(samples, SAMPLE_RATE_HZ);
+        let total = samples.len().max(1);
+        let mut parts: Vec<String> = Vec::with_capacity(chunks.len());
+        for range in chunks {
+            let end = range.end;
+            let text = self.transcribe(&samples[range], initial_prompt)?;
+            let text = text.trim();
+            if !text.is_empty() {
+                parts.push(text.to_owned());
+            }
+            progress(end as f32 / total as f32);
+        }
+        progress(1.0);
+        Ok(parts.join(" "))
     }
 }
 
-/// Target duration of one finalize chunk. Chosen to sit inside Whisper's
-/// native 30 s window and well inside the range Parakeet was trained on.
-pub const LONG_AUDIO_CHUNK_TARGET_SECS: f32 = 24.0;
+/// Target duration of one finalize chunk.
+///
+/// Every bundled model handles two minutes in one pass (Parakeet uses a
+/// bounded attention window, Whisper has native long-form decoding, Cohere
+/// accepts up to about 400 s), and a single pass avoids mid-sentence cuts
+/// that capitalise or repeat words at chunk seams. Longer recordings are
+/// still split so the HUD gets progress ticks and memory stays bounded.
+pub const LONG_AUDIO_CHUNK_TARGET_SECS: f32 = 120.0;
 
 /// Energy-split search window around the chunk target.
 const LONG_AUDIO_SEARCH_WINDOW_SECS: f32 = 3.0;
+
+/// Frame length used to find the quietest cut point (30 ms).
+const CUT_FRAME_SECS: f32 = 0.03;
+
+/// A trailing chunk shorter than this is merged into the previous one.
+const MIN_TAIL_CHUNK_SECS: f32 = 0.5;
 
 /// Audio shorter than one chunk-plus-search-window is transcribed in a
 /// single plain pass; anything longer takes the chunked path.
@@ -53,54 +68,59 @@ pub fn should_use_chunked_transcription(sample_count: usize, sample_rate_hz: u32
     secs > LONG_AUDIO_CHUNK_TARGET_SECS + LONG_AUDIO_SEARCH_WINDOW_SECS
 }
 
-/// Run the shared energy-adaptive chunked transcription over any
-/// `SpeechModel`, reporting progress as the fraction of audio samples whose
-/// chunks have finished transcribing.
-fn transcribe_long_with_model(
-    model: &mut dyn SpeechModel,
-    samples: &[f32],
-    language: Option<String>,
-    progress: &mut dyn FnMut(f32),
-) -> Result<String> {
-    let options = TranscribeOptions {
-        language,
-        ..Default::default()
-    };
-    let mut chunker = EnergyAdaptiveChunked::new(
-        EnergyAdaptiveConfig {
-            target_chunk_secs: LONG_AUDIO_CHUNK_TARGET_SECS,
-            search_window_secs: LONG_AUDIO_SEARCH_WINDOW_SECS,
-            padding_secs: 0.3,
-            min_chunk_secs: 0.5,
-            ..Default::default()
-        },
-        options,
-    );
+/// Split long audio into contiguous chunks of roughly
+/// [`LONG_AUDIO_CHUNK_TARGET_SECS`], cutting at the quietest 30 ms frame
+/// within ±[`LONG_AUDIO_SEARCH_WINDOW_SECS`] of each target so cuts land in
+/// pauses rather than mid-word.
+///
+/// The returned ranges cover every sample exactly once, in order. Audio that
+/// does not need chunking yields a single range.
+pub fn plan_long_audio_chunks(samples: &[f32], sample_rate_hz: u32) -> Vec<Range<usize>> {
+    let rate = sample_rate_hz.max(1) as f32;
+    let len = samples.len();
+    let target = (LONG_AUDIO_CHUNK_TARGET_SECS * rate) as usize;
+    let window = (LONG_AUDIO_SEARCH_WINDOW_SECS * rate) as usize;
+    let frame = ((CUT_FRAME_SECS * rate) as usize).max(1);
+    let min_tail = (MIN_TAIL_CHUNK_SECS * rate) as usize;
 
-    // Feed in chunk-sized slices so a progress tick lands after every chunk
-    // the underlying model completes.
-    let slice_len = ((LONG_AUDIO_CHUNK_TARGET_SECS * SAMPLE_RATE_HZ as f32) as usize).max(1);
-    let total = samples.len().max(1);
-    let mut fed = 0usize;
-    for slice in samples.chunks(slice_len) {
-        chunker
-            .feed(model, slice)
-            .map_err(|e| anyhow::anyhow!("chunked transcription failed: {e}"))?;
-        fed += slice.len();
-        // feed() may hold up to one chunk buffered; report the fed fraction
-        // scaled down so 1.0 is reserved for finish().
-        progress((fed as f32 / total as f32) * 0.95);
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+    while len - start > target + window {
+        let search_start = start + target - window;
+        let search_end = (start + target + window).min(len);
+        let ideal = start + target;
+        let mut best_cut = ideal;
+        let mut best_energy = f32::MAX;
+        let mut best_distance = usize::MAX;
+        let mut frame_start = search_start;
+        while frame_start + frame <= search_end {
+            let energy = rms(&samples[frame_start..frame_start + frame]);
+            let center = frame_start + frame / 2;
+            let distance = center.abs_diff(ideal);
+            if energy < best_energy || (energy == best_energy && distance < best_distance) {
+                best_energy = energy;
+                best_distance = distance;
+                best_cut = center;
+            }
+            frame_start += frame;
+        }
+        chunks.push(start..best_cut);
+        start = best_cut;
     }
-    // finish() transcribes the remainder and merges every chunk result into
-    // the authoritative transcript.
-    let merged = chunker
-        .finish(model)
-        .map_err(|e| anyhow::anyhow!("chunked transcription finalize failed: {e}"))?;
-    progress(1.0);
-    Ok(merged.text.trim().to_owned())
+    if len > start {
+        let tail = start..len;
+        match chunks.last_mut() {
+            Some(previous) if tail.len() < min_tail => previous.end = len,
+            _ => chunks.push(tail),
+        }
+    }
+    if chunks.is_empty() {
+        chunks.push(0..len);
+    }
+    chunks
 }
 
-/// Expected input sample rate for both bundled engines.
+/// Expected input sample rate for every bundled engine.
 const SAMPLE_RATE_HZ: u32 = 16_000;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,53 +136,57 @@ pub struct DictationTranscriptionConfig {
     pub silence_rms: f32,
 }
 
-/// Default Whisper model filename (relative to the models directory).
-const DEFAULT_WHISPER_MODEL: &str = "whisper-medium-q4_1.bin";
+/// Parakeet TDT 0.6B v3 model file (GGUF, Q8_0), relative to the models directory.
+const DEFAULT_PARAKEET_MODEL_FILE: &str = "parakeet-tdt-0.6b-v3-Q8_0.gguf";
 
-/// Default Parakeet model directory name (relative to the models directory).
-const DEFAULT_PARAKEET_MODEL_DIR: &str = "parakeet-tdt-0.6b-v3-int8";
+/// URL for downloading the Parakeet model file.
+pub const PARAKEET_MODEL_URL: &str =
+    "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf/resolve/main/parakeet-tdt-0.6b-v3-Q8_0.gguf";
 
-/// URL for downloading the Parakeet model archive.
-pub const PARAKEET_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
+/// Expected size of the Parakeet model file in bytes.
+pub const PARAKEET_MODEL_SIZE: u64 = 739_508_576;
 
-/// Expected size of the Parakeet model archive in bytes.
-pub const PARAKEET_MODEL_ARCHIVE_SIZE: u64 = 478_517_071;
+/// Expected SHA-256 of the Parakeet model file (lowercase hex).
+pub const PARAKEET_MODEL_SHA256: &str =
+    "5859f77944efcd8eafa23a6350731960b2b55b2203df51f319665c807d802cc7";
 
-/// URL for downloading the Whisper Medium (q4_1) model file.
-///
-/// Served from the same blob host as the Parakeet archive and named exactly
-/// like the local model file, so no extraction or renaming is needed.
-pub const WHISPER_MODEL_URL: &str = "https://blob.handy.computer/whisper-medium-q4_1.bin";
+/// Whisper Medium model file (GGUF, Q5_K_M), relative to the models directory.
+const DEFAULT_WHISPER_MODEL_FILE: &str = "whisper-medium-Q5_K_M.gguf";
 
-/// Expected size of the Whisper Medium (q4_1) model file in bytes.
-pub const WHISPER_MODEL_SIZE: u64 = 491_852_915;
+/// URL for downloading the Whisper Medium model file.
+pub const WHISPER_MODEL_URL: &str =
+    "https://huggingface.co/handy-computer/whisper-medium-gguf/resolve/main/whisper-medium-Q5_K_M.gguf";
+
+/// Expected size of the Whisper Medium model file in bytes.
+pub const WHISPER_MODEL_SIZE: u64 = 582_746_048;
+
+/// Expected SHA-256 of the Whisper Medium model file (lowercase hex).
+pub const WHISPER_MODEL_SHA256: &str =
+    "4e2a8904a866b3aa7ef70d7640ec6abc5f0a05524cd950ea4b66ace12122bf53";
 
 /// Default RMS silence gate (mirrors `DictationPreferences::DEFAULT_SILENCE_RMS`).
 pub const DEFAULT_SILENCE_RMS: f32 = 0.01;
 
-/// Resolve the default Parakeet model directory path.
+/// Resolve the default Parakeet model file path.
 ///
 /// Anchors the model path to `get_kit_path()/models/` so it works
 /// regardless of the process working directory.
 pub fn resolve_default_model_path() -> PathBuf {
     get_kit_path()
         .join("models")
-        .join(DEFAULT_PARAKEET_MODEL_DIR)
+        .join(DEFAULT_PARAKEET_MODEL_FILE)
 }
 
-/// Resolve the legacy Whisper model file path.
+/// Resolve the Whisper Medium model file path.
 pub fn resolve_whisper_model_path() -> PathBuf {
-    get_kit_path().join("models").join(DEFAULT_WHISPER_MODEL)
+    get_kit_path()
+        .join("models")
+        .join(DEFAULT_WHISPER_MODEL_FILE)
 }
 
-/// Returns `true` when the default Parakeet model directory exists and
-/// contains at least one file (i.e. extraction completed).
+/// Returns `true` when the default Parakeet model file has been downloaded.
 pub fn is_parakeet_model_available() -> bool {
-    let path = resolve_default_model_path();
-    path.is_dir()
-        && std::fs::read_dir(&path)
-            .map(|mut entries| entries.next().is_some())
-            .unwrap_or(false)
+    resolve_default_model_path().is_file()
 }
 
 impl Default for DictationTranscriptionConfig {
@@ -289,224 +313,296 @@ pub fn build_session_result(
 }
 
 // ---------------------------------------------------------------------------
-// Concrete Whisper engine (transcribe-rs / whisper.cpp backend)
+// Local speech engine (transcribe.cpp / ggml, Metal GPU with CPU fallback)
 // ---------------------------------------------------------------------------
 
-/// Local Whisper speech-to-text engine backed by `transcribe-rs`.
-///
-/// The underlying `TranscribeWhisperEngine` is loaded lazily on the first
-/// `transcribe()` call and cached for subsequent invocations.  Call
-/// `unload()` to free the model memory.
-pub struct WhisperDictationEngine {
-    model_path: PathBuf,
-    language: Option<String>,
-    engine: Option<TranscribeWhisperEngine>,
+/// Which compute backend the dictation model is running on. Logged on every
+/// load and surfaced in the passive dictation automation state so agents can
+/// confirm GPU use without starting a capture.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationEngineReceipt {
+    /// Model file name (no directory).
+    pub model_file: String,
+    /// `true` while the model is resident in memory.
+    pub loaded: bool,
+    /// Backend the model is bound to, e.g. `"Metal"` or `"CPU"`.
+    pub backend: String,
+    /// Device description, e.g. `"Apple M4 Max"`.
+    pub device: String,
+    /// `true` when the model runs on a GPU device.
+    pub gpu: bool,
+    /// Why the engine is on the CPU instead of the GPU, when it fell back.
+    pub cpu_fallback_reason: Option<String>,
+    /// Wall time of the most recent model load.
+    pub load_ms: u64,
+    /// Wall time of the most recent transcription pass.
+    pub last_transcribe_ms: Option<u64>,
+    /// Audio length of the most recent transcription pass.
+    pub last_audio_ms: Option<u64>,
 }
 
-impl std::fmt::Debug for WhisperDictationEngine {
+static ENGINE_RECEIPT: Mutex<Option<DictationEngineReceipt>> = Mutex::new(None);
+
+/// Latest engine receipt, or `None` when no model has been loaded this run.
+pub fn dictation_engine_receipt() -> Option<DictationEngineReceipt> {
+    ENGINE_RECEIPT.lock().clone()
+}
+
+fn update_engine_receipt(update: impl FnOnce(&mut DictationEngineReceipt)) {
+    if let Some(receipt) = ENGINE_RECEIPT.lock().as_mut() {
+        update(receipt);
+    }
+}
+
+/// Route the native library's diagnostics into `log`/`tracing` once, so ggml
+/// messages land in Script Kit's logs instead of raw stderr.
+fn init_native_logging() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(transcribe_cpp::init_logging);
+}
+
+struct LoadedSpeechModel {
+    session: transcribe_cpp::Session,
+    languages: Vec<String>,
+    supports_prompt: bool,
+    gpu: bool,
+}
+
+/// Local speech-to-text engine for GGUF models (Parakeet, Whisper) backed by
+/// transcribe.cpp.
+///
+/// The model loads lazily on the first `transcribe()` call, on the GPU
+/// (Metal) when available. If the GPU load or a GPU pass fails, the engine
+/// reloads on the CPU and stays there for the rest of its life. Call
+/// `unload()` (or drop the engine) to free model memory.
+pub struct LocalDictationEngine {
+    model_path: PathBuf,
+    language: Option<String>,
+    loaded: Option<LoadedSpeechModel>,
+    cpu_fallback_reason: Option<String>,
+}
+
+impl std::fmt::Debug for LocalDictationEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WhisperDictationEngine")
+        f.debug_struct("LocalDictationEngine")
             .field("model_path", &self.model_path)
             .field("language", &self.language)
-            .field("engine_loaded", &self.engine.is_some())
+            .field("model_loaded", &self.loaded.is_some())
+            .field("cpu_fallback_reason", &self.cpu_fallback_reason)
             .finish()
     }
 }
 
-impl WhisperDictationEngine {
-    /// Create a new Whisper engine handle.
+impl LocalDictationEngine {
+    /// Create a new engine handle.
     ///
     /// Validates that `config.model_path` points to an existing regular file
     /// but defers the expensive model load to the first `transcribe()` call.
-    pub fn new(config: &DictationTranscriptionConfig) -> anyhow::Result<Self> {
+    pub fn new(config: &DictationTranscriptionConfig) -> Result<Self> {
         let path = &config.model_path;
         if !path.exists() {
-            anyhow::bail!("Whisper model not found at {}", path.display());
+            anyhow::bail!("Dictation model not found at {}", path.display());
         }
         if !path.is_file() {
             anyhow::bail!(
-                "Whisper model path is not a regular file: {}",
+                "Dictation model path is not a regular file: {}",
                 path.display()
             );
         }
         Ok(Self {
             model_path: path.clone(),
             language: config.language.clone(),
-            engine: None,
+            loaded: None,
+            cpu_fallback_reason: None,
         })
     }
 
-    /// Lazily load the Whisper model, returning a mutable reference to the
-    /// live engine.
-    fn load_if_needed(&mut self) -> Result<&mut TranscribeWhisperEngine> {
-        if self.engine.is_none() {
+    fn model_file_name(&self) -> String {
+        self.model_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
+    fn load_with_backend(&self, backend: transcribe_cpp::Backend) -> Result<LoadedSpeechModel> {
+        init_native_logging();
+        let model = transcribe_cpp::Model::load_with(
+            &self.model_path,
+            &transcribe_cpp::ModelOptions {
+                backend,
+                ..Default::default()
+            },
+        )
+        .with_context(|| {
+            format!(
+                "failed to load dictation model from {} ({backend:?})",
+                self.model_path.display()
+            )
+        })?;
+        let languages = model
+            .capabilities()
+            .map(|caps| caps.languages)
+            .unwrap_or_default();
+        let supports_prompt = model.supports(transcribe_cpp::Feature::ContextPrompt);
+        let gpu = model
+            .device()
+            .map(|device| is_gpu_device_kind(&device.kind))
+            .unwrap_or(false);
+        let session = model
+            .session()
+            .context("failed to create dictation model session")?;
+        Ok(LoadedSpeechModel {
+            session,
+            languages,
+            supports_prompt,
+            gpu,
+        })
+    }
+
+    /// Lazily load the model: GPU first, CPU on failure.
+    fn load_if_needed(&mut self) -> Result<&mut LoadedSpeechModel> {
+        if self.loaded.is_none() {
+            let started = Instant::now();
+            let loaded = if self.cpu_fallback_reason.is_some() {
+                self.load_with_backend(transcribe_cpp::Backend::Cpu)?
+            } else {
+                match self.load_with_backend(transcribe_cpp::Backend::Auto) {
+                    Ok(loaded) => loaded,
+                    Err(error) => {
+                        tracing::warn!(
+                            category = "DICTATION",
+                            error = %format!("{error:#}"),
+                            "GPU model load failed; falling back to CPU"
+                        );
+                        self.cpu_fallback_reason = Some(format!("GPU load failed: {error:#}"));
+                        self.load_with_backend(transcribe_cpp::Backend::Cpu)?
+                    }
+                }
+            };
+            let load_ms = started.elapsed().as_millis() as u64;
+            let model = loaded.session.model();
+            let backend = model.backend();
+            let device = model
+                .device()
+                .map(|device| device.description)
+                .unwrap_or_default();
             tracing::info!(
                 category = "DICTATION",
                 model_path = %self.model_path.display(),
-                "Loading Whisper model"
+                backend = %backend,
+                device = %device,
+                gpu = loaded.gpu,
+                load_ms,
+                cpu_fallback_reason = ?self.cpu_fallback_reason,
+                "Dictation model loaded"
             );
-            self.engine = Some(
-                TranscribeWhisperEngine::load(&self.model_path).with_context(|| {
-                    format!(
-                        "failed to load Whisper model from {}",
-                        self.model_path.display()
-                    )
-                })?,
-            );
+            *ENGINE_RECEIPT.lock() = Some(DictationEngineReceipt {
+                model_file: self.model_file_name(),
+                loaded: true,
+                backend,
+                device,
+                gpu: loaded.gpu,
+                cpu_fallback_reason: self.cpu_fallback_reason.clone(),
+                load_ms,
+                last_transcribe_ms: None,
+                last_audio_ms: None,
+            });
+            self.loaded = Some(loaded);
         }
-        self.engine
+        self.loaded
             .as_mut()
-            .context("whisper engine missing after load")
+            .context("dictation model missing after load")
+    }
+
+    fn run_once(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
+        let requested_language = self.language.clone();
+        let loaded = self.load_if_needed()?;
+        let options = transcribe_cpp::RunOptions {
+            language: supported_language(requested_language.as_deref(), &loaded.languages),
+            prompt: if loaded.supports_prompt {
+                initial_prompt.map(str::to_owned)
+            } else {
+                None
+            },
+            ..Default::default()
+        };
+        let transcript = loaded
+            .session
+            .run(samples, &options)
+            .context("dictation transcription failed")?;
+        Ok(transcript.text.trim().to_owned())
     }
 
     /// Unload the model, freeing memory.
     pub fn unload(&mut self) {
-        self.engine = None;
-        tracing::info!(
-            category = "DICTATION",
-            model_path = %self.model_path.display(),
-            "Whisper model unloaded"
-        );
-    }
-}
-
-impl DictationEngine for WhisperDictationEngine {
-    fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
-        let language = self.language.clone();
-        let engine = self.load_if_needed()?;
-
-        tracing::debug!(
-            category = "DICTATION",
-            samples = samples.len(),
-            initial_prompt = ?initial_prompt,
-            "Whisper transcription requested"
-        );
-
-        let result = engine
-            .transcribe_with(
-                samples,
-                &WhisperInferenceParams {
-                    initial_prompt: initial_prompt.map(str::to_owned),
-                    language,
-                    ..Default::default()
-                },
-            )
-            .context("whisper transcription failed")?;
-
-        Ok(result.text.trim().to_owned())
-    }
-
-    fn transcribe_long(
-        &mut self,
-        samples: &[f32],
-        _initial_prompt: Option<&str>,
-        progress: &mut dyn FnMut(f32),
-    ) -> Result<String> {
-        let language = self.language.clone();
-        let engine = self.load_if_needed()?;
-        transcribe_long_with_model(engine, samples, language, progress)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Concrete Parakeet engine (ONNX via transcribe-rs)
-// ---------------------------------------------------------------------------
-
-/// Local Parakeet speech-to-text engine backed by ONNX Runtime via
-/// `transcribe-rs`.
-///
-/// The underlying `ParakeetModel` is loaded lazily on the first
-/// `transcribe()` call.  Call `unload()` to free model memory.
-pub struct ParakeetDictationEngine {
-    model_dir: PathBuf,
-    model: Option<ParakeetModel>,
-}
-
-impl std::fmt::Debug for ParakeetDictationEngine {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ParakeetDictationEngine")
-            .field("model_dir", &self.model_dir)
-            .field("model_loaded", &self.model.is_some())
-            .finish()
-    }
-}
-
-impl ParakeetDictationEngine {
-    /// Create a new Parakeet engine handle.
-    ///
-    /// Validates that `model_dir` points to an existing directory but defers
-    /// the expensive model load to the first `transcribe()` call.
-    pub fn new(model_dir: &Path) -> anyhow::Result<Self> {
-        if !model_dir.exists() {
-            anyhow::bail!("Parakeet model not found at {}", model_dir.display());
-        }
-        if !model_dir.is_dir() {
-            anyhow::bail!(
-                "Parakeet model path is not a directory: {}",
-                model_dir.display()
-            );
-        }
-        Ok(Self {
-            model_dir: model_dir.to_path_buf(),
-            model: None,
-        })
-    }
-
-    /// Lazily load the Parakeet ONNX model.
-    fn load_if_needed(&mut self) -> Result<&mut ParakeetModel> {
-        if self.model.is_none() {
+        if self.loaded.take().is_some() {
+            update_engine_receipt(|receipt| receipt.loaded = false);
             tracing::info!(
                 category = "DICTATION",
-                model_dir = %self.model_dir.display(),
-                "Loading Parakeet ONNX model (INT8)"
+                model_path = %self.model_path.display(),
+                "Dictation model unloaded"
             );
-            let loaded = ParakeetModel::load(&self.model_dir, &Quantization::Int8)
-                .map_err(|e| anyhow::anyhow!("failed to load Parakeet model: {e}"))?;
-            self.model = Some(loaded);
         }
-        self.model
-            .as_mut()
-            .context("parakeet model missing after load")
-    }
-
-    /// Unload the model, freeing memory.
-    pub fn unload(&mut self) {
-        self.model = None;
-        tracing::info!(
-            category = "DICTATION",
-            model_dir = %self.model_dir.display(),
-            "Parakeet model unloaded"
-        );
     }
 }
 
-impl DictationEngine for ParakeetDictationEngine {
-    fn transcribe(&mut self, samples: &[f32], _initial_prompt: Option<&str>) -> Result<String> {
-        let model = self.load_if_needed()?;
+impl Drop for LocalDictationEngine {
+    fn drop(&mut self) {
+        self.unload();
+    }
+}
 
+impl DictationEngine for LocalDictationEngine {
+    fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
+        let started = Instant::now();
+        let text = match self.run_once(samples, initial_prompt) {
+            Ok(text) => text,
+            Err(error) if self.loaded.as_ref().is_some_and(|loaded| loaded.gpu) => {
+                tracing::warn!(
+                    category = "DICTATION",
+                    error = %format!("{error:#}"),
+                    "GPU transcription failed; reloading on CPU and retrying once"
+                );
+                self.unload();
+                self.cpu_fallback_reason = Some(format!("GPU transcription failed: {error:#}"));
+                self.run_once(samples, initial_prompt)?
+            }
+            Err(error) => return Err(error),
+        };
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        let audio_ms = (samples.len() as u64 * 1000) / u64::from(SAMPLE_RATE_HZ);
+        update_engine_receipt(|receipt| {
+            receipt.last_transcribe_ms = Some(elapsed_ms);
+            receipt.last_audio_ms = Some(audio_ms);
+        });
         tracing::debug!(
             category = "DICTATION",
             samples = samples.len(),
-            "Parakeet transcription requested"
+            audio_ms,
+            elapsed_ms,
+            "Dictation transcription pass complete"
         );
-
-        let options = TranscribeOptions::default();
-        let result = model
-            .transcribe(samples, &options)
-            .map_err(|e| anyhow::anyhow!("parakeet transcription failed: {e}"))?;
-
-        Ok(result.text.trim().to_owned())
+        Ok(text)
     }
+}
 
-    fn transcribe_long(
-        &mut self,
-        samples: &[f32],
-        _initial_prompt: Option<&str>,
-        progress: &mut dyn FnMut(f32),
-    ) -> Result<String> {
-        let model = self.load_if_needed()?;
-        transcribe_long_with_model(model, samples, None, progress)
+/// `true` for device kinds that run on a GPU rather than the host CPU.
+pub(crate) fn is_gpu_device_kind(kind: &str) -> bool {
+    !matches!(kind, "cpu" | "accel" | "unknown" | "")
+}
+
+/// Pass the language hint only when the model lists it; models without a
+/// language list (or that don't support the requested code) auto-detect.
+pub(crate) fn supported_language(requested: Option<&str>, supported: &[String]) -> Option<String> {
+    let requested = requested?.trim();
+    if requested.is_empty() || requested.eq_ignore_ascii_case("auto") {
+        return None;
     }
+    supported
+        .iter()
+        .find(|code| code.eq_ignore_ascii_case(requested))
+        .cloned()
 }
 
 // ---------------------------------------------------------------------------

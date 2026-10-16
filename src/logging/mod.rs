@@ -1101,7 +1101,9 @@ fn init_internal() -> LoggingGuard {
     // Environment filter - default to info, allow override via RUST_LOG
     let rust_log_value = std::env::var("RUST_LOG").unwrap_or_else(|_| "default".to_string());
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new("info,gpui::window=off,gpui=warn,hyper=warn,reqwest=warn")
+        EnvFilter::new(
+            "info,gpui::window=off,gpui=warn,hyper=warn,reqwest=warn,transcribe_cpp=warn",
+        )
     });
 
     // JSONL layer for file output (goes to both append + session via tee)

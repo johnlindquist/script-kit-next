@@ -838,9 +838,9 @@ pub enum DictationModelStatus {
         /// Estimated seconds remaining, or `None` when not enough data exists yet.
         eta_seconds: Option<u64>,
     },
-    /// Model is being extracted from the archive.
-    Extracting,
-    /// Download or extraction failed.
+    /// Downloaded model file is being checked against its published SHA-256.
+    Verifying,
+    /// Download or verification failed.
     DownloadFailed(String),
 }
 

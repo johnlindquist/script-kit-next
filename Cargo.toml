@@ -124,14 +124,13 @@ bitflags = "2.10"              # For cell attribute flags
 async-channel = "2.3"          # Async channel for stdin command listener
 smol.workspace = true          # future::or for the main-hotkey gesture listener select
 
-# Local speech-to-text via Whisper.cpp + Parakeet ONNX (used by dictation feature)
-transcribe-rs = { version = "0.3", features = ["whisper-cpp", "onnx"] }
+# Local speech-to-text (dictation): GGUF Parakeet/Whisper via transcribe.cpp on
+# ggml, Metal GPU by default with a CPU fallback.
+transcribe-cpp = "0.4"
 rustfft = "6"                  # FFT-based audio visualization for dictation waveform
 block = "0.1"                  # Objective-C block support for NSEvent global monitor
 
-# Model download & extraction (Parakeet ONNX model archive)
 flate2 = "1.0"
-tar = "0.4"
 
 # Selected text functionality (getSelectedText/setSelectedText)
 arboard = "3.6"                # Clipboard access for setSelectedText fallback

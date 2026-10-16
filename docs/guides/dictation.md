@@ -14,8 +14,12 @@ Open the launcher and search:
 
 Readiness requires a downloaded transcription model, macOS microphone permission, and at least one input device. Models are fetched on demand from Dictation Setup:
 
-- `parakeet-tdt-0.6b-v3` (default) — auto-detects its supported languages
-- `whisper-medium` — supports an explicit `language` hint
+- `parakeet-tdt-0.6b-v3` (default, 740 MB) — auto-detects its supported languages
+- `whisper-medium` (583 MB) — supports an explicit `language` hint
+
+Both models run on the Mac's GPU through Metal. If the GPU can't load the model or a GPU pass fails, transcription continues on the CPU. Downloads resume if interrupted, and each file is checked against its published SHA-256 before it is used. Models live in `~/.scriptkit/models/`.
+
+To check which processor is in use, read the passive dictation state (`getState`): its `engine` object reports `backend`, `device`, `gpu`, `cpuFallbackReason`, the last load time and the last transcription time. It appears after the first transcription.
 
 ## The Hotkey
 

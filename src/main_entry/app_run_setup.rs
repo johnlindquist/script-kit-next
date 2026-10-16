@@ -214,6 +214,8 @@ app.run(move |cx: &mut App| {
         // no local model was ever loaded. Runs on every quit path.
         cx.on_app_quit(|_cx| {
             crate::ai::local_llm::shutdown_local_ghost_llm();
+            // Same for the dictation speech model, which also runs on ggml Metal.
+            crate::dictation::shutdown_transcriber();
             // Reap every registered child (scripts, flow runs, AI sidecars) on
             // ANY quit path, not just the tray/builtin/signal paths that call
             // kill_all_processes explicitly. Idempotent when they already ran.

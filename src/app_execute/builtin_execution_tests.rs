@@ -254,7 +254,7 @@ mod dictation_model_prompt_tests {
             &crate::dictation::DictationModelStatus::Downloading {
                 percentage: 0,
                 downloaded_bytes: 0,
-                total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                total_bytes: crate::dictation::PARAKEET_MODEL_SIZE,
                 speed_bytes_per_sec: 0,
                 eta_seconds: None,
             },
@@ -264,7 +264,7 @@ mod dictation_model_prompt_tests {
             crate::dictation::DictationModelStatus::Downloading {
                 percentage: 0,
                 downloaded_bytes: 0,
-                total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                total_bytes: crate::dictation::PARAKEET_MODEL_SIZE,
                 speed_bytes_per_sec: 0,
                 eta_seconds: None,
             },
@@ -326,7 +326,7 @@ mod dictation_model_prompt_tests {
 
     #[test]
     fn partial_archive_prompt_offers_resume_copy() {
-        let partial = crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE / 4;
+        let partial = crate::dictation::PARAKEET_MODEL_SIZE / 4;
         let (title, _placeholder, choices) = ScriptListApp::build_dictation_model_prompt_for_model(
             crate::dictation::DictationModelStatus::NotDownloaded,
             crate::dictation::DictationModelId::ParakeetTdt06bV3,
@@ -381,11 +381,11 @@ mod dictation_model_prompt_tests {
     }
 
     #[test]
-    fn extracting_prompt_offers_hide() {
+    fn verifying_prompt_offers_hide() {
         let (title, _placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
-            crate::dictation::DictationModelStatus::Extracting,
+            crate::dictation::DictationModelStatus::Verifying,
         );
-        assert_eq!(title, "Installing local dictation model\u{2026}");
+        assert_eq!(title, "Checking dictation model\u{2026}");
         assert_eq!(choices.len(), 1);
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_HIDE);
     }

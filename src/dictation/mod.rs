@@ -71,9 +71,9 @@ pub use runtime::{
     pending_dictation_device_label, record_delivery_receipt, record_wrong_target_refusal,
     redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
     set_dictation_session_selection, set_dictation_session_target, set_dictation_target_cycle,
-    set_pending_dictation_device_label, snapshot_live_state, toggle_dictation,
-    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
-    DictationTranscriptResolution,
+    set_pending_dictation_device_label, shutdown_transcriber, snapshot_live_state,
+    toggle_dictation, transcribe_captured_audio, BeginStopCapture, DictationStopJob,
+    DictationStopReason, DictationTranscriptResolution,
 };
 pub(crate) use runtime::{
     clear_dictation_recovery_work, clear_dictation_return_origin, dictation_pipeline_failure_state,
@@ -86,10 +86,11 @@ pub use setup::{
     DictationMicrophoneStatus, DictationSetupState,
 };
 pub use transcription::{
-    build_session_result, captured_duration, is_parakeet_model_available, merge_captured_chunks,
-    resolve_default_model_path, resolve_whisper_model_path, DictationEngine, DictationTranscriber,
-    DictationTranscriptionConfig, ParakeetDictationEngine, WhisperDictationEngine,
-    PARAKEET_MODEL_ARCHIVE_SIZE, PARAKEET_MODEL_URL, WHISPER_MODEL_SIZE, WHISPER_MODEL_URL,
+    build_session_result, captured_duration, dictation_engine_receipt, is_parakeet_model_available,
+    merge_captured_chunks, plan_long_audio_chunks, resolve_default_model_path,
+    resolve_whisper_model_path, DictationEngine, DictationEngineReceipt, DictationTranscriber,
+    DictationTranscriptionConfig, LocalDictationEngine, PARAKEET_MODEL_SIZE, PARAKEET_MODEL_URL,
+    WHISPER_MODEL_SIZE, WHISPER_MODEL_URL,
 };
 pub use types::{
     CapturedAudioChunk, CompletedDictationCapture, DayPageDictationDestinationSnapshot,

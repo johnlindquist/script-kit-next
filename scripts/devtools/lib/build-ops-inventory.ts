@@ -197,8 +197,8 @@ export function buildDependencies(root: string) {
       const path = Bun.which(name); return { name, path, executablePresent: executable(path), health: "not-executed", version: null };
     }),
     goose: { candidates: candidates.map(path => ({ path, executablePresent: executable(path) })), health: "not-probed", owner: "scripts/prepare-goose-sidecar.sh" },
-    models: [join(kitHome, "models/whisper-medium-q4_1.bin"), join(kitHome, "models/parakeet-tdt-0.6b-v3-int8")].map(path => ({ path, present: existsSync(path), validity: "not-loaded" })),
-    lockedLibraries: (lock.package ?? []).filter(value => ["transcribe-rs", "whisper-rs-sys", "ort-sys", "llama-cpp-sys-2"].includes(value.name)).map(({ name, version }) => ({ name, version })),
+    models: [join(kitHome, "models/whisper-medium-Q5_K_M.gguf"), join(kitHome, "models/parakeet-tdt-0.6b-v3-Q8_0.gguf")].map(path => ({ path, present: existsSync(path), validity: "not-loaded" })),
+    lockedLibraries: (lock.package ?? []).filter(value => ["transcribe-cpp", "transcribe-cpp-sys", "llama-cpp-sys-2"].includes(value.name)).map(({ name, version }) => ({ name, version })),
     metal: { owner: "vendor/gpui_macos/build.rs", requiredTools: ["xcrun metal", "xcrun metallib"], nativeBuild: "not-executed" },
     nativeRuntimeProof: "not-evaluated", installsTools: false, fetchesModels: false, startsSidecars: false,
   };

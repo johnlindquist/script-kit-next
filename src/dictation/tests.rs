@@ -1,8 +1,7 @@
 use crate::dictation::capture::{mix_to_mono, normalize_chunk, resample_linear, run_processor};
 use crate::dictation::transcription::{
-    build_session_result, is_parakeet_model_available, merge_captured_chunks, DictationEngine,
-    DictationTranscriber, DictationTranscriptionConfig, ParakeetDictationEngine,
-    WhisperDictationEngine,
+    build_session_result, merge_captured_chunks, plan_long_audio_chunks, DictationEngine,
+    DictationTranscriber, DictationTranscriptionConfig, LocalDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -451,19 +450,19 @@ fn transcriber_not_idle_immediately_after_use() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// WhisperDictationEngine tests
+// LocalDictationEngine tests
 // ---------------------------------------------------------------------------
 
 #[test]
-fn whisper_engine_new_fails_for_missing_model() {
+fn local_engine_new_fails_for_missing_model() {
     let config = DictationTranscriptionConfig {
-        model_path: std::path::PathBuf::from("/definitely/missing-model.bin"),
+        model_path: std::path::PathBuf::from("/definitely/missing-model.gguf"),
         ..Default::default()
     };
-    let result = WhisperDictationEngine::new(&config);
+    let result = LocalDictationEngine::new(&config);
     assert!(
         result.is_err(),
-        "WhisperDictationEngine::new must fail for a missing model path"
+        "LocalDictationEngine::new must fail for a missing model path"
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
@@ -473,15 +472,15 @@ fn whisper_engine_new_fails_for_missing_model() {
 }
 
 #[test]
-fn whisper_engine_new_fails_for_directory_path() {
+fn local_engine_new_fails_for_directory_path() {
     let config = DictationTranscriptionConfig {
         model_path: std::path::PathBuf::from("/tmp"),
         ..Default::default()
     };
-    let result = WhisperDictationEngine::new(&config);
+    let result = LocalDictationEngine::new(&config);
     assert!(
         result.is_err(),
-        "WhisperDictationEngine::new must fail for a directory path"
+        "LocalDictationEngine::new must fail for a directory path"
     );
     let err_msg = result.unwrap_err().to_string();
     assert!(
@@ -491,15 +490,13 @@ fn whisper_engine_new_fails_for_directory_path() {
 }
 
 #[test]
-fn whisper_engine_missing_model_error_names_attempted_path() {
-    let explicit_path = std::path::PathBuf::from("/nonexistent/dir/model.bin");
+fn local_engine_missing_model_error_names_attempted_path() {
+    let explicit_path = std::path::PathBuf::from("/nonexistent/dir/model.gguf");
     let config = DictationTranscriptionConfig {
         model_path: explicit_path.clone(),
         ..Default::default()
     };
-    let err_msg = WhisperDictationEngine::new(&config)
-        .unwrap_err()
-        .to_string();
+    let err_msg = LocalDictationEngine::new(&config).unwrap_err().to_string();
     assert!(
         err_msg.contains(explicit_path.to_str().unwrap()),
         "error must name the attempted model path, got: {err_msg}"
@@ -507,26 +504,26 @@ fn whisper_engine_missing_model_error_names_attempted_path() {
 }
 
 #[test]
-fn whisper_engine_new_accepts_regular_file_model_path() {
+fn local_engine_new_accepts_regular_file_model_path() {
     let temp_file = tempfile::NamedTempFile::new().expect("create temp model file");
     let config = DictationTranscriptionConfig {
         model_path: temp_file.path().to_path_buf(),
         ..Default::default()
     };
 
-    WhisperDictationEngine::new(&config)
-        .expect("WhisperDictationEngine::new should accept a regular file path");
+    LocalDictationEngine::new(&config)
+        .expect("LocalDictationEngine::new should accept a regular file path");
 }
 
 #[test]
-fn whisper_engine_new_with_whisper_config_surfaces_path_or_succeeds() {
+fn local_engine_new_with_whisper_config_surfaces_path_or_succeeds() {
     use crate::dictation::transcription::resolve_whisper_model_path;
     let whisper_path = resolve_whisper_model_path();
     let config = DictationTranscriptionConfig {
         model_path: whisper_path.clone(),
         ..Default::default()
     };
-    let result = WhisperDictationEngine::new(&config);
+    let result = LocalDictationEngine::new(&config);
 
     if whisper_path.is_file() {
         assert!(
@@ -584,12 +581,12 @@ fn resolve_default_model_path_matches_config_default() {
 }
 
 #[test]
-fn resolve_default_model_path_ends_with_parakeet_dir() {
+fn resolve_default_model_path_ends_with_parakeet_gguf() {
     use crate::dictation::transcription::resolve_default_model_path;
     let path = resolve_default_model_path();
     assert!(
-        path.ends_with("models/parakeet-tdt-0.6b-v3-int8"),
-        "resolved path must end with models/parakeet-tdt-0.6b-v3-int8, got: {}",
+        path.ends_with("models/parakeet-tdt-0.6b-v3-Q8_0.gguf"),
+        "resolved path must end with models/parakeet-tdt-0.6b-v3-Q8_0.gguf, got: {}",
         path.display()
     );
 }
@@ -599,8 +596,8 @@ fn resolve_whisper_model_path_ends_with_expected_filename() {
     use crate::dictation::transcription::resolve_whisper_model_path;
     let path = resolve_whisper_model_path();
     assert!(
-        path.ends_with("models/whisper-medium-q4_1.bin"),
-        "resolved path must end with models/whisper-medium-q4_1.bin, got: {}",
+        path.ends_with("models/whisper-medium-Q5_K_M.gguf"),
+        "resolved path must end with models/whisper-medium-Q5_K_M.gguf, got: {}",
         path.display()
     );
 }
@@ -643,9 +640,9 @@ fn dictation_model_catalog_marks_only_parakeet_recommended() {
     assert!(catalog
         .iter()
         .any(|entry| entry.description
-            == "Fast and accurate. Auto-detects 25 European languages (ignores the language setting)."));
+            == "Fast and accurate; runs on the GPU. Auto-detects 25 European languages (ignores the language setting)."));
     assert!(catalog.iter().any(|entry| entry.description
-        == "Broadest language coverage and honors the language setting, but may run a bit slow."));
+        == "Broadest language coverage and honors the language setting; slower than Parakeet."));
 }
 
 #[test]
@@ -2670,44 +2667,222 @@ fn frontmost_app_delivery_full_ordering_chain() {
 }
 
 // ---------------------------------------------------------------------------
-// ParakeetDictationEngine tests
+// Long-audio chunk planning
 // ---------------------------------------------------------------------------
 
+fn tone(seconds: f32, amplitude: f32) -> Vec<f32> {
+    let n = (seconds * 16_000.0) as usize;
+    (0..n)
+        .map(|i| amplitude * ((i as f32) * 0.05).sin())
+        .collect()
+}
+
+fn assert_chunks_cover(chunks: &[std::ops::Range<usize>], len: usize) {
+    assert_eq!(chunks.first().map(|c| c.start), Some(0));
+    assert_eq!(chunks.last().map(|c| c.end), Some(len));
+    for pair in chunks.windows(2) {
+        assert_eq!(pair[0].end, pair[1].start, "chunks must be contiguous");
+    }
+    assert!(chunks.iter().all(|c| !c.is_empty()), "no empty chunks");
+}
+
 #[test]
-fn parakeet_engine_new_fails_for_missing_model_dir() {
-    let result =
-        ParakeetDictationEngine::new(std::path::Path::new("/definitely/missing-parakeet-dir"));
+fn plan_long_audio_chunks_keeps_short_audio_whole() {
+    let samples = tone(10.0, 0.3);
+    let chunks = plan_long_audio_chunks(&samples, 16_000);
+    assert_eq!(chunks, vec![0..samples.len()]);
+}
+
+#[test]
+fn plan_long_audio_chunks_cuts_in_the_pause_near_the_target() {
+    use crate::dictation::transcription::LONG_AUDIO_CHUNK_TARGET_SECS as TARGET;
+    // Speech until 1.5 s before the target, 1 s of silence, then more
+    // speech: the cut must land in the silent second, not at the target.
+    let mut samples = tone(TARGET - 1.5, 0.3);
+    samples.extend(std::iter::repeat_n(0.0, 16_000));
+    samples.extend(tone(TARGET * 0.8, 0.3));
+    let chunks = plan_long_audio_chunks(&samples, 16_000);
+    assert_chunks_cover(&chunks, samples.len());
+    assert_eq!(chunks.len(), 2, "expected two chunks, got {chunks:?}");
+    let cut_secs = chunks[0].end as f32 / 16_000.0;
     assert!(
-        result.is_err(),
-        "ParakeetDictationEngine::new must fail for a missing directory"
-    );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("not found"),
-        "error should mention 'not found', got: {err_msg}"
+        (TARGET - 1.5..=TARGET - 0.5).contains(&cut_secs),
+        "cut should land in the pause, got {cut_secs:.2}s"
     );
 }
 
 #[test]
-fn parakeet_engine_new_fails_for_file_path() {
-    let temp_file = tempfile::NamedTempFile::new().expect("create temp file");
-    let result = ParakeetDictationEngine::new(temp_file.path());
+fn plan_long_audio_chunks_covers_long_uniform_audio() {
+    use crate::dictation::transcription::LONG_AUDIO_CHUNK_TARGET_SECS as TARGET;
+    let samples = tone(TARGET * 5.3, 0.3);
+    let chunks = plan_long_audio_chunks(&samples, 16_000);
+    assert_chunks_cover(&chunks, samples.len());
     assert!(
-        result.is_err(),
-        "ParakeetDictationEngine::new must fail for a file path"
+        chunks.len() >= 5,
+        "expected at least five chunks, got {}",
+        chunks.len()
     );
-    let err_msg = result.unwrap_err().to_string();
-    assert!(
-        err_msg.contains("not a directory"),
-        "error should mention 'not a directory', got: {err_msg}"
-    );
+    for chunk in &chunks[..chunks.len() - 1] {
+        let secs = chunk.len() as f32 / 16_000.0;
+        assert!(
+            (TARGET - 3.0..=TARGET + 3.0).contains(&secs),
+            "chunk length {secs:.2}s out of range"
+        );
+    }
 }
 
 #[test]
-fn parakeet_engine_new_accepts_existing_directory() {
-    let temp_dir = tempfile::TempDir::new().expect("create temp dir");
-    ParakeetDictationEngine::new(temp_dir.path())
-        .expect("ParakeetDictationEngine::new should accept an existing directory");
+fn plan_long_audio_chunks_merges_a_tiny_tail() {
+    use crate::dictation::transcription::LONG_AUDIO_CHUNK_TARGET_SECS as TARGET;
+    // Speech to 0.1 s before the end of the search window, then 0.3 s of
+    // silence: the only cut lands in that silence, leaving a tail under
+    // 0.5 s that must be folded back so no near-empty chunk reaches the model.
+    let mut samples = tone(TARGET + 2.9, 0.3);
+    samples.extend(std::iter::repeat_n(0.0, 4_800));
+    let chunks = plan_long_audio_chunks(&samples, 16_000);
+    assert_eq!(chunks, vec![0..samples.len()]);
+}
+
+/// Fake engine that records each chunk it receives.
+struct ChunkRecordingEngine {
+    calls: Vec<usize>,
+}
+
+impl DictationEngine for ChunkRecordingEngine {
+    fn transcribe(&mut self, samples: &[f32], _prompt: Option<&str>) -> anyhow::Result<String> {
+        self.calls.push(samples.len());
+        Ok(format!("part{}", self.calls.len()))
+    }
+}
+
+#[test]
+fn default_transcribe_long_joins_chunks_and_reports_monotonic_progress() {
+    use crate::dictation::transcription::LONG_AUDIO_CHUNK_TARGET_SECS as TARGET;
+    let samples = tone(TARGET * 2.5, 0.3);
+    let mut engine = ChunkRecordingEngine { calls: Vec::new() };
+    let mut ticks = Vec::new();
+    let text = engine
+        .transcribe_long(&samples, None, &mut |p| ticks.push(p))
+        .expect("chunked transcription");
+    assert!(engine.calls.len() >= 2, "expected several chunks");
+    assert_eq!(engine.calls.iter().sum::<usize>(), samples.len());
+    assert!(text.starts_with("part1 part2"), "got {text}");
+    assert!(
+        ticks.windows(2).all(|w| w[0] <= w[1]),
+        "progress must not go backwards"
+    );
+    assert_eq!(ticks.last().copied(), Some(1.0));
+}
+
+#[test]
+fn supported_language_only_passes_listed_codes() {
+    use crate::dictation::transcription::supported_language;
+    let langs = vec!["en".to_string(), "de".to_string()];
+    assert_eq!(
+        supported_language(Some("de"), &langs),
+        Some("de".to_string())
+    );
+    assert_eq!(
+        supported_language(Some("EN"), &langs),
+        Some("en".to_string())
+    );
+    assert_eq!(supported_language(Some("ja"), &langs), None);
+    assert_eq!(supported_language(Some("auto"), &langs), None);
+    assert_eq!(supported_language(Some("  "), &langs), None);
+    assert_eq!(supported_language(None, &langs), None);
+    assert_eq!(supported_language(Some("en"), &[]), None);
+}
+
+#[test]
+fn gpu_device_kinds_are_classified() {
+    use crate::dictation::transcription::is_gpu_device_kind;
+    assert!(is_gpu_device_kind("metal"));
+    assert!(is_gpu_device_kind("vulkan"));
+    assert!(!is_gpu_device_kind("cpu"));
+    assert!(!is_gpu_device_kind("accel"));
+    assert!(!is_gpu_device_kind(""));
+}
+
+/// Minimal PCM16 mono WAV reader for the real-model test (walks RIFF chunks).
+fn read_pcm16_mono_wav(path: &std::path::Path) -> Vec<f32> {
+    let bytes = std::fs::read(path).expect("read wav");
+    let mut offset = 12;
+    while offset + 8 <= bytes.len() {
+        let id = &bytes[offset..offset + 4];
+        let size = u32::from_le_bytes([
+            bytes[offset + 4],
+            bytes[offset + 5],
+            bytes[offset + 6],
+            bytes[offset + 7],
+        ]) as usize;
+        let body = offset + 8;
+        if id == b"data" {
+            let end = (body + size).min(bytes.len());
+            return bytes[body..end]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0)
+                .collect();
+        }
+        offset = body + size + (size & 1);
+    }
+    panic!("no data chunk in {}", path.display());
+}
+
+/// End-to-end check of the real engine: loads a downloaded GGUF on the GPU,
+/// transcribes a 16 kHz mono WAV twice (cold and warm), and checks the
+/// engine receipt. Run directly from the lib test binary with `--ignored`.
+#[test]
+#[ignore = "needs a GGUF model and WAV: set SK_DICTATION_GGUF and SK_DICTATION_WAV"]
+fn local_engine_transcribes_real_audio_on_gpu() {
+    let (Ok(model), Ok(wav)) = (
+        std::env::var("SK_DICTATION_GGUF"),
+        std::env::var("SK_DICTATION_WAV"),
+    ) else {
+        eprintln!("skipping: SK_DICTATION_GGUF / SK_DICTATION_WAV not set");
+        return;
+    };
+    let samples = read_pcm16_mono_wav(std::path::Path::new(&wav));
+    let config = DictationTranscriptionConfig {
+        model_path: model.into(),
+        language: std::env::var("SK_DICTATION_LANGUAGE").ok(),
+        ..Default::default()
+    };
+    let engine = LocalDictationEngine::new(&config).expect("engine handle");
+    let transcriber = DictationTranscriber::new(config, Box::new(engine));
+    for pass in ["cold", "warm"] {
+        let started = std::time::Instant::now();
+        let mut ticks = 0usize;
+        let text = transcriber
+            .transcribe_samples_with_progress(&samples, &mut |_| ticks += 1)
+            .expect("transcription")
+            .expect("non-empty transcript");
+        let receipt = crate::dictation::dictation_engine_receipt().expect("engine receipt");
+        eprintln!(
+            "{pass}: {} ms total, audio {:.1} s, progress ticks {ticks}, receipt {receipt:?}\n  text: {text}",
+            started.elapsed().as_millis(),
+            samples.len() as f32 / 16_000.0
+        );
+        assert!(receipt.loaded);
+        assert!(
+            receipt.gpu,
+            "expected the model on the GPU, receipt: {receipt:?}"
+        );
+        assert!(receipt.cpu_fallback_reason.is_none());
+        if let Ok(expected) = std::env::var("SK_DICTATION_EXPECT") {
+            assert!(
+                text.to_lowercase().contains(&expected.to_lowercase()),
+                "transcript should contain {expected:?}: {text}"
+            );
+        }
+    }
+    drop(transcriber);
+    let receipt = crate::dictation::dictation_engine_receipt().expect("engine receipt");
+    assert!(
+        !receipt.loaded,
+        "dropping the engine must mark the model unloaded"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2715,29 +2890,30 @@ fn parakeet_engine_new_accepts_existing_directory() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn is_parakeet_model_available_returns_false_for_nonexistent_path() {
-    // The default path is unlikely to exist in CI, so this should be false.
-    // We test the function runs without panicking and returns a bool.
-    let _available = is_parakeet_model_available();
-}
-
-#[test]
-fn is_parakeet_model_available_returns_true_for_populated_dir() {
-    let temp_dir = tempfile::TempDir::new().expect("create temp dir");
-    // Create a dummy file inside to simulate an extracted model.
-    std::fs::write(temp_dir.path().join("model.onnx"), b"dummy").expect("write dummy model");
-
-    // We can't easily test the actual function since it reads from a fixed path,
-    // but we can verify the logic inline.
-    let path = temp_dir.path();
-    let available = path.is_dir()
-        && std::fs::read_dir(path)
-            .map(|mut entries| entries.next().is_some())
-            .unwrap_or(false);
-    assert!(
-        available,
-        "populated directory should be detected as available"
-    );
+fn catalog_entries_are_available_only_as_regular_files() {
+    use crate::dictation::{dictation_model_catalog, DictationModelId};
+    for entry in dictation_model_catalog() {
+        assert_eq!(entry.is_available(), entry.path().is_file());
+        let file_name = entry
+            .path()
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned());
+        assert!(
+            file_name.as_deref().is_some_and(|n| n.ends_with(".gguf")),
+            "{:?} should resolve to a .gguf file, got {file_name:?}",
+            entry.id
+        );
+        let spec = entry.download_spec();
+        assert_eq!(entry.download_size_bytes(), spec.size);
+        assert!(spec.url.starts_with("https://"));
+        assert!(spec.url.ends_with(file_name.as_deref().unwrap_or_default()));
+        assert_eq!(spec.sha256.len(), 64);
+        assert!(spec
+            .sha256
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+    let _ = DictationModelId::default();
 }
 
 // ---------------------------------------------------------------------------
@@ -2780,7 +2956,7 @@ fn download_phase_variants_are_distinct() {
 
     let phases = [
         DownloadPhase::Downloading,
-        DownloadPhase::Extracting,
+        DownloadPhase::Verifying,
         DownloadPhase::Complete,
         DownloadPhase::Cancelled,
         DownloadPhase::Failed("test".to_string()),
@@ -2811,17 +2987,13 @@ fn parakeet_model_url_is_https() {
 }
 
 #[test]
-fn parakeet_model_archive_size_is_reasonable() {
-    use crate::dictation::transcription::PARAKEET_MODEL_ARCHIVE_SIZE;
-    // ~478 MB — sanity check it's in the right ballpark.
-    assert!(
-        PARAKEET_MODEL_ARCHIVE_SIZE > 400_000_000,
-        "archive size should be > 400 MB"
-    );
-    assert!(
-        PARAKEET_MODEL_ARCHIVE_SIZE < 600_000_000,
-        "archive size should be < 600 MB"
-    );
+fn parakeet_model_size_is_reasonable() {
+    use crate::dictation::transcription::PARAKEET_MODEL_SIZE;
+    // ~740 MB Q8_0 GGUF — sanity check it's in the right ballpark.
+    const {
+        assert!(PARAKEET_MODEL_SIZE > 600_000_000);
+        assert!(PARAKEET_MODEL_SIZE < 900_000_000);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2887,7 +3059,7 @@ fn dictation_model_status_variants() {
             speed_bytes_per_sec: 10_000_000,
             eta_seconds: Some(25),
         },
-        DictationModelStatus::Extracting,
+        DictationModelStatus::Verifying,
         DictationModelStatus::DownloadFailed("err".to_string()),
     ];
 
@@ -3778,10 +3950,11 @@ fn chunked_transcription_reserved_for_long_audio() {
     use super::transcription::should_use_chunked_transcription;
     let rate = 16_000u32;
 
-    // Typical short dictations take the single plain pass.
+    // Typical dictations, even a minute or two long, take one plain pass.
     assert!(!should_use_chunked_transcription(20 * rate as usize, rate));
-    // A five-minute recording must go through the chunked path — one giant
-    // encoder pass is quadratic in audio length and can drop trailing speech.
+    assert!(!should_use_chunked_transcription(110 * rate as usize, rate));
+    // A five-minute recording goes through the chunked path so progress
+    // ticks arrive and no single pass grows without bound.
     assert!(should_use_chunked_transcription(300 * rate as usize, rate));
 }
 

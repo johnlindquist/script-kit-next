@@ -32,7 +32,7 @@ enum DictationModelProgressEvent {
         speed_bytes_per_sec: u64,
         eta_seconds: Option<u64>,
     },
-    Extracting,
+    Verifying,
 }
 
 /// Simple rolling-window speed tracker for download progress.
@@ -71,7 +71,7 @@ impl SpeedTracker {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DictationModelUiPhase {
     Downloading,
-    Extracting,
+    Verifying,
 }
 
 /// Snapshot of the last UI-visible state, used to decide whether a new
@@ -92,9 +92,9 @@ impl DictationModelUiSnapshot {
         }
     }
 
-    fn extracting() -> Self {
+    fn verifying() -> Self {
         Self {
-            phase: DictationModelUiPhase::Extracting,
+            phase: DictationModelUiPhase::Verifying,
             percentage: 100,
             eta_bucket_seconds: Some(0),
         }

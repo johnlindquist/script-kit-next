@@ -3,7 +3,7 @@ use crate::dictation::catalog::{dictation_model_entry, DictationEngineKind, Dict
 use crate::dictation::device::{list_input_devices, resolve_selected_input_device};
 use crate::dictation::transcription::{
     captured_duration, merge_captured_chunks, DictationTranscriber, DictationTranscriptionConfig,
-    ParakeetDictationEngine, WhisperDictationEngine,
+    LocalDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -1278,6 +1278,18 @@ pub fn automation_state() -> serde_json::Value {
             "generation": generation,
             "source": "runtime.dictation.cleanupState",
         },
+        "engine": crate::dictation::dictation_engine_receipt().map(|receipt| serde_json::json!({
+            "modelFile": receipt.model_file,
+            "loaded": receipt.loaded,
+            "backend": receipt.backend,
+            "device": receipt.device,
+            "gpu": receipt.gpu,
+            "cpuFallbackReason": receipt.cpu_fallback_reason,
+            "loadMs": receipt.load_ms,
+            "lastTranscribeMs": receipt.last_transcribe_ms,
+            "lastAudioMs": receipt.last_audio_ms,
+            "source": "runtime.dictation.engineReceipt",
+        })),
         "safety": {
             "noMicrophoneCaptureStarted": true,
             "noSystemSettingsOpened": true,
@@ -1325,7 +1337,7 @@ fn dictation_model_status_label(status: &DictationModelStatus) -> &'static str {
         DictationModelStatus::Available => "available",
         DictationModelStatus::NotDownloaded => "notDownloaded",
         DictationModelStatus::Downloading { .. } => "downloading",
-        DictationModelStatus::Extracting => "extracting",
+        DictationModelStatus::Verifying => "verifying",
         DictationModelStatus::DownloadFailed(_) => "downloadFailed",
     }
 }
@@ -1545,24 +1557,13 @@ pub(crate) fn transcribe_samples_with_cached_engine_progress(
             "Initializing dictation engine"
         );
         let engine: Box<dyn crate::dictation::transcription::DictationEngine> =
-            match catalog_entry.engine_kind {
-                DictationEngineKind::Parakeet => Box::new(
-                    ParakeetDictationEngine::new(&config.model_path).with_context(|| {
-                        format!(
-                            "failed to initialize Parakeet engine from {}",
-                            config.model_path.display()
-                        )
-                    })?,
-                ),
-                DictationEngineKind::Whisper => {
-                    Box::new(WhisperDictationEngine::new(&config).with_context(|| {
-                        format!(
-                            "failed to initialize Whisper engine from {}",
-                            config.model_path.display()
-                        )
-                    })?)
-                }
-            };
+            Box::new(LocalDictationEngine::new(&config).with_context(|| {
+                format!(
+                    "failed to initialize {} engine from {}",
+                    catalog_entry.display_name,
+                    config.model_path.display()
+                )
+            })?);
         *guard = Some(CachedTranscriber {
             key: requested_key,
             transcriber: DictationTranscriber::new(config.clone(), engine),
@@ -1585,6 +1586,16 @@ pub fn maybe_unload_transcriber() {
         .map(|cached| cached.transcriber.is_idle())
         .unwrap_or(false)
     {
+        *guard = None;
+    }
+}
+
+/// Drop the cached transcriber and its model before process teardown, so
+/// ggml's Metal backend frees GPU buffers while the device is still valid.
+/// Waits briefly for an in-flight transcription; skips if it cannot get the
+/// lock in time (exit then proceeds as before).
+pub fn shutdown_transcriber() {
+    if let Some(mut guard) = TRANSCRIBER.try_lock_for(Duration::from_secs(2)) {
         *guard = None;
     }
 }
