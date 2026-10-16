@@ -422,4 +422,43 @@ mod tests {
             "expected at least one index with a valid downward move"
         );
     }
+
+    #[test]
+    fn shortcodes_turn_into_emoji_as_you_type_the_closing_colon() {
+        assert_eq!(emoji_for_shortcode("rocket"), Some("\u{1F680}"));
+        assert_eq!(emoji_for_shortcode("red_heart"), Some("\u{2764}\u{FE0F}"));
+        assert_eq!(emoji_for_shortcode("+1"), Some("\u{1F44D}"));
+        assert_eq!(emoji_for_shortcode("Tada"), Some("\u{1F389}"));
+        assert_eq!(
+            emoji_for_shortcode("flag_japan"),
+            Some("\u{1F1EF}\u{1F1F5}")
+        );
+        assert_eq!(emoji_for_shortcode("not_an_emoji"), None);
+        assert_eq!(shortcode_for_name("flag: Japan"), "flag_japan");
+
+        // The cursor sits right after the typed character.
+        let typed = |previous: &str, content: &str| {
+            let at = previous
+                .bytes()
+                .zip(content.bytes())
+                .position(|(a, b)| a != b)
+                .unwrap_or(previous.len());
+            shortcode_typed_fixup(previous, content, at + 1)
+        };
+        assert_eq!(
+            typed("launch :rocket", "launch :rocket:"),
+            Some(("launch \u{1F680}".to_string(), 11))
+        );
+        assert_eq!(
+            typed(":tada done", ":tada: done"),
+            Some(("\u{1F389} done".to_string(), 4))
+        );
+        // Times, URLs, and unknown names stay as typed.
+        assert_eq!(typed("at 10:30", "at 10:30:"), None);
+        assert_eq!(typed("see http:rocket", "see http:rocket:"), None);
+        assert_eq!(typed("hi :nope", "hi :nope:"), None);
+        assert_eq!(typed("a :two words", "a :two words:"), None);
+        // Pasting more than one character never triggers it.
+        assert_eq!(shortcode_typed_fixup("x ", "x :rocket:", 10), None);
+    }
 }

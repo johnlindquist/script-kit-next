@@ -563,6 +563,10 @@ impl DayPageView {
                     )
                 })
                 .or_else(|| {
+                    // `:rocket:` becomes 🚀 as the closing colon is typed.
+                    crate::emoji::shortcode_typed_fixup(&previous, &content, selection.end)
+                })
+                .or_else(|| {
                     let now = self
                         .now()
                         .with_timezone(&self.session.substrate().timezone())

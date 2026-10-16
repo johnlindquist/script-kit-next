@@ -18,6 +18,9 @@ pub(crate) const DAY_PAGE_PREVIEW_COPY_URI_ACTION_ID: &str = "day_page:kit_previ
 pub(crate) const DAY_PAGE_PREVIEW_OPEN_SOURCE_ACTION_ID: &str = "day_page:kit_preview_open_source";
 pub(crate) const DAY_PAGE_PREVIEW_CLOSE_ACTION_ID: &str = "day_page:kit_preview_close";
 pub(crate) const DAY_PAGE_TOGGLE_READ_MODE_ACTION_ID: &str = "day_page:toggle_read_mode";
+pub(crate) const DAY_PAGE_COPY_MARKDOWN_ACTION_ID: &str = "day_page:copy_markdown";
+pub(crate) const DAY_PAGE_COPY_HTML_ACTION_ID: &str = "day_page:copy_html";
+pub(crate) const DAY_PAGE_COPY_PLAIN_TEXT_ACTION_ID: &str = "day_page:copy_plain_text";
 
 fn day_page_editor_action_id(toolbar_id: &str) -> String {
     format!("day_page:format_{}", toolbar_id.replace('-', "_"))
@@ -273,6 +276,31 @@ pub(crate) fn day_page_host_actions_section(
                     ActionCategory::ScriptContext,
                 )
                 .with_section("Kept Clipboard Entries"),
+            );
+        }
+    }
+
+    let content = view.notes_editor.read(cx).content(cx);
+    if !content.trim().is_empty() {
+        let (words, characters) = crate::notes::export::text_counts(&content);
+        let counts = format!(
+            "{words} word{} \u{b7} {characters} character{}",
+            if words == 1 { "" } else { "s" },
+            if characters == 1 { "" } else { "s" }
+        );
+        for (id, title) in [
+            (DAY_PAGE_COPY_MARKDOWN_ACTION_ID, "Copy as Markdown"),
+            (DAY_PAGE_COPY_HTML_ACTION_ID, "Copy as HTML"),
+            (DAY_PAGE_COPY_PLAIN_TEXT_ACTION_ID, "Copy as Plain Text"),
+        ] {
+            actions.push(
+                Action::new(
+                    id,
+                    title,
+                    Some(counts.clone()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_section("Copy"),
             );
         }
     }
@@ -937,6 +965,32 @@ impl ScriptListApp {
             }),
             DAY_PAGE_TOGGLE_READ_MODE_ACTION_ID => {
                 entity.update(cx, |view, cx| view.toggle_read_mode(window, cx));
+                true
+            }
+            DAY_PAGE_COPY_MARKDOWN_ACTION_ID
+            | DAY_PAGE_COPY_HTML_ACTION_ID
+            | DAY_PAGE_COPY_PLAIN_TEXT_ACTION_ID => {
+                let markdown = entity.read(cx).notes_editor.read(cx).content(cx);
+                let (text, label) = match action_id {
+                    DAY_PAGE_COPY_HTML_ACTION_ID => {
+                        (crate::notes::export::markdown_to_html(&markdown), "HTML")
+                    }
+                    DAY_PAGE_COPY_PLAIN_TEXT_ACTION_ID => (
+                        crate::notes::export::markdown_to_plain_text(&markdown),
+                        "plain text",
+                    ),
+                    _ => (markdown, "Markdown"),
+                };
+                match crate::platform::copy_text(&text) {
+                    Ok(receipt) => self.one_window_notice(
+                        crate::line_notice::INFO,
+                        receipt.feedback(format!("Copied the note as {label}")),
+                        cx,
+                    ),
+                    Err(error) => {
+                        self.notice_failed(format!("Couldn't copy the note: {error}"), cx)
+                    }
+                }
                 true
             }
             "day_page:back_to_today" => {

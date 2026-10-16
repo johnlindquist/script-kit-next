@@ -22,6 +22,7 @@ pub(crate) mod ai_scope;
 pub(crate) mod code_highlight;
 pub(crate) mod day_switcher;
 pub(crate) mod deeplink_activation;
+pub mod export;
 pub(crate) mod file_names;
 pub mod folder;
 pub(crate) mod ghost;

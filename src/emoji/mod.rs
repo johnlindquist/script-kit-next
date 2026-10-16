@@ -728,5 +728,120 @@ fn match_score(emoji: &Emoji, query: &str, terms: &[&str]) -> Option<u32> {
     Some(score * 100 + 100u32.saturating_sub(name.len() as u32))
 }
 
+/// Common shortcodes whose emoji's Unicode name differs (`:+1:` is
+/// "thumbs up", `:tada:` is "party popper").
+const SHORTCODE_ALIASES: &[(&str, &str)] = &[
+    ("+1", "\u{1F44D}"),
+    ("thumbsup", "\u{1F44D}"),
+    ("-1", "\u{1F44E}"),
+    ("thumbsdown", "\u{1F44E}"),
+    ("heart", "\u{2764}\u{FE0F}"),
+    ("smile", "\u{1F604}"),
+    ("smiley", "\u{1F603}"),
+    ("grin", "\u{1F601}"),
+    ("laughing", "\u{1F606}"),
+    ("joy", "\u{1F602}"),
+    ("sob", "\u{1F62D}"),
+    ("wink", "\u{1F609}"),
+    ("blush", "\u{1F60A}"),
+    ("thinking", "\u{1F914}"),
+    ("tada", "\u{1F389}"),
+    ("pray", "\u{1F64F}"),
+    ("clap", "\u{1F44F}"),
+    ("wave", "\u{1F44B}"),
+    ("ok_hand", "\u{1F44C}"),
+    ("muscle", "\u{1F4AA}"),
+    ("100", "\u{1F4AF}"),
+    ("white_check_mark", "\u{2705}"),
+    ("heavy_check_mark", "\u{2714}\u{FE0F}"),
+    ("x", "\u{274C}"),
+    ("warning", "\u{26A0}\u{FE0F}"),
+    ("bulb", "\u{1F4A1}"),
+    ("memo", "\u{1F4DD}"),
+    ("bug", "\u{1F41B}"),
+    ("zap", "\u{26A1}"),
+    ("star", "\u{2B50}"),
+    ("eyes", "\u{1F440}"),
+    ("shrug", "\u{1F937}"),
+    ("facepalm", "\u{1F926}"),
+    ("sweat_smile", "\u{1F605}"),
+    ("slightly_smiling_face", "\u{1F642}"),
+    ("rofl", "\u{1F923}"),
+];
+
+/// `red heart` -> `red_heart`, `flag: Japan` -> `flag_japan`.
+pub fn shortcode_for_name(name: &str) -> String {
+    let mut code = String::with_capacity(name.len());
+    for ch in name.chars() {
+        if ch.is_alphanumeric() || ch == '+' || ch == '-' {
+            code.extend(ch.to_lowercase());
+        } else if !code.ends_with('_') && !code.is_empty() {
+            code.push('_');
+        }
+    }
+    code.trim_end_matches('_').to_string()
+}
+
+/// The emoji for `:shortcode:` text (without the colons): a common alias,
+/// or the emoji's Unicode name with words joined by underscores.
+pub fn emoji_for_shortcode(shortcode: &str) -> Option<&'static str> {
+    let code = shortcode.to_lowercase();
+    if let Some((_, emoji)) = SHORTCODE_ALIASES.iter().find(|(alias, _)| *alias == code) {
+        return Some(emoji);
+    }
+    static BY_NAME: std::sync::LazyLock<std::collections::HashMap<String, &'static str>> =
+        std::sync::LazyLock::new(|| {
+            let mut map = std::collections::HashMap::new();
+            for emoji in EMOJIS.iter() {
+                map.entry(shortcode_for_name(emoji.name))
+                    .or_insert(emoji.emoji);
+            }
+            map
+        });
+    BY_NAME.get(&code).copied()
+}
+
+/// When the text just typed closes a `:shortcode:` that names an emoji,
+/// the text with the shortcode replaced and the new cursor.
+///
+/// Only a single typed `:` triggers it, the shortcode must start the text or
+/// follow whitespace or an opening bracket, and it has no spaces, so times
+/// (`10:30:15`) and URLs aren't touched.
+pub fn shortcode_typed_fixup(
+    previous: &str,
+    content: &str,
+    cursor: usize,
+) -> Option<(String, usize)> {
+    if content.len() != previous.len() + 1
+        || cursor == 0
+        || !content.is_char_boundary(cursor)
+        || content.as_bytes().get(cursor - 1) != Some(&b':')
+        || format!("{}{}", &content[..cursor - 1], &content[cursor..]) != previous
+    {
+        return None;
+    }
+    let before = &content[..cursor - 1];
+    let open = before.rfind(':')?;
+    let code = &before[open + 1..];
+    if code.is_empty()
+        || code.len() > 48
+        || !code
+            .chars()
+            .all(|ch| ch.is_alphanumeric() || matches!(ch, '_' | '+' | '-'))
+    {
+        return None;
+    }
+    let starts_token = before[..open]
+        .chars()
+        .next_back()
+        .is_none_or(|ch| ch.is_whitespace() || matches!(ch, '(' | '[' | '{' | '"' | '\''));
+    if !starts_token {
+        return None;
+    }
+    let emoji = emoji_for_shortcode(code)?;
+    let fixed = format!("{}{emoji}{}", &content[..open], &content[cursor..]);
+    Some((fixed, open + emoji.len()))
+}
+
 #[cfg(test)]
 include!("mod_tests.rs");
