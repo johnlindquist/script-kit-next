@@ -208,9 +208,6 @@ mod stdin_request_accessibility_wired;
 #[path = "source_audits/stdin_set_selected_text_wired.rs"]
 mod stdin_set_selected_text_wired;
 
-#[path = "source_audits/selected_text_clipboard_restore.rs"]
-mod selected_text_clipboard_restore;
-
 #[path = "source_audits/passive_selection_capture_no_cmd_c.rs"]
 mod passive_selection_capture_no_cmd_c;
 

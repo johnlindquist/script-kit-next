@@ -23,17 +23,6 @@ fn clipboard_helper_exposes_snapshot_and_change_count() {
 }
 
 #[test]
-fn clipboard_paste_fallback_restores_only_when_change_count_still_matches() {
-    assert!(CLIPBOARD.contains("paste_plain_text_preserving_clipboard"));
-    assert!(CLIPBOARD.contains("capture_general_pasteboard_snapshot()"));
-    assert!(CLIPBOARD.contains("write_plain_text_to_pasteboard(text)"));
-    assert!(CLIPBOARD.contains("simulate_paste_with_cg()"));
-    assert!(CLIPBOARD.contains("current_change_count == temporary_change_count"));
-    assert!(CLIPBOARD.contains("restore_general_pasteboard_snapshot(&snapshot)"));
-    assert!(CLIPBOARD.contains("Clipboard changed during focused-text Agent Chat paste fallback"));
-}
-
-#[test]
 fn capture_registers_short_lived_ax_session_for_later_mutation() {
     assert!(AX.contains("register_focused_text_session"));
     assert!(AX.contains("FOCUSED_TEXT_SESSION_TTL_MS"));

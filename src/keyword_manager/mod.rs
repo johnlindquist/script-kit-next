@@ -12,11 +12,17 @@
 //! 1. Loads scriptlets with `keyword` metadata from ~/.scriptkit/scriptlets/
 //! 2. Registers each keyword trigger with the KeywordMatcher
 //! 3. Starts the KeyboardMonitor with a callback that feeds keystrokes to the matcher
-//! 4. When a match is found, performs the expansion:
-//!    a. Stops keyboard monitor (avoid capturing our own keystrokes)
-//!    b. Deletes trigger characters with backspaces
-//!    c. Pastes replacement text via clipboard
-//!    d. Resumes keyboard monitor
+//! 4. Keeps the typed buffer honest: Backspace edits it; clicks, arrow and
+//!    navigation keys, and ⌘/⌃/⌥ shortcuts clear it (the caret may have moved)
+//! 5. When a match is found, performs the expansion on a worker thread:
+//!    a. Waits briefly, and cancels if the user typed or clicked meanwhile
+//!    b. Captures the app being typed in and aims every key at it
+//!    c. Deletes trigger characters with Delete presses
+//!    d. Pastes replacement text via the clipboard and restores the clipboard
+//!    once the app has read it
+//!
+//! Keys Script Kit posts are tagged or process-targeted, so the monitor never
+//! mistakes them for typing.
 //!
 
 // --- merged from part_000.rs ---
@@ -31,10 +37,12 @@ use tracing::{debug, error, info, instrument, warn};
 use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
 use crate::keystroke_logger::keystroke_logger;
 use crate::keyword_matcher::KeywordMatcher;
+use crate::platform::synthetic_keys::{self, KeyTarget};
 use crate::scripts::load_scriptlets;
 use crate::snippet::analysis::build_hybrid_snippet_plan;
 use crate::template_variables::VariableContext;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
+use std::sync::atomic::{AtomicU64, Ordering};
 /// Delay after stopping monitor before performing expansion (ms)
 const STOP_DELAY_MS: u64 = 50;
 const DEFAULT_KEYWORD_POST_DELETE_DELAY_MS: u64 = 0;
@@ -42,6 +50,103 @@ const MAX_KEYWORD_POST_DELETE_DELAY_MS: u64 = 250;
 const KEYWORD_POST_DELETE_DELAY_ENV: &str = "SCRIPT_KIT_KEYWORD_POST_DELETE_DELAY_MS";
 /// Delay after expansion before restarting monitor (ms)
 const RESTART_DELAY_MS: u64 = 100;
+
+/// One expansion edits the focused field at a time.
+static EXPANSION_LOCK: Mutex<()> = Mutex::new(());
+
+/// macOS virtual keycodes the buffer reacts to.
+const KEY_DELETE: u16 = 51;
+const KEY_FORWARD_DELETE: u16 = 117;
+const KEY_HOME: u16 = 115;
+const KEY_END: u16 = 119;
+const KEY_PAGE_UP: u16 = 116;
+const KEY_PAGE_DOWN: u16 = 121;
+const KEY_LEFT: u16 = 123;
+const KEY_RIGHT: u16 = 124;
+const KEY_DOWN: u16 = 125;
+const KEY_UP: u16 = 126;
+
+/// What a monitored event does to the typed-keyword buffer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BufferAction {
+    /// Characters were typed at the caret.
+    Type(String),
+    /// Backspace removed the last typed character.
+    Backspace,
+    /// The caret may have moved or the text changed in a way we can't follow.
+    Reset(&'static str),
+    /// No effect on the buffer (for example a bare modifier key).
+    Ignore,
+}
+
+fn buffer_action_for(event: &KeyEvent) -> BufferAction {
+    use crate::keyboard_monitor::KeyEventKind;
+    if event.kind == KeyEventKind::PointerDown {
+        return BufferAction::Reset("pointer_down");
+    }
+    if event.command || event.control {
+        // Shortcuts (⌘V, ⌘Z, ⌃A …) can move the caret or change text.
+        return if event.character.is_some() || is_navigation_key(event.key_code) {
+            BufferAction::Reset("modified_key")
+        } else {
+            BufferAction::Ignore
+        };
+    }
+    if event.option {
+        // ⌥ also types ordinary characters on many layouts (German @ is ⌥L),
+        // but ⌥⌫ and ⌥← edit or move by word.
+        if event.key_code == KEY_DELETE || is_navigation_key(event.key_code) {
+            return BufferAction::Reset("modified_key");
+        }
+        return match &event.character {
+            Some(text) if is_typed_text(text) => BufferAction::Type(text.clone()),
+            Some(_) => BufferAction::Reset("modified_key"),
+            None => BufferAction::Ignore,
+        };
+    }
+    if event.key_code == KEY_DELETE {
+        return BufferAction::Backspace;
+    }
+    if is_navigation_key(event.key_code) {
+        return BufferAction::Reset("navigation_key");
+    }
+    match &event.character {
+        Some(text) if !text.is_empty() => BufferAction::Type(text.clone()),
+        _ => BufferAction::Ignore,
+    }
+}
+
+/// Printable text, not control characters or the private-use codes macOS
+/// reports for function and arrow keys.
+fn is_typed_text(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|c| !c.is_control() && !('\u{f700}'..='\u{f8ff}').contains(&c))
+}
+
+/// True when keys aimed at `target` would now go to a different app.
+fn focus_moved_since(target: KeyTarget) -> bool {
+    match (target, synthetic_keys::focused_key_target()) {
+        (KeyTarget::Process(then), KeyTarget::Process(now)) => then != now,
+        _ => false,
+    }
+}
+
+fn is_navigation_key(key_code: u16) -> bool {
+    matches!(
+        key_code,
+        KEY_FORWARD_DELETE
+            | KEY_HOME
+            | KEY_END
+            | KEY_PAGE_UP
+            | KEY_PAGE_DOWN
+            | KEY_LEFT
+            | KEY_RIGHT
+            | KEY_DOWN
+            | KEY_UP
+    )
+}
 
 fn keyword_post_delete_delay_ms() -> u64 {
     std::env::var(KEYWORD_POST_DELETE_DELAY_ENV)
@@ -269,6 +374,9 @@ impl KeywordManager {
         }
 
         info!("Enabling keyword system");
+        // Learn which key types "v" with ⌘ held in the current layout before
+        // the first expansion needs ⌘V.
+        synthetic_keys::refresh_layout_keycodes();
 
         // Check trigger count
         let trigger_count = {
@@ -291,15 +399,39 @@ impl KeywordManager {
         let injector_config = Arc::new(self.config.injector_config.clone());
 
         // Create keyboard monitor with callback
+        // Bumped by every real input event; an expansion that sees it move
+        // before it starts editing knows the user kept typing and cancels.
+        let input_generation = Arc::new(AtomicU64::new(0));
+
         let mut monitor = KeyboardMonitor::new(move |event: KeyEvent| {
-            // Only process printable characters (ignore modifier keys, etc.)
-            if let Some(ref character) = event.character {
-                // Skip if any modifier is held (except shift for capitals)
-                if event.command || event.control || event.option {
+            let action = buffer_action_for(&event);
+            if action != BufferAction::Ignore {
+                input_generation.fetch_add(1, Ordering::SeqCst);
+            }
+            let character = match action {
+                BufferAction::Ignore => {
                     keystroke_logger().record_skipped();
                     return;
                 }
-
+                BufferAction::Reset(reason) => {
+                    debug!(reason, "Keyword buffer reset");
+                    keystroke_logger().record_buffer_clear();
+                    matcher
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clear_buffer();
+                    return;
+                }
+                BufferAction::Backspace => {
+                    matcher
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .backspace();
+                    return;
+                }
+                BufferAction::Type(character) => character,
+            };
+            {
                 // Process each character in the string (usually just 1)
                 for c in character.chars() {
                     // Record keystroke for debounced logging
@@ -332,10 +464,32 @@ impl KeywordManager {
                             // Arc clone is cheap - just increments reference count
                             let config_clone = Arc::clone(&config);
                             let injector_config_clone = Arc::clone(&injector_config);
+                            let generation_for_expansion = Arc::clone(&input_generation);
+                            let match_generation = input_generation.load(Ordering::SeqCst);
 
                             thread::spawn(move || {
+                                let _expansion =
+                                    EXPANSION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
                                 // Small delay to let the keyboard event complete
                                 thread::sleep(Duration::from_millis(config_clone.stop_delay_ms));
+
+                                // The user kept typing or clicked: the keyword is no
+                                // longer right before the caret. Deleting now would
+                                // eat their new text, so do nothing.
+                                if generation_for_expansion.load(Ordering::SeqCst)
+                                    != match_generation
+                                {
+                                    info!(
+                                        category = "KEYWORD",
+                                        event = "keyword_expansion_cancelled",
+                                        reason = "input_after_match",
+                                        "Keyword expansion cancelled: input arrived after the keyword"
+                                    );
+                                    return;
+                                }
+                                // Every key of this expansion goes to the app the
+                                // keyword was typed in.
+                                let target = synthetic_keys::focused_key_target();
 
                                 // Get raw content based on tool type
                                 let raw_content = match tool.as_str() {
@@ -394,7 +548,7 @@ impl KeywordManager {
 
                                 // Delete trigger characters
                                 let delete_start = Instant::now();
-                                if let Err(e) = injector.delete_chars(chars_to_delete) {
+                                if let Err(e) = injector.delete_chars_in(target, chars_to_delete) {
                                     let total_ms = expansion_start.elapsed().as_millis() as u64;
                                     error!(
                                         error = %e,
@@ -420,9 +574,20 @@ impl KeywordManager {
                                     thread::sleep(Duration::from_millis(post_delete_delay_ms));
                                 }
 
+                                if focus_moved_since(target) {
+                                    warn!(
+                                        category = "KEYWORD",
+                                        event = "keyword_expansion_cancelled",
+                                        reason = "focus_changed_before_paste",
+                                        route = target.route_name(),
+                                        "Keyword expansion stopped: focus moved to another app before the paste"
+                                    );
+                                    return;
+                                }
+
                                 // Paste replacement text
                                 let paste_start = Instant::now();
-                                if let Err(e) = injector.paste_text(&replacement) {
+                                if let Err(e) = injector.paste_text_in(target, &replacement) {
                                     let paste_ms = paste_start.elapsed().as_millis() as u64;
                                     let total_ms = expansion_start.elapsed().as_millis() as u64;
                                     error!(
@@ -1130,6 +1295,105 @@ pub fn is_keyword_manager_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn key(character: Option<&str>, key_code: u16) -> KeyEvent {
+        KeyEvent {
+            kind: crate::keyboard_monitor::KeyEventKind::KeyDown,
+            character: character.map(str::to_string),
+            key_code,
+            shift: false,
+            control: false,
+            option: false,
+            command: false,
+            is_repeat: false,
+        }
+    }
+
+    #[test]
+    fn typed_characters_feed_the_buffer() {
+        assert_eq!(
+            buffer_action_for(&key(Some("s"), 1)),
+            BufferAction::Type("s".to_string())
+        );
+        let mut shifted = key(Some(":"), 41);
+        shifted.shift = true;
+        assert_eq!(
+            buffer_action_for(&shifted),
+            BufferAction::Type(":".to_string())
+        );
+    }
+
+    #[test]
+    fn backspace_edits_the_buffer_instead_of_being_typed() {
+        assert_eq!(
+            buffer_action_for(&key(Some("\u{7f}"), KEY_DELETE)),
+            BufferAction::Backspace
+        );
+    }
+
+    #[test]
+    fn clicks_navigation_and_shortcuts_reset_the_buffer() {
+        let click = KeyEvent {
+            kind: crate::keyboard_monitor::KeyEventKind::PointerDown,
+            ..key(None, 0)
+        };
+        assert_eq!(
+            buffer_action_for(&click),
+            BufferAction::Reset("pointer_down")
+        );
+        for code in [
+            KEY_LEFT,
+            KEY_RIGHT,
+            KEY_UP,
+            KEY_DOWN,
+            KEY_HOME,
+            KEY_END,
+            KEY_FORWARD_DELETE,
+        ] {
+            assert_eq!(
+                buffer_action_for(&key(Some("\u{f702}"), code)),
+                BufferAction::Reset("navigation_key"),
+                "keycode {code}"
+            );
+        }
+        let mut paste = key(Some("v"), 9);
+        paste.command = true;
+        assert_eq!(
+            buffer_action_for(&paste),
+            BufferAction::Reset("modified_key")
+        );
+        let mut word_delete = key(Some("\u{7f}"), KEY_DELETE);
+        word_delete.option = true;
+        assert_eq!(
+            buffer_action_for(&word_delete),
+            BufferAction::Reset("modified_key")
+        );
+    }
+
+    #[test]
+    fn option_typed_characters_count_as_typing() {
+        // German layout: ⌥L types "@".
+        let mut at_sign = key(Some("@"), 37);
+        at_sign.option = true;
+        assert_eq!(
+            buffer_action_for(&at_sign),
+            BufferAction::Type("@".to_string())
+        );
+        let mut word_left = key(Some("\u{f702}"), KEY_LEFT);
+        word_left.option = true;
+        assert_eq!(
+            buffer_action_for(&word_left),
+            BufferAction::Reset("modified_key")
+        );
+    }
+
+    #[test]
+    fn bare_modifier_presses_leave_the_buffer_alone() {
+        let mut command_only = key(None, 55);
+        command_only.command = true;
+        assert_eq!(buffer_action_for(&command_only), BufferAction::Ignore);
+        assert_eq!(buffer_action_for(&key(None, 56)), BufferAction::Ignore);
+    }
 
     #[test]
     fn test_new_creates_disabled_manager() {

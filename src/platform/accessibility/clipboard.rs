@@ -5,6 +5,8 @@ pub struct PasteboardSnapshot {
     #[cfg(target_os = "macos")]
     items: Vec<PasteboardItemSnapshot>,
     pub change_count: i64,
+    /// Representations that could not be read and so won't be restored.
+    pub skipped_representations: usize,
 }
 
 #[cfg(target_os = "macos")]
@@ -47,38 +49,27 @@ pub fn restore_general_pasteboard_snapshot(snapshot: &PasteboardSnapshot) -> Res
     }
 }
 
+/// Paste `text` into the focused app through the shared promised-paste path
+/// and put the user's full clipboard back once the app has read it.
 pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
-    let snapshot = capture_general_pasteboard_snapshot()
-        .context("Failed to snapshot clipboard before focused-text Agent Chat paste fallback")?;
-    write_plain_text_to_pasteboard(text)
-        .context("Failed to write focused-text Agent Chat paste fallback")?;
-    let temporary_change_count = general_pasteboard_change_count().context(
-        "Failed to read clipboard change count after focused-text Agent Chat paste write",
-    )?;
+    use crate::platform::promised_paste::{paste_text_preserving_clipboard, RestoreOutcome};
 
-    crate::selected_text::simulate_paste_with_cg()
-        .context("Failed to simulate focused-text Agent Chat paste")?;
-
-    // The target app reads the pasteboard asynchronously after ⌘V lands;
-    // restoring immediately would paste the user's OLD clipboard. There is no
-    // observable "paste consumed" signal, so give the app a settle window
-    // (mirrors `selected_text::set_via_clipboard_fallback`).
-    std::thread::sleep(std::time::Duration::from_millis(150));
-
-    let restore_result = match general_pasteboard_change_count() {
-        Ok(current_change_count) if current_change_count == temporary_change_count => {
-            restore_general_pasteboard_snapshot(&snapshot)
-        }
-        Ok(_) => {
+    if text.is_empty() {
+        return Ok(());
+    }
+    let report = paste_text_preserving_clipboard(text, None)
+        .context("Failed to paste focused-text Agent Chat output")?;
+    match report.restore {
+        RestoreOutcome::Restored => Ok(()),
+        RestoreOutcome::SkippedExternalChange => {
             bail!(
                 "Clipboard changed during focused-text Agent Chat paste fallback; skipped restore"
             )
         }
-        Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
-    };
-
-    restore_result
-        .context("Failed to restore clipboard after focused-text Agent Chat paste fallback")
+        RestoreOutcome::Failed(error) => bail!(
+            "Failed to restore clipboard after focused-text Agent Chat paste fallback: {error}"
+        ),
+    }
 }
 
 /// Raycast-parity selection capture: simulate ⌘C into the active app, wait for
@@ -213,6 +204,16 @@ pub fn select_all_text_for_focused_text_fallback() -> Result<()> {
 #[cfg(target_os = "macos")]
 impl PasteboardSnapshot {
     fn capture() -> Result<Self> {
+        // SAFETY: generalPasteboard is a shared AppKit singleton.
+        let pasteboard = unsafe { general_pasteboard_id()? };
+        Self::capture_from(pasteboard)
+    }
+
+    /// Snapshot every item, type and data representation of `pasteboard`.
+    /// Representations whose data can't be read (for example a file promise
+    /// whose owner has quit) are skipped and counted rather than failing the
+    /// whole snapshot.
+    pub(crate) fn capture_from(pasteboard: cocoa::base::id) -> Result<Self> {
         // Snapshotting the pasteboard is racy: another process (a clipboard
         // manager, a browser, any app) can write the general pasteboard while
         // we enumerate its items, which makes AppKit's mutation handler raise
@@ -228,14 +229,15 @@ impl PasteboardSnapshot {
         let mut last_err: Option<anyhow::Error> = None;
 
         for _ in 0..MAX_ATTEMPTS {
-            let before = general_pasteboard_change_count()
-                .context("Failed to read clipboard change count before snapshot")?;
+            // SAFETY: `pasteboard` is a live NSPasteboard owned by the caller.
+            let before = unsafe { change_count_of(pasteboard) };
 
             // SAFETY: every raw objc call runs inside `objc_exception::try`,
             // which converts the "collection mutated while enumerated"
             // NSException into `Err(exception_ptr)` instead of unwinding into
             // Rust (which would abort). We never touch the returned pointer.
-            let caught = unsafe { objc_exception::r#try(|| Self::capture_items_unchecked()) };
+            let caught =
+                unsafe { objc_exception::r#try(|| Self::capture_items_unchecked(pasteboard)) };
 
             let items = match caught {
                 Ok(Ok(items)) => items,
@@ -249,8 +251,8 @@ impl PasteboardSnapshot {
                 }
             };
 
-            let after = general_pasteboard_change_count()
-                .context("Failed to read clipboard change count after snapshot")?;
+            // SAFETY: as above.
+            let after = unsafe { change_count_of(pasteboard) };
             if after != before {
                 last_err = Some(anyhow::anyhow!(
                     "clipboard changed during snapshot (change_count {before} -> {after}); retrying"
@@ -259,9 +261,11 @@ impl PasteboardSnapshot {
                 continue;
             }
 
+            let (items, skipped_representations) = items;
             return Ok(Self {
                 items,
                 change_count: after,
+                skipped_representations,
             });
         }
 
@@ -274,19 +278,20 @@ impl PasteboardSnapshot {
     /// `objc::exception::catch` (see `capture`): if the pasteboard is mutated
     /// concurrently, AppKit raises an Obj-C exception here that would otherwise
     /// abort the process.
-    unsafe fn capture_items_unchecked() -> Result<Vec<PasteboardItemSnapshot>> {
-        use cocoa::appkit::NSPasteboard;
+    unsafe fn capture_items_unchecked(
+        pasteboard: cocoa::base::id,
+    ) -> Result<(Vec<PasteboardItemSnapshot>, usize)> {
         use cocoa::base::{id, nil};
         use objc::{msg_send, sel, sel_impl};
 
-        let pasteboard: id = NSPasteboard::generalPasteboard(nil);
         if pasteboard == nil {
-            bail!("NSPasteboard.generalPasteboard returned nil");
+            bail!("NSPasteboard was nil while snapshotting");
         }
         let items: id = msg_send![pasteboard, pasteboardItems];
         if items == nil {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), 0));
         }
+        let mut skipped_representations = 0usize;
 
         let item_count: usize = msg_send![items, count];
         let mut snapshot_items = Vec::with_capacity(item_count);
@@ -311,7 +316,8 @@ impl PasteboardSnapshot {
                     .context("Failed to read NSPasteboard type name while snapshotting")?;
                 let data: id = msg_send![item, dataForType: type_id];
                 if data == nil {
-                    bail!("NSPasteboard item data was unavailable while snapshotting");
+                    skipped_representations += 1;
+                    continue;
                 }
 
                 let byte_len: usize = msg_send![data, length];
@@ -326,22 +332,29 @@ impl PasteboardSnapshot {
                 };
                 representations.push(PasteboardRepresentation { type_name, data });
             }
-            snapshot_items.push(PasteboardItemSnapshot { representations });
+            if !representations.is_empty() {
+                snapshot_items.push(PasteboardItemSnapshot { representations });
+            }
         }
 
-        Ok(snapshot_items)
+        Ok((snapshot_items, skipped_representations))
     }
 
     fn restore(&self) -> Result<()> {
-        use cocoa::appkit::NSPasteboard;
+        // SAFETY: generalPasteboard is a shared AppKit singleton.
+        let pasteboard = unsafe { general_pasteboard_id()? };
+        self.restore_to(pasteboard)
+    }
+
+    /// Replace the contents of `pasteboard` with this snapshot.
+    pub(crate) fn restore_to(&self, pasteboard: cocoa::base::id) -> Result<()> {
         use cocoa::base::{id, nil};
         use cocoa::foundation::{NSArray, NSData, NSString};
         use objc::{class, msg_send, sel, sel_impl};
 
         unsafe {
-            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
             if pasteboard == nil {
-                bail!("NSPasteboard.generalPasteboard returned nil");
+                bail!("NSPasteboard was nil while restoring clipboard");
             }
 
             let _: i64 = msg_send![pasteboard, clearContents];
@@ -402,6 +415,95 @@ impl PasteboardSnapshot {
             Ok(())
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+impl PasteboardSnapshot {
+    /// Content-free description for logs: counts and broad kinds only.
+    pub(crate) fn summary(&self) -> PasteboardSnapshotSummary {
+        let mut summary = PasteboardSnapshotSummary {
+            item_count: self.items.len(),
+            skipped_representations: self.skipped_representations,
+            ..Default::default()
+        };
+        for item in &self.items {
+            for representation in &item.representations {
+                summary.type_count += 1;
+                summary.total_bytes += representation.data.len();
+                let name = representation.type_name.to_ascii_lowercase();
+                if name.contains("image") || name.contains("png") || name.contains("tiff") {
+                    summary.has_image = true;
+                } else if name.contains("file-url") || name.contains("filename") {
+                    summary.has_file_url = true;
+                } else if name.contains("rtf") || name.contains("html") {
+                    summary.has_rich_text = true;
+                } else if name.contains("text") || name.contains("string") {
+                    summary.has_text = true;
+                } else {
+                    summary.has_other = true;
+                }
+            }
+        }
+        summary
+    }
+
+    /// Type names of every item, in order (for tests and diagnostics).
+    #[cfg(test)]
+    pub(crate) fn type_names(&self) -> Vec<Vec<String>> {
+        self.items
+            .iter()
+            .map(|item| {
+                item.representations
+                    .iter()
+                    .map(|representation| representation.type_name.clone())
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Data stored for `type_name` in item `index` (tests).
+    #[cfg(test)]
+    pub(crate) fn data_for(&self, index: usize, type_name: &str) -> Option<&[u8]> {
+        self.items
+            .get(index)?
+            .representations
+            .iter()
+            .find_map(|representation| {
+                (representation.type_name == type_name).then_some(representation.data.as_slice())
+            })
+    }
+}
+
+/// Counts and kinds of a pasteboard snapshot; never contains clipboard data.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PasteboardSnapshotSummary {
+    pub item_count: usize,
+    pub type_count: usize,
+    pub total_bytes: usize,
+    pub skipped_representations: usize,
+    pub has_text: bool,
+    pub has_rich_text: bool,
+    pub has_image: bool,
+    pub has_file_url: bool,
+    pub has_other: bool,
+}
+
+/// The shared general pasteboard (unretained singleton).
+#[cfg(target_os = "macos")]
+pub(crate) unsafe fn general_pasteboard_id() -> Result<cocoa::base::id> {
+    use cocoa::appkit::NSPasteboard;
+    use cocoa::base::nil;
+    let pasteboard = NSPasteboard::generalPasteboard(nil);
+    if pasteboard == nil {
+        bail!("NSPasteboard.generalPasteboard returned nil");
+    }
+    Ok(pasteboard)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) unsafe fn change_count_of(pasteboard: cocoa::base::id) -> i64 {
+    use objc::{msg_send, sel, sel_impl};
+    msg_send![pasteboard, changeCount]
 }
 
 #[cfg(target_os = "macos")]

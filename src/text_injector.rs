@@ -1,32 +1,37 @@
 //! Text Injection Module for macOS
 //!
-//! Provides text injection functionality for text expansion/snippet systems.
-//! Uses the proven Espanso/Raycast pattern:
-//! 1. Delete trigger text with simulated backspace key events
-//! 2. Insert replacement text via clipboard paste (Cmd+V)
+//! Deletes a typed keyword and inserts its replacement in the app the user is
+//! typing in:
+//! 1. Delete the keyword with Delete key presses posted to that app
+//! 2. Paste the replacement through the clipboard (⌘V), then give the user's
+//!    clipboard back
 //!
 //! ## Architecture
 //!
-//! - `delete_chars()`: Simulates N backspace key events using CGEventPost
-//! - `paste_text()`: Clipboard-based paste with save/restore pattern
-//! - `inject_text()`: Convenience function combining both operations
+//! - `delete_chars_in()`: Delete presses aimed at one app, no modifiers, tagged
+//!   so our own keyboard monitor ignores them (`platform::synthetic_keys`)
+//! - `paste_text_in()`: promised-pasteboard paste that restores the full
+//!   clipboard once the app has read the text (`platform::promised_paste`)
+//! - `delete_chars()` / `paste_text()`: the same, aimed at the focused app
 //!
 //! ## Configurable Delays
 //!
-//! All timing is configurable via `TextInjectorConfig`:
-//! - `key_delay_ms`: Delay between backspace events (default: 2ms)
-//! - `pre_paste_delay_ms`: Delay before paste operation (default: 50ms)
-//! - `post_paste_delay_ms`: Delay before restoring clipboard (default: 100ms)
+//! - `key_delay_ms`: Delay between Delete presses (default: 2ms)
+//! - `pre_paste_delay_ms`: Delay between deleting and pasting in
+//!   `inject_text()` (default: 50ms)
+//!
+//! Clipboard restore timing is not configured here: it follows the target
+//! app's request for the pasted text.
 //!
 //! ## Permissions
 //!
 //! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
 
-use anyhow::{Context, Result};
-use arboard::Clipboard;
+use crate::platform::synthetic_keys::{self, KeyTarget};
+use anyhow::Result;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 
 // ============================================================================
 // Configuration
@@ -35,12 +40,10 @@ use tracing::{debug, info, instrument, warn};
 /// Configuration for text injection timing and behavior
 #[derive(Debug, Clone)]
 pub struct TextInjectorConfig {
-    /// Delay in milliseconds between backspace key events (default: 2ms)
+    /// Delay in milliseconds between Delete key events (default: 2ms)
     pub key_delay_ms: u64,
-    /// Delay in milliseconds before paste operation (default: 50ms)
+    /// Delay in milliseconds between deleting and pasting in `inject_text` (default: 50ms)
     pub pre_paste_delay_ms: u64,
-    /// Delay in milliseconds before restoring clipboard (default: 100ms)
-    pub post_paste_delay_ms: u64,
 }
 
 impl Default for TextInjectorConfig {
@@ -48,7 +51,6 @@ impl Default for TextInjectorConfig {
         Self {
             key_delay_ms: 2,
             pre_paste_delay_ms: 50,
-            post_paste_delay_ms: 100,
         }
     }
 }
@@ -58,9 +60,6 @@ impl Default for TextInjectorConfig {
 // ============================================================================
 
 /// Text injector for deleting trigger text and inserting replacements
-///
-/// Uses macOS Core Graphics API for key simulation and clipboard for pasting.
-/// This is the same reliable pattern used by Espanso and Raycast.
 #[derive(Debug, Clone)]
 pub struct TextInjector {
     config: TextInjectorConfig,
@@ -91,213 +90,72 @@ impl TextInjector {
         &self.config
     }
 
-    /// Delete characters by sending backspace key events
-    ///
-    /// Simulates N backspace keystrokes using CGEventPost to delete
-    /// the trigger text that the user typed.
-    ///
-    /// # Arguments
-    /// * `count` - Number of characters to delete (backspace events to send)
-    ///
-    /// # Errors
-    /// Returns error if CGEventPost fails
-    ///
+    /// Delete `count` characters before the caret of the focused app.
     #[instrument(skip(self), fields(count))]
     pub fn delete_chars(&self, count: usize) -> Result<()> {
+        if count == 0 {
+            debug!("No characters to delete");
+            return Ok(());
+        }
+        self.delete_chars_in(synthetic_keys::focused_key_target(), count)
+    }
+
+    /// Delete `count` characters before the caret of `target`.
+    #[instrument(skip(self), fields(count, route = target.route_name()))]
+    pub fn delete_chars_in(&self, target: KeyTarget, count: usize) -> Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
         if count == 0 {
             debug!("No characters to delete");
             return Ok(());
         }
-
-        debug!(count, "Deleting characters via backspace simulation");
-
-        for i in 0..count {
-            simulate_backspace()?;
-
-            // Add delay between keystrokes for reliability
-            if i < count - 1 && self.config.key_delay_ms > 0 {
-                thread::sleep(Duration::from_millis(self.config.key_delay_ms));
-            }
-        }
-
-        info!(count, "Deleted characters successfully");
+        synthetic_keys::post_deletes(
+            target,
+            count,
+            Duration::from_millis(self.config.key_delay_ms),
+        )?;
+        info!(count, route = target.route_name(), "Deleted characters");
         Ok(())
     }
 
-    /// Paste text using clipboard and Cmd+V simulation
-    ///
-    /// This function:
-    /// 1. Saves the current clipboard contents
-    /// 2. Sets the clipboard to the new text
-    /// 3. Simulates Cmd+V to paste
-    /// 4. Waits for paste to complete
-    /// 5. Restores the original clipboard contents
-    ///
-    /// # Arguments
-    /// * `text` - The text to paste
-    ///
-    /// # Errors
-    /// Returns error if clipboard or paste operation fails
-    ///
+    /// Paste `text` into the focused app and restore the user's clipboard.
     #[instrument(skip(self, text), fields(text_len = text.len()))]
     pub fn paste_text(&self, text: &str) -> Result<()> {
+        self.paste_into(None, text)
+    }
+
+    /// Paste `text` into `target` and restore the user's clipboard.
+    #[instrument(skip(self, text), fields(text_len = text.len(), route = target.route_name()))]
+    pub fn paste_text_in(&self, target: KeyTarget, text: &str) -> Result<()> {
+        self.paste_into(Some(target), text)
+    }
+
+    fn paste_into(&self, target: Option<KeyTarget>, text: &str) -> Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)?;
         if text.is_empty() {
             debug!("Empty text, nothing to paste");
             return Ok(());
         }
-
-        debug!(text_len = text.len(), "Pasting text via clipboard");
-
-        let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-
-        // Save original clipboard contents (text only for now)
-        let original = clipboard.get_text().ok();
-        debug!(
-            had_original = original.is_some(),
-            "Saved original clipboard"
-        );
-
-        // Set new text to clipboard
-        clipboard
-            .set_text(text)
-            .context("Failed to set clipboard text")?;
-
-        // Pre-paste delay to ensure clipboard is ready
-        if self.config.pre_paste_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(self.config.pre_paste_delay_ms));
-        }
-
-        // Simulate Cmd+V using Core Graphics
-        simulate_paste()?;
-
-        // Post-paste delay before restoring clipboard
-        if self.config.post_paste_delay_ms > 0 {
-            thread::sleep(Duration::from_millis(self.config.post_paste_delay_ms));
-        }
-
-        // Restore original clipboard (best effort)
-        if let Some(original_text) = original {
-            if let Err(e) = clipboard.set_text(&original_text) {
-                warn!(error = %e, "Failed to restore original clipboard");
-            } else {
-                debug!("Restored original clipboard");
-            }
-        }
-
-        info!(text_len = text.len(), "Pasted text successfully");
+        // Outcome details (target read the text, clipboard restored) are
+        // logged by the paste engine as `synthetic_paste`.
+        crate::platform::promised_paste::paste_text_preserving_clipboard(text, target)?;
         Ok(())
     }
 
     /// Inject text by deleting trigger characters and pasting replacement
     ///
-    /// This is a convenience function that combines `delete_chars()` and
-    /// `paste_text()` for the common text expansion use case.
-    ///
-    /// # Arguments
-    /// * `delete_count` - Number of characters to delete (trigger length)
-    /// * `replacement` - The text to insert
-    ///
-    /// # Errors
-    /// Returns error if delete or paste operation fails
-    ///
+    /// Both steps go to the app that is focused when this is called.
     #[allow(dead_code)]
     #[instrument(skip(self, replacement), fields(delete_count, replacement_len = replacement.len()))]
     pub fn inject_text(&self, delete_count: usize, replacement: &str) -> Result<()> {
-        info!(
-            delete_count,
-            replacement_len = replacement.len(),
-            "Injecting text"
-        );
-
-        // Delete trigger characters
-        self.delete_chars(delete_count)?;
-
-        // Small delay between delete and paste operations
+        let target = synthetic_keys::focused_key_target();
+        self.delete_chars_in(target, delete_count)?;
         if self.config.pre_paste_delay_ms > 0 {
             thread::sleep(Duration::from_millis(self.config.pre_paste_delay_ms));
         }
-
-        // Paste replacement text
-        self.paste_text(replacement)?;
-
+        self.paste_text_in(target, replacement)?;
         info!("Text injection completed");
         Ok(())
     }
-}
-
-// ============================================================================
-// Core Graphics Key Simulation
-// ============================================================================
-
-/// Simulate a single backspace keypress using Core Graphics
-///
-/// Sends both key down and key up events for the backspace key.
-fn simulate_backspace() -> Result<()> {
-    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
-    use core_graphics::event::{CGEvent, CGEventTapLocation, CGKeyCode};
-    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-
-    // Backspace key is keycode 51 on macOS
-    const KEY_BACKSPACE: CGKeyCode = 51;
-
-    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-        .ok()
-        .context("Failed to create CGEventSource")?;
-
-    // Key down event
-    let key_down = CGEvent::new_keyboard_event(source.clone(), KEY_BACKSPACE, true)
-        .ok()
-        .context("Failed to create backspace key down event")?;
-
-    // Key up event
-    let key_up = CGEvent::new_keyboard_event(source, KEY_BACKSPACE, false)
-        .ok()
-        .context("Failed to create backspace key up event")?;
-
-    // Post events to HID system
-    key_down.post(CGEventTapLocation::HID);
-    thread::sleep(Duration::from_millis(1)); // Brief delay between down/up
-    key_up.post(CGEventTapLocation::HID);
-
-    Ok(())
-}
-
-/// Simulate Cmd+V paste keystroke using Core Graphics
-///
-/// Sends key down and key up events for 'v' with Command modifier.
-fn simulate_paste() -> Result<()> {
-    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
-    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode};
-    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-
-    // 'v' key is keycode 9 on macOS
-    const KEY_V: CGKeyCode = 9;
-
-    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-        .ok()
-        .context("Failed to create CGEventSource")?;
-
-    // Create key down event for 'v' with Cmd modifier
-    let key_down = CGEvent::new_keyboard_event(source.clone(), KEY_V, true)
-        .ok()
-        .context("Failed to create paste key down event")?;
-    key_down.set_flags(CGEventFlags::CGEventFlagCommand);
-
-    // Create key up event for 'v' with Cmd modifier
-    let key_up = CGEvent::new_keyboard_event(source, KEY_V, false)
-        .ok()
-        .context("Failed to create paste key up event")?;
-    key_up.set_flags(CGEventFlags::CGEventFlagCommand);
-
-    // Post events
-    key_down.post(CGEventTapLocation::HID);
-    thread::sleep(Duration::from_millis(5)); // Brief delay between down/up
-    key_up.post(CGEventTapLocation::HID);
-
-    debug!("Simulated Cmd+V via Core Graphics");
-    Ok(())
 }
 
 // ============================================================================
@@ -313,7 +171,6 @@ mod tests {
         let config = TextInjectorConfig::default();
         assert_eq!(config.key_delay_ms, 2);
         assert_eq!(config.pre_paste_delay_ms, 50);
-        assert_eq!(config.post_paste_delay_ms, 100);
     }
 
     #[test]
@@ -321,12 +178,10 @@ mod tests {
         let config = TextInjectorConfig {
             key_delay_ms: 5,
             pre_paste_delay_ms: 100,
-            post_paste_delay_ms: 200,
         };
         let injector = TextInjector::with_config(config.clone());
         assert_eq!(injector.config().key_delay_ms, 5);
         assert_eq!(injector.config().pre_paste_delay_ms, 100);
-        assert_eq!(injector.config().post_paste_delay_ms, 200);
     }
 
     #[test]

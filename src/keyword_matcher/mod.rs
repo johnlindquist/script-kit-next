@@ -192,6 +192,13 @@ impl KeywordMatcher {
         None
     }
 
+    /// Apply a Backspace: drop the last buffered character, so correcting a
+    /// typo inside a keyword still lets it match.
+    pub fn backspace(&mut self) {
+        self.buffer.pop_back();
+        keystroke_logger().update_buffer_state(self.buffer.len(), self.triggers.len());
+    }
+
     /// Clear the keystroke buffer
     pub fn clear_buffer(&mut self) {
         self.buffer.clear();
@@ -520,6 +527,29 @@ mod tests {
 
         assert!(matcher.buffer().is_empty());
     }
+    #[test]
+    fn test_backspace_lets_a_corrected_keyword_match() {
+        let mut matcher = KeywordMatcher::new();
+        matcher.register_trigger(":sig", PathBuf::from("sig.md"));
+        for c in ":sx".chars() {
+            assert!(matcher.process_keystroke(c).is_none());
+        }
+        matcher.backspace();
+        assert!(matcher.process_keystroke('i').is_none());
+        let result = matcher
+            .process_keystroke('g')
+            .expect("corrected keyword matches");
+        assert_eq!(result.trigger, ":sig");
+        assert_eq!(result.chars_to_delete, 4);
+    }
+
+    #[test]
+    fn test_backspace_on_empty_buffer_is_harmless() {
+        let mut matcher = KeywordMatcher::new();
+        matcher.backspace();
+        assert_eq!(matcher.buffer(), "");
+    }
+
     #[test]
     fn test_buffer_does_not_clear_on_space() {
         let mut matcher = KeywordMatcher::new();

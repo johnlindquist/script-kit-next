@@ -103,6 +103,27 @@ impl DebouncedLogState {
         result
     }
 }
+/// How often the event loop checks that the tap is still enabled and whether
+/// Secure Input changed.
+const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Last observed Secure Input state (see [`secure_input_status`]).
+static LAST_SECURE_INPUT: std::sync::Mutex<crate::platform::synthetic_keys::SecureInputStatus> =
+    std::sync::Mutex::new(crate::platform::synthetic_keys::SecureInputStatus {
+        enabled: false,
+        owner_pid: None,
+        owner_name: None,
+    });
+
+/// Secure Input as last seen by the running keyboard monitor (checked every
+/// few seconds). While `enabled`, keyword expansion cannot see typing.
+pub fn secure_input_status() -> crate::platform::synthetic_keys::SecureInputStatus {
+    LAST_SECURE_INPUT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
 /// Global debounced log state
 static DEBOUNCED_LOG: std::sync::LazyLock<DebouncedLogState> =
     std::sync::LazyLock::new(DebouncedLogState::new);
@@ -135,10 +156,23 @@ pub enum KeyboardMonitorError {
     #[error("Failed to start monitor thread")]
     ThreadSpawnFailed,
 }
+/// What kind of input the monitor saw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyEventKind {
+    /// A key went down. `character` and `key_code` describe it.
+    KeyDown,
+    /// A mouse button went down. The caret may have moved, so anything typed
+    /// so far no longer sits in front of it. Only `kind` is meaningful.
+    PointerDown,
+}
+
 /// Represents a keyboard event captured by the monitor
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct KeyEvent {
+    /// Key press or pointer press
+    pub kind: KeyEventKind,
+
     /// The character that was typed (if available)
     /// This is the actual character produced, taking into account modifiers
     pub character: Option<String>,
@@ -340,13 +374,19 @@ impl KeyboardMonitor {
             Arc::new(std::sync::Mutex::new(SendableMachPortRef(None)));
         let mach_port_for_callback = Arc::clone(&mach_port_ref);
 
-        // Create event tap for key down events
-        debug!("Creating CGEventTap with HID location for KeyDown events");
+        // Key presses feed the keyword buffer; mouse presses reset it (a click
+        // can move the caret away from what was typed).
+        debug!("Creating CGEventTap with HID location for KeyDown and mouse-down events");
         let event_tap_result = CGEventTap::new(
             CGEventTapLocation::HID,
             CGEventTapPlacement::HeadInsertEventTap,
             CGEventTapOptions::ListenOnly, // We only observe, don't modify
-            vec![CGEventType::KeyDown],
+            vec![
+                CGEventType::KeyDown,
+                CGEventType::LeftMouseDown,
+                CGEventType::RightMouseDown,
+                CGEventType::OtherMouseDown,
+            ],
             move |_proxy, event_type, event: &CGEvent| {
                 // CRITICAL: Check for tap disabled events first
                 // When a tap is disabled (timeout or user), macOS sends a special event
@@ -365,8 +405,23 @@ impl KeyboardMonitor {
                     _ => {}
                 }
 
+                if matches!(
+                    event_type,
+                    CGEventType::LeftMouseDown
+                        | CGEventType::RightMouseDown
+                        | CGEventType::OtherMouseDown
+                ) {
+                    callback(Self::pointer_down_event());
+                    return None;
+                }
+
                 // Only process KeyDown events (filter out any other event types)
                 if !matches!(event_type, CGEventType::KeyDown) {
+                    return None;
+                }
+
+                // Keys Script Kit posted itself (Delete, ⌘V) are not typing.
+                if crate::platform::synthetic_keys::is_synthetic_event(event) {
                     return None;
                 }
 
@@ -430,8 +485,18 @@ impl KeyboardMonitor {
 
         info!("Keyboard monitor event tap enabled, entering run loop");
 
+        let mut last_health_check = std::time::Instant::now();
+        let tap_port = event_tap.mach_port.as_concrete_TypeRef();
+        Self::check_secure_input();
+
         // Run the loop until stopped
         while running.load(Ordering::SeqCst) {
+            if last_health_check.elapsed() >= HEALTH_CHECK_INTERVAL {
+                last_health_check = std::time::Instant::now();
+                Self::check_tap_enabled(tap_port);
+                Self::check_secure_input();
+            }
+
             // Run for a short interval, then check if we should stop
             // Note: Must use kCFRunLoopDefaultMode (not kCFRunLoopCommonModes) for run_in_mode
             let result = CFRunLoop::run_in_mode(
@@ -460,6 +525,69 @@ impl KeyboardMonitor {
         // Clear the stored run loop
         if let Ok(mut guard) = run_loop_storage.lock() {
             *guard = None;
+        }
+    }
+
+    /// Watchdog: macOS can disable a tap without delivering the
+    /// "tap disabled" event (for example after the system was under load).
+    /// A disabled tap means silent text expansion, so turn it back on.
+    fn check_tap_enabled(port: CFMachPortRef) {
+        extern "C" {
+            fn CGEventTapIsEnabled(tap: CFMachPortRef) -> bool;
+            fn CGEventTapEnable(tap: CFMachPortRef, enable: bool);
+        }
+        // SAFETY: `port` is the live tap created in `event_loop`, which owns
+        // it for the duration of this loop.
+        unsafe {
+            if !CGEventTapIsEnabled(port) {
+                warn!(
+                    category = "KEYWORD",
+                    event = "keyboard_monitor_tap_found_disabled",
+                    "Keyboard monitor tap was disabled without notice - re-enabling"
+                );
+                CGEventTapEnable(port, true);
+            }
+        }
+    }
+
+    /// Track Secure Event Input. While it is on, macOS sends no keystrokes to
+    /// event taps, so keywords cannot expand; say so once per change.
+    fn check_secure_input() {
+        let status = crate::platform::synthetic_keys::secure_input_status();
+        let mut last = LAST_SECURE_INPUT.lock().unwrap_or_else(|e| e.into_inner());
+        if *last == status {
+            return;
+        }
+        if status.enabled {
+            warn!(
+                category = "KEYWORD",
+                event = "secure_input_changed",
+                enabled = true,
+                owner_pid = status.owner_pid.unwrap_or(0),
+                owner = %status.owner_name.as_deref().unwrap_or("unknown"),
+                "Secure Input is on: keyword expansion cannot see typing until it turns off"
+            );
+        } else {
+            info!(
+                category = "KEYWORD",
+                event = "secure_input_changed",
+                enabled = false,
+                "Secure Input is off: keyword expansion can see typing"
+            );
+        }
+        *last = status;
+    }
+
+    fn pointer_down_event() -> KeyEvent {
+        KeyEvent {
+            kind: KeyEventKind::PointerDown,
+            character: None,
+            key_code: 0,
+            shift: false,
+            control: false,
+            option: false,
+            command: false,
+            is_repeat: false,
         }
     }
 
@@ -507,6 +635,7 @@ impl KeyboardMonitor {
         let character = Self::get_character_from_event(event);
 
         KeyEvent {
+            kind: KeyEventKind::KeyDown,
             character,
             key_code,
             shift,
@@ -587,6 +716,7 @@ mod tests {
     #[test]
     fn test_key_event_creation() {
         let event = KeyEvent {
+            kind: KeyEventKind::KeyDown,
             character: Some("a".to_string()),
             key_code: 0,
             shift: false,
