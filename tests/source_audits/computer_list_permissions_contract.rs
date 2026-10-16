@@ -142,8 +142,14 @@ fn computer_list_permissions_reports_read_only_permission_statuses() {
         &permissions_wizard,
         "pub fn check_accessibility_permission()",
     );
+    // The status goes through the shared permission service, whose
+    // Accessibility read is the plain (non-prompting) AXIsProcessTrusted.
+    let detect = include_str!("../../src/platform/permiso_detect.rs");
+    let ax_detect = extract_function_body(detect, "pub fn ax_is_trusted()");
     assert!(
-        accessibility_check.contains("accessibility::application_is_trusted()"),
+        accessibility_check.contains("crate::permissions::accessibility_granted()")
+            && ax_detect.contains("AXIsProcessTrusted()")
+            && !ax_detect.contains("WithOptions"),
         "Accessibility status must use the non-prompting trust check"
     );
     for needle in [

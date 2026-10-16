@@ -116,3 +116,4 @@ Then `import` them normally inside scripts. See [SDK Scripting](./sdk-scripting.
 | Imports fail at runtime | Install dependencies in `~/.scriptkit` with `bun add <package>`. |
 | MCP/agent examples fail | Start Script Kit first — the live discovery file `~/.scriptkit/server.json` only exists while the app runs. |
 | Dictation unavailable | Search **Dictation Setup** in the launcher and check model, microphone permission, and device readiness. |
+| Snippets don't expand, or text is copied instead of pasted | Search **Set Up Permissions** and turn on Accessibility. See [Permissions](./permissions.md). |

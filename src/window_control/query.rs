@@ -56,7 +56,7 @@ extern "C" {
 /// `true` if permission is granted, `false` otherwise.
 #[instrument]
 pub fn has_accessibility_permission() -> bool {
-    let result = accessibility::application_is_trusted();
+    let result = crate::permissions::accessibility_granted();
     debug!(granted = result, "Checked accessibility permission");
     result
 }

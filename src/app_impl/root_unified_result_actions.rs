@@ -1097,13 +1097,15 @@ impl ScriptListApp {
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(200));
             let injector = crate::text_injector::TextInjector::new();
-            if let Err(error) = injector.paste_text(&command) {
-                crate::logging::log(
+            match injector.paste_text_reporting(&command, "The AI Vault command") {
+                Err(error) => crate::logging::log(
                     "ERROR",
                     &format!("Failed to paste AI Vault resume command: {error}"),
-                );
-            } else {
-                crate::logging::log("EXEC", "Pasted AI Vault resume command");
+                ),
+                Ok(result) => crate::logging::log(
+                    "EXEC",
+                    &format!("AI Vault resume command paste: {}", result.code()),
+                ),
             }
         });
     }

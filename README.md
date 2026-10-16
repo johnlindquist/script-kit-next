@@ -67,6 +67,7 @@ New to Script Kit GPUI? Start with the user guides:
 - [SDK Scripting](docs/guides/sdk-scripting.md)
 - [MCP and Agent Context](docs/guides/mcp-and-agent-context.md)
 - [Dictation](docs/guides/dictation.md)
+- [Permissions](docs/guides/permissions.md)
 - [Computer Use](docs/guides/computer-use.md)
 
 ### Prerequisites

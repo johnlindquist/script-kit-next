@@ -735,6 +735,16 @@ pub(crate) fn permission_onboarding_intro_spec(
                     "permissions-grant-selected",
                     "Grant selected permission",
                 ),
+                InfoGuidanceItem::shortcut(
+                    "\u{2318}R",
+                    "permissions-restart",
+                    "Restart Script Kit when a grant doesn't take",
+                ),
+                InfoGuidanceItem::shortcut(
+                    "\u{2318}\u{21e7}R",
+                    "permissions-reset-selected",
+                    "Reset the selected entry and ask again",
+                ),
                 InfoGuidanceItem::shortcut("Esc", "permissions-finish", "Finish setup"),
             ],
         ))
@@ -1899,6 +1909,7 @@ mod tests {
         assert!(pending_copy.contains("Press Enter on a row to grant it"));
         assert!(pending_copy.contains("Grant selected permission"));
         assert!(pending_copy.contains("Finish setup"));
+        assert!(pending_copy.contains("Restart Script Kit when a grant doesn't take"));
 
         let complete = permission_onboarding_intro_spec(5, 5, true);
         let complete_copy = format!("{complete:?}");

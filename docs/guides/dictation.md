@@ -12,7 +12,7 @@ Open the launcher and search:
 | **Select Microphone** | Pick an input device (`None` = system default) |
 | **Open Dictation History** | Browse saved transcripts |
 
-Readiness requires a downloaded transcription model, macOS microphone permission, and at least one input device. Models are fetched on demand from Dictation Setup:
+Readiness requires a downloaded transcription model, macOS microphone permission, and at least one input device. Dictation Setup also shows whether Script Kit can type into other apps (that needs Accessibility; without it your words are copied to the clipboard instead). It offers a three-second microphone test and warns when the built-in microphone is selected with the lid closed. See [Permissions](./permissions.md). Models are fetched on demand from Dictation Setup:
 
 - `parakeet-tdt-0.6b-v3` (default, 740 MB) — auto-detects its supported languages
 - `whisper-medium` (583 MB) — supports an explicit `language` hint
@@ -100,6 +100,8 @@ kit://dictation-history?id=<entry-id>
 | --- | --- |
 | No microphone detected | **Select Microphone** — confirm macOS sees the device |
 | Permission denied | **Dictation Setup** → grant microphone permission in macOS Settings |
+| Words land on the clipboard instead of in the app | Script Kit needs Accessibility to type into other apps, or the app didn't take the paste: press ⌘V. See [Permissions](./permissions.md) |
+| Dictation hears nothing | **Dictation Setup** → **Test microphone** |
 | Hotkey does nothing | Check `dictationHotkeyEnabled` isn't `false`; restart Script Kit after config changes |
 | Quiet mic drops dictations | Lower `dictation.silenceRms` (default 0.01) |
 | Recording never stops | `maxDurationSecs` auto-stops at 600 s by default |

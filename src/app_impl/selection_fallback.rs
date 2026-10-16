@@ -1331,13 +1331,15 @@ impl ScriptListApp {
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(200));
             let injector = crate::text_injector::TextInjector::new();
-            if let Err(error) = injector.paste_text(&transcript) {
-                logging::log(
+            match injector.paste_text_reporting(&transcript, "The dictation") {
+                Err(error) => logging::log(
                     "ERROR",
                     &format!("Failed to paste root dictation history: {error}"),
-                );
-            } else {
-                logging::log("EXEC", "Pasted root dictation history transcript");
+                ),
+                Ok(result) => logging::log(
+                    "EXEC",
+                    &format!("Root dictation history paste: {}", result.code()),
+                ),
             }
         });
     }

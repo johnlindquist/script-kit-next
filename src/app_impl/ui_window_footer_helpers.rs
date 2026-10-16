@@ -435,13 +435,20 @@ impl ScriptListApp {
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(200));
             let injector = crate::text_injector::TextInjector::new();
-            if let Err(error) = injector.paste_text(&text) {
-                tracing::warn!(
+            match injector.paste_text_reporting(&text, "The Agent Chat response") {
+                Err(error) => tracing::warn!(
                     target: "script_kit::footer_popup",
                     event = "agent_chat_footer_paste_response_failed",
                     %error,
                     "Failed to paste Agent Chat response into frontmost app"
-                );
+                ),
+                Ok(result) if !result.landed() => tracing::warn!(
+                    target: "script_kit::footer_popup",
+                    event = "agent_chat_footer_paste_response_not_pasted",
+                    result = result.code(),
+                    "Agent Chat response was not pasted into the frontmost app"
+                ),
+                Ok(_) => {}
             }
         });
 

@@ -397,6 +397,30 @@ pub enum DictationDeliveryFailureReason {
     DestinationStale,
     MutationFailed,
     MutationOutcomeUnknown,
+    /// Script Kit can't post ⌘V to other apps (no Accessibility).
+    AccessibilityMissing,
+    /// ⌘V was sent but the app never read the text.
+    PasteNotRead,
+}
+
+impl DictationDeliveryFailureReason {
+    /// The line shown when the transcript went to the clipboard instead.
+    pub fn clipboard_notice(self) -> &'static str {
+        match self {
+            Self::AccessibilityMissing => {
+                "Your words are on the clipboard because Script Kit needs Accessibility to type into other apps"
+            }
+            Self::PasteNotRead => {
+                "Your words are on the clipboard because the app didn't take the paste"
+            }
+            Self::DestinationUnavailable
+            | Self::DestinationStale
+            | Self::MutationFailed
+            | Self::MutationOutcomeUnknown => {
+                "Couldn't type the words where you were, so they're on the clipboard"
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -32,11 +32,31 @@ impl PermissionKind {
 
     pub fn subtitle(&self) -> &'static str {
         match self {
-            Self::Accessibility => "Read selected text, control windows, run text expansion",
-            Self::ScreenRecording => "Capture screenshots for AI context and visual tools",
-            Self::EventSynthesizing => "Paste text and simulate keypresses in other apps",
-            Self::InputMonitoring => "Global keyboard shortcuts and text expansion triggers",
+            Self::Accessibility => {
+                "Snippets, pasting into other apps, selected text and window commands"
+            }
+            Self::ScreenRecording => "Screenshots and screen context for AI",
+            Self::EventSynthesizing => "Pasting into other apps; Accessibility already covers this",
+            Self::InputMonitoring => {
+                "Watching typing for snippets; Accessibility already covers this"
+            }
             Self::Microphone => "Dictation and voice input",
+        }
+    }
+
+    /// What stops working while this permission is missing.
+    pub fn missing_consequence(&self) -> &'static str {
+        match self {
+            Self::Accessibility => {
+                "Until it's on, snippets can't expand, text is copied instead of pasted, and window commands are off"
+            }
+            Self::ScreenRecording => {
+                "Until it's on, screenshots and screen context for AI don't work"
+            }
+            Self::EventSynthesizing | Self::InputMonitoring => {
+                "Only needed when Accessibility is off"
+            }
+            Self::Microphone => "Until it's on, dictation can't hear you",
         }
     }
 
@@ -70,12 +90,17 @@ impl PermissionKind {
         }
     }
 
+    /// How much Script Kit depends on this permission. Only Accessibility is
+    /// required: most core features need it. Screen Recording is recommended
+    /// and macOS asks for it when a screenshot feature first runs. The
+    /// microphone matters only for dictation, and the other two are covered by
+    /// Accessibility.
     pub fn requirement(&self) -> PermissionRequirement {
         match self {
             Self::Accessibility => PermissionRequirement::Required,
-            Self::ScreenRecording => PermissionRequirement::Required,
-            Self::EventSynthesizing => PermissionRequirement::Recommended,
-            Self::InputMonitoring => PermissionRequirement::Recommended,
+            Self::ScreenRecording => PermissionRequirement::Recommended,
+            Self::EventSynthesizing => PermissionRequirement::Optional,
+            Self::InputMonitoring => PermissionRequirement::Optional,
             Self::Microphone => PermissionRequirement::Optional,
         }
     }
@@ -150,99 +175,6 @@ impl PermissionsWizardActions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PermissionGuideActionKind {
-    AlreadyGranted,
-    SystemPrompt,
-    SystemSettings,
-    ReadOnlyStatus,
-    Unavailable,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionGuideInput {
-    pub kind: PermissionKind,
-    pub status: crate::platform::permiso_detect::PermissionStatus,
-    pub prompt_attempted: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionGuideStep {
-    pub kind: PermissionKind,
-    pub status: crate::platform::permiso_detect::PermissionStatus,
-    pub requirement: PermissionRequirement,
-    pub action: PermissionGuideActionKind,
-    pub settings_url: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionGuideReceipt {
-    pub schema_version: u32,
-    pub primary_missing: Option<PermissionKind>,
-    pub steps: Vec<PermissionGuideStep>,
-    pub redacted: bool,
-}
-
-pub const PERMISSION_GUIDE_RECEIPT_SCHEMA_VERSION: u32 = 1;
-
-pub fn build_permission_guide_receipt(inputs: &[PermissionGuideInput]) -> PermissionGuideReceipt {
-    let steps: Vec<PermissionGuideStep> = inputs
-        .iter()
-        .map(|input| PermissionGuideStep {
-            kind: input.kind,
-            status: input.status,
-            requirement: input.kind.requirement(),
-            action: permission_guide_action(input.kind, input.status, input.prompt_attempted),
-            settings_url: input.kind.settings_url().to_string(),
-        })
-        .collect();
-
-    let primary_missing = steps
-        .iter()
-        .find(|step| {
-            step.requirement == PermissionRequirement::Required
-                && step.status != crate::platform::permiso_detect::PermissionStatus::Authorized
-        })
-        .map(|step| step.kind);
-
-    PermissionGuideReceipt {
-        schema_version: PERMISSION_GUIDE_RECEIPT_SCHEMA_VERSION,
-        primary_missing,
-        steps,
-        redacted: true,
-    }
-}
-
-pub fn permission_guide_action(
-    kind: PermissionKind,
-    status: crate::platform::permiso_detect::PermissionStatus,
-    prompt_attempted: bool,
-) -> PermissionGuideActionKind {
-    use crate::platform::permiso_detect::PermissionStatus;
-
-    if status == PermissionStatus::Authorized {
-        return PermissionGuideActionKind::AlreadyGranted;
-    }
-
-    if matches!(kind, PermissionKind::Microphone) {
-        return PermissionGuideActionKind::ReadOnlyStatus;
-    }
-
-    if matches!(status, PermissionStatus::Unknown) {
-        return PermissionGuideActionKind::Unavailable;
-    }
-
-    if prompt_attempted {
-        PermissionGuideActionKind::SystemSettings
-    } else {
-        PermissionGuideActionKind::SystemPrompt
-    }
-}
-
 // ============================================================================
 // Permission Card State
 // ============================================================================
@@ -312,14 +244,20 @@ pub fn detect_permission(
 /// Accessibility and the CG-based permissions show the one-time OS prompt
 /// (or are silently denied if the user already refused once — callers should
 /// fall back to [`open_permission_settings`] when the result is not
-/// `Authorized`). Microphone has no useful programmatic prompt outside an
-/// active capture session, so it is detect-only here.
+/// `Authorized`). The microphone prompt is asynchronous: when macOS hasn't
+/// asked yet, this shows it and returns `NotDetermined` while it is up, and
+/// the permission watcher picks up the answer. System Settings doesn't list
+/// Script Kit under Microphone until that prompt has appeared once.
+///
+/// Every request is noted, so [`crate::permissions::grant_looks_stuck`] can
+/// tell when a grant didn't take.
 pub fn request_permission(
     kind: PermissionKind,
 ) -> crate::platform::permiso_detect::PermissionStatus {
     use crate::platform::permiso_detect;
     info!(permission = %kind, "Requesting permission via native prompt");
-    match kind {
+    crate::permissions::note_requested(kind);
+    let status = match kind {
         PermissionKind::Accessibility => {
             if request_accessibility_permission() {
                 permiso_detect::PermissionStatus::Authorized
@@ -336,8 +274,22 @@ pub fn request_permission(
         PermissionKind::EventSynthesizing => {
             crate::platform::permission_requests::request_event_synthesizing_access()
         }
-        PermissionKind::Microphone => permiso_detect::microphone_authorized(),
-    }
+        PermissionKind::Microphone => {
+            let current = permiso_detect::microphone_authorized();
+            if current == permiso_detect::PermissionStatus::NotDetermined
+                && crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Device)
+                    .is_ok()
+            {
+                crate::dictation::request_microphone_permission_nonblocking(|answer| {
+                    info!(answer = ?answer, "Microphone prompt answered");
+                    crate::permissions::refresh_all();
+                });
+            }
+            current
+        }
+    };
+    crate::permissions::record(kind, status);
+    status
 }
 
 // ============================================================================
@@ -347,23 +299,45 @@ pub fn request_permission(
 #[derive(Debug, Clone)]
 pub enum PermissionStartupIntent {
     OpenFullWizard,
-    ShowReminder { missing: Vec<PermissionKind> },
+    ShowReminder {
+        reminder: crate::permissions::features::StartupReminder,
+    },
     None,
 }
 
+/// What to do about permissions at startup.
+///
+/// A first run without Accessibility opens the full setup list. Later runs
+/// remind only about permissions the user's own setup depends on (see
+/// [`crate::permissions::features::startup_reminder`]): Screen Recording
+/// never nags at startup.
 pub fn startup_intent(is_fresh_install: bool) -> PermissionStartupIntent {
-    let snapshot = PermissionSnapshot::current();
-    let missing = snapshot.missing_required();
+    let facts = crate::permissions::live_facts();
+    let status_of = |kind| crate::permissions::status(kind);
+    decide_startup_intent(
+        &status_of,
+        &facts,
+        is_fresh_install || !onboarding_state_exists(),
+    )
+}
 
-    if missing.is_empty() {
-        return PermissionStartupIntent::None;
-    }
-
-    if is_fresh_install || !onboarding_state_exists() {
+fn decide_startup_intent(
+    status_of: &dyn Fn(PermissionKind) -> crate::platform::permiso_detect::PermissionStatus,
+    facts: &crate::permissions::LiveFacts,
+    first_run: bool,
+) -> PermissionStartupIntent {
+    let accessibility_missing = !matches!(
+        status_of(PermissionKind::Accessibility),
+        crate::platform::permiso_detect::PermissionStatus::Authorized
+            | crate::platform::permiso_detect::PermissionStatus::Unknown
+    );
+    if first_run && accessibility_missing {
         return PermissionStartupIntent::OpenFullWizard;
     }
-
-    PermissionStartupIntent::ShowReminder { missing }
+    match crate::permissions::features::startup_reminder(status_of, facts) {
+        Some(reminder) => PermissionStartupIntent::ShowReminder { reminder },
+        None => PermissionStartupIntent::None,
+    }
 }
 
 fn onboarding_state_exists() -> bool {
@@ -458,7 +432,7 @@ pub fn check_all_permissions() -> PermissionStatus {
 
 #[instrument]
 pub fn check_accessibility_permission() -> bool {
-    let granted = macos_accessibility_client::accessibility::application_is_trusted();
+    let granted = crate::permissions::accessibility_granted();
     debug!(granted, "Checked accessibility permission");
     granted
 }
@@ -522,7 +496,8 @@ mod tests {
         );
         assert_eq!(
             PermissionKind::ScreenRecording.requirement(),
-            PermissionRequirement::Required
+            PermissionRequirement::Recommended,
+            "Screen Recording is asked for when a screenshot feature first runs"
         );
         assert_eq!(
             PermissionKind::Microphone.requirement(),
@@ -603,7 +578,7 @@ mod tests {
         };
         assert!(
             snapshot.all_required_granted(),
-            "Required (Accessibility, ScreenRecording) are Authorized; non-required can be Denied"
+            "Required (Accessibility) is Authorized; non-required can be Denied"
         );
         assert!(snapshot.missing_required().is_empty());
     }
@@ -626,6 +601,52 @@ mod tests {
         let missing = snapshot.missing_required();
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], PermissionKind::Accessibility);
+    }
+
+    #[test]
+    fn first_run_without_accessibility_opens_the_setup_list() {
+        use crate::platform::permiso_detect::PermissionStatus as PS;
+        let facts = crate::permissions::LiveFacts::default();
+        let denied = |_kind: PermissionKind| PS::Denied;
+        assert!(matches!(
+            decide_startup_intent(&denied, &facts, true),
+            PermissionStartupIntent::OpenFullWizard
+        ));
+        assert!(matches!(
+            decide_startup_intent(&denied, &facts, false),
+            PermissionStartupIntent::ShowReminder { .. }
+        ));
+    }
+
+    #[test]
+    fn missing_screen_recording_alone_never_opens_or_reminds_at_startup() {
+        use crate::platform::permiso_detect::PermissionStatus as PS;
+        let facts = crate::permissions::LiveFacts::default();
+        let only_screen_missing = |kind: PermissionKind| match kind {
+            PermissionKind::ScreenRecording => PS::Denied,
+            _ => PS::Authorized,
+        };
+        assert!(matches!(
+            decide_startup_intent(&only_screen_missing, &facts, true),
+            PermissionStartupIntent::None
+        ));
+        assert!(matches!(
+            decide_startup_intent(&only_screen_missing, &facts, false),
+            PermissionStartupIntent::None
+        ));
+    }
+
+    #[test]
+    fn every_permission_says_what_stops_working() {
+        for kind in PermissionKind::all() {
+            assert!(!kind.missing_consequence().is_empty(), "{kind}");
+        }
+        assert!(PermissionKind::Accessibility
+            .missing_consequence()
+            .contains("snippets"));
+        assert!(!PermissionKind::InputMonitoring
+            .subtitle()
+            .contains("keyboard shortcuts"));
     }
 
     #[test]

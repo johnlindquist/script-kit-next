@@ -97,6 +97,9 @@ pub enum RestoreOutcome {
     Restored,
     /// Something else wrote the clipboard during the paste; it was kept.
     SkippedExternalChange,
+    /// The target never read the text, so the text was left on the clipboard
+    /// for the user to paste ([`PasteOptions::keep_text_if_unread`]).
+    KeptPastedText,
     Failed(String),
 }
 
@@ -105,9 +108,20 @@ impl RestoreOutcome {
         match self {
             Self::Restored => "restored",
             Self::SkippedExternalChange => "skipped_external_change",
+            Self::KeptPastedText => "kept_pasted_text",
             Self::Failed(_) => "failed",
         }
     }
+}
+
+/// Choices for one paste.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PasteOptions {
+    /// When the target never reads the text, leave the text on the clipboard
+    /// (so the user can press ⌘V) instead of restoring the old clipboard.
+    /// Right for text that exists nowhere else, such as a transcript; the
+    /// old clipboard stays in clipboard history.
+    pub keep_text_if_unread: bool,
 }
 
 /// Result of one paste, safe to log (no clipboard or text content).
@@ -130,14 +144,29 @@ fn choose_delivery(on_main_thread: bool, env_value: Option<&str>) -> Delivery {
 }
 
 #[cfg(target_os = "macos")]
-pub use macos::paste_text_preserving_clipboard;
+pub use macos::{copy_text_to_clipboard, paste_text_with_options};
+
+/// Paste `text` into `target` (default: the focused app) and restore the
+/// user's full clipboard afterwards.
+pub fn paste_text_preserving_clipboard(
+    text: &str,
+    target: Option<KeyTarget>,
+) -> Result<PasteReport> {
+    paste_text_with_options(text, target, PasteOptions::default())
+}
 
 #[cfg(not(target_os = "macos"))]
-pub fn paste_text_preserving_clipboard(
+pub fn paste_text_with_options(
     _text: &str,
     _target: Option<KeyTarget>,
+    _options: PasteOptions,
 ) -> Result<PasteReport> {
     anyhow::bail!("pasting into other applications requires macOS")
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn copy_text_to_clipboard(_text: &str) -> Result<()> {
+    anyhow::bail!("the system clipboard requires macOS")
 }
 
 #[cfg(target_os = "macos")]
@@ -162,11 +191,24 @@ mod macos {
     /// the user's real clipboard rather than the first paste's text.
     static PASTE_LOCK: Mutex<()> = Mutex::new(());
 
-    /// Paste `text` into `target` (default: the focused app) and restore the
-    /// user's full clipboard afterwards.
-    pub fn paste_text_preserving_clipboard(
+    /// Put `text` on the clipboard as ordinary copied text (recorded by
+    /// clipboard managers), for when pasting isn't possible.
+    pub fn copy_text_to_clipboard(text: &str) -> Result<()> {
+        crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)?;
+        objc::rc::autoreleasepool(|| {
+            // SAFETY: generalPasteboard is a shared AppKit singleton.
+            let pasteboard = unsafe { general_pasteboard_id()? };
+            // SAFETY: `pasteboard` is a live NSPasteboard.
+            unsafe { write_paste_item(pasteboard, text, Delivery::Eager, false) }.map(|_| ())
+        })
+    }
+
+    /// Paste `text` into `target` (default: the focused app), then restore
+    /// the user's full clipboard (or keep the text, see [`PasteOptions`]).
+    pub fn paste_text_with_options(
         text: &str,
         target: Option<KeyTarget>,
+        options: PasteOptions,
     ) -> Result<PasteReport> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)?;
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
@@ -196,7 +238,7 @@ mod macos {
         let result = objc::rc::autoreleasepool(|| {
             // SAFETY: generalPasteboard is a shared AppKit singleton.
             let pasteboard = unsafe { general_pasteboard_id()? };
-            run_paste(pasteboard, text, delivery, timing, || {
+            run_paste_with(pasteboard, text, delivery, timing, options, || {
                 synthetic_keys::post_paste_shortcut(target)
             })
         });
@@ -239,10 +281,11 @@ mod macos {
             RestoreOutcome::Failed(error) => error.as_str(),
             _ => "",
         };
-        let fields_ok = matches!(
+        let consumed = matches!(
             report.consumption,
             PasteConsumption::Requested { .. } | PasteConsumption::Unobserved
-        ) && matches!(report.restore, RestoreOutcome::Restored);
+        );
+        let fields_ok = consumed && matches!(report.restore, RestoreOutcome::Restored);
         if fields_ok {
             info!(
                 category = "PASTE",
@@ -277,7 +320,7 @@ mod macos {
                 original_bytes = report.original.total_bytes,
                 original_unreadable_types = report.original.skipped_representations,
                 total_ms = total.as_millis() as u64,
-                success = true,
+                success = consumed,
                 "Paste finished with a warning: the target did not read the text or the clipboard was not restored"
             );
         }
@@ -289,13 +332,33 @@ mod macos {
         pub original: PasteboardSnapshotSummary,
     }
 
-    /// Snapshot → write → post shortcut → wait → restore, on any pasteboard.
-    /// Returns the shortcut error (after the restore attempt) if posting failed.
+    /// [`run_paste_with`] using the default options.
+    #[cfg(test)]
     pub(crate) fn run_paste(
         pasteboard: id,
         text: &str,
         delivery: Delivery,
         timing: PasteTiming,
+        post_shortcut: impl FnOnce() -> Result<()>,
+    ) -> Result<PasteOutcome> {
+        run_paste_with(
+            pasteboard,
+            text,
+            delivery,
+            timing,
+            PasteOptions::default(),
+            post_shortcut,
+        )
+    }
+
+    /// Snapshot → write → post shortcut → wait → restore, on any pasteboard.
+    /// Returns the shortcut error (after the restore attempt) if posting failed.
+    pub(crate) fn run_paste_with(
+        pasteboard: id,
+        text: &str,
+        delivery: Delivery,
+        timing: PasteTiming,
+        options: PasteOptions,
         post_shortcut: impl FnOnce() -> Result<()>,
     ) -> Result<PasteOutcome> {
         let snapshot = PasteboardSnapshot::capture_from(pasteboard)
@@ -304,7 +367,7 @@ mod macos {
 
         // SAFETY: `pasteboard` is a live NSPasteboard.
         let (written_change_count, promise) =
-            match unsafe { write_paste_item(pasteboard, text, delivery) } {
+            match unsafe { write_paste_item(pasteboard, text, delivery, true) } {
                 Ok(written) => written,
                 Err(error) => {
                     // The write may have cleared the clipboard before failing.
@@ -349,8 +412,11 @@ mod macos {
 
         // SAFETY: `pasteboard` is a live NSPasteboard.
         let current_change_count = unsafe { change_count_of(pasteboard) };
+        let unread = matches!(consumption, PasteConsumption::NotRequested { .. });
         let restore = if current_change_count != written_change_count {
             RestoreOutcome::SkippedExternalChange
+        } else if unread && options.keep_text_if_unread && keep_text(pasteboard, text) {
+            RestoreOutcome::KeptPastedText
         } else {
             match snapshot.restore_to(pasteboard) {
                 Ok(()) => RestoreOutcome::Restored,
@@ -367,12 +433,20 @@ mod macos {
         })
     }
 
+    /// Leave `text` itself on the clipboard: the promise ends with this paste.
+    fn keep_text(pasteboard: id, text: &str) -> bool {
+        // SAFETY: `pasteboard` is a live NSPasteboard.
+        unsafe { write_paste_item(pasteboard, text, Delivery::Eager, false) }.is_ok()
+    }
+
     /// Clear `pasteboard` and write one item holding `text` (promised or
-    /// eager) plus the transient marker. Returns the resulting change count.
+    /// eager), plus the transient marker when `transient`. Returns the
+    /// resulting change count.
     unsafe fn write_paste_item(
         pasteboard: id,
         text: &str,
         delivery: Delivery,
+        transient: bool,
     ) -> Result<(i64, Option<PromisedText>)> {
         let item: id = msg_send![class!(NSPasteboardItem), new];
         if item == nil {
@@ -409,8 +483,10 @@ mod macos {
             }
         };
 
-        let empty: id = msg_send![class!(NSData), data];
-        let _: bool = msg_send![item, setData: empty forType: transient_type];
+        if transient {
+            let empty: id = msg_send![class!(NSData), data];
+            let _: bool = msg_send![item, setData: empty forType: transient_type];
+        }
 
         let _: i64 = msg_send![pasteboard, clearContents];
         let objects = NSArray::arrayWithObjects(nil, &[item]);
@@ -778,6 +854,67 @@ mod macos {
                     outcome.consumption,
                     PasteConsumption::NotRequested { waited } if waited >= Duration::from_millis(80)
                 ));
+                assert_eq!(outcome.restore, RestoreOutcome::Restored);
+                assert_original_restored(&pasteboard, &before);
+            });
+        }
+
+        #[test]
+        fn unread_text_is_left_on_the_clipboard_when_asked() {
+            objc::rc::autoreleasepool(|| {
+                let pasteboard = PrivatePasteboard::new();
+                write_original(&pasteboard);
+                let timing = PasteTiming {
+                    request_timeout: Duration::from_millis(60),
+                    ..quick_timing()
+                };
+                let outcome = run_paste_with(
+                    pasteboard.0,
+                    "dictated words",
+                    Delivery::Promised,
+                    timing,
+                    PasteOptions {
+                        keep_text_if_unread: true,
+                    },
+                    || Ok(()),
+                )
+                .expect("paste");
+                assert!(matches!(
+                    outcome.consumption,
+                    PasteConsumption::NotRequested { .. }
+                ));
+                assert_eq!(outcome.restore, RestoreOutcome::KeptPastedText);
+                assert_eq!(pasteboard.read_string().as_deref(), Some("dictated words"));
+                assert!(
+                    !pasteboard.has_type(TRANSIENT_PASTEBOARD_TYPE),
+                    "kept text is ordinary copied text, recorded by clipboard history"
+                );
+            });
+        }
+
+        #[test]
+        fn text_that_was_read_restores_the_clipboard_even_when_keeping_is_asked() {
+            objc::rc::autoreleasepool(|| {
+                let pasteboard = PrivatePasteboard::new();
+                write_original(&pasteboard);
+                let before = pasteboard.snapshot();
+                let mut reader = None;
+                let outcome = run_paste_with(
+                    pasteboard.0,
+                    "read me",
+                    Delivery::Promised,
+                    quick_timing(),
+                    PasteOptions {
+                        keep_text_if_unread: true,
+                    },
+                    || {
+                        reader = Some(spawn_target_reader(&pasteboard, Duration::from_millis(20)));
+                        Ok(())
+                    },
+                )
+                .expect("paste");
+                let (read, _) = reader.unwrap().recv().expect("reader result");
+                assert_eq!(read.as_deref(), Some("read me"));
                 assert_eq!(outcome.restore, RestoreOutcome::Restored);
                 assert_original_restored(&pasteboard, &before);
             });

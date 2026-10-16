@@ -26,6 +26,14 @@ const BUILTIN_DICTATION_SETUP_START: &str = "start-dictation";
 const BUILTIN_DICTATION_SETUP_DOWNLOAD_MODEL: &str = "download-model";
 const BUILTIN_DICTATION_SETUP_REQUEST_MIC: &str = "request-microphone";
 const BUILTIN_DICTATION_SETUP_OPEN_MIC_SETTINGS: &str = "open-microphone-settings";
+const BUILTIN_DICTATION_SETUP_TEST_MIC: &str = crate::dictation::DICTATION_SETUP_TEST_MIC;
+const BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY: &str =
+    crate::dictation::DICTATION_SETUP_GRANT_ACCESSIBILITY;
+
+use crate::dictation::DictationSetupExtras;
+
+static DICTATION_MIC_CHECK_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 include!("builtin_execution_support.rs");
 use crate::dictation::{dictation_mutation_error_outcome, with_frozen_dictation_destination};
@@ -437,7 +445,7 @@ impl PermissionCommandBuiltinAction {
 
     fn all_permissions_granted_hud(self) -> &'static str {
         match self {
-            Self::CheckPermissions => "All permissions granted!",
+            Self::CheckPermissions => "Everything that needs a permission is ready",
             Self::SetupPermissions
             | Self::RequestAccessibility
             | Self::OpenAccessibilitySettings
@@ -4146,19 +4154,22 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         match action {
             PermissionCommandBuiltinAction::CheckPermissions => {
-                // Honest check across all five permission kinds (not just
-                // accessibility). Anything ungranted routes into the wizard
-                // so the user can fix it in place.
-                let snapshot = permissions_wizard::PermissionSnapshot::current();
-                let ungranted: Vec<&str> = snapshot
-                    .cards
+                // Check what the user can actually do, feature by feature
+                // (a permission only matters through the features it
+                // affects). Anything not ready routes into the wizard so the
+                // user can fix it in place.
+                let not_ready: Vec<&str> = crate::permissions::feature_readiness()
                     .iter()
-                    .filter(|card| {
-                        card.status != crate::platform::permiso_detect::PermissionStatus::Authorized
+                    .filter(|feature| {
+                        matches!(
+                            feature.readiness,
+                            crate::permissions::Readiness::Blocked
+                                | crate::permissions::Readiness::Degraded
+                        )
                     })
-                    .map(|card| card.kind.name())
+                    .map(|feature| feature.label)
                     .collect();
-                if ungranted.is_empty() {
+                if not_ready.is_empty() {
                     self.one_window_notice(
                         crate::line_notice::INFO,
                         action.all_permissions_granted_hud().to_string(),
@@ -4167,7 +4178,7 @@ impl ScriptListApp {
                 } else {
                     self.one_window_notice(
                         crate::line_notice::FAILED,
-                        format!("Not yet granted: {}", ungranted.join(", ")),
+                        format!("Not ready yet — {}", not_ready.join(", ")),
                         cx,
                     );
                     self.open_permissions_wizard(cx);
@@ -4181,7 +4192,9 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             PermissionCommandBuiltinAction::RequestAccessibility => {
-                let granted = permissions_wizard::request_accessibility_permission();
+                let granted = permissions_wizard::request_permission(
+                    permissions_wizard::PermissionKind::Accessibility,
+                ) == crate::platform::permiso_detect::PermissionStatus::Authorized;
                 if granted {
                     self.one_window_notice(
                         crate::line_notice::INFO,
@@ -5179,11 +5192,20 @@ impl ScriptListApp {
         let transcript = work.request.transcript.text().to_string();
         crate::dictation::preserve_dictation_recovery_work(work, failure, retry_safety, false);
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(transcript));
-        self.one_window_notice(
-            crate::line_notice::FAILED,
-            "Couldn't type the words where you were, so they're on the clipboard",
-            cx,
-        );
+        let notice = reason.clipboard_notice();
+        if !script_kit_gpui::is_main_window_visible() {
+            // Dictating into another app hides Script Kit: say it now, not
+            // when the window next opens.
+            let hint = if reason
+                == crate::dictation::DictationDeliveryFailureReason::AccessibilityMissing
+            {
+                " Open Script Kit and run “Set Up Permissions”."
+            } else {
+                " Press ⌘V to paste them."
+            };
+            crate::permissions::notify_user("Dictation copied", &format!("{notice}.{hint}"));
+        }
+        self.one_window_notice(crate::line_notice::FAILED, notice, cx);
     }
 
     fn dictation_prompt_input_len(&self, cx: &App) -> Option<usize> {
@@ -5857,7 +5879,37 @@ impl ScriptListApp {
 
                         if this.update(cx, |this, cx| {
                             match paste_result {
-                                Ok(()) => {
+                                Ok(result) if !result.landed() => {
+                                    // Not pasted: the words went to the clipboard.
+                                    // Say so instead of recording a delivery.
+                                    let reason = match result {
+                                        crate::text_injector::PasteResult::CopiedInstead {
+                                            reason: crate::text_injector::CopiedReason::AccessibilityMissing,
+                                            ..
+                                        } => crate::dictation::DictationDeliveryFailureReason::AccessibilityMissing,
+                                        _ => crate::dictation::DictationDeliveryFailureReason::PasteNotRead,
+                                    };
+                                    let failure = crate::ai::reliability::destination_failure(
+                                        false,
+                                        result.code(),
+                                    );
+                                    tracing::warn!(
+                                        category = "DICTATION",
+                                        delivery_id,
+                                        result = result.code(),
+                                        reason = ?reason,
+                                        "Dictation transcript was not pasted; copied instead"
+                                    );
+                                    this.present_dictation_delivery_failure(
+                                        request.clone(),
+                                        timing,
+                                        failure,
+                                        reason,
+                                        sk_protocol::ai_reliability::RetrySafety::ExplicitUserConfirmation,
+                                        cx,
+                                    );
+                                }
+                                Ok(_) => {
                                     crate::dictation::clear_dictation_recovery_work();
                                     crate::dictation::clear_dictation_return_origin();
                                     let _ = crate::dictation::record_delivery_receipt(
@@ -6914,9 +6966,36 @@ impl ScriptListApp {
         )
     }
 
+    fn current_dictation_setup_extras(&self) -> DictationSetupExtras {
+        let prefs = crate::config::load_user_preferences();
+        let lid_closed_on_builtin_microphone = crate::dictation::laptop_lid_closed() == Some(true)
+            && crate::dictation::microphone_permission_status()
+                == crate::dictation::DictationMicrophonePermissionStatus::Granted
+            && crate::dictation::list_input_devices()
+                .ok()
+                .and_then(|devices| {
+                    crate::dictation::resolve_selected_input_device(
+                        &devices,
+                        prefs.dictation.selected_device_id.as_deref(),
+                    )
+                })
+                .is_some_and(|resolution| {
+                    resolution.device.transport
+                        == crate::dictation::DictationDeviceTransport::BuiltIn
+                });
+        DictationSetupExtras {
+            paste_ready: crate::permissions::can_post_keystrokes(),
+            lid_closed_on_builtin_microphone,
+            microphone_check: crate::dictation::last_microphone_check(),
+            microphone_check_running: DICTATION_MIC_CHECK_RUNNING
+                .load(std::sync::atomic::Ordering::SeqCst),
+        }
+    }
+
     fn build_dictation_setup_prompt(
         state: &crate::dictation::DictationSetupState,
         model_id: crate::dictation::DictationModelId,
+        extras: &DictationSetupExtras,
     ) -> (String, String, Vec<Choice>) {
         let model = crate::dictation::dictation_model_entry(model_id);
         let archive_size = crate::dictation::download::format_bytes(model.download_size_bytes());
@@ -7086,6 +7165,20 @@ impl ScriptListApp {
             }
         }
 
+        for row in crate::dictation::dictation_setup_extra_rows(state, extras) {
+            choices.push(Choice {
+                name: row.name,
+                value: row.value.to_string(),
+                description: Some(row.description),
+                key: None,
+                semantic_id: Some(builtin_choice_semantic_id(
+                    BUILTIN_DICTATION_SETUP_PROMPT_ID,
+                    choices.len(),
+                    row.value,
+                )),
+            });
+        }
+
         match &state.hotkey_status {
             crate::dictation::DictationHotkeyStatus::Ready(combo) => choices.push(Choice {
                 name: format!("Hotkey ready: {combo}"),
@@ -7134,7 +7227,9 @@ impl ScriptListApp {
         let model_id =
             crate::dictation::DictationModelId::from_preference(prefs.dictation.model.as_deref());
         let state = self.current_dictation_setup_state();
-        let (title, placeholder, choices) = Self::build_dictation_setup_prompt(&state, model_id);
+        let extras = self.current_dictation_setup_extras();
+        let (title, placeholder, choices) =
+            Self::build_dictation_setup_prompt(&state, model_id, &extras);
         self.set_arg_selected_index(0);
         self.open_builtin_filterable_view(
             AppView::MiniPrompt {
@@ -7146,6 +7241,50 @@ impl ScriptListApp {
             false,
             cx,
         );
+    }
+
+    /// Record a few seconds from the selected microphone, then reopen Dictation
+    /// Setup with the result.
+    fn run_dictation_microphone_check(&mut self, cx: &mut Context<Self>) {
+        if let Err(refusal) =
+            crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Device)
+        {
+            self.notice_failed(refusal.to_string(), cx);
+            return;
+        }
+        if DICTATION_MIC_CHECK_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let device_id = crate::config::load_user_preferences()
+            .dictation
+            .selected_device_id
+            .map(crate::dictation::DictationDeviceId);
+        self.open_dictation_setup_prompt(cx);
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::dictation::run_microphone_check(
+                        device_id.as_ref(),
+                        crate::dictation::MICROPHONE_CHECK_DURATION,
+                    )
+                })
+                .await;
+            DICTATION_MIC_CHECK_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+            let _ = this.update(cx, |this, cx| {
+                if let Err(error) = result {
+                    this.notice_failed(format!("Couldn't test the microphone: {error}"), cx);
+                }
+                let still_in_setup = matches!(
+                    &this.current_view,
+                    AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_SETUP_PROMPT_ID
+                );
+                if still_in_setup {
+                    this.open_dictation_setup_prompt(cx);
+                }
+            });
+        })
+        .detach();
     }
 
     fn handle_dictation_setup_selection(&mut self, value: &str, cx: &mut Context<Self>) {
@@ -7172,6 +7311,13 @@ impl ScriptListApp {
                 self.one_window_notice(
                     crate::line_notice::INFO,
                     "Choose Allow when macOS asks for microphone access".to_string(),
+                    cx,
+                );
+            }
+            BUILTIN_DICTATION_SETUP_TEST_MIC => self.run_dictation_microphone_check(cx),
+            BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY => {
+                self.execute_permissions_wizard_grant(
+                    crate::permissions_wizard::PermissionKind::Accessibility,
                     cx,
                 );
             }

@@ -3130,9 +3130,11 @@ impl ScriptListApp {
                 if let Message::StateResult {
                     main_window_animation,
                     one_window,
+                    permissions,
                     ..
                 } = &mut response
                 {
+                    *permissions = Some(crate::permissions::automation_state());
                     let mut animation =
                         self.main_preferences.animation.preset.automation_snapshot();
                     animation["nativeLifecycle"] =

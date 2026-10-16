@@ -176,7 +176,12 @@ pub struct KeywordManagerConfig {
 impl Default for KeywordManagerConfig {
     fn default() -> Self {
         Self {
-            injector_config: TextInjectorConfig::default(),
+            // A snippet's text lives in its file; if an app ignores the
+            // paste, give the user their own clipboard back.
+            injector_config: TextInjectorConfig {
+                keep_text_if_unread: false,
+                ..TextInjectorConfig::default()
+            },
             stop_delay_ms: STOP_DELAY_MS,
             restart_delay_ms: RESTART_DELAY_MS,
         }
@@ -587,7 +592,21 @@ impl KeywordManager {
 
                                 // Paste replacement text
                                 let paste_start = Instant::now();
-                                if let Err(e) = injector.paste_text_in(target, &replacement) {
+                                let paste_result = injector.paste_text_in(target, &replacement);
+                                let landed =
+                                    paste_result.as_ref().is_ok_and(|outcome| outcome.landed());
+                                if let Ok(outcome) = &paste_result {
+                                    if !outcome.landed() {
+                                        warn!(
+                                            category = "KEYWORD",
+                                            event = "keyword_expansion_not_pasted",
+                                            result = outcome.code(),
+                                            "Snippet keyword was removed but the app didn't take the replacement"
+                                        );
+                                        notify_snippet_not_pasted(*outcome, &name);
+                                    }
+                                }
+                                if let Err(e) = paste_result {
                                     let paste_ms = paste_start.elapsed().as_millis() as u64;
                                     let total_ms = expansion_start.elapsed().as_millis() as u64;
                                     error!(
@@ -613,7 +632,8 @@ impl KeywordManager {
                                 info!(
                                     trigger = %name,
                                     replacement_len = replacement.len(),
-                                    "Expansion completed successfully"
+                                    landed,
+                                    "Expansion finished"
                                 );
                                 info!(
                                     category = "KEYWORD",
@@ -626,7 +646,7 @@ impl KeywordManager {
                                     post_delete_delay_ms,
                                     paste_ms,
                                     total_ms,
-                                    success = true,
+                                    success = landed,
                                     "Keyword expansion timing"
                                 );
                             });
@@ -682,6 +702,14 @@ impl KeywordManager {
     #[allow(dead_code)]
     pub fn is_enabled(&self) -> bool {
         self.enabled
+    }
+
+    /// Whether the event tap's thread is still running. `enabled` alone only
+    /// says text expansion was started; this says it still sees typing.
+    pub fn monitor_running(&self) -> bool {
+        self.monitor
+            .as_ref()
+            .is_some_and(|monitor| monitor.is_running())
     }
 
     /// Get the number of registered triggers
@@ -1104,20 +1132,23 @@ static KEYWORD_MANAGER: OnceLock<Mutex<KeywordManager>> = OnceLock::new();
 /// - `Err(e)` if there was an error during initialization
 #[cfg(target_os = "macos")]
 pub fn init_keyword_manager() -> Result<Option<usize>> {
-    // Check accessibility permissions first
-    if !KeywordManager::has_accessibility_permission() {
-        info!("Accessibility permissions not granted - text expansion disabled");
-        return Ok(None);
-    }
-
     let manager = KEYWORD_MANAGER.get_or_init(|| Mutex::new(KeywordManager::new()));
 
     let mut guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
-    // Load scriptlets with keyword triggers
+    // Load scriptlets with keyword triggers even without Accessibility, so
+    // reminders and agent state can say how many snippets are waiting.
     let count = guard.load_scriptlets()?;
+
+    if !KeywordManager::has_accessibility_permission() {
+        info!(
+            count,
+            "Accessibility permissions not granted - text expansion waits for it"
+        );
+        return Ok(None);
+    }
     let enabled_before = guard.is_enabled();
     if count == 0 {
         info!(
@@ -1149,20 +1180,46 @@ pub fn init_keyword_manager() -> Result<Option<usize>> {
     Ok(None)
 }
 
-/// Block until Accessibility permission is granted, then initialize.
-///
-/// Granting Accessibility in System Settings must arm text expansion without
-/// an app restart. Call on a dedicated background thread after
-/// `init_keyword_manager()` returned `Ok(None)`; polls AXIsProcessTrusted
-/// (cheap) until it flips, then performs the normal initialization.
-#[cfg(target_os = "macos")]
-pub fn init_keyword_manager_when_accessibility_granted() -> Result<Option<usize>> {
-    const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-    while !KeywordManager::has_accessibility_permission() {
-        std::thread::sleep(POLL_INTERVAL);
+mod supervisor;
+pub use supervisor::start_text_expansion_supervisor;
+
+/// Tell the user a snippet didn't land, at most once every 30 seconds.
+fn notify_snippet_not_pasted(outcome: crate::text_injector::PasteResult, name: &str) {
+    static LAST: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if last.is_some_and(|at| at.elapsed() < Duration::from_secs(30)) {
+        return;
     }
-    info!("Accessibility permission granted - arming text expansion without restart");
-    init_keyword_manager()
+    *last = Some(Instant::now());
+    let label = format!("The snippet “{name}”");
+    if let Some(message) = outcome.user_message(&label) {
+        crate::permissions::notify_user("Snippet not pasted", &format!("{message}."));
+    }
+}
+
+/// `(enabled, event tap thread running, trigger count)` of the global manager.
+fn keyword_manager_activity() -> (bool, bool, usize) {
+    let Some(manager) = KEYWORD_MANAGER.get() else {
+        return (false, false, 0);
+    };
+    let guard = manager.lock().unwrap_or_else(|e| e.into_inner());
+    (
+        guard.is_enabled(),
+        guard.monitor_running(),
+        guard.trigger_count(),
+    )
+}
+
+/// Stop watching typing (Accessibility revoked, or the tap died).
+fn disable_keyword_manager() {
+    if let Some(manager) = KEYWORD_MANAGER.get() {
+        manager.lock().unwrap_or_else(|e| e.into_inner()).disable();
+    }
+}
+
+/// Number of snippet keywords loaded, whether or not expansion is running.
+pub fn keyword_trigger_count() -> usize {
+    keyword_manager_activity().2
 }
 /// Update keyword triggers when a scriptlet file changes
 ///
@@ -1277,14 +1334,11 @@ pub fn update_keyword_triggers_for_file(
 ) -> (usize, usize, usize) {
     (0, 0, 0)
 }
-/// Check if the keyword manager is currently enabled
+/// Whether text expansion is on and its event tap still sees typing.
 #[allow(dead_code)]
 pub fn is_keyword_manager_enabled() -> bool {
-    KEYWORD_MANAGER
-        .get()
-        .and_then(|m| m.lock().ok())
-        .map(|g| g.is_enabled())
-        .unwrap_or(false)
+    let (enabled, monitor_running, _) = keyword_manager_activity();
+    enabled && monitor_running
 }
 
 // --- merged from part_003.rs ---

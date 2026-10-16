@@ -103,5 +103,7 @@ fn root_unified_dictation_history_enter_reuses_existing_paste_contract() {
     assert!(selection.contains("execute_root_dictation_history_paste("));
     assert!(selection.contains("crate::dictation::get_history_entry(entry_id)"));
     assert!(selection.contains("crate::text_injector::TextInjector::new()"));
-    assert!(selection.contains("injector.paste_text(&transcript)"));
+    // Pastes through the shared injector and reports a paste that didn't
+    // land (copied instead) rather than dropping it.
+    assert!(selection.contains(r#"injector.paste_text_reporting(&transcript, "The dictation")"#));
 }

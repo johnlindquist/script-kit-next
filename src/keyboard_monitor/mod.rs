@@ -107,6 +107,9 @@ impl DebouncedLogState {
 /// Secure Input changed.
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
+/// How long `start()` waits for the monitor thread to report its event tap.
+const TAP_READY_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Last observed Secure Input state (see [`secure_input_status`]).
 static LAST_SECURE_INPUT: std::sync::Mutex<crate::platform::synthetic_keys::SecureInputStatus> =
     std::sync::Mutex::new(crate::platform::synthetic_keys::SecureInputStatus {
@@ -247,12 +250,7 @@ impl KeyboardMonitor {
     /// Returns true if the application has been granted accessibility permissions.
     /// If false, the monitor will fail to start.
     pub fn has_accessibility_permission() -> bool {
-        if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
-            .is_err()
-        {
-            return false;
-        }
-        accessibility::application_is_trusted()
+        crate::permissions::accessibility_granted()
     }
 
     /// Check if accessibility permissions are granted, prompting the user if not
@@ -297,6 +295,9 @@ impl KeyboardMonitor {
         let running = Arc::clone(&self.running);
         let callback = Arc::clone(&self.callback);
         let run_loop_storage = Arc::clone(&self.run_loop);
+        // The tap is created on the monitor thread; wait for its answer so a
+        // refused tap is an error here instead of a log line nobody reads.
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
 
         // Set running flag before spawning thread
         self.running.store(true, Ordering::SeqCst);
@@ -304,7 +305,7 @@ impl KeyboardMonitor {
         let handle = thread::Builder::new()
             .name("keyboard-monitor".to_string())
             .spawn(move || {
-                Self::event_loop(running, callback, run_loop_storage);
+                Self::event_loop(running, callback, run_loop_storage, ready_tx);
             })
             .map_err(|e| {
                 error!("Failed to spawn keyboard monitor thread: {}", e);
@@ -312,8 +313,27 @@ impl KeyboardMonitor {
                 KeyboardMonitorError::ThreadSpawnFailed
             })?;
 
-        self.thread_handle = Some(handle);
-        Ok(())
+        match ready_rx.recv_timeout(TAP_READY_TIMEOUT) {
+            Ok(Ok(())) => {
+                self.thread_handle = Some(handle);
+                Ok(())
+            }
+            Ok(Err(error)) => {
+                self.running.store(false, Ordering::SeqCst);
+                let _ = handle.join();
+                Err(error)
+            }
+            Err(_) => {
+                // No answer in time: keep the thread (it may still finish
+                // setting up) and let `is_running` report the truth later.
+                warn!(
+                    category = "KEYWORD",
+                    "Keyboard monitor did not report its event tap in time"
+                );
+                self.thread_handle = Some(handle);
+                Ok(())
+            }
+        }
     }
 
     /// Stop the keyboard monitor
@@ -359,6 +379,7 @@ impl KeyboardMonitor {
         running: Arc<AtomicBool>,
         callback: Arc<KeyEventCallback>,
         run_loop_storage: Arc<std::sync::Mutex<Option<CFRunLoop>>>,
+        ready: std::sync::mpsc::SyncSender<Result<(), KeyboardMonitorError>>,
     ) {
         debug!("Keyboard monitor event loop starting");
 
@@ -456,6 +477,7 @@ impl KeyboardMonitor {
                     "Failed to create CGEventTap - accessibility permissions may not be granted"
                 );
                 running.store(false, Ordering::SeqCst);
+                let _ = ready.send(Err(KeyboardMonitorError::EventTapCreationFailed));
                 return;
             }
         };
@@ -471,6 +493,7 @@ impl KeyboardMonitor {
             Err(()) => {
                 error!("Failed to create run loop source from event tap");
                 running.store(false, Ordering::SeqCst);
+                let _ = ready.send(Err(KeyboardMonitorError::RunLoopSourceCreationFailed));
                 return;
             }
         };
@@ -482,6 +505,7 @@ impl KeyboardMonitor {
             current_run_loop.add_source(&run_loop_source, kCFRunLoopCommonModes);
         }
         event_tap.enable();
+        let _ = ready.send(Ok(()));
 
         info!("Keyboard monitor event tap enabled, entering run loop");
 

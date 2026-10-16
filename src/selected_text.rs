@@ -44,11 +44,7 @@ use tracing::{instrument, warn};
 #[instrument]
 #[cfg(target_os = "macos")]
 pub fn has_accessibility_permission() -> bool {
-    if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery).is_err()
-    {
-        return false;
-    }
-    let result = accessibility::application_is_trusted();
+    let result = crate::permissions::accessibility_granted();
     debug!(granted = result, "Checked accessibility permission");
     result
 }
@@ -611,8 +607,14 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
         restore = report.restore.as_str(),
         "Selected-text replacement clipboard round trip"
     );
+    if matches!(
+        report.consumption,
+        crate::platform::promised_paste::PasteConsumption::NotRequested { .. }
+    ) {
+        bail!("The focused app didn't take the replacement text");
+    }
     match report.restore {
-        RestoreOutcome::Restored => {}
+        RestoreOutcome::Restored | RestoreOutcome::KeptPastedText => {}
         RestoreOutcome::SkippedExternalChange => bail!(
             "Clipboard changed during selected-text replacement; skipped restore to avoid overwriting external clipboard update"
         ),

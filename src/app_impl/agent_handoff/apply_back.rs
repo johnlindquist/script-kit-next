@@ -2,7 +2,9 @@
 // Apply-back: clipboard helpers
 // ---------------------------------------------------------------------------
 
-fn with_tab_ai_apply_back_clipboard<T>(operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+fn with_tab_ai_apply_back_clipboard<T>(
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)
         .map_err(|error| error.to_string())?;
     // An armed owned probe replaces only the native delegate, never the guard or
@@ -24,25 +26,25 @@ fn with_tab_ai_apply_back_clipboard<T>(operation: impl FnOnce() -> Result<T, Str
 
 fn read_tab_ai_apply_back_clipboard_text() -> Result<String, String> {
     with_tab_ai_apply_back_clipboard(|| {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|error| format!("tab_ai_apply_back_clipboard_open_failed: {error}"))?;
-    let text = clipboard
-        .get_text()
-        .map_err(|error| format!("tab_ai_apply_back_clipboard_read_failed: {error}"))?;
-    if text.trim().is_empty() {
-        return Err("tab_ai_apply_back_clipboard_empty".to_string());
-    }
-    Ok(text)
+        let mut clipboard = arboard::Clipboard::new()
+            .map_err(|error| format!("tab_ai_apply_back_clipboard_open_failed: {error}"))?;
+        let text = clipboard
+            .get_text()
+            .map_err(|error| format!("tab_ai_apply_back_clipboard_read_failed: {error}"))?;
+        if text.trim().is_empty() {
+            return Err("tab_ai_apply_back_clipboard_empty".to_string());
+        }
+        Ok(text)
     })
 }
 
 fn write_tab_ai_apply_back_clipboard_text(text: &str) -> Result<(), String> {
     with_tab_ai_apply_back_clipboard(|| {
-    let mut clipboard = arboard::Clipboard::new()
-        .map_err(|error| format!("tab_ai_apply_back_clipboard_open_failed: {error}"))?;
-    clipboard
-        .set_text(text.to_string())
-        .map_err(|error| format!("tab_ai_apply_back_clipboard_write_failed: {error}"))
+        let mut clipboard = arboard::Clipboard::new()
+            .map_err(|error| format!("tab_ai_apply_back_clipboard_open_failed: {error}"))?;
+        clipboard
+            .set_text(text.to_string())
+            .map_err(|error| format!("tab_ai_apply_back_clipboard_write_failed: {error}"))
     })
 }
 
@@ -94,28 +96,43 @@ impl Drop for TabAiApplyBackClipboardProbe {
     fn drop(&mut self) {
         TAB_AI_APPLY_BACK_CLIPBOARD_PROBE.with(|probe| {
             let mut probe = probe.borrow_mut();
-            if probe.as_ref().is_some_and(|state| std::rc::Rc::ptr_eq(state, &self.state)) {
+            if probe
+                .as_ref()
+                .is_some_and(|state| std::rc::Rc::ptr_eq(state, &self.state))
+            {
                 *probe = None;
             }
         });
     }
 }
 
-pub(crate) fn probe_tab_ai_apply_back_clipboard_boundary() -> anyhow::Result<TabAiApplyBackClipboardProbe> {
+pub(crate) fn probe_tab_ai_apply_back_clipboard_boundary(
+) -> anyhow::Result<TabAiApplyBackClipboardProbe> {
     // Never allow a negative probe to become a real clipboard operation when
     // invoked outside the owned evaluator.
-    anyhow::ensure!(crate::runtime_policy::is_owned_evaluation(), "owned_policy_missing");
-    anyhow::ensure!(!TabAiApplyBackClipboardProbe::is_active(), "clipboard_probe_already_active");
+    anyhow::ensure!(
+        crate::runtime_policy::is_owned_evaluation(),
+        "owned_policy_missing"
+    );
+    anyhow::ensure!(
+        !TabAiApplyBackClipboardProbe::is_active(),
+        "clipboard_probe_already_active"
+    );
     let probe = TabAiApplyBackClipboardProbe {
-        state: std::rc::Rc::new(std::cell::RefCell::new(TabAiApplyBackClipboardProbeState::default())),
+        state: std::rc::Rc::new(std::cell::RefCell::new(
+            TabAiApplyBackClipboardProbeState::default(),
+        )),
     };
-    TAB_AI_APPLY_BACK_CLIPBOARD_PROBE.with(|active| *active.borrow_mut() = Some(probe.state.clone()));
+    TAB_AI_APPLY_BACK_CLIPBOARD_PROBE
+        .with(|active| *active.borrow_mut() = Some(probe.state.clone()));
     let read = read_tab_ai_apply_back_clipboard_text();
     let write = write_tab_ai_apply_back_clipboard_text("negative-only clipboard refusal probe");
     {
         let mut state = probe.state.borrow_mut();
-        state.read_refused = read.as_ref().err().map(String::as_str) == Some("system_clipboard_forbidden");
-        state.write_refused = write.as_ref().err().map(String::as_str) == Some("system_clipboard_forbidden");
+        state.read_refused =
+            read.as_ref().err().map(String::as_str) == Some("system_clipboard_forbidden");
+        state.write_refused =
+            write.as_ref().err().map(String::as_str) == Some("system_clipboard_forbidden");
     }
     Ok(probe)
 }
@@ -149,7 +166,11 @@ impl ScriptListApp {
                 .as_ref()
                 .map(|route| &route.source_type),
         );
-        self.one_window_notice(crate::line_notice::FAILED, format!("{apply_label} failed: select terminal text or wait for output."), cx);
+        self.one_window_notice(
+            crate::line_notice::FAILED,
+            format!("{apply_label} failed: select terminal text or wait for output."),
+            cx,
+        );
         cx.notify();
     }
 
@@ -177,7 +198,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         if text.trim().is_empty() {
-            self.one_window_notice(crate::line_notice::FAILED, "No terminal selection or harness output was available".to_string(), cx);
+            self.one_window_notice(
+                crate::line_notice::FAILED,
+                "No terminal selection or harness output was available".to_string(),
+                cx,
+            );
             cx.notify();
             return;
         }
@@ -186,9 +211,17 @@ impl ScriptListApp {
             crate::ai::TabAiSourceType::RunningCommand => {
                 self.close_tab_ai_harness_terminal(cx);
                 if self.try_set_prompt_input(text.clone(), cx) {
-                    self.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(&route.source_type).to_string(), cx);
+                    self.one_window_notice(
+                        crate::line_notice::DONE,
+                        tab_ai_apply_back_success_message(&route.source_type).to_string(),
+                        cx,
+                    );
                 } else {
-                    self.one_window_notice(crate::line_notice::FAILED, "The original prompt is no longer active".to_string(), cx);
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        "The original prompt is no longer active".to_string(),
+                        cx,
+                    );
                 }
                 cx.notify();
             }
@@ -196,10 +229,18 @@ impl ScriptListApp {
                 self.close_tab_ai_harness_terminal(cx);
                 match write_tab_ai_apply_back_clipboard_text(&text) {
                     Ok(()) => {
-                        self.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(&route.source_type).to_string(), cx);
+                        self.one_window_notice(
+                            crate::line_notice::DONE,
+                            tab_ai_apply_back_success_message(&route.source_type).to_string(),
+                            cx,
+                        );
                     }
                     Err(error) => {
-                        self.one_window_notice(crate::line_notice::FAILED, format!("Failed to update clipboard: {error}"), cx);
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Failed to update clipboard: {error}"),
+                            cx,
+                        );
                     }
                 }
                 cx.notify();
@@ -227,13 +268,17 @@ impl ScriptListApp {
                             script_path_bytes = path_str.len(),
                             "tab_ai_apply_back.script_saved"
                         );
-                        self.one_window_notice(crate::line_notice::DONE, format!(
-                                    "Saved and running generated script: {}",
-                                    script_path
-                                        .file_stem()
-                                        .and_then(|s| s.to_str())
-                                        .unwrap_or("script"),
-                                ), cx);
+                        self.one_window_notice(
+                            crate::line_notice::DONE,
+                            format!(
+                                "Saved and running generated script: {}",
+                                script_path
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("script"),
+                            ),
+                            cx,
+                        );
                         self.execute_script_by_path(&path_str, cx);
                     }
                     Err(error) => {
@@ -242,7 +287,11 @@ impl ScriptListApp {
                             error = %error,
                             "tab_ai_apply_back.script_save_failed"
                         );
-                        self.one_window_notice(crate::line_notice::FAILED, format!("Failed to save generated script: {error}"), cx);
+                        self.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Failed to save generated script: {error}"),
+                            cx,
+                        );
                     }
                 }
                 cx.notify();
@@ -274,15 +323,19 @@ impl ScriptListApp {
                             match route_for_apply.source_type {
                                 crate::ai::TabAiSourceType::DesktopSelection => {
                                     selected_text::set_selected_text(&text_for_apply)
+                                        .map(|()| None)
                                         .map_err(|error| error.to_string())
                                 }
                                 crate::ai::TabAiSourceType::Desktop => {
                                     let injector = text_injector::TextInjector::new();
+                                    // `Some(message)`: not pasted, and why (the
+                                    // text may be on the clipboard instead).
                                     injector
                                         .paste_text(&text_for_apply)
+                                        .map(|result| result.user_message("The result"))
                                         .map_err(|error| error.to_string())
                                 }
-                                _ => Ok(()),
+                                _ => Ok(None),
                             }
                         })
                         .await;
@@ -293,14 +346,31 @@ impl ScriptListApp {
                         };
                         app.update(cx, |this, cx| {
                             match result {
-                                Ok(()) => {
-                                    this.one_window_notice(crate::line_notice::DONE, tab_ai_apply_back_success_message(
-                                                &route_for_toast.source_type,
-                                            )
-                                            .to_string(), cx);
+                                Ok(None) => {
+                                    this.one_window_notice(
+                                        crate::line_notice::DONE,
+                                        tab_ai_apply_back_success_message(
+                                            &route_for_toast.source_type,
+                                        )
+                                        .to_string(),
+                                        cx,
+                                    );
+                                }
+                                Ok(Some(message)) => {
+                                    if !script_kit_gpui::is_main_window_visible() {
+                                        crate::permissions::notify_user(
+                                            "Result not pasted",
+                                            &format!("{message}."),
+                                        );
+                                    }
+                                    this.one_window_notice(crate::line_notice::FAILED, message, cx);
                                 }
                                 Err(error) => {
-                                    this.one_window_notice(crate::line_notice::FAILED, format!("Failed to apply result: {error}"), cx);
+                                    this.one_window_notice(
+                                        crate::line_notice::FAILED,
+                                        format!("Failed to apply result: {error}"),
+                                        cx,
+                                    );
                                 }
                             }
                             cx.notify();

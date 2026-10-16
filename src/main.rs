@@ -155,6 +155,9 @@ mod script_creation;
 // Permissions wizard - Check and request macOS permissions
 mod permissions_wizard;
 
+// Permission service - cached statuses, change events, feature readiness
+mod permissions;
+
 // Built-in features registry
 mod ai_vault;
 mod app_launcher;

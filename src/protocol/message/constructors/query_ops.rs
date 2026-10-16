@@ -163,6 +163,7 @@ impl Message {
             backgrounded_sessions,
             main_window_animation: None,
             one_window: None,
+            permissions: None,
         }
     }
 

@@ -61,8 +61,9 @@ impl ScriptListApp {
                 self.open_permissions_wizard(cx);
                 script_kit_gpui::request_show_main_window();
             }
-            crate::permissions_wizard::PermissionStartupIntent::ShowReminder { missing } => {
-                let names = missing
+            crate::permissions_wizard::PermissionStartupIntent::ShowReminder { reminder } => {
+                let names = reminder
+                    .missing
                     .iter()
                     .map(|kind| kind.name())
                     .collect::<Vec<_>>()
@@ -70,17 +71,18 @@ impl ScriptListApp {
                 tracing::info!(
                     event = "permission_onboarding_reminder",
                     missing = %names,
-                    "Missing required permissions at startup"
+                    "Missing permissions that the user's setup depends on"
                 );
-                self.one_window_notice(crate::line_notice::FAILED, format!(
-                            "Script Kit still needs {names}. Run \u{201c}Set Up Permissions\u{201d} to grant them."
-                        ), cx);
-                let _ = notify_rust::Notification::new()
-                    .summary("Script Kit needs permissions")
-                    .body(&format!(
-                        "{names} not granted. Open Script Kit and run \u{201c}Set Up Permissions\u{201d}."
-                    ))
-                    .show();
+                // One sentence without ": ", so the line shows all of it.
+                self.one_window_notice(
+                    crate::line_notice::FAILED,
+                    format!(
+                        "{} \u{2014} run \u{201c}Set Up Permissions\u{201d}",
+                        reminder.title
+                    ),
+                    cx,
+                );
+                crate::permissions::notify_user(&reminder.title, &reminder.body);
                 cx.notify();
             }
             crate::permissions_wizard::PermissionStartupIntent::None => {}
@@ -150,10 +152,23 @@ impl ScriptListApp {
             return;
         }
 
-        if crate::permissions_wizard::request_permission(kind) == PermissionStatus::Authorized {
+        let requested = crate::permissions_wizard::request_permission(kind);
+        if requested == PermissionStatus::Authorized {
             self.one_window_notice(
                 crate::line_notice::INFO,
                 format!("{} granted", kind.name()),
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+        if kind == crate::permissions_wizard::PermissionKind::Microphone
+            && requested == PermissionStatus::NotDetermined
+        {
+            // macOS is showing its prompt; Settings would not list Script Kit yet.
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Choose Allow when macOS asks to use the microphone",
                 cx,
             );
             cx.notify();
@@ -188,6 +203,69 @@ impl ScriptListApp {
             );
         }
         cx.notify();
+    }
+
+    /// Quit and reopen Script Kit, so macOS applies a grant it is holding
+    /// back (Screen Recording, or an entry made for an older copy).
+    fn restart_script_kit_for_permissions(&mut self, cx: &mut Context<Self>) {
+        match crate::permissions::recovery::relaunch_after_exit() {
+            Ok(()) => {
+                Self::prepare_script_kit_shutdown();
+                cx.quit();
+            }
+            Err(error) => {
+                self.notice_failed(format!("Couldn't restart Script Kit: {error}"), cx);
+            }
+        }
+    }
+
+    /// Remove Script Kit's privacy entry for `kind`, then ask again, so the
+    /// entry macOS keeps matches this copy of the app.
+    fn reset_permission_entry_and_ask(
+        &mut self,
+        kind: crate::permissions_wizard::PermissionKind,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = crate::permissions::recovery::reset_entry(kind) {
+            self.notice_failed(
+                format!("Couldn't reset the {} entry: {error}", kind.name()),
+                cx,
+            );
+            return;
+        }
+        self.one_window_notice(
+            crate::line_notice::INFO,
+            format!(
+                "Reset the {} entry \u{2014} allow Script Kit again when macOS asks",
+                kind.name()
+            ),
+            cx,
+        );
+        self.execute_permissions_wizard_grant(kind, cx);
+    }
+
+    /// Description for a wizard row: what the permission is for when
+    /// granted; what stops working when it isn't; how to unstick a grant
+    /// that didn't take.
+    fn permissions_wizard_row_description(
+        kind: crate::permissions_wizard::PermissionKind,
+        status: crate::platform::permiso_detect::PermissionStatus,
+    ) -> String {
+        use crate::platform::permiso_detect::PermissionStatus;
+        match status {
+            PermissionStatus::Authorized | PermissionStatus::Unknown => kind.subtitle().to_string(),
+            _ if crate::permissions::grant_looks_stuck(kind) => {
+                let reset = if crate::permissions::recovery::host_bundle_identifier().is_some() {
+                    ", or \u{2318}\u{21e7}R to reset its entry and ask again"
+                } else {
+                    ""
+                };
+                format!(
+                    "Already on in System Settings? Press \u{2318}R to restart Script Kit{reset}"
+                )
+            }
+            _ => kind.missing_consequence().to_string(),
+        }
     }
 
     pub(crate) fn dispatch_permissions_wizard_action(
@@ -264,6 +342,27 @@ impl ScriptListApp {
                     crate::permissions_wizard::PermissionsWizardActions::for_key(key, has_cmd)
                 {
                     this.dispatch_permissions_wizard_action(action, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                // ⌘R restarts Script Kit; ⌘⇧R resets the selected
+                // row's privacy entry and asks again. Rows that look stuck
+                // say so in their description.
+                if has_cmd && key.eq_ignore_ascii_case("r") {
+                    if event.keystroke.modifiers.shift {
+                        if let AppView::PermissionsWizardView { selected_index } =
+                            &this.current_view
+                        {
+                            if let Some(&kind) = crate::permissions_wizard::PermissionKind::all()
+                                .get(*selected_index)
+                            {
+                                this.reset_permission_entry_and_ask(kind, cx);
+                            }
+                        }
+                    } else {
+                        this.restart_script_kit_for_permissions(cx);
+                    }
                     cx.stop_propagation();
                     return;
                 }
@@ -389,7 +488,9 @@ impl ScriptListApp {
                     .child(
                         ListItem::new(kind.name().to_string(), list_colors)
                             .icon_kind_opt(crate::list_item::IconKind::from_icon_hint(kind.icon()))
-                            .description_opt(Some(kind.subtitle().to_string()))
+                            .description_opt(Some(Self::permissions_wizard_row_description(
+                                kind, *status,
+                            )))
                             .trailing_accessory(badge)
                             .selected(is_selected)
                             .hovered(is_hovered),

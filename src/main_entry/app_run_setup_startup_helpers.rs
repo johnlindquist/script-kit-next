@@ -158,55 +158,11 @@ fn initialize_startup_background_services(loaded_config: &config::Config) {
         }
     }
 
-    // Initialize text expansion system (background thread with keyboard monitoring)
-    // This must be done early, before the GPUI run loop starts
-    // Uses a global singleton so the manager can be updated when scriptlet files change
+    // Watch macOS privacy permissions so grants and revocations reach the
+    // features that depend on them, then run text expansion under a
+    // supervisor that starts, stops and restarts it as Accessibility and the
+    // event tap allow (see `keyword_manager::supervisor`).
+    permissions::start_watcher();
     #[cfg(target_os = "macos")]
-    {
-        // Spawn initialization in a thread to not block startup
-        std::thread::spawn(move || {
-            logging::log("KEYWORD", "Initializing text expansion system");
-
-            match keyword_manager::init_keyword_manager() {
-                Ok(Some(count)) => {
-                    logging::log(
-                        "KEYWORD",
-                        &format!("Text expansion system enabled with {} triggers", count),
-                    );
-                }
-                Ok(None) => {
-                    logging::log(
-                        "KEYWORD",
-                        "Accessibility permissions not granted - text expansion disabled",
-                    );
-                    logging::log(
-                        "KEYWORD",
-                        "Enable in System Preferences > Privacy & Security > Accessibility",
-                    );
-                    // Keep this thread waiting so granting Accessibility arms
-                    // text expansion without an app restart.
-                    match keyword_manager::init_keyword_manager_when_accessibility_granted() {
-                        Ok(Some(count)) => logging::log(
-                            "KEYWORD",
-                            &format!(
-                                "Accessibility granted - text expansion enabled with {} triggers",
-                                count
-                            ),
-                        ),
-                        Ok(None) => {}
-                        Err(e) => logging::log(
-                            "KEYWORD",
-                            &format!("Failed to initialize text expansion after grant: {}", e),
-                        ),
-                    }
-                }
-                Err(e) => {
-                    logging::log(
-                        "KEYWORD",
-                        &format!("Failed to initialize text expansion: {}", e),
-                    );
-                }
-            }
-        });
-    }
+    keyword_manager::start_text_expansion_supervisor();
 }

@@ -52,15 +52,32 @@ pub fn restore_general_pasteboard_snapshot(snapshot: &PasteboardSnapshot) -> Res
 /// Paste `text` into the focused app through the shared promised-paste path
 /// and put the user's full clipboard back once the app has read it.
 pub fn paste_plain_text_preserving_clipboard(text: &str) -> Result<()> {
-    use crate::platform::promised_paste::{paste_text_preserving_clipboard, RestoreOutcome};
+    use crate::platform::promised_paste::{paste_text_with_options, PasteOptions, RestoreOutcome};
 
     if text.is_empty() {
         return Ok(());
     }
-    let report = paste_text_preserving_clipboard(text, None)
-        .context("Failed to paste focused-text Agent Chat output")?;
+    // Agent output exists nowhere else on screen: if the app ignores the
+    // paste, leave it on the clipboard rather than losing it.
+    let report = paste_text_with_options(
+        text,
+        None,
+        PasteOptions {
+            keep_text_if_unread: true,
+        },
+    )
+    .context("Failed to paste focused-text Agent Chat output")?;
+    if report.restore == RestoreOutcome::KeptPastedText {
+        bail!("The Agent Chat output is on the clipboard because the focused app didn't take the paste");
+    }
+    if matches!(
+        report.consumption,
+        crate::platform::promised_paste::PasteConsumption::NotRequested { .. }
+    ) {
+        bail!("The focused app didn't take the Agent Chat output");
+    }
     match report.restore {
-        RestoreOutcome::Restored => Ok(()),
+        RestoreOutcome::Restored | RestoreOutcome::KeptPastedText => Ok(()),
         RestoreOutcome::SkippedExternalChange => {
             bail!(
                 "Clipboard changed during focused-text Agent Chat paste fallback; skipped restore"

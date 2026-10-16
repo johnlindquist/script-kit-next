@@ -14,6 +14,7 @@ mod delivery;
 mod device;
 pub mod download;
 mod history;
+mod mic_check;
 mod runtime;
 mod setup;
 mod transcription;
@@ -59,6 +60,10 @@ pub(crate) use history::{
     root_dictation_history_cache_is_fresh, root_dictation_history_fresh_cache_status,
     try_begin_root_dictation_history_refresh, RootDictationHistorySnapshot,
 };
+pub use mic_check::{
+    assess_samples, laptop_lid_closed, last_microphone_check, run_microphone_check,
+    MicrophoneCheck, MicrophoneLevel, MICROPHONE_CHECK_DURATION,
+};
 pub use runtime::{
     abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
     claim_dictation_delivery, current_dictation_phase, cycle_dictation_target,
@@ -82,8 +87,10 @@ pub(crate) use runtime::{
     retain_frozen_selection_for_delivery, toggled_post_stop_restart, DictationRecoveryWork,
 };
 pub use setup::{
-    build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,
-    DictationMicrophoneStatus, DictationSetupState,
+    build_dictation_setup_state, dictation_setup_extra_rows, DictationHotkeyStatus,
+    DictationMicrophonePermissionStatus, DictationMicrophoneStatus, DictationSetupExtras,
+    DictationSetupRow, DictationSetupState, DICTATION_SETUP_GRANT_ACCESSIBILITY,
+    DICTATION_SETUP_TEST_MIC,
 };
 pub use transcription::{
     build_session_result, captured_duration, dictation_engine_receipt, is_parakeet_model_available,

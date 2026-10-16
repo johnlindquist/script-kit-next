@@ -119,6 +119,105 @@ fn format_hotkey(hotkey: &HotkeyConfig) -> String {
     )
 }
 
+/// Dictation Setup row: start a microphone test.
+pub const DICTATION_SETUP_TEST_MIC: &str = "test-microphone";
+/// Dictation Setup row: ask for Accessibility so dictation can type.
+pub const DICTATION_SETUP_GRANT_ACCESSIBILITY: &str = "allow-pasting";
+
+/// Dictation Setup facts beyond model, microphone permission and hotkey.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DictationSetupExtras {
+    /// Script Kit can post ⌘V, so dictated words are typed in place.
+    pub paste_ready: bool,
+    /// The selected microphone is the built-in one and the lid is closed.
+    pub lid_closed_on_builtin_microphone: bool,
+    /// The last microphone test in this session.
+    pub microphone_check: Option<crate::dictation::MicrophoneCheck>,
+    /// A microphone test is recording now.
+    pub microphone_check_running: bool,
+}
+
+impl Default for DictationSetupExtras {
+    fn default() -> Self {
+        Self {
+            paste_ready: true,
+            lid_closed_on_builtin_microphone: false,
+            microphone_check: None,
+            microphone_check_running: false,
+        }
+    }
+}
+
+/// One Dictation Setup row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictationSetupRow {
+    pub name: String,
+    pub value: &'static str,
+    pub description: String,
+}
+
+/// The rows that say whether dictation will really work: a closed-lid
+/// warning, the microphone test, and whether dictated words can be typed
+/// into other apps (Accessibility) or will be copied instead.
+pub fn dictation_setup_extra_rows(
+    state: &DictationSetupState,
+    extras: &DictationSetupExtras,
+) -> Vec<DictationSetupRow> {
+    let mut rows = Vec::new();
+    if extras.lid_closed_on_builtin_microphone {
+        rows.push(DictationSetupRow {
+            name: "The lid is closed, so the built-in microphone can't hear you".to_string(),
+            value: "microphone-lid-closed",
+            description: "Open the lid or choose another microphone".to_string(),
+        });
+    }
+
+    if matches!(
+        state.microphone_status,
+        DictationMicrophoneStatus::Ready { .. }
+            | DictationMicrophoneStatus::SavedDeviceMissing { .. }
+    ) {
+        let (name, description) = if extras.microphone_check_running {
+            (
+                "Microphone test: listening…".to_string(),
+                "Say something now".to_string(),
+            )
+        } else if let Some(check) = &extras.microphone_check {
+            check.summary()
+        } else {
+            (
+                "Test microphone".to_string(),
+                format!(
+                    "Records {} seconds and checks that sound comes through",
+                    crate::dictation::MICROPHONE_CHECK_DURATION.as_secs()
+                ),
+            )
+        };
+        rows.push(DictationSetupRow {
+            name,
+            value: DICTATION_SETUP_TEST_MIC,
+            description,
+        });
+    }
+
+    rows.push(if extras.paste_ready {
+        DictationSetupRow {
+            name: "Typing into other apps: ready".to_string(),
+            value: "paste-ready",
+            description: "Dictated words go where you're working".to_string(),
+        }
+    } else {
+        DictationSetupRow {
+            name: "Allow typing into other apps".to_string(),
+            value: DICTATION_SETUP_GRANT_ACCESSIBILITY,
+            description:
+                "Needs Accessibility. Without it, dictated words are copied to the clipboard instead"
+                    .to_string(),
+        }
+    });
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +301,76 @@ mod tests {
                 fallback_name: Some("MacBook Microphone".to_string())
             }
         );
+    }
+
+    fn ready_state() -> DictationSetupState {
+        DictationSetupState {
+            model_status: DictationModelStatus::Available,
+            microphone_status: DictationMicrophoneStatus::Ready {
+                name: "MacBook Microphone".to_string(),
+                using_system_default: true,
+            },
+            hotkey_status: DictationHotkeyStatus::Disabled,
+            ready: true,
+        }
+    }
+
+    #[test]
+    fn setup_offers_accessibility_when_dictation_would_only_copy() {
+        let rows = dictation_setup_extra_rows(
+            &ready_state(),
+            &DictationSetupExtras {
+                paste_ready: false,
+                ..DictationSetupExtras::default()
+            },
+        );
+        let grant = rows
+            .iter()
+            .find(|row| row.value == DICTATION_SETUP_GRANT_ACCESSIBILITY)
+            .expect("missing Accessibility is offered in setup");
+        assert!(grant.description.contains("copied to the clipboard"));
+
+        let ready = dictation_setup_extra_rows(&ready_state(), &DictationSetupExtras::default());
+        assert!(ready.iter().any(|row| row.value == "paste-ready"));
+        assert!(!ready
+            .iter()
+            .any(|row| row.value == DICTATION_SETUP_GRANT_ACCESSIBILITY));
+    }
+
+    #[test]
+    fn setup_offers_a_microphone_test_and_shows_its_result() {
+        let rows = dictation_setup_extra_rows(&ready_state(), &DictationSetupExtras::default());
+        assert!(rows
+            .iter()
+            .any(|row| row.value == DICTATION_SETUP_TEST_MIC && row.name == "Test microphone"));
+
+        let rows = dictation_setup_extra_rows(
+            &ready_state(),
+            &DictationSetupExtras {
+                microphone_check: Some(crate::dictation::assess_samples(&[0.0; 1600], 16_000)),
+                lid_closed_on_builtin_microphone: true,
+                ..DictationSetupExtras::default()
+            },
+        );
+        assert_eq!(
+            rows[0].value, "microphone-lid-closed",
+            "the lid warning comes first"
+        );
+        assert!(rows
+            .iter()
+            .any(|row| row.name == "Microphone test: no sound came through"));
+    }
+
+    #[test]
+    fn no_microphone_test_until_permission_is_granted() {
+        let state = DictationSetupState {
+            microphone_status: DictationMicrophoneStatus::PermissionNeeded(
+                DictationMicrophonePermissionStatus::NotDetermined,
+            ),
+            ready: false,
+            ..ready_state()
+        };
+        let rows = dictation_setup_extra_rows(&state, &DictationSetupExtras::default());
+        assert!(!rows.iter().any(|row| row.value == DICTATION_SETUP_TEST_MIC));
     }
 }

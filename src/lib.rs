@@ -127,6 +127,9 @@ pub mod script_creation;
 // Permissions wizard - Check and request macOS permissions
 pub mod permissions_wizard;
 
+// Permission service - cached statuses, change events, feature readiness
+pub mod permissions;
+
 // One-shot NUX markers (release hints, habit changes)
 pub mod nux;
 

@@ -23,15 +23,150 @@
 //! Clipboard restore timing is not configured here: it follows the target
 //! app's request for the pasted text.
 //!
-//! ## Permissions
+//! ## Permissions and honest results
 //!
-//! Requires Accessibility permission in System Preferences > Privacy & Security > Accessibility
+//! Posting ⌘V to another app needs Accessibility (or the narrower "post
+//! events" grant). Without it the keystroke would be dropped without a trace,
+//! so the text goes on the clipboard instead and the result says so
+//! ([`PasteResult::CopiedInstead`]). When the app never reads a paste, the
+//! result says that too, and by default the text stays on the clipboard.
 
+use crate::platform::promised_paste::{PasteConsumption, PasteOptions, RestoreOutcome};
 use crate::platform::synthetic_keys::{self, KeyTarget};
 use anyhow::Result;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, info, instrument};
+use tracing::{debug, info, instrument, warn};
+
+// ============================================================================
+// Results
+// ============================================================================
+
+/// Why text went to the clipboard instead of into the app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopiedReason {
+    /// Script Kit can't post keystrokes to other apps.
+    AccessibilityMissing,
+    /// ⌘V was sent but the app never read the text.
+    NotRead,
+}
+
+/// What happened to a paste.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PasteResult {
+    /// The app read the text.
+    Pasted,
+    /// ⌘V was sent; nothing could observe whether the app read it.
+    Sent,
+    /// Nothing to paste.
+    Empty,
+    /// The app didn't get the text. `on_clipboard` says whether the text was
+    /// left on the clipboard for the user.
+    CopiedInstead {
+        reason: CopiedReason,
+        on_clipboard: bool,
+    },
+}
+
+impl PasteResult {
+    /// The text is, as far as anyone can tell, in the app.
+    pub fn landed(self) -> bool {
+        matches!(self, Self::Pasted | Self::Sent | Self::Empty)
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Pasted => "pasted",
+            Self::Sent => "sent",
+            Self::Empty => "empty",
+            Self::CopiedInstead {
+                reason: CopiedReason::AccessibilityMissing,
+                ..
+            } => "copied_accessibility_missing",
+            Self::CopiedInstead {
+                reason: CopiedReason::NotRead,
+                ..
+            } => "copied_not_read",
+        }
+    }
+
+    /// One sentence for the user about `what` ("The transcript"), or `None`
+    /// when the text landed. It has no ": ", so a failure line shows all of
+    /// it rather than only the words before the colon.
+    pub fn user_message(self, what: &str) -> Option<String> {
+        match self {
+            Self::Pasted | Self::Sent | Self::Empty => None,
+            Self::CopiedInstead {
+                reason: CopiedReason::AccessibilityMissing,
+                on_clipboard: true,
+            } => Some(format!(
+                "{what} is on the clipboard because Script Kit needs Accessibility to paste into other apps"
+            )),
+            Self::CopiedInstead {
+                reason: CopiedReason::AccessibilityMissing,
+                on_clipboard: false,
+            } => Some(format!(
+                "{what} wasn't pasted because Script Kit needs Accessibility to paste into other apps"
+            )),
+            Self::CopiedInstead {
+                reason: CopiedReason::NotRead,
+                on_clipboard: true,
+            } => Some(format!(
+                "{what} is on the clipboard because the app didn't take the paste"
+            )),
+            Self::CopiedInstead {
+                reason: CopiedReason::NotRead,
+                on_clipboard: false,
+            } => Some(format!("{what} wasn't pasted because the app didn't take it")),
+        }
+    }
+}
+
+/// Turn the paste engine's report into a [`PasteResult`].
+pub fn classify_paste(consumption: PasteConsumption, restore: &RestoreOutcome) -> PasteResult {
+    match consumption {
+        PasteConsumption::Requested { .. } => PasteResult::Pasted,
+        PasteConsumption::Unobserved => PasteResult::Sent,
+        PasteConsumption::NotRequested { .. } => PasteResult::CopiedInstead {
+            reason: CopiedReason::NotRead,
+            on_clipboard: matches!(restore, RestoreOutcome::KeptPastedText),
+        },
+    }
+}
+
+/// Tell the user, by system notification, that `what` didn't land. For paste
+/// paths that run after Script Kit's window has hidden.
+pub fn report_in_background(result: &Result<PasteResult>, what: &str) {
+    match result {
+        Ok(outcome) => {
+            let Some(message) = outcome.user_message(what) else {
+                return;
+            };
+            let (title, hint) = match outcome {
+                PasteResult::CopiedInstead {
+                    reason: CopiedReason::AccessibilityMissing,
+                    on_clipboard,
+                } => (
+                    if *on_clipboard {
+                        "Copied instead of pasted"
+                    } else {
+                        "Couldn't paste"
+                    },
+                    " Open Script Kit and run “Set Up Permissions”.",
+                ),
+                PasteResult::CopiedInstead {
+                    on_clipboard: true, ..
+                } => ("Copied instead of pasted", " Press ⌘V to paste it."),
+                _ => ("Couldn't paste", ""),
+            };
+            crate::permissions::notify_user(title, &format!("{message}.{hint}"));
+        }
+        Err(error) => {
+            warn!(category = "PASTE", error = %error, what, "Paste failed");
+            crate::permissions::notify_user("Couldn't paste", &format!("{what} wasn't pasted."));
+        }
+    }
+}
 
 // ============================================================================
 // Configuration
@@ -44,6 +179,10 @@ pub struct TextInjectorConfig {
     pub key_delay_ms: u64,
     /// Delay in milliseconds between deleting and pasting in `inject_text` (default: 50ms)
     pub pre_paste_delay_ms: u64,
+    /// Leave the text on the clipboard when the app never reads the paste
+    /// (default: true). Snippets turn this off: their text lives in the
+    /// snippet file, so the user's own clipboard matters more.
+    pub keep_text_if_unread: bool,
 }
 
 impl Default for TextInjectorConfig {
@@ -51,6 +190,7 @@ impl Default for TextInjectorConfig {
         Self {
             key_delay_ms: 2,
             pre_paste_delay_ms: 50,
+            keep_text_if_unread: true,
         }
     }
 }
@@ -119,26 +259,58 @@ impl TextInjector {
 
     /// Paste `text` into the focused app and restore the user's clipboard.
     #[instrument(skip(self, text), fields(text_len = text.len()))]
-    pub fn paste_text(&self, text: &str) -> Result<()> {
+    pub fn paste_text(&self, text: &str) -> Result<PasteResult> {
         self.paste_into(None, text)
     }
 
     /// Paste `text` into `target` and restore the user's clipboard.
     #[instrument(skip(self, text), fields(text_len = text.len(), route = target.route_name()))]
-    pub fn paste_text_in(&self, target: KeyTarget, text: &str) -> Result<()> {
+    pub fn paste_text_in(&self, target: KeyTarget, text: &str) -> Result<PasteResult> {
         self.paste_into(Some(target), text)
     }
 
-    fn paste_into(&self, target: Option<KeyTarget>, text: &str) -> Result<()> {
+    /// Paste `text` into the focused app from a background path the user
+    /// can't see, and tell them (system notification) when `what` didn't
+    /// land, for example `"The AI Vault command"`.
+    pub fn paste_text_reporting(&self, text: &str, what: &str) -> Result<PasteResult> {
+        let result = self.paste_text(text);
+        report_in_background(&result, what);
+        result
+    }
+
+    fn paste_into(&self, target: Option<KeyTarget>, text: &str) -> Result<PasteResult> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard)?;
         if text.is_empty() {
             debug!("Empty text, nothing to paste");
-            return Ok(());
+            return Ok(PasteResult::Empty);
+        }
+        if !crate::permissions::can_post_keystrokes() {
+            // ⌘V would be dropped without a trace; give the user the text.
+            let on_clipboard =
+                crate::platform::promised_paste::copy_text_to_clipboard(text).is_ok();
+            warn!(
+                category = "PASTE",
+                event = "paste_copied_instead",
+                reason = "accessibility_missing",
+                on_clipboard,
+                text_len = text.len(),
+                "Script Kit can't post keystrokes; copied the text instead of pasting"
+            );
+            return Ok(PasteResult::CopiedInstead {
+                reason: CopiedReason::AccessibilityMissing,
+                on_clipboard,
+            });
         }
         // Outcome details (target read the text, clipboard restored) are
         // logged by the paste engine as `synthetic_paste`.
-        crate::platform::promised_paste::paste_text_preserving_clipboard(text, target)?;
-        Ok(())
+        let report = crate::platform::promised_paste::paste_text_with_options(
+            text,
+            target,
+            PasteOptions {
+                keep_text_if_unread: self.config.keep_text_if_unread,
+            },
+        )?;
+        Ok(classify_paste(report.consumption, &report.restore))
     }
 
     /// Inject text by deleting trigger characters and pasting replacement
@@ -146,15 +318,15 @@ impl TextInjector {
     /// Both steps go to the app that is focused when this is called.
     #[allow(dead_code)]
     #[instrument(skip(self, replacement), fields(delete_count, replacement_len = replacement.len()))]
-    pub fn inject_text(&self, delete_count: usize, replacement: &str) -> Result<()> {
+    pub fn inject_text(&self, delete_count: usize, replacement: &str) -> Result<PasteResult> {
         let target = synthetic_keys::focused_key_target();
         self.delete_chars_in(target, delete_count)?;
         if self.config.pre_paste_delay_ms > 0 {
             thread::sleep(Duration::from_millis(self.config.pre_paste_delay_ms));
         }
-        self.paste_text_in(target, replacement)?;
-        info!("Text injection completed");
-        Ok(())
+        let result = self.paste_text_in(target, replacement)?;
+        info!(result = result.code(), "Text injection completed");
+        Ok(result)
     }
 }
 
@@ -178,10 +350,69 @@ mod tests {
         let config = TextInjectorConfig {
             key_delay_ms: 5,
             pre_paste_delay_ms: 100,
+            keep_text_if_unread: false,
         };
         let injector = TextInjector::with_config(config.clone());
         assert_eq!(injector.config().key_delay_ms, 5);
         assert_eq!(injector.config().pre_paste_delay_ms, 100);
+    }
+
+    #[test]
+    fn unread_and_unpermitted_pastes_are_reported_not_silent() {
+        let unread = classify_paste(
+            PasteConsumption::NotRequested {
+                waited: Duration::from_millis(1200),
+            },
+            &RestoreOutcome::KeptPastedText,
+        );
+        assert_eq!(
+            unread,
+            PasteResult::CopiedInstead {
+                reason: CopiedReason::NotRead,
+                on_clipboard: true
+            }
+        );
+        assert!(!unread.landed());
+        assert_eq!(
+            unread.user_message("The transcript").as_deref(),
+            Some("The transcript is on the clipboard because the app didn't take the paste")
+        );
+        let restored = classify_paste(
+            PasteConsumption::NotRequested {
+                waited: Duration::from_millis(1200),
+            },
+            &RestoreOutcome::Restored,
+        );
+        assert_eq!(
+            restored.user_message("The snippet").as_deref(),
+            Some("The snippet wasn't pasted because the app didn't take it")
+        );
+        let no_access = PasteResult::CopiedInstead {
+            reason: CopiedReason::AccessibilityMissing,
+            on_clipboard: true,
+        };
+        assert!(no_access
+            .user_message("The transcript")
+            .unwrap_or_default()
+            .contains("needs Accessibility"));
+        assert_eq!(no_access.code(), "copied_accessibility_missing");
+    }
+
+    #[test]
+    fn read_and_unobservable_pastes_count_as_landed() {
+        assert_eq!(
+            classify_paste(
+                PasteConsumption::Requested {
+                    after: Duration::from_millis(30)
+                },
+                &RestoreOutcome::Restored
+            ),
+            PasteResult::Pasted
+        );
+        let sent = classify_paste(PasteConsumption::Unobserved, &RestoreOutcome::Restored);
+        assert_eq!(sent, PasteResult::Sent);
+        assert!(sent.landed());
+        assert_eq!(sent.user_message("x"), None);
     }
 
     #[test]

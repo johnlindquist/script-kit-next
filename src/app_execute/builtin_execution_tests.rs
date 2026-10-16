@@ -355,6 +355,7 @@ mod dictation_model_prompt_tests {
         let (title, _placeholder, choices) = ScriptListApp::build_dictation_setup_prompt(
             &state,
             crate::dictation::DictationModelId::ParakeetTdt06bV3,
+            &DictationSetupExtras::default(),
         );
         assert_eq!(title, "Dictation ready");
         assert_eq!(choices[0].value, BUILTIN_DICTATION_SETUP_START);
@@ -373,6 +374,7 @@ mod dictation_model_prompt_tests {
         let (title, _placeholder, choices) = ScriptListApp::build_dictation_setup_prompt(
             &state,
             crate::dictation::DictationModelId::ParakeetTdt06bV3,
+            &DictationSetupExtras::default(),
         );
         assert_eq!(title, "Finish dictation setup");
         assert!(choices

@@ -300,6 +300,12 @@ macro_rules! protocol_message_variants_query_ops {
         /// non-main targets.
         #[serde(rename = "oneWindow", default, skip_serializing_if = "Option::is_none")]
         one_window: Option<serde_json::Value>,
+        /// macOS privacy permissions read live: each status, whether Script Kit
+        /// asked and whether a grant looks stuck, plus each feature's readiness
+        /// with the words the user would see (`permissions::automation_state`).
+        /// Omitted for non-main targets.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        permissions: Option<serde_json::Value>,
     },
 
     // ============================================================

@@ -1653,7 +1653,7 @@ fn permission_command_builtin_uses_named_action_states() {
         "Permission command feedback copy should derive from the named state"
     );
     assert!(
-        content.contains("All permissions granted!")
+        content.contains("Everything that needs a permission is ready")
             && content.contains("Accessibility permission granted!")
             && content
                 .contains("Accessibility permission not granted. Some features may not work.")
