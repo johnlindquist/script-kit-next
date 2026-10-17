@@ -1438,6 +1438,7 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         "Starting dictation transcription"
     );
 
+    crate::dictation::takes::set_last_no_speech_reason(None);
     if samples.len() < config.minimum_samples {
         tracing::info!(
             category = "DICTATION",
@@ -1445,6 +1446,9 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
             minimum_samples = config.minimum_samples,
             "Skipping dictation transcription: audio too short"
         );
+        crate::dictation::takes::set_last_no_speech_reason(Some(
+            crate::dictation::takes::NoSpeechReason::TooShort,
+        ));
         return Ok(None);
     }
 
@@ -1455,6 +1459,9 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
             threshold = config.silence_rms,
             "Skipping dictation transcription: audio too silent"
         );
+        crate::dictation::takes::set_last_no_speech_reason(Some(
+            crate::dictation::takes::NoSpeechReason::TooQuiet,
+        ));
         return Ok(None);
     }
 
@@ -1470,10 +1477,15 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
             transcript_len = transcript.len(),
             "Dictation transcription succeeded"
         ),
-        Ok(None) => tracing::info!(
-            category = "DICTATION",
-            "Dictation transcription completed without text"
-        ),
+        Ok(None) => {
+            tracing::info!(
+                category = "DICTATION",
+                "Dictation transcription completed without text"
+            );
+            crate::dictation::takes::set_last_no_speech_reason(Some(
+                crate::dictation::takes::NoSpeechReason::NothingRecognized,
+            ));
+        }
         Err(error) => tracing::error!(
             category = "DICTATION",
             error = %error,

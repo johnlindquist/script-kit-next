@@ -310,6 +310,7 @@ fn test_thread_with_profile(
         pending_permission: None,
         pending_context_blocks,
         pending_context_consumed,
+        standing_instructions_considered: false,
         pending_context_items: Vec::new(),
         context_receipts: Vec::new(),
         last_prepared_turn: None,
@@ -590,6 +591,62 @@ fn brain_profile_prepends_recall_and_records_ask_signal() {
         block_text(&prepared.blocks[1]),
         "--- USER REQUEST ---\nWhat is the handoff port?"
     );
+}
+
+#[test]
+fn instruction_notes_go_with_the_first_message_only_and_show_a_receipt() {
+    let mut thread = test_thread_with_profile(
+        crate::ai::agent_chat::profiles::BUILTIN_GENERAL_PROFILE_ID,
+        Vec::new(),
+        false,
+    );
+    let loads = std::cell::Cell::new(0);
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok(crate::notes::format_standing_instructions(
+            &[("Tone".to_string(), "Answer in one paragraph.".to_string())],
+            1000,
+        ))
+    };
+    let first = thread.prepare_turn_blocks_with_receipt_full("hello", |_| Ok(None), |_| {}, load);
+    assert_eq!(loads.get(), 1);
+    assert!(block_text(&first.blocks[0]).contains("Answer in one paragraph."));
+    assert_eq!(
+        block_text(first.blocks.last().expect("request")),
+        "--- USER REQUEST ---\nhello"
+    );
+    assert_eq!(first.attachments.len(), 1);
+    assert_eq!(first.attachments[0].label.as_ref(), "Note Instructions");
+    assert_eq!(
+        first.attachments[0].snippet.as_ref().map(|s| s.as_ref()),
+        Some("Tone")
+    );
+
+    let second = thread.prepare_turn_blocks_with_receipt_full(
+        "again",
+        |_| Ok(None),
+        |_| {},
+        || panic!("instructions load once per chat"),
+    );
+    assert_eq!(block_text(&second.blocks[0]), "again");
+    assert!(second.attachments.is_empty());
+}
+
+#[test]
+fn unreadable_instruction_notes_say_so_without_blocking_the_message() {
+    let mut thread = test_thread(Vec::new(), false);
+    let prepared = thread.prepare_turn_blocks_with_receipt_full(
+        "hello",
+        |_| Ok(None),
+        |_| {},
+        || Err(anyhow::anyhow!("database locked")),
+    );
+    assert!(prepared.brain_failure.is_none());
+    assert_eq!(block_text(&prepared.blocks[0]), "hello");
+    assert!(prepared.attachments[0]
+        .snippet
+        .as_ref()
+        .is_some_and(|s| s.contains("Couldn't read")));
 }
 
 #[test]

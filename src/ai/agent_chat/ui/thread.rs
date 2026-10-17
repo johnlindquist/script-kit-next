@@ -464,6 +464,9 @@ pub(crate) struct AgentChatThread {
     pending_context_blocks: Vec<ContentBlock>,
     /// Whether staged context has already been consumed.
     pending_context_consumed: bool,
+    /// Whether this thread already decided about `#instructions` notes (they
+    /// go with the first message only).
+    standing_instructions_considered: bool,
 
     /// Typed context items visible as chips in the composer. The wrapper owns
     /// provenance, role, lifecycle, lifetime, stable identity, and removability;
@@ -1244,6 +1247,7 @@ impl AgentChatThread {
             pending_permission: None,
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
+            standing_instructions_considered: false,
             // WP-B2: the constructor is a context ingress. Drop any initial
             // parts the launch policy forbids so a Quick AI thread can never be
             // born holding ambient/file/skill context.
@@ -2048,8 +2052,13 @@ impl AgentChatThread {
         retained_queue_message: Option<AgentChatQueuedMessage>,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let needs_background_preparation =
-            context_job.is_some() || self.should_stage_brain_recall();
+        let stage_standing_instructions = self.should_stage_standing_instructions();
+        if stage_standing_instructions {
+            self.standing_instructions_considered = true;
+        }
+        let needs_background_preparation = context_job.is_some()
+            || self.should_stage_brain_recall()
+            || stage_standing_instructions;
         if !needs_background_preparation {
             return self.start_prepared_turn(
                 display_text.clone(),
@@ -2083,6 +2092,7 @@ impl AgentChatThread {
                     &preparation_text,
                     context_job,
                     should_stage_brain_recall,
+                    stage_standing_instructions,
                 )
             }))
             .map_err(|_| "agent_chat_context_resolution_panicked".to_string())
@@ -2450,16 +2460,88 @@ impl AgentChatThread {
             && self.profile_id == crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID
     }
 
+    /// Turns the loaded `#instructions` notes into a prompt block plus the
+    /// visible receipt on the user's message. A read failure doesn't stop the
+    /// message; the receipt says the notes couldn't be read.
+    pub(super) fn standing_instructions_parts(
+        loaded: anyhow::Result<Option<crate::notes::StandingInstructions>>,
+    ) -> (Option<ContentBlock>, Option<AgentChatMessageAttachment>) {
+        match loaded {
+            Ok(Some(instructions)) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_standing_instructions_staged",
+                    note_count = instructions.titles.len(),
+                    chars = instructions.text.len(),
+                    truncated = instructions.truncated,
+                );
+                let mut snippet = instructions.titles.join(", ");
+                if instructions.truncated {
+                    snippet.push_str(" (shortened)");
+                }
+                (
+                    Some(ContentBlock::Text(TextContent::new(instructions.text))),
+                    Some(AgentChatMessageAttachment {
+                        label: SharedString::from(crate::notes::NOTES_INSTRUCTIONS_LABEL),
+                        snippet: Some(SharedString::from(snippet)),
+                    }),
+                )
+            }
+            Ok(None) => (None, None),
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "agent_chat_standing_instructions_unavailable",
+                    error = %crate::logging::log_private_user_value(&error.to_string()),
+                );
+                (
+                    None,
+                    Some(AgentChatMessageAttachment {
+                        label: SharedString::from(crate::notes::NOTES_INSTRUCTIONS_LABEL),
+                        snippet: Some(SharedString::from(
+                            "Couldn't read your #instructions notes, so this message went without them",
+                        )),
+                    }),
+                )
+            }
+        }
+    }
+
+    /// Notes tagged `#instructions` go with the first message of every full
+    /// chat (any profile). Quick AI admits no recalled content, so it never
+    /// gets them.
+    fn should_stage_standing_instructions(&self) -> bool {
+        // Unit tests drive `prepare_turn_blocks_with_receipt_full` with their
+        // own loader instead of reading the real notes store.
+        !cfg!(test)
+            && !self.standing_instructions_considered
+            && !self.is_provider_free_fixture()
+            && !crate::runtime_policy::is_owned_evaluation()
+            && self
+                .session_policy
+                .admit_context(super::capabilities::AgentChatContextClass::History)
+                .is_ok()
+    }
+
     /// Build the content blocks for a turn AND return the resolution receipt
     /// so callers can surface partial-failure feedback.
     fn prepare_turn_blocks_with_receipt(&mut self, input: &str) -> PreparedTurnBlocks {
-        self.prepare_turn_blocks_with_receipt_using(
+        let stage_instructions = self.should_stage_standing_instructions();
+        self.prepare_turn_blocks_with_receipt_full(
             input,
             crate::brain::recall_context_block,
             crate::brain::record_ask_signals,
+            move || {
+                if stage_instructions {
+                    crate::notes::load_standing_instructions()
+                } else {
+                    Ok(None)
+                }
+            },
         )
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     fn prepare_turn_blocks_with_receipt_using<R, S>(
         &mut self,
         input: &str,
@@ -2470,8 +2552,37 @@ impl AgentChatThread {
         R: FnOnce(&str) -> anyhow::Result<Option<String>>,
         S: FnOnce(&str),
     {
+        self.prepare_turn_blocks_with_receipt_full(
+            input,
+            recall_context,
+            record_ask_signals,
+            || Ok(None),
+        )
+    }
+
+    fn prepare_turn_blocks_with_receipt_full<R, S, I>(
+        &mut self,
+        input: &str,
+        recall_context: R,
+        record_ask_signals: S,
+        standing_instructions: I,
+    ) -> PreparedTurnBlocks
+    where
+        R: FnOnce(&str) -> anyhow::Result<Option<String>>,
+        S: FnOnce(&str),
+        I: FnOnce() -> anyhow::Result<Option<crate::notes::StandingInstructions>>,
+    {
         let mut blocks = Vec::new();
         let mut brain_failure = None;
+        let mut extra_attachments = Vec::new();
+
+        // --- Standing instructions: `#instructions` notes, first turn only ---
+        if !self.standing_instructions_considered {
+            self.standing_instructions_considered = true;
+            let (block, attachment) = Self::standing_instructions_parts(standing_instructions());
+            blocks.extend(block);
+            extra_attachments.extend(attachment);
+        }
 
         // --- Brain recall: stage relevant local memory for the Brain profile ---
         // Lexical + attention-signal retrieval over the brain store (notes,
@@ -2501,7 +2612,8 @@ impl AgentChatThread {
 
         if let Some(turn) = self.take_pending_context_for_turn() {
             let receipt = turn.receipt;
-            let attachments = turn.attachments;
+            let mut attachments = extra_attachments;
+            attachments.extend(turn.attachments);
             let context_transition = turn.context_transition;
             blocks.extend(turn.blocks);
 
@@ -2544,7 +2656,7 @@ impl AgentChatThread {
             brain_failure,
             blocks,
             receipt: None,
-            attachments: Vec::new(),
+            attachments: extra_attachments,
             context_transition: PreparedContextTransition::default(),
         }
     }

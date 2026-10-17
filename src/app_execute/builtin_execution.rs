@@ -27,6 +27,9 @@ const BUILTIN_DICTATION_SETUP_DOWNLOAD_MODEL: &str = "download-model";
 const BUILTIN_DICTATION_SETUP_REQUEST_MIC: &str = "request-microphone";
 const BUILTIN_DICTATION_SETUP_OPEN_MIC_SETTINGS: &str = "open-microphone-settings";
 const BUILTIN_DICTATION_SETUP_TEST_MIC: &str = crate::dictation::DICTATION_SETUP_TEST_MIC;
+const BUILTIN_DICTATION_SETUP_RETRY_LAST: &str = crate::dictation::DICTATION_SETUP_RETRY_LAST;
+static DICTATION_RETRY_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 const BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY: &str =
     crate::dictation::DICTATION_SETUP_GRANT_ACCESSIBILITY;
 
@@ -4991,7 +4994,12 @@ impl ScriptListApp {
         cx.spawn(async move |this, cx| {
             let transcript_result = cx
                 .background_executor()
-                .spawn(async move { crate::dictation::transcribe_captured_audio(&chunks) })
+                .spawn(async move {
+                    // Keep the recording first, so a failed or empty
+                    // transcription can be retried from "Retry Last Dictation".
+                    let _ = crate::dictation::takes::save_take(&chunks);
+                    crate::dictation::transcribe_captured_audio(&chunks)
+                })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 Self::handle_dictation_transcript(
@@ -5976,15 +5984,28 @@ impl ScriptListApp {
                 }
             }
             Ok(None) => {
-                // No speech detected — treat the session as an abort: without a
-                // transcript there is nothing to seed, submit, or paste.
+                // No speech detected — nothing to seed, submit, or paste. Say
+                // why instead of ending silently.
+                let reason = crate::dictation::takes::last_no_speech_reason()
+                    .unwrap_or(crate::dictation::takes::NoSpeechReason::NothingRecognized);
                 tracing::info!(
                     category = "DICTATION",
                     ?target,
+                    reason = reason.code(),
                     "No dictation transcript recognized; aborting delivery"
                 );
                 if self.one_window_talking() {
                     self.one_window_talk_final(String::new(), None, cx);
+                }
+                let mut message = reason.message().to_string();
+                if reason == crate::dictation::takes::NoSpeechReason::NothingRecognized
+                    && crate::dictation::takes::latest_take().is_some()
+                {
+                    message.push_str(", or retry it from Dictation Setup");
+                }
+                self.one_window_notice(crate::line_notice::INFO, message.clone(), cx);
+                if !script_kit_gpui::is_main_window_visible() {
+                    crate::permissions::notify_user("Dictation", &message);
                 }
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
@@ -6989,7 +7010,79 @@ impl ScriptListApp {
             microphone_check: crate::dictation::last_microphone_check(),
             microphone_check_running: DICTATION_MIC_CHECK_RUNNING
                 .load(std::sync::atomic::Ordering::SeqCst),
+            last_take: crate::dictation::takes::latest_take().map(|take| {
+                let when: chrono::DateTime<chrono::Local> = take.recorded_at.into();
+                (take.duration, when.format("%-I:%M %p").to_string())
+            }),
+            retry_running: DICTATION_RETRY_RUNNING.load(std::sync::atomic::Ordering::SeqCst),
         }
+    }
+
+    /// Transcribe the newest kept recording again and copy the words.
+    fn retry_last_dictation(&mut self, cx: &mut Context<Self>) {
+        let Some(take) = crate::dictation::takes::latest_take() else {
+            self.notice_failed("There's no kept recording to retry".to_string(), cx);
+            return;
+        };
+        if DICTATION_RETRY_RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        self.open_dictation_setup_prompt(cx);
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move {
+                    let chunks = crate::dictation::takes::load_take(&take.path)?;
+                    let transcript = crate::dictation::transcribe_captured_audio(&chunks)?;
+                    if let Some(text) = &transcript {
+                        crate::platform::promised_paste::copy_text_to_clipboard(text)?;
+                        if crate::config::load_user_preferences()
+                            .dictation
+                            .save_history_enabled()
+                        {
+                            let _ = crate::dictation::record_dictation_history(
+                                text,
+                                take.duration,
+                                crate::dictation::DictationTarget::ExternalApp,
+                            );
+                        }
+                    }
+                    anyhow::Ok(transcript)
+                })
+                .await;
+            DICTATION_RETRY_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(Some(text)) => this.one_window_notice(
+                        crate::line_notice::DONE,
+                        format!("Copied {} words from your last recording", text.split_whitespace().count()),
+                        cx,
+                    ),
+                    Ok(None) => {
+                        let reason = crate::dictation::takes::last_no_speech_reason().unwrap_or(
+                            crate::dictation::takes::NoSpeechReason::NothingRecognized,
+                        );
+                        this.one_window_notice(
+                            crate::line_notice::INFO,
+                            reason.message().to_string(),
+                            cx,
+                        );
+                    }
+                    Err(error) => this.notice_failed(
+                        format!("Couldn't transcribe the last recording: {error}"),
+                        cx,
+                    ),
+                }
+                let still_in_setup = matches!(
+                    &this.current_view,
+                    AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_SETUP_PROMPT_ID
+                );
+                if still_in_setup {
+                    this.open_dictation_setup_prompt(cx);
+                }
+            });
+        })
+        .detach();
     }
 
     fn build_dictation_setup_prompt(
@@ -7315,6 +7408,7 @@ impl ScriptListApp {
                 );
             }
             BUILTIN_DICTATION_SETUP_TEST_MIC => self.run_dictation_microphone_check(cx),
+            BUILTIN_DICTATION_SETUP_RETRY_LAST => self.retry_last_dictation(cx),
             BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY => {
                 self.execute_permissions_wizard_grant(
                     crate::permissions_wizard::PermissionKind::Accessibility,

@@ -9,6 +9,8 @@
 //! - `// Schedule: every tuesday at 2pm` - Natural language schedules
 //!
 
+pub mod runs;
+
 // --- merged from part_000.rs ---
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, TimeZone, Utc};
@@ -80,6 +82,7 @@ pub struct Scheduler {
     stop_tx: Option<Sender<()>>,
 }
 
+#[allow(dead_code)] // Kept for the slot tests; runs::dispatch owns admission now.
 pub(crate) fn active_scheduled_run_count() -> usize {
     SCHEDULED_SCRIPT_ACTIVE_RUNS.load(Ordering::SeqCst)
 }
@@ -249,8 +252,14 @@ impl Scheduler {
         // Calculate the next run time in local timezone semantics,
         // then normalize to UTC for storage/comparison.
         let now = Utc::now();
-        let next_run = find_next_occurrence_utc_in_timezone(&parsed_cron, &now, &Local)
+        let mut next_run = find_next_occurrence_utc_in_timezone(&parsed_cron, &now, &Local)
             .context("Failed to calculate next run time")?;
+        // A run missed while Script Kit was quit (or the Mac slept) runs
+        // once now; several missed runs still make one.
+        if runs::catch_up_due(&parsed_cron, runs::last_started(&path), now) {
+            info!(path = %path.display(), cron = %cron_expr, "Catching up a missed scheduled run");
+            next_run = now;
+        }
 
         let scheduled_script = ScheduledScript {
             path: path.clone(),
@@ -393,26 +402,10 @@ impl Scheduler {
                 }
             }
 
-            // Send run events and update next_run times
-            let active_runs = active_scheduled_run_count();
-            let mut remaining_dispatches =
-                SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS.saturating_sub(active_runs);
+            // Send run events and update next_run times. The run handler
+            // (`runs::dispatch`) queues runs over the concurrency limit, so
+            // nothing due is dropped here.
             for path in scripts_to_run {
-                if remaining_dispatches == 0 {
-                    warn!(
-                        path = %path.display(),
-                        active_runs,
-                        limit = SCHEDULED_SCRIPT_MAX_CONCURRENT_RUNS,
-                        "Skipping scheduled run dispatch because concurrency limit is reached"
-                    );
-                    crate::executor::telemetry::log_scheduler_job_skipped(
-                        "scheduler::run_loop",
-                        &path.display().to_string(),
-                        "concurrency_limit",
-                    );
-                    continue;
-                }
-
                 debug!(path = %path.display(), "Script due to run");
                 if tx.send(SchedulerEvent::RunScript(path.clone())).is_err() {
                     warn!("Failed to send RunScript event, receiver dropped");
@@ -422,7 +415,6 @@ impl Scheduler {
                     "scheduler::run_loop",
                     &path.display().to_string(),
                 );
-                remaining_dispatches = remaining_dispatches.saturating_sub(1);
             }
 
             // Update next_run times

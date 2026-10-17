@@ -19,12 +19,14 @@ pub struct CalculatorInlineResult {
 }
 
 pub fn try_build(input: &str) -> Option<CalculatorInlineResult> {
-    if !looks_like_math(input) {
+    // "20% of 150" reads as 20% times 150.
+    let prepared = percent_of_re().replace_all(input, "% * ").into_owned();
+    if !looks_like_math(&prepared) {
         debug!("inline calculator rejected input during looks_like_math");
         return None;
     }
 
-    let normalized_expr = normalize_expression(input);
+    let (normalized_expr, percent_change) = normalize_expression_with_percent_kind(&prepared);
     let value = match meval::eval_str(&normalized_expr) {
         Ok(value) if value.is_finite() => value,
         Ok(value) => {
@@ -38,7 +40,12 @@ pub fn try_build(input: &str) -> Option<CalculatorInlineResult> {
     };
 
     let formatted = format_value(value)?;
-    let operation_name = infer_operation_name(&normalized_expr);
+    let operation_name = match percent_change {
+        Some('+') => String::from("Add Percentage"),
+        Some(_) => String::from("Subtract Percentage"),
+        None if prepared != input => String::from("Percentage Of"),
+        None => infer_operation_name(&normalized_expr),
+    };
     let words = words_for_formatted_number(&formatted);
 
     debug!(
@@ -124,7 +131,12 @@ fn looks_like_math(input: &str) -> bool {
     true
 }
 
-fn normalize_expression(input: &str) -> String {
+/// Normalizes symbols and percentages. A percentage added to or taken from
+/// the whole expression before it changes that amount, the way a desk
+/// calculator does: `50 + 20%` is 60 and `80 - 25%` is 60. Any other
+/// percentage is a fraction (`10% + 1` is 1.1, `200 * 5%` is 10). Returns
+/// the operator of an outermost percentage change, if there was one.
+fn normalize_expression_with_percent_kind(input: &str) -> (String, Option<char>) {
     let mut normalized_unicode = String::with_capacity(input.len());
     for ch in input.trim().chars() {
         match ch {
@@ -136,9 +148,48 @@ fn normalize_expression(input: &str) -> String {
         }
     }
 
-    percent_literal_re()
-        .replace_all(&normalized_unicode, "($num/100)")
-        .to_string()
+    let (rewritten, kind) = rewrite_percent_change(&normalized_unicode);
+    let expression = percent_literal_re()
+        .replace_all(&rewritten, "($num/100)")
+        .to_string();
+    (expression, kind)
+}
+
+/// Rewrites a trailing top-level `<left> + N%` / `<left> - N%` into
+/// `(<left>) * (1 ± N/100)`, handling `<left>` the same way first.
+fn rewrite_percent_change(expression: &str) -> (String, Option<char>) {
+    let Some(captures) = percent_change_re().captures(expression) else {
+        return (expression.to_string(), None);
+    };
+    let (Some(left), Some(op), Some(num)) = (
+        captures.name("left"),
+        captures.name("op"),
+        captures.name("num"),
+    ) else {
+        return (expression.to_string(), None);
+    };
+    let left = left.as_str().trim_end();
+    let ends_with_operand = left
+        .chars()
+        .next_back()
+        .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == ')' || ch == '.' || ch == '%');
+    let mut depth = 0i32;
+    for ch in left.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    if !ends_with_operand || depth != 0 {
+        return (expression.to_string(), None);
+    }
+    let op_char = if op.as_str() == "+" { '+' } else { '-' };
+    let (left, _) = rewrite_percent_change(left);
+    (
+        format!("({left}) * (1 {op_char} {}/100)", num.as_str()),
+        Some(op_char),
+    )
 }
 
 fn infer_operation_name(normalized_expression: &str) -> String {
@@ -528,6 +579,24 @@ fn percent_literal_re() -> &'static Regex {
     )
 }
 
+fn percent_change_re() -> &'static Regex {
+    static PERCENT_CHANGE_RE: OnceLock<Regex> = OnceLock::new();
+    PERCENT_CHANGE_RE.get_or_init(|| {
+        match Regex::new(r"^(?P<left>.*\S)\s*(?P<op>[+-])\s*(?P<num>\d+\.\d+|\d+|\.\d+)\s*%\s*$") {
+            Ok(regex) => regex,
+            Err(error) => panic!("SK_CALC_PERCENT_CHANGE_REGEX_INVALID: {}", error),
+        }
+    })
+}
+
+fn percent_of_re() -> &'static Regex {
+    static PERCENT_OF_RE: OnceLock<Regex> = OnceLock::new();
+    PERCENT_OF_RE.get_or_init(|| match Regex::new(r"(?i)%\s*of\b\s*") {
+        Ok(regex) => regex,
+        Err(error) => panic!("SK_CALC_PERCENT_OF_REGEX_INVALID: {}", error),
+    })
+}
+
 fn alpha_token_re() -> &'static Regex {
     static ALPHA_TOKEN_RE: OnceLock<Regex> = OnceLock::new();
     ALPHA_TOKEN_RE.get_or_init(|| match Regex::new(r"[A-Za-z]+") {
@@ -565,6 +634,51 @@ mod tests {
         assert_eq!("(10/100) + 2*3", result.normalized_expr);
         assert_eq!("6.1", result.formatted);
         assert_eq!("Six Point One", result.words);
+    }
+
+    #[test]
+    fn percent_added_to_or_taken_from_an_amount_changes_that_amount() {
+        for (input, expected, name) in [
+            ("50 + 20%", "60", "Add Percentage"),
+            ("80 - 25%", "60", "Subtract Percentage"),
+            ("100 + 10% + 10%", "121", "Add Percentage"),
+            ("(40 + 10) + 20%", "60", "Add Percentage"),
+            ("2 * 50 - 10%", "90", "Subtract Percentage"),
+        ] {
+            let result = try_build(input).expect(input);
+            assert_eq!(expected, result.formatted, "{input}");
+            assert_eq!(name, result.operation_name, "{input}");
+            assert_eq!(input, result.raw_input);
+        }
+    }
+
+    #[test]
+    fn other_percentages_stay_fractions() {
+        for (input, expected) in [
+            ("200 * 5%", "10"),
+            ("10% + 1", "1.1"),
+            ("50 / 25%", "200"),
+            ("2 * (3 + 50%)", "7"),
+            ("5 * -10%", "-0.5"),
+        ] {
+            assert_eq!(
+                expected,
+                try_build(input).expect(input).formatted,
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn percent_of_multiplies() {
+        let result = try_build("20% of 150").expect("percent of");
+        assert_eq!("30", result.formatted);
+        assert_eq!("Percentage Of", result.operation_name);
+        assert_eq!(
+            "7.5",
+            try_build("5% OF (100 + 50)").expect("upper").formatted
+        );
+        assert_eq!(None, try_build("of 150"), "`of` alone is still not math");
     }
 
     #[test]

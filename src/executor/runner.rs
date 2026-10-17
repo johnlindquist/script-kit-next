@@ -726,6 +726,36 @@ fn execute_script_interactive_impl(
     // remembering ("what script did I run earlier?"). Off-thread.
     crate::brain::record_activity("ran script", path_str);
 
+    let attempts = runtime_attempts(path, path_str, &argv);
+
+    let extra_env_for_closure = extra_env.clone();
+    let runner = move |cmd: &str, args: &[&str], script_path: &str| {
+        spawn_script_with_extra_env(cmd, args, script_path, &extra_env_for_closure)
+    };
+    if let Some(session) = run_fallback_chain(&attempts, &start, runner, path_str) {
+        return Ok(session);
+    }
+
+    let err = format!(
+        "Failed to execute script '{}' interactively. Make sure bun or node is installed.",
+        path.display()
+    );
+    error!(
+        duration_ms = start.elapsed().as_millis() as u64,
+        path = %path.display(),
+        "All script execution methods failed"
+    );
+    info!(
+        category = "EXEC",
+        error = %err,
+        "All interactive script execution methods failed"
+    );
+    Err(err)
+}
+
+/// The runtimes to try for a script, in order (bun with the SDK preloaded,
+/// bun alone, node).
+fn runtime_attempts(path: &Path, path_str: &str, argv: &[String]) -> Vec<RuntimeAttempt> {
     // Find SDK for preloading
     let sdk_path = find_sdk_path();
 
@@ -765,33 +795,99 @@ fn execute_script_interactive_impl(
             name: "node",
             label: "node".to_string(),
             cmd: node_path,
-            args: with_script_argv(vec![path_str.to_string()], &argv),
+            args: with_script_argv(vec![path_str.to_string()], argv),
         });
     }
+    attempts
+}
 
-    let extra_env_for_closure = extra_env.clone();
-    let runner = move |cmd: &str, args: &[&str], script_path: &str| {
-        spawn_script_with_extra_env(cmd, args, script_path, &extra_env_for_closure)
-    };
-    if let Some(session) = run_fallback_chain(&attempts, &start, runner, path_str) {
-        return Ok(session);
+/// Applies the script environment: an allow-list of the parent's variables,
+/// every `SCRIPT_KIT*` variable, then `extra_env`.
+fn apply_script_environment(command: &mut Command, extra_env: &[(String, String)]) {
+    command.env_clear();
+    for key in SAFE_SCRIPT_ENV_VARS {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
     }
+    for (key, value) in std::env::vars() {
+        if key.starts_with("SCRIPT_KIT") {
+            command.env(key, value);
+        }
+    }
+    for (key, value) in extra_env {
+        command.env(key, value);
+    }
+}
 
-    let err = format!(
-        "Failed to execute script '{}' interactively. Make sure bun or node is installed.",
-        path.display()
-    );
-    error!(
-        duration_ms = start.elapsed().as_millis() as u64,
-        path = %path.display(),
-        "All script execution methods failed"
-    );
-    info!(
-        category = "EXEC",
-        error = %err,
-        "All interactive script execution methods failed"
-    );
-    Err(err)
+/// A script started with nobody watching (a schedule). Same runtimes,
+/// environment and process group as an interactive run, but stdin is empty
+/// and stdout/stderr are plain pipes the caller drains.
+pub struct UnattendedChild {
+    pub child: std::process::Child,
+    /// The process group (the leader's pid); kill it to stop every child.
+    pub pgid: u32,
+}
+
+/// Starts a script for an unattended run. `SCRIPT_KIT_UNATTENDED=1` tells
+/// the script nobody can answer prompts.
+pub fn spawn_unattended_script(
+    path: &Path,
+    extra_env: &[(String, String)],
+) -> Result<UnattendedChild, String> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)
+        .map_err(|error| error.to_string())?;
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| "Invalid path encoding".to_string())?;
+    let mut env = extra_env.to_vec();
+    env.push(("SCRIPT_KIT_UNATTENDED".to_string(), "1".to_string()));
+    let attempts = runtime_attempts(path, path_str, &[]);
+    let start = Instant::now();
+    let runner =
+        |cmd: &str, args: &[&str], _script_path: &str| -> Result<UnattendedChild, String> {
+            let executable = find_executable(cmd)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|| cmd.to_string());
+            let mut command = Command::new(&executable);
+            apply_script_environment(&mut command, &env);
+            command
+                .args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            #[cfg(unix)]
+            command.process_group(0);
+            let child = command
+                .spawn()
+                .map_err(|e| format!("Failed to spawn '{}': {}", executable, e))?;
+            let pgid = child.id();
+            Ok(UnattendedChild { child, pgid })
+        };
+    run_fallback_chain(&attempts, &start, runner, path_str).ok_or_else(|| {
+        format!(
+            "Couldn't start '{}'. Make sure bun or node is installed.",
+            path.display()
+        )
+    })
+}
+
+/// Signals a process group (unix); a no-op elsewhere.
+pub fn signal_process_group(pgid: u32, kill: bool) -> Result<(), &'static str> {
+    #[cfg(unix)]
+    {
+        let signal = if kill {
+            unix_process::SIGKILL
+        } else {
+            unix_process::SIGTERM
+        };
+        unix_process::kill_process_group(pgid, signal)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (pgid, kill);
+        Ok(())
+    }
 }
 
 fn with_script_argv(mut args: Vec<String>, argv: &[String]) -> Vec<String> {
@@ -828,20 +924,7 @@ pub fn spawn_script_with_extra_env(
     );
 
     let mut command = Command::new(&executable);
-    command.env_clear();
-    for key in SAFE_SCRIPT_ENV_VARS {
-        if let Some(value) = std::env::var_os(key) {
-            command.env(key, value);
-        }
-    }
-    for (key, value) in std::env::vars() {
-        if key.starts_with("SCRIPT_KIT") {
-            command.env(key, value);
-        }
-    }
-    for (key, value) in extra_env {
-        command.env(key, value);
-    }
+    apply_script_environment(&mut command, extra_env);
     command
         .args(args)
         .stdin(Stdio::piped())

@@ -34,14 +34,14 @@ pub use types::{
     AgentChatBackend, AgentChatPathPolicyConfig, AgentChatProfile, AgentChatToolPolicyConfig,
     AiPreferences, AiVaultProvider, AiVaultResumeTerminal, AnimationPreferences, BrainRemoteConfig,
     BrowserHistoryProvider, BrowserTabProvider, BuiltInConfig, ClaudeCodeConfig, Config,
-    DictationPreferences, DictationTargetMode, EffectsPreferences, HotkeyConfig, LayoutConfig,
-    McpConfig, McpHttpServerConfig, McpServerConfig, McpStdioServerConfig, RootFilePromotionConfig,
-    ScriptKitUserPreferences, SpineCommandConfig, SpineStyleConfig, SuggestedConfig,
-    ThemeSelectionPreferences, UnifiedSearchAgentChatHistoryConfig, UnifiedSearchAiVaultConfig,
-    UnifiedSearchBrainConfig, UnifiedSearchBrainInboxConfig, UnifiedSearchBrowserHistoryConfig,
-    UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,
-    UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource, WatcherConfig,
-    WindowManagementPreferences,
+    DictationAppStyle, DictationPreferences, DictationTargetMode, EffectsPreferences, HotkeyConfig,
+    LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig, McpStdioServerConfig,
+    RootFilePromotionConfig, ScriptKitUserPreferences, SpineCommandConfig, SpineStyleConfig,
+    SuggestedConfig, ThemeSelectionPreferences, UnifiedSearchAgentChatHistoryConfig,
+    UnifiedSearchAiVaultConfig, UnifiedSearchBrainConfig, UnifiedSearchBrainInboxConfig,
+    UnifiedSearchBrowserHistoryConfig, UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig,
+    UnifiedSearchFilesConfig, UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource,
+    WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader

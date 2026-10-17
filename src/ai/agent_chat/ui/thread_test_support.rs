@@ -79,6 +79,7 @@ impl AgentChatThread {
             pending_permission: None,
             pending_context_blocks: context_blocks,
             pending_context_consumed: false,
+            standing_instructions_considered: false,
             pending_context_items: Vec::new(),
             context_receipts: Vec::new(),
             last_prepared_turn: None,

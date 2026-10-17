@@ -93,6 +93,14 @@ fn automation_row(script: &crate::scripts::Script, off: &BTreeSet<String>) -> Op
     let when = runs_when(script)?;
     let path = script.path.to_string_lossy().to_string();
     let stopped = off.contains(&path);
+    // How the latest unattended run went, so a failing automation is visible
+    // without opening logs.
+    let when = match crate::scheduler::runs::state(&script.path)
+        .and_then(|state| state.summary(chrono::Utc::now()))
+    {
+        Some(last) => format!("{when} · {last}"),
+        None => when,
+    };
     let row = Row::new(format!("auto:{path}"), script.name.clone())
         .with_icon(if stopped { "off" } else { "automation" })
         .with_enter_label(if stopped {

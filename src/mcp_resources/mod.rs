@@ -297,6 +297,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             mime_type: "text/plain".to_string(),
         },
         McpResource {
+            uri: "kit://automations".to_string(),
+            name: "Automations".to_string(),
+            description: Some(
+                "Scheduled scripts: when each last ran, how it ended (finished, failed, stopped at its time or memory limit, couldn't start), the end of its output, failures in a row, pauses and skipped runs."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
             uri: "kit://processes".to_string(),
             name: "Processes".to_string(),
             description: Some(
@@ -452,6 +461,12 @@ pub fn read_resource(
         _ if uri == "kit://git-diff" || uri.starts_with("kit://git-diff?") => {
             read_git_diff_resource(uri)
         }
+        "kit://automations" => Ok(ResourceContent {
+            uri: uri.to_string(),
+            mime_type: "application/json".to_string(),
+            text: serde_json::to_string_pretty(&crate::scheduler::runs::automation_state())
+                .map_err(|error| format!("Failed to serialize automations: {error}"))?,
+        }),
         "kit://processes" => read_processes_resource(),
         "kit://system" => read_system_info_resource(),
         STDIN_COMMANDS_REFERENCE_URI => read_stdin_commands_resource(),

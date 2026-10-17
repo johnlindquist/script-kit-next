@@ -82,6 +82,70 @@ pub const NOTES_INSTRUCTIONS_RESOURCE_URI: &str = "kit://notes?tag=instructions&
 /// Label shown on the instructions context chip in Agent Chat.
 pub const NOTES_INSTRUCTIONS_LABEL: &str = "Note Instructions";
 
+/// Most text standing instructions may add to a chat (all notes together).
+pub const STANDING_INSTRUCTIONS_MAX_CHARS: usize = 12_000;
+
+/// Instruction notes ready to send with the first message of a chat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StandingInstructions {
+    /// The prompt block (titles and bodies, capped).
+    pub text: String,
+    /// Titles of the notes included, in order.
+    pub titles: Vec<String>,
+    /// True when the cap cut text off.
+    pub truncated: bool,
+}
+
+/// Builds the standing-instructions block from `(title, body)` pairs. Empty
+/// bodies are skipped; the whole block stays under `max_chars`.
+pub fn format_standing_instructions(
+    notes: &[(String, String)],
+    max_chars: usize,
+) -> Option<StandingInstructions> {
+    let header = "Standing instructions from the user's notes tagged #instructions. Follow them unless the user says otherwise.\n";
+    let mut text = String::from(header);
+    let mut titles = Vec::new();
+    let mut truncated = false;
+    for (title, body) in notes {
+        let body = body.trim();
+        if body.is_empty() {
+            continue;
+        }
+        let section = format!("\n## {}\n{}\n", title.trim(), body);
+        let room = max_chars.saturating_sub(text.chars().count());
+        if room == 0 {
+            truncated = true;
+            break;
+        }
+        if section.chars().count() > room {
+            text.extend(section.chars().take(room));
+            titles.push(title.trim().to_string());
+            truncated = true;
+            break;
+        }
+        text.push_str(&section);
+        titles.push(title.trim().to_string());
+    }
+    (!titles.is_empty()).then_some(StandingInstructions {
+        text,
+        titles,
+        truncated,
+    })
+}
+
+/// Reads every active note tagged `#instructions` and formats it for a chat.
+pub fn load_standing_instructions() -> anyhow::Result<Option<StandingInstructions>> {
+    let notes = search_notes(&format!("tag:{NOTES_INSTRUCTIONS_TAG}"))?;
+    let pairs: Vec<(String, String)> = notes
+        .into_iter()
+        .map(|note| (note.title, note.content))
+        .collect();
+    Ok(format_standing_instructions(
+        &pairs,
+        STANDING_INSTRUCTIONS_MAX_CHARS,
+    ))
+}
+
 /// Provenance URI recorded in `source:` frontmatter for notes created from an
 /// Agent Chat thread. Keeps the note ↔ conversation relationship in the data
 /// layer so any surface can link back.
@@ -97,3 +161,37 @@ pub(crate) use open::new_note_to_edit;
 pub(crate) use storage::search_note_ids;
 #[allow(unused_imports)]
 pub(crate) use storage::{resolve_note_ref, rewrite_note_links, NoteRefResolution};
+
+#[cfg(test)]
+mod standing_instructions_tests {
+    use super::*;
+
+    #[test]
+    fn instructions_block_lists_each_note_and_skips_empty_ones() {
+        let notes = vec![
+            ("Tone".to_string(), "Be brief.".to_string()),
+            ("Empty".to_string(), "   ".to_string()),
+            ("Code".to_string(), "Prefer Rust.".to_string()),
+        ];
+        let block = format_standing_instructions(&notes, 10_000).expect("block");
+        assert_eq!(block.titles, vec!["Tone", "Code"]);
+        assert!(block.text.contains("## Tone\nBe brief."));
+        assert!(block.text.contains("## Code\nPrefer Rust."));
+        assert!(!block.truncated);
+    }
+
+    #[test]
+    fn instructions_block_respects_the_cap() {
+        let notes = vec![("Long".to_string(), "x".repeat(500))];
+        let block = format_standing_instructions(&notes, 200).expect("block");
+        assert!(block.truncated);
+        assert!(block.text.chars().count() <= 200);
+    }
+
+    #[test]
+    fn no_instruction_notes_means_no_block() {
+        assert_eq!(format_standing_instructions(&[], 1000), None);
+        let blank = vec![("Blank".to_string(), String::new())];
+        assert_eq!(format_standing_instructions(&blank, 1000), None);
+    }
+}

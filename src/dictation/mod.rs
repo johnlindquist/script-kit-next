@@ -17,6 +17,7 @@ mod history;
 mod mic_check;
 mod runtime;
 mod setup;
+pub mod takes;
 mod transcription;
 mod types;
 mod visualizer;
@@ -90,7 +91,7 @@ pub use setup::{
     build_dictation_setup_state, dictation_setup_extra_rows, DictationHotkeyStatus,
     DictationMicrophonePermissionStatus, DictationMicrophoneStatus, DictationSetupExtras,
     DictationSetupRow, DictationSetupState, DICTATION_SETUP_GRANT_ACCESSIBILITY,
-    DICTATION_SETUP_TEST_MIC,
+    DICTATION_SETUP_RETRY_LAST, DICTATION_SETUP_TEST_MIC,
 };
 pub use transcription::{
     build_session_result, captured_duration, dictation_engine_receipt, is_parakeet_model_available,

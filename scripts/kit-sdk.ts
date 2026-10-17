@@ -1143,7 +1143,8 @@ export interface BuiltInConfig {
 export interface ProcessLimits {
   /**
    * Maximum memory usage in megabytes (MB).
-   * Scripts exceeding this limit may be terminated.
+   * Applies to scheduled scripts: a run using more is stopped, and the
+   * Automations list and a notification say so.
    * Set to undefined/null for no limit.
    * 
    * @default undefined (no limit)
@@ -1154,10 +1155,10 @@ export interface ProcessLimits {
   
   /**
    * Maximum runtime in seconds.
-   * Scripts running longer than this will be terminated.
-   * Set to undefined/null for no limit.
+   * Applies to scheduled scripts: a run going longer is asked to stop, then
+   * stopped 5 seconds later along with anything it started.
    * 
-   * @default undefined (no limit)
+   * @default 1800 for scheduled scripts (30 minutes)
    * @example 60 // 1 minute timeout
    * @example 300 // 5 minute timeout
    * @example 3600 // 1 hour timeout
@@ -1709,6 +1710,15 @@ export interface DictationPreferences {
    * @example false // Hotkey always toggles recording
    */
   pushToTalk?: boolean;
+
+  /**
+   * Keep the newest 25 recordings (private WAV files in
+   * ~/.scriptkit/dictation/takes) so a dictation that failed or heard nothing
+   * can be retried from Dictation Setup. `saveHistory: false` also turns this off.
+   *
+   * @default true
+   */
+  keepRecordings?: boolean;
 }
 
 /**

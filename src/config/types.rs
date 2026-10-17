@@ -936,6 +936,41 @@ pub struct DictationPreferences {
     /// target mode. Managed by the app — edit `target` instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_target: Option<String>,
+    /// Keep the newest recordings (private WAV files) so a failed dictation
+    /// can be retried (default: true; `saveHistory: false` also turns it off).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_recordings: Option<bool>,
+    /// Words dictation should spell your way: names, product terms,
+    /// acronyms. Used as a spelling hint and as a correction pass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vocabulary: Option<Vec<String>>,
+    /// Clean-up style applied to the transcript before it is delivered
+    /// (default: "off"). "clean" fixes punctuation, capitals and filler words;
+    /// any writing style id ("concise", "professional", …) also works.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cleanup: Option<String>,
+    /// How long clean-up may take before the raw words are delivered
+    /// instead, in milliseconds (default: 6000).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cleanup_timeout_ms: Option<u64>,
+    /// Clean-up styles chosen by the app or website you dictate into. The
+    /// first rule that matches wins; otherwise `cleanup` applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_styles: Option<Vec<DictationAppStyle>>,
+}
+
+/// A dictation clean-up style for some apps or websites.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationAppStyle {
+    /// App names or bundle identifiers ("Slack", "com.apple.mail").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub apps: Vec<String>,
+    /// Website hosts ("github.com"); subdomains match too.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<String>,
+    /// The clean-up style to use ("off", "clean", or a writing style id).
+    pub style: String,
 }
 
 /// How `dictation.target` resolves the delivery destination at session start.
@@ -984,6 +1019,32 @@ impl DictationPreferences {
     /// Whether holding the dictation hotkey acts as push-to-talk.
     pub fn push_to_talk_enabled(&self) -> bool {
         self.push_to_talk.unwrap_or(true)
+    }
+
+    pub const DEFAULT_CLEANUP_TIMEOUT_MS: u64 = 6_000;
+    /// Most vocabulary words used (longer lists are cut).
+    pub const MAX_VOCABULARY_WORDS: usize = 200;
+
+    /// Vocabulary words, trimmed, de-duplicated and capped.
+    pub fn vocabulary_words(&self) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        self.vocabulary
+            .iter()
+            .flatten()
+            .map(|word| word.trim().to_string())
+            .filter(|word| !word.is_empty() && word.chars().count() <= 60)
+            .filter(|word| seen.insert(word.to_lowercase()))
+            .take(Self::MAX_VOCABULARY_WORDS)
+            .collect()
+    }
+
+    /// How long clean-up may take, clamped to 1–30 s.
+    pub fn cleanup_timeout(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(
+            self.cleanup_timeout_ms
+                .unwrap_or(Self::DEFAULT_CLEANUP_TIMEOUT_MS)
+                .clamp(1_000, 30_000),
+        )
     }
 
     /// Resolve `dictation.target` into a [`DictationTargetMode`].

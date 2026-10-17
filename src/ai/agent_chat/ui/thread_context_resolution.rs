@@ -232,9 +232,17 @@ impl AgentChatThread {
         input: &str,
         context_job: Option<PendingContextResolutionJob>,
         should_stage_brain_recall: bool,
+        stage_standing_instructions: bool,
     ) -> PreparedTurnBlocks {
         let mut blocks = Vec::new();
         let mut brain_failure = None;
+        let mut instruction_attachment = None;
+        if stage_standing_instructions {
+            let (block, attachment) =
+                Self::standing_instructions_parts(crate::notes::load_standing_instructions());
+            blocks.extend(block);
+            instruction_attachment = attachment;
+        }
         if should_stage_brain_recall {
             let recall = match crate::brain::recall_context_block(input) {
                 Ok(recall) => recall,
@@ -259,7 +267,8 @@ impl AgentChatThread {
         if let Some(job) = context_job {
             let consumed_part_count = job.items.len();
             let consumed_hidden_block_count = job.blocks.len();
-            let attachments = job.attachments;
+            let mut attachments: Vec<_> = instruction_attachment.take().into_iter().collect();
+            attachments.extend(job.attachments);
             blocks.extend(job.blocks);
             let resolved = Self::resolve_pending_context_items_with(
                 &job.items,
@@ -307,7 +316,7 @@ impl AgentChatThread {
             brain_failure,
             blocks,
             receipt: None,
-            attachments: Vec::new(),
+            attachments: instruction_attachment.into_iter().collect(),
             context_transition: PreparedContextTransition::default(),
         }
     }

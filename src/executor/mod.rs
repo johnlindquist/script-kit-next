@@ -26,7 +26,10 @@ pub use auto_submit::{
 
 pub use errors::{extract_error_message, generate_suggestions, parse_stack_trace};
 
-pub use runner::{execute_script_interactive_with_env_and_args, ScriptSession};
+pub use runner::{
+    execute_script_interactive_with_env_and_args, signal_process_group, spawn_unattended_script,
+    ScriptSession,
+};
 
 #[cfg(test)]
 pub(crate) use runner::{

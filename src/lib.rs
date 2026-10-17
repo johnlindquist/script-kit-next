@@ -55,6 +55,8 @@ pub mod form_prompt;
 pub mod formatting;
 #[cfg(test)]
 mod gpui_debug_bounds_tests;
+// Outcome of every global hotkey registration (shown when one fails)
+pub mod hotkey_health;
 pub mod hotkeys;
 pub mod icons;
 #[cfg(test)]

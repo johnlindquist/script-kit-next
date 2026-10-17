@@ -362,6 +362,7 @@ pub fn automation_state() -> serde_json::Value {
         "textExpansion": facts.text_expansion,
         "canRestart": recovery::restart_supported(),
         "bundleIdentifier": recovery::host_bundle_identifier(),
+        "hotkeys": crate::hotkey_health::automation_state(),
     })
 }
 

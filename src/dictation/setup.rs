@@ -123,6 +123,8 @@ fn format_hotkey(hotkey: &HotkeyConfig) -> String {
 pub const DICTATION_SETUP_TEST_MIC: &str = "test-microphone";
 /// Dictation Setup row: ask for Accessibility so dictation can type.
 pub const DICTATION_SETUP_GRANT_ACCESSIBILITY: &str = "allow-pasting";
+/// Dictation Setup row: transcribe the newest kept recording again.
+pub const DICTATION_SETUP_RETRY_LAST: &str = "retry-last-recording";
 
 /// Dictation Setup facts beyond model, microphone permission and hotkey.
 #[derive(Debug, Clone, PartialEq)]
@@ -135,6 +137,10 @@ pub struct DictationSetupExtras {
     pub microphone_check: Option<crate::dictation::MicrophoneCheck>,
     /// A microphone test is recording now.
     pub microphone_check_running: bool,
+    /// The newest kept recording: its length and when it was made ("2:05 PM").
+    pub last_take: Option<(std::time::Duration, String)>,
+    /// A retry of the newest recording is transcribing now.
+    pub retry_running: bool,
 }
 
 impl Default for DictationSetupExtras {
@@ -144,6 +150,8 @@ impl Default for DictationSetupExtras {
             lid_closed_on_builtin_microphone: false,
             microphone_check: None,
             microphone_check_running: false,
+            last_take: None,
+            retry_running: false,
         }
     }
 }
@@ -197,6 +205,23 @@ pub fn dictation_setup_extra_rows(
             name,
             value: DICTATION_SETUP_TEST_MIC,
             description,
+        });
+    }
+
+    if extras.retry_running {
+        rows.push(DictationSetupRow {
+            name: "Transcribing your last recording…".to_string(),
+            value: DICTATION_SETUP_RETRY_LAST,
+            description: "The words will be copied to the clipboard".to_string(),
+        });
+    } else if let Some((duration, when)) = &extras.last_take {
+        rows.push(DictationSetupRow {
+            name: format!(
+                "Retry last recording ({} s, {when})",
+                duration.as_secs_f32().round().max(1.0) as u64
+            ),
+            value: DICTATION_SETUP_RETRY_LAST,
+            description: "Transcribes it again and copies the words to the clipboard".to_string(),
         });
     }
 
@@ -372,5 +397,28 @@ mod tests {
         };
         let rows = dictation_setup_extra_rows(&state, &DictationSetupExtras::default());
         assert!(!rows.iter().any(|row| row.value == DICTATION_SETUP_TEST_MIC));
+    }
+
+    #[test]
+    fn setup_offers_to_retry_the_last_recording() {
+        let none = dictation_setup_extra_rows(&ready_state(), &DictationSetupExtras::default());
+        assert!(!none
+            .iter()
+            .any(|row| row.value == DICTATION_SETUP_RETRY_LAST));
+        let rows = dictation_setup_extra_rows(
+            &ready_state(),
+            &DictationSetupExtras {
+                last_take: Some((
+                    std::time::Duration::from_millis(4_400),
+                    "2:05 PM".to_string(),
+                )),
+                ..DictationSetupExtras::default()
+            },
+        );
+        let retry = rows
+            .iter()
+            .find(|row| row.value == DICTATION_SETUP_RETRY_LAST)
+            .expect("retry row");
+        assert_eq!(retry.name, "Retry last recording (4 s, 2:05 PM)");
     }
 }

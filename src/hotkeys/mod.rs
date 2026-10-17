@@ -259,6 +259,54 @@ fn hotkey_action_label(action: &HotkeyAction) -> String {
     }
 }
 
+/// Identity under which [`crate::hotkey_health`] tracks a hotkey.
+fn hotkey_health_key(action: &HotkeyAction) -> String {
+    match action {
+        HotkeyAction::Script(id) => format!("script:{id}"),
+        other => format!("builtin:{}", hotkey_action_label(other)),
+    }
+}
+
+/// What a script hotkey opens, for messages (the file name without folders).
+fn script_hotkey_label(path_or_id: &str) -> String {
+    std::path::Path::new(path_or_id)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(path_or_id)
+        .to_string()
+}
+
+fn hotkey_failure_kind(error: &HotkeyError) -> crate::hotkey_health::HotkeyFailureKind {
+    use crate::hotkey_health::HotkeyFailureKind;
+    match error {
+        HotkeyError::AlreadyRegistered(_) => HotkeyFailureKind::TakenByAnotherApp,
+        HotkeyError::FailedToRegister(_) => HotkeyFailureKind::ReservedBySystem,
+        _ => HotkeyFailureKind::Other,
+    }
+}
+
+/// Records a registration outcome for a builtin or script action.
+fn record_hotkey_outcome(action: &HotkeyAction, display: &str, result: Result<(), &HotkeyError>) {
+    if matches!(action, HotkeyAction::DevMarker) {
+        return;
+    }
+    let key = hotkey_health_key(action);
+    let label = match action {
+        HotkeyAction::Script(id) => script_hotkey_label(id),
+        other => hotkey_action_label(other),
+    };
+    match result {
+        Ok(()) => crate::hotkey_health::record_registered(&key, &label, display),
+        Err(error) => crate::hotkey_health::record_failed(
+            &key,
+            &label,
+            display,
+            hotkey_failure_kind(error),
+            error.to_string(),
+        ),
+    }
+}
+
 fn shortcut_conflict_in_routes(
     routes: &HotkeyRoutes,
     command_id: &str,
@@ -462,6 +510,7 @@ fn rebind_hotkey_transactional(
                 action_label, display, new_id
             ),
         );
+        record_hotkey_outcome(&action, display, Ok(()));
         return true; // No change needed
     }
 
@@ -487,6 +536,7 @@ fn rebind_hotkey_transactional(
             "HOTKEY",
             &format!("Failed to register {}: {} - keeping existing", display, e),
         );
+        record_hotkey_outcome(&action, display, Err(&e));
         return false;
     }
 
@@ -543,6 +593,7 @@ fn rebind_hotkey_transactional(
             action_label, display, new_id, old_replaced
         ),
     );
+    record_hotkey_outcome(&action, display, Ok(()));
     true
 }
 /// Update hotkeys from config - call this when config changes
@@ -684,7 +735,13 @@ impl ScriptHotkeyManager {
         let hotkey_id = hotkey.id();
 
         // Register with the OS - provide specific error messages based on error type
-        if let Err(e) = self.manager.register(hotkey) {
+        let registered = self.manager.register(hotkey);
+        record_hotkey_outcome(
+            &HotkeyAction::Script(path.to_string()),
+            shortcut,
+            registered.as_ref().map(|_| ()),
+        );
+        if let Err(e) = registered {
             return Err(match e {
                 HotkeyError::AlreadyRegistered(hk) => {
                     anyhow::anyhow!(
@@ -856,6 +913,7 @@ fn unregister_script_hotkey_with_manager(
             "HOTKEY",
             &format!("Unregistered script shortcut for {}", path),
         );
+        crate::hotkey_health::forget(&format!("script:{path}"));
     }
 
     Ok(())
@@ -1033,7 +1091,13 @@ pub fn register_dynamic_shortcut(
             command_id, shortcut, id, mods, code
         ),
     );
-    if let Err(e) = manager_guard.register(hotkey) {
+    let registered = manager_guard.register(hotkey);
+    record_hotkey_outcome(
+        &HotkeyAction::Script(command_id.to_string()),
+        shortcut,
+        registered.as_ref().map(|_| ()),
+    );
+    if let Err(e) = registered {
         logging::log(
             "KEY_SETUP",
             &format!(
@@ -1076,6 +1140,7 @@ pub fn register_dynamic_shortcut(
 /// Returns Ok(()) even if the shortcut wasn't registered (no-op).
 #[allow(dead_code)]
 pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
+    crate::hotkey_health::forget(&format!("script:{command_id}"));
     // Remove app routing first so a removed config shortcut cannot invoke the command
     // even if the OS/global unregister call fails.
     let Some((id, hotkey)) = ({
@@ -1600,7 +1665,9 @@ fn register_builtin_hotkey(
             action_label, display, id, mods, code
         ),
     );
-    match manager.register(hotkey) {
+    let registered = manager.register(hotkey);
+    record_hotkey_outcome(&action, &display, registered.as_ref().map(|_| ()));
+    match registered {
         Ok(()) => {
             let mut routes_guard = routes().write();
             routes_guard.add_route(
@@ -1651,7 +1718,21 @@ fn register_script_hotkey_internal(
             name, path, shortcut, id, mods, code
         ),
     );
-    match manager.register(hotkey) {
+    let registered = manager.register(hotkey);
+    let action = HotkeyAction::Script(path.to_string());
+    match &registered {
+        Ok(()) => {
+            crate::hotkey_health::record_registered(&hotkey_health_key(&action), name, shortcut)
+        }
+        Err(error) => crate::hotkey_health::record_failed(
+            &hotkey_health_key(&action),
+            name,
+            shortcut,
+            hotkey_failure_kind(error),
+            error.to_string(),
+        ),
+    }
+    match registered {
         Ok(()) => {
             let mut routes_guard = routes().write();
             routes_guard.add_route(

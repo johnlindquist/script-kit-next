@@ -74,7 +74,7 @@ mod tests {
 
         assert_eq!(
             resources.len(),
-            30,
+            31,
             "Resource registry count should be updated when new MCP resources land"
         );
 
