@@ -125,6 +125,17 @@ pub const DICTATION_SETUP_TEST_MIC: &str = "test-microphone";
 pub const DICTATION_SETUP_GRANT_ACCESSIBILITY: &str = "allow-pasting";
 /// Dictation Setup row: transcribe the newest kept recording again.
 pub const DICTATION_SETUP_RETRY_LAST: &str = "retry-last-recording";
+/// Dictation Setup row: add the selected word to the vocabulary.
+pub const DICTATION_SETUP_ADD_WORD: &str = "add-vocabulary-word";
+
+/// A selection that makes sense as a vocabulary entry: 2–60 characters and
+/// at most four words, on one line.
+pub fn vocabulary_candidate(selection: &str) -> Option<String> {
+    let text = selection.trim();
+    let chars = text.chars().count();
+    ((2..=60).contains(&chars) && !text.contains('\n') && text.split_whitespace().count() <= 4)
+        .then(|| text.to_string())
+}
 
 /// Dictation Setup facts beyond model, microphone permission and hotkey.
 #[derive(Debug, Clone, PartialEq)]
@@ -141,6 +152,12 @@ pub struct DictationSetupExtras {
     pub last_take: Option<(std::time::Duration, String)>,
     /// A retry of the newest recording is transcribing now.
     pub retry_running: bool,
+    /// Words in `dictation.vocabulary`.
+    pub vocabulary: Vec<String>,
+    /// Text selected in the app you came from, if it could be a word to add.
+    pub selected_word: Option<String>,
+    /// The clean-up style in effect when no app rule matches.
+    pub cleanup_style: String,
 }
 
 impl Default for DictationSetupExtras {
@@ -152,6 +169,9 @@ impl Default for DictationSetupExtras {
             microphone_check_running: false,
             last_take: None,
             retry_running: false,
+            vocabulary: Vec::new(),
+            selected_word: None,
+            cleanup_style: "off".to_string(),
         }
     }
 }
@@ -224,6 +244,43 @@ pub fn dictation_setup_extra_rows(
             description: "Transcribes it again and copies the words to the clipboard".to_string(),
         });
     }
+
+    let count = extras.vocabulary.len();
+    let words_label = if count == 1 {
+        "1 word".to_string()
+    } else {
+        format!("{count} words")
+    };
+    match &extras.selected_word {
+        Some(word)
+            if !extras
+                .vocabulary
+                .iter()
+                .any(|known| known.eq_ignore_ascii_case(word)) =>
+        {
+            rows.push(DictationSetupRow {
+                name: format!("Add “{word}” to your vocabulary"),
+                value: DICTATION_SETUP_ADD_WORD,
+                description: format!("Dictation will spell it this way ({words_label} so far)"),
+            });
+        }
+        _ => rows.push(DictationSetupRow {
+            name: format!("Vocabulary: {words_label}"),
+            value: "vocabulary",
+            description: "Select a name or term in any app, then open Dictation Setup to add it"
+                .to_string(),
+        }),
+    }
+    rows.push(DictationSetupRow {
+        name: if extras.cleanup_style == "off" {
+            "Clean-up: off".to_string()
+        } else {
+            format!("Clean-up: {}", extras.cleanup_style)
+        },
+        value: "cleanup-style",
+        description: "Set dictation.cleanup in config.ts (clean, or a writing style); dictation.appStyles picks one per app"
+            .to_string(),
+    });
 
     rows.push(if extras.paste_ready {
         DictationSetupRow {
@@ -420,5 +477,37 @@ mod tests {
             .find(|row| row.value == DICTATION_SETUP_RETRY_LAST)
             .expect("retry row");
         assert_eq!(retry.name, "Retry last recording (4 s, 2:05 PM)");
+    }
+
+    #[test]
+    fn setup_offers_to_add_the_selected_word_once() {
+        assert_eq!(
+            vocabulary_candidate("  OpenAI "),
+            Some("OpenAI".to_string())
+        );
+        assert_eq!(vocabulary_candidate("a"), None);
+        assert_eq!(vocabulary_candidate("one two three four five"), None);
+        assert_eq!(vocabulary_candidate("line\nbreak"), None);
+
+        let extras = DictationSetupExtras {
+            selected_word: Some("OpenAI".to_string()),
+            vocabulary: vec!["Script Kit".to_string()],
+            ..DictationSetupExtras::default()
+        };
+        let rows = dictation_setup_extra_rows(&ready_state(), &extras);
+        let add = rows
+            .iter()
+            .find(|row| row.value == DICTATION_SETUP_ADD_WORD)
+            .expect("add row");
+        assert!(add.name.contains("OpenAI"));
+        assert!(add.description.contains("1 word so far"));
+
+        let known = DictationSetupExtras {
+            vocabulary: vec!["openai".to_string()],
+            ..extras
+        };
+        let rows = dictation_setup_extra_rows(&ready_state(), &known);
+        assert!(!rows.iter().any(|row| row.value == DICTATION_SETUP_ADD_WORD));
+        assert!(rows.iter().any(|row| row.name == "Vocabulary: 1 word"));
     }
 }

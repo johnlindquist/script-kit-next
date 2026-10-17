@@ -1582,9 +1582,17 @@ pub(crate) fn transcribe_samples_with_cached_engine_progress(
         });
     }
 
-    guard
-        .as_ref()
-        .context("dictation transcriber unavailable")?
+    let cached = guard
+        .as_mut()
+        .context("dictation transcriber unavailable")?;
+    // Vocabulary as a spelling hint (engines without prompt support ignore
+    // it; the vocabulary pass in `polish` covers them).
+    cached
+        .transcriber
+        .set_initial_prompt(crate::dictation::polish::vocabulary_prompt(
+            &prefs.dictation.vocabulary_words(),
+        ));
+    cached
         .transcriber
         .transcribe_samples_with_progress(samples, progress)
 }

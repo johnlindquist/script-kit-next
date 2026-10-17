@@ -28,6 +28,7 @@ const BUILTIN_DICTATION_SETUP_REQUEST_MIC: &str = "request-microphone";
 const BUILTIN_DICTATION_SETUP_OPEN_MIC_SETTINGS: &str = "open-microphone-settings";
 const BUILTIN_DICTATION_SETUP_TEST_MIC: &str = crate::dictation::DICTATION_SETUP_TEST_MIC;
 const BUILTIN_DICTATION_SETUP_RETRY_LAST: &str = crate::dictation::DICTATION_SETUP_RETRY_LAST;
+const BUILTIN_DICTATION_SETUP_ADD_WORD: &str = crate::dictation::DICTATION_SETUP_ADD_WORD;
 static DICTATION_RETRY_RUNNING: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 const BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY: &str =
@@ -4998,9 +4999,23 @@ impl ScriptListApp {
                     // Keep the recording first, so a failed or empty
                     // transcription can be retried from "Retry Last Dictation".
                     let _ = crate::dictation::takes::save_take(&chunks);
-                    crate::dictation::transcribe_captured_audio(&chunks)
+                    let transcript = crate::dictation::transcribe_captured_audio(&chunks)?;
+                    // Vocabulary spelling and the optional clean-up style.
+                    // Clean-up has a deadline and falls back to the raw words.
+                    anyhow::Ok(transcript.map(|raw| {
+                        let prefs = crate::config::load_user_preferences();
+                        let (outcome, notice) =
+                            crate::dictation::polish::polish_transcript(&raw, &prefs.dictation);
+                        crate::dictation::polish::remember_polish(&outcome);
+                        (outcome.text, notice)
+                    }))
                 })
                 .await;
+            let (transcript_result, cleanup_notice) = match transcript_result {
+                Ok(Some((text, notice))) => (Ok(Some(text)), notice),
+                Ok(None) => (Ok(None), None),
+                Err(error) => (Err(error), None),
+            };
             let _ = this.update(cx, |this, cx| {
                 Self::handle_dictation_transcript(
                     this,
@@ -5015,6 +5030,9 @@ impl ScriptListApp {
                     None,
                     cx,
                 );
+                if let Some(notice) = cleanup_notice {
+                    this.one_window_notice(crate::line_notice::INFO, notice, cx);
+                }
             });
         })
         .detach();
@@ -7015,7 +7033,51 @@ impl ScriptListApp {
                 (take.duration, when.format("%-I:%M %p").to_string())
             }),
             retry_running: DICTATION_RETRY_RUNNING.load(std::sync::atomic::Ordering::SeqCst),
+            vocabulary: prefs.dictation.vocabulary_words(),
+            // Accessibility read only (never a simulated copy): text selected
+            // in the app you came from.
+            selected_word: crate::selected_text::get_selected_text_ax_only()
+                .ok()
+                .flatten()
+                .and_then(|text| crate::dictation::vocabulary_candidate(&text)),
+            cleanup_style: prefs
+                .dictation
+                .cleanup
+                .clone()
+                .map(|style| style.trim().to_lowercase())
+                .filter(|style| !style.is_empty())
+                .unwrap_or_else(|| "off".to_string()),
         }
+    }
+
+    /// Adds the selected word to `dictation.vocabulary` in config.ts.
+    fn add_selected_vocabulary_word(&mut self, cx: &mut Context<Self>) {
+        let Some(word) = crate::selected_text::get_selected_text_ax_only()
+            .ok()
+            .flatten()
+            .and_then(|text| crate::dictation::vocabulary_candidate(&text))
+        else {
+            self.notice_failed(
+                "The selection changed; select the word again and reopen Dictation Setup"
+                    .to_string(),
+                cx,
+            );
+            return;
+        };
+        let mut prefs = crate::config::load_user_preferences();
+        let list = prefs.dictation.vocabulary.get_or_insert_with(Vec::new);
+        if !list.iter().any(|known| known.eq_ignore_ascii_case(&word)) {
+            list.push(word.clone());
+        }
+        match crate::config::save_user_preferences(&prefs) {
+            Ok(()) => self.one_window_notice(
+                crate::line_notice::DONE,
+                format!("Dictation will spell “{word}” this way"),
+                cx,
+            ),
+            Err(error) => self.notice_failed(format!("Couldn't save the word: {error}"), cx),
+        }
+        self.open_dictation_setup_prompt(cx);
     }
 
     /// Transcribe the newest kept recording again and copy the words.
@@ -7409,6 +7471,7 @@ impl ScriptListApp {
             }
             BUILTIN_DICTATION_SETUP_TEST_MIC => self.run_dictation_microphone_check(cx),
             BUILTIN_DICTATION_SETUP_RETRY_LAST => self.retry_last_dictation(cx),
+            BUILTIN_DICTATION_SETUP_ADD_WORD => self.add_selected_vocabulary_word(cx),
             BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY => {
                 self.execute_permissions_wizard_grant(
                     crate::permissions_wizard::PermissionKind::Accessibility,

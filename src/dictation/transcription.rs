@@ -210,6 +210,11 @@ pub struct DictationTranscriber {
 }
 
 impl DictationTranscriber {
+    /// Replaces the spelling hint passed to engines that accept one.
+    pub fn set_initial_prompt(&mut self, prompt: Option<String>) {
+        self.config.initial_prompt = prompt;
+    }
+
     pub fn new(config: DictationTranscriptionConfig, engine: Box<dyn DictationEngine>) -> Self {
         Self {
             config,

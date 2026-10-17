@@ -1719,6 +1719,42 @@ export interface DictationPreferences {
    * @default true
    */
   keepRecordings?: boolean;
+
+  /**
+   * Names and terms dictation should spell your way. Words heard with other
+   * capitals or spacing ("open ai") are written as listed ("OpenAI"). Add the
+   * selected word from Dictation Setup. Up to 200 entries.
+   *
+   * @example ["Script Kit", "OpenAI", "GPUI"]
+   */
+  vocabulary?: string[];
+
+  /**
+   * AI clean-up applied before the words are delivered: "off", "clean"
+   * (punctuation, capitals, filler words) or a writing style id such as
+   * "concise" or "professional". Runs on the fast Quick AI model; if it fails
+   * or takes too long, your words are delivered as spoken.
+   *
+   * @default "off"
+   */
+  cleanup?: string;
+
+  /**
+   * How long clean-up may take before the words are delivered as spoken, in
+   * milliseconds. Clamped to 1000-30000.
+   *
+   * @default 6000
+   */
+  cleanupTimeoutMs?: number;
+
+  /**
+   * Clean-up styles per app or website. Sites are checked first (reading the
+   * browser page may ask for Automation permission once); the first matching
+   * rule wins, otherwise `cleanup` applies.
+   *
+   * @example [{ apps: ["Slack"], style: "concise" }, { sites: ["github.com"], style: "clean" }]
+   */
+  appStyles?: { apps?: string[]; sites?: string[]; style: string }[];
 }
 
 /**

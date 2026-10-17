@@ -1358,6 +1358,7 @@ pub(crate) fn private_snapshot(
                         target_id: "main-filter".into(),
                         target_label_snapshot: "Main Filter".into(),
                         audio_duration_ms: 1000,
+                        raw_transcript: None,
                     })
                     .collect()
             }))

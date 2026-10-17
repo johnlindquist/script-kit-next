@@ -84,6 +84,10 @@ pub struct DictationHistoryEntry {
     #[serde(default, alias = "target")]
     pub target_label_snapshot: String,
     pub audio_duration_ms: u64,
+    /// The words as spoken, when clean-up or vocabulary changed them before
+    /// delivery (`transcript` holds what was delivered).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_transcript: Option<String>,
 }
 
 /// What waits in the line before a saved transcript is deleted.
@@ -272,6 +276,7 @@ pub fn build_history_entry(
         target_id: target.sticky_label().to_string(),
         target_label_snapshot: target_label(target),
         audio_duration_ms: audio_duration.as_millis() as u64,
+        raw_transcript: crate::dictation::polish::raw_for_delivered(transcript),
     }
 }
 

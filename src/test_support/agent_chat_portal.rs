@@ -80,6 +80,7 @@ pub fn production_dictation_part(id: &str, preview: &str) -> AiContextPart {
             .to_string(),
         target_label_snapshot: "Agent Chat".to_string(),
         audio_duration_ms: 0,
+        raw_transcript: None,
     };
     crate::ai::context_mentions::dictation_history_part_for_entry(&entry)
 }

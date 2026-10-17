@@ -15,6 +15,7 @@ mod device;
 pub mod download;
 mod history;
 mod mic_check;
+pub mod polish;
 mod runtime;
 mod setup;
 pub mod takes;
@@ -87,11 +88,12 @@ pub(crate) use runtime::{
     replace_dictation_recovery_work, replace_dictation_return_origin,
     retain_frozen_selection_for_delivery, toggled_post_stop_restart, DictationRecoveryWork,
 };
+pub use setup::vocabulary_candidate;
 pub use setup::{
     build_dictation_setup_state, dictation_setup_extra_rows, DictationHotkeyStatus,
     DictationMicrophonePermissionStatus, DictationMicrophoneStatus, DictationSetupExtras,
-    DictationSetupRow, DictationSetupState, DICTATION_SETUP_GRANT_ACCESSIBILITY,
-    DICTATION_SETUP_RETRY_LAST, DICTATION_SETUP_TEST_MIC,
+    DictationSetupRow, DictationSetupState, DICTATION_SETUP_ADD_WORD,
+    DICTATION_SETUP_GRANT_ACCESSIBILITY, DICTATION_SETUP_RETRY_LAST, DICTATION_SETUP_TEST_MIC,
 };
 pub use transcription::{
     build_session_result, captured_duration, dictation_engine_receipt, is_parakeet_model_available,
