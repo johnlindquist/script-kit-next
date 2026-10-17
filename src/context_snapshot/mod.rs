@@ -8,6 +8,7 @@
 mod capture;
 mod inspection;
 mod types;
+pub mod window_context;
 
 #[allow(unused_imports)] // Used via lib crate; binary only needs capture_context_snapshot_json
 pub use capture::{

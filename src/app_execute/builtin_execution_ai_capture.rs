@@ -106,7 +106,6 @@ impl ScriptListApp {
         trace_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let capture_action = AiImageCaptureBuiltinAction::focused_window();
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -125,49 +124,46 @@ impl ScriptListApp {
                 .timer(ai_capture_hide_settle_duration())
                 .await;
 
-            let capture_result = cx
+            // Text sources (app, selection, page) are read alongside the
+            // screenshot; each fails on its own.
+            let text_sources = cx.background_executor().spawn(async {
+                let tracked = crate::frontmost_app_tracker::get_last_real_app();
+                let selection = crate::selected_text::get_selected_text_ax_only()
+                    .ok()
+                    .flatten();
+                let page_url = crate::platform::get_focused_browser_tab_url().ok();
+                (tracked, selection, page_url)
+            });
+            let screenshot = cx
                 .background_executor()
-                .spawn(async { platform::capture_focused_window_screenshot() })
-                .await;
+                .spawn(async { platform::capture_focused_window_screenshot() });
+            let (tracked, selection, page_url) = text_sources.await;
+            let capture_result = screenshot.await;
 
+            let mut context = crate::context_snapshot::window_context::WindowContext {
+                app_name: tracked.as_ref().map(|app| app.name.clone()),
+                window_title: tracked.as_ref().and_then(|app| app.window_title.clone()),
+                page_url,
+                ..Default::default()
+            }
+            .with_selection(selection);
+            let mut image_base64 = None;
+            let mut fallback_warning = None;
             match capture_result {
+                Ok(capture) if capture.png_data.len() > crate::prompts::chat::MAX_IMAGE_BYTES => {
+                    tracing::warn!(
+                        category = "AI",
+                        event = "ai_capture_rejected",
+                        source_action = "SendFocusedWindowToAi",
+                        trace_id = %trace_id,
+                        size_bytes = capture.png_data.len(),
+                        max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
+                        "Rejecting window capture larger than 10 MB"
+                    );
+                    context.screenshot_missing =
+                        Some("the window image is larger than 10 MB".to_string());
+                }
                 Ok(capture) => {
-                    let size_bytes = capture.png_data.len();
-                    if size_bytes > crate::prompts::chat::MAX_IMAGE_BYTES {
-                        tracing::warn!(
-                            category = "AI",
-                            event = "ai_capture_rejected",
-                            source_action = "SendFocusedWindowToAi",
-                            trace_id = %trace_id,
-                            size_bytes,
-                            max_bytes = crate::prompts::chat::MAX_IMAGE_BYTES,
-                            "Rejecting window capture larger than 10 MB"
-                        );
-                        this.update(cx, |this, cx| {
-                            this.notice_failed(
-                                "Window capture exceeds 10 MB limit".to_string(),
-                                cx,
-                            );
-                        })
-                        .ok();
-                        return;
-                    }
-
-                    let fallback_warning = capture.used_fallback.then(|| {
-                        format!(
-                            "No focused window found — captured '{}'",
-                            capture.window_title
-                        )
-                    });
-                    let base64_data = base64::Engine::encode(
-                        &base64::engine::general_purpose::STANDARD,
-                        &capture.png_data,
-                    );
-                    let message = format!(
-                        "[Window: {} - {}x{} pixels]\n\nPlease analyze this window screenshot.",
-                        capture.window_title, capture.width, capture.height
-                    );
-
                     let safe_window_title =
                         crate::logging::log_private_user_value(&capture.window_title);
                     tracing::info!(
@@ -179,46 +175,77 @@ impl ScriptListApp {
                         window_title_sha256 = %safe_window_title.sha256,
                         width = capture.width,
                         height = capture.height,
-                        size_bytes,
+                        size_bytes = capture.png_data.len(),
                         used_fallback = capture.used_fallback,
                         "Focused window captured for AI"
                     );
-
-                    this.update(cx, |this, cx| {
-                        if let Some(warning_message) = fallback_warning {
-                            this.one_window_notice(crate::line_notice::FAILED, warning_message, cx);
-                            cx.notify();
-                        }
-
-                        this.open_chat_for_action(
-                            "SendFocusedWindowToAi",
-                            &trace_id,
-                            DeferredAgentChatAction::SetInputWithImage {
-                                text: message,
-                                image_base64: base64_data,
-                                submit: false,
-                            },
-                            cx,
-                        );
-                    })
-                    .ok();
+                    if capture.used_fallback {
+                        fallback_warning = Some(format!(
+                            "No focused window found \u{2014} captured '{}'",
+                            capture.window_title
+                        ));
+                    }
+                    if !capture.window_title.is_empty() {
+                        context.window_title = Some(capture.window_title.clone());
+                    }
+                    context.screenshot_size = Some((capture.width, capture.height));
+                    image_base64 = Some(base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &capture.png_data,
+                    ));
                 }
                 Err(error) => {
-                    tracing::error!(
+                    tracing::warn!(
                         category = "AI",
                         event = "ai_capture_failed",
                         source_action = "SendFocusedWindowToAi",
                         trace_id = %trace_id,
                         error = %error,
-                        "Failed to capture focused window for AI"
+                        "Focused window screenshot failed; sending text sources"
                     );
-                    let message = capture_action.failure_message(&error);
-                    this.update(cx, |this, cx| {
-                        this.notice_failed(message, cx);
-                    })
-                    .ok();
+                    let recording = crate::permissions::status(
+                        crate::permissions::PermissionKind::ScreenRecording,
+                    );
+                    context.screenshot_missing = Some(
+                        if recording != crate::permissions::PermissionStatus::Authorized {
+                            "Screen Recording is off. Turn it on in Set Up Permissions".to_string()
+                        } else {
+                            format!("the capture failed ({error})")
+                        },
+                    );
                 }
             }
+
+            let notice = context.notice();
+            let text = context.composer_text();
+            let source_count = context.sources().len();
+            this.update(cx, |this, cx| {
+                if let Some(warning) = fallback_warning {
+                    this.one_window_notice(crate::line_notice::FAILED, warning, cx);
+                }
+                if let Some(notice) = notice {
+                    this.one_window_notice(crate::line_notice::INFO, notice, cx);
+                }
+                tracing::info!(
+                    category = "AI",
+                    event = "ai_window_context_sent",
+                    trace_id = %trace_id,
+                    source_count,
+                );
+                let action = match image_base64 {
+                    Some(image_base64) => DeferredAgentChatAction::SetInputWithImage {
+                        text,
+                        image_base64,
+                        submit: false,
+                    },
+                    None => DeferredAgentChatAction::SetInput {
+                        text,
+                        submit: false,
+                    },
+                };
+                this.open_chat_for_action("SendFocusedWindowToAi", &trace_id, action, cx);
+            })
+            .ok();
         })
         .detach();
     }
