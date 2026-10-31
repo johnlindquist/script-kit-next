@@ -939,7 +939,7 @@ impl Render for ScriptListApp {
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if !event.keystroke.modifiers.platform { crate::hotkeys::commit_main_gesture_typing(); }
                 let key = event.keystroke.key.as_str();
-                if crate::ui_foundation::is_key_escape(key) && this.cancel_cursor(cx) {cx.stop_propagation();return;}
+                if this.cursor_local_key(event,cx) {cx.stop_propagation();return;}
 
                 // The internal brain-memory preview is a sessionless DivPrompt:
                 // Enter/Escape close it back to the launcher list here instead

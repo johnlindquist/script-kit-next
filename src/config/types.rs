@@ -885,6 +885,12 @@ pub struct ThemeSelectionPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DictationPreferences {
+    /// Start contextual dictation in editable Kit input rather than at the captured cursor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_in_kit: Option<bool>,
+    /// Recording-only switch chord (default Shift+Escape); "off" leaves it unregistered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub switch_shortcut: Option<String>,
     /// Persisted microphone device ID. `None` means use system default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_device_id: Option<String>,

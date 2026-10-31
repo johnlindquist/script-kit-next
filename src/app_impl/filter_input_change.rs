@@ -9,6 +9,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.one_window_host.cursor_voice.dictated_input.as_deref()==Some(raw_filter_text){return false;}
         let entry_kind = match &entry {
             ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
             ScriptListSpecialEntry::QuickTerminal => "quick_terminal",

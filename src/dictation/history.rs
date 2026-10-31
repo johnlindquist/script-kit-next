@@ -135,6 +135,7 @@ impl DictationHistoryEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictationHistorySearchField {
     Transcript,
+    RawTranscript,
     Target,
     Timestamp,
 }
@@ -547,15 +548,15 @@ fn rank_history_entries(
             },
         ];
 
-        let Some(matched) = match_long_text_query(&compiled, &fields) else {
-            continue;
-        };
+        let mut matched_raw=false;
+        let Some(matched) = match_long_text_query(&compiled, &fields).or_else(||{let raw=entry.raw_transcript.as_deref()?;matched_raw=true;match_long_text_query(&compiled,&[LongTextField{id:LongTextFieldId::Transcript,text:raw,class:FieldClass::NaturalText,visibility:FieldVisibility::Hidden,weight:2}])}) else {continue;};
 
         let matched_field = match matched.evidence.primary_field {
             LongTextFieldId::Target => DictationHistorySearchField::Target,
             LongTextFieldId::Timestamp | LongTextFieldId::Duration => {
                 DictationHistorySearchField::Timestamp
             }
+            _ if matched_raw => DictationHistorySearchField::RawTranscript,
             _ => DictationHistorySearchField::Transcript,
         };
 
@@ -932,6 +933,7 @@ fn refresh_published_resource_from_entries(entries: &[DictationHistoryEntry]) {
 }
 
 pub fn hydrate_dictation_resource_from_history() {
+    if crate::dictation::recovery::purge_expired().is_err(){tracing::warn!("Dictation recovery cleanup unavailable");}
     let entries = match load_history_result() {
         Ok(entries) => entries,
         Err(error) => {
@@ -954,6 +956,12 @@ pub fn record_dictation_history(
     target: DictationTarget,
 ) -> std::io::Result<DictationHistoryEntry> {
     let entry = build_history_entry(transcript, audio_duration, target);
+    record_entry(entry)
+}
+pub fn keep_reviewed(entry:&DictationHistoryEntry)->std::io::Result<()> {
+    with_history_write_lock(||{let mut entries=load_history_result()?; entries.retain(|e|e.id!=entry.id);entries.insert(0,entry.clone());entries.truncate(HISTORY_COMPACT_LIMIT);write_history(&entries.iter().rev().cloned().collect::<Vec<_>>())?;entries.truncate(RESOURCE_ITEMS_LIMIT);refresh_published_resource_from_entries(&entries);Ok(())})
+}
+pub fn record_entry(entry:DictationHistoryEntry)->std::io::Result<DictationHistoryEntry>{
     save_history_entry(&entry)?;
     tracing::info!(
         category = "DICTATION",
@@ -969,6 +977,7 @@ pub fn record_dictation_history(
 pub fn delete_history_entry(entry_id: &str) -> anyhow::Result<()> {
     use anyhow::Context;
 
+    crate::dictation::recovery::TakeId::existing(entry_id).forget()?;
     with_history_write_lock(|| {
         let entries: Vec<DictationHistoryEntry> = load_history_result()?
             .into_iter()
@@ -1447,6 +1456,8 @@ mod tests {
         assert_eq!(loaded[1].id, first.id);
     }
 
+    #[test]
+    fn history_finds_original_and_kept_words_without_mixing_their_labels(){let _env=TestEnv::new();let mut e=build_history_entry("ship Thursday",Duration::from_secs(1),DictationTarget::ExternalApp);e.raw_transcript=Some("dispatch Wednesday".into());keep_reviewed(&e).unwrap();assert_eq!(search_history("Wednesday",10)[0].matched_field,DictationHistorySearchField::RawTranscript);assert_eq!(search_history("Thursday",10)[0].matched_field,DictationHistorySearchField::Transcript);}
     #[test]
     fn search_history_matches_transcript_and_target() {
         let _env = TestEnv::new();

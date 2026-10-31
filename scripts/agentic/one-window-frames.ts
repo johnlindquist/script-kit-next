@@ -31,7 +31,7 @@ export interface TalkToControl { family: "oneWindow"; operation: "talkTo"; desti
 export interface SummonControl { family: "oneWindow"; operation: "summon" }
 /** Stands in for the app the user came from: the line names its front window, so Space stages it. */
 export interface FocusWindowControl { family: "oneWindow"; operation: "focusWindow"; app: string; title: string }
-export type OneWindowControl = TalkToControl | SummonControl | FocusWindowControl | {family:"oneWindow";operation:"cursorBegin"|"shortcutOutside"} | {family:"oneWindow";operation:"cursorFinal";words:string};
+export type OneWindowControl = TalkToControl | SummonControl | FocusWindowControl | {family:"oneWindow";operation:"cursorBegin";handsFree?:boolean;inKit?:boolean;recoverableSample?:boolean} | {family:"oneWindow";operation:"shortcutOutside"} | {family:"oneWindow";operation:"cursorFinal";words:string};
 /** `click` names a painted node (its debug selector); the step clicks its center with an owned GPUI mouse event. */
 export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; control?: OneWindowControl; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
@@ -68,7 +68,7 @@ export function parseSteps(value: unknown): Step[] {
       const focusWindow = keys === "app,family,operation,title" && control!.operation === "focusWindow" &&
         [control!.app, control!.title].every(value =>
           typeof value === "string" && value.trim().length > 0 && value.length <= 128);
-      const cursor = keys === "family,operation" && ["cursorBegin","shortcutOutside"].includes(String(control!.operation)) || keys === "family,operation,words" && control!.operation === "cursorFinal" && typeof control!.words === "string" && control!.words.length > 0 && control!.words.length <= 256;
+      const cursor = (control?.operation === "cursorBegin" && Object.keys(control).every(key=>key==="family"||key==="operation"||(["handsFree","inKit","recoverableSample"].includes(key)&&typeof control[key]==="boolean"))) || keys === "family,operation" && control!.operation === "shortcutOutside" || keys === "family,operation,words" && control!.operation === "cursorFinal" && typeof control!.words === "string" && control!.words.length > 0 && control!.words.length <= 256;
       if (control?.family !== "oneWindow" || !(talkTo || summon || focusWindow || cursor))
         throw new EvaluationContractError("invalid_step_control", [step.name]);
     }

@@ -1,6 +1,6 @@
 # Dictation
 
-Hold the main shortcut to dictate into the field where you started. Tap Shift during recording to put the final words into Kit instead. Release finishes transcription; it does not execute a command. Tap twice for Today, or hold the second press to dictate there. [Shortcut and focus map](../specs/gesture-grammar.md). Transcription runs on-device.
+Hold the main shortcut to dictate into the field where you started. Press ⇧Esc during recording to put the final words into Kit instead. Release finishes transcription; it does not execute a command. Tap twice for Today, or hold the second press to dictate there. [Shortcut and focus map](../specs/gesture-grammar.md). Transcription runs on-device.
 
 ## First-Time Setup
 
@@ -12,7 +12,7 @@ Open the launcher and search:
 | **Select Microphone** | Pick an input device (`None` = system default) |
 | **Open Dictation History** | Browse saved transcripts |
 
-Readiness requires a downloaded transcription model, macOS microphone permission, and at least one input device. Dictation Setup also shows whether Script Kit can type into other apps (that needs Accessibility; without it your words are copied to the clipboard instead). It offers a three-second microphone test and warns when the built-in microphone is selected with the lid closed. See [Permissions](./permissions.md). Models are fetched on demand from Dictation Setup:
+Readiness requires a downloaded transcription model, macOS microphone permission, and at least one input device. Dictation Setup also shows whether Script Kit can type into other apps (direct cursor delivery needs Accessibility; if the field cannot be verified, the words are kept for review instead). It offers a three-second microphone test and warns when the built-in microphone is selected with the lid closed. See [Permissions](./permissions.md). Models are fetched on demand from Dictation Setup:
 
 - `parakeet-tdt-0.6b-v3` (default, 740 MB) — auto-detects its supported languages
 - `whisper-medium` (583 MB) — supports an explicit `language` hint
@@ -33,6 +33,8 @@ export default {
 ```
 
 **Push-to-talk is the default**: hold the hotkey, speak, release to stop and transcribe. A quick tap keeps classic toggle behavior (tap to start, tap to stop).
+
+**Dictate into Kit** (`builtin/dictate-into-kit`) is a separate bindable shortcut: start listening for Kit, then finish into editable launcher text. **Dictation Starting Destination** lets the usual shortcut start in Kit instead. The ⇧Esc switch is temporary: if its chord conflicts, choose a different `switchShortcut`. Configure a different chord when the hold shortcut already contains Shift; Kit does not guess whether an ambiguous Esc means switch or cancel. You can also bind **Cancel Dictation** (`builtin/cancel-cursor-dictation`). Outside cursor recording neither Escape combination belongs to dictation. ⌘K remains available to the foreground app.
 
 ## The “Talk” launcher action
 
@@ -57,6 +59,9 @@ export default {
     selectedDeviceId: "usb-mic",   // microphone; omit for system default
     model: "parakeet-tdt-0.6b-v3", // or "whisper-medium"
     language: "en",                // Whisper only; Parakeet auto-detects
+    startInKit: false,             // usual cursor shortcut starts at the original field
+    switchShortcut: "Shift+Escape", // use e.g. "Alt+F12" or "off"
+    keepRecordings: true,          // protected audio; saveHistory:false disables it too
     pushToTalk: true,              // hold-to-record (default: true)
     livePreview: true,             // live partial transcripts (default: true)
     saveHistory: true,             // append to dictation history (default: true)
@@ -79,7 +84,7 @@ Script Kit records the intended target when dictation starts, so delivery is sta
 
 ## Dictation History
 
-With `saveHistory` on, transcripts are stored locally and searchable via the **Dictation History** built-in: rows under the same input, newest first. `↵` pastes; `⌘K` stages an entry in the line to reuse it, hand it to Agent Chat, or delete it (the delete waits in the line with `⌘Z` to stop it). Saved transcripts are also exposed over MCP:
+With `saveHistory` on, transcripts are stored locally and searchable via the **Dictation History** built-in: rows under the same input, newest first. `↵` opens words for review. `⌘K` stages an entry: copy it, paste into the named field if available, review recording versions, hand it to Agent Chat or forget it after an eight-second countdown. **Last Dictation** opens the newest history entry without pasting. Saved transcripts are also exposed over MCP:
 
 ```text
 kit://dictation                      # most recent dictation envelope
@@ -87,6 +92,8 @@ kit://dictation-history              # newest transcript summaries
 kit://dictation-history?limit=20
 kit://dictation-history?id=<entry-id>
 ```
+
+**Recently Cancelled Dictations** is a separate, private list. Cancel with Esc before dispatch; use ⌘Z in Kit’s empty launcher when offered, or open the recovery list later. Cancelled takes expire after 24 hours. If only audio survived, choose **Transcribe saved audio**. A new version does not overwrite the draft. Choose **Keep draft in History** to retain a private draft and make it searchable. [Recovery and failure behavior](../specs/dictation-recovery.md).
 
 ## Privacy Notes
 
@@ -100,7 +107,7 @@ kit://dictation-history?id=<entry-id>
 | --- | --- |
 | No microphone detected | **Select Microphone** — confirm macOS sees the device |
 | Permission denied | **Dictation Setup** → grant microphone permission in macOS Settings |
-| Words land on the clipboard instead of in the app | Script Kit needs Accessibility to type into other apps, or the app didn't take the paste: press ⌘V. See [Permissions](./permissions.md) |
+| Delivery unknown or field changed | Check the original field first. Use **Recently Cancelled Dictations** or **Review Dictation in Markdown** to recover text. Kit does not repeat an uncertain paste. |
 | Dictation hears nothing | **Dictation Setup** → **Test microphone** |
 | Hotkey does nothing | Check `dictationHotkeyEnabled` isn't `false`; restart Script Kit after config changes |
 | Quiet mic drops dictations | Lower `dictation.silenceRms` (default 0.01) |

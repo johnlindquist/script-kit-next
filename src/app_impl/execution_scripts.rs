@@ -11,6 +11,10 @@ const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin/dictation",
     "builtin/dictation-to-ai",
     "builtin/dictation-to-app",
+    "builtin/dictate-into-kit",
+    "builtin/cancel-cursor-dictation",
+    "builtin/use-dictation-in-kit",
+    "builtin/review-dictation-markdown",
     "builtin/dictation-to-notes",
     "builtin/script-kit-selfie",
 ];
@@ -21,7 +25,7 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
 
 fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
     match entry.feature {
-        builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => false,
+        builtins::BuiltInFeature::CancelCursorDictation | builtins::BuiltInFeature::DictateIntoKit | builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => false,
         builtins::BuiltInFeature::App(_) => false,
         builtins::BuiltInFeature::MenuBarAction(_) => false,
         builtins::BuiltInFeature::SystemAction(_) => false,

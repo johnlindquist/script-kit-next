@@ -16,13 +16,14 @@ The default hold threshold is 250 ms. The second press must **begin** within 300
 
 ## Where the words go
 
-- **Use in Kit:** tap and release Shift after listening starts, or click the listening line. Tap again to switch back. The whole final transcript goes to the chosen destination. In Kit it's editable input; press ↵ separately to run a reading. Remote intent reading still requires opt-in. The model is told when command text came from speech; names, negation and literal values are not a license to guess.
+- **Use in Kit:** press ⇧Esc after listening starts, without releasing a held main shortcut. Press it again to switch back. Bare Shift does nothing. The switch is recording-only and configurable (`dictation.switchShortcut`; `off` disables it). The whole final transcript goes to the chosen destination. In Kit it's editable input; press ↵ separately to run a reading. Remote intent reading still requires opt-in. The model is told when command text came from speech; names, negation and literal values are not a license to guess.
+- **Start in Kit:** bind **Dictate into Kit**, or choose **In Script Kit** from **Dictation Starting Destination**. Both produce editable input, not a submitted command.
 - **Hands-free:** quick-tap the configured dictation shortcut to start, then tap it again to stop. Existing explicit target preferences and dedicated chat/note actions remain separate from the main shortcut's contextual hold.
 - **Long passages:** length never changes the destination. Bind **Review Dictation in Markdown** (`builtin/review-dictation-markdown`) to choose an editable local draft instead of pasting. This does not create a Today entry. A failed or stale direct delivery retains the latest withheld draft in memory for that same action. Review before leaving an unsaved draft.
 - **Controls:** `builtin/use-dictation-in-kit` toggles the destination without ending the recording. Both actions are available to shortcut bindings and the existing builtin-command interface. `getState`'s one-window snapshot exposes `cursorDictation`: active generation, route, stopping flag and draft availability, not audio or transcript contents.
 - Ordinary external delivery requires an identifiable, non-secure accessible field. It checks the captured process, field and selection again before dispatching a process-targeted paste. A changed or unidentifiable field is not replaced with whatever is now focused. The check and OS dispatch are not an atomic operation.
 
-The [dictation recovery contract](dictation-recovery.md) defines the target behavior of Escape, Restore, Retry, Paste and Forget, including which shortcuts stay local to Kit. Its durable recovery rules are not current storage guarantees.
+The [dictation recovery contract](dictation-recovery.md) defines the target behavior of Escape, Restore, Retry, Paste and Forget, including which shortcuts stay local to Kit.
 
 ## Focus ownership map
 

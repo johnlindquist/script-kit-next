@@ -4,6 +4,7 @@
 //! This module depends on `config`, `scripts`, `shortcuts`, and `logging`, and is used by app startup/reload flows.
 
 pub mod gesture;
+pub(crate) mod dictation_keys;
 
 // --- merged from part_000.rs ---
 use crate::{config, logging, scripts, shortcuts};
@@ -2013,6 +2014,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
         loop {
             if let Ok(event) = receiver.recv() {
+                if dictation_keys::dispatch(event.id,event.state){continue;}
                 // Look up action in unified routing table (fast read lock)
                 let action = {
                     let routes_guard = routes().read();

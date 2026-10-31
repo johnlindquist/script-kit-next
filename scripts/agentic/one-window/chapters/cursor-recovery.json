@@ -1,0 +1,26 @@
+[
+  {
+    "name": "record",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin",
+      "handsFree": true,
+      "inKit": true,
+      "recoverableSample": true
+    }
+  },
+  {
+    "name": "original",
+    "key": "shift-escape"
+  },
+  {
+    "name": "cancel",
+    "key": "escape",
+    "waitMs": 400
+  },
+  {
+    "name": "restore",
+    "key": "cmd-z",
+    "waitMs": 450
+  }
+]

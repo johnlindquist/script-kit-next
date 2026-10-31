@@ -1612,6 +1612,9 @@ impl ScriptListApp {
         })
     }
 
+    /// Same accessible destination and shortcut hints as the painted line. Live speech is
+    /// a local preview, not part of the passive protocol projection.
+    pub(crate) fn observable_prompt_header(&self)->crate::one_window::slot_line::SlotLineView {let mut header=self.prompt_header_context();if self.cursor_dictation_pending(){header.line.sub.clear();}header}
     pub(crate) fn prompt_header_context(&self) -> crate::one_window::slot_line::SlotLineView {
         let mut header=crate::one_window::slot_line::SlotLineView::of(
             &self.one_window,
@@ -1620,7 +1623,14 @@ impl ScriptListApp {
             self.is_pinned,
         );
         if let Some(s)=self.one_window_host.cursor_voice.active.as_ref(){
-            header.line.kind=sk_one_window::SlotKind::Typing;header.line.icon="mic".into();header.line.label.clear();header.line.title=if s.stopped{"Finishing dictation".into()}else{s.route.title(&s.label)};header.line.sub=s.partial.split_whitespace().collect::<Vec<_>>().join(" ");header.line.progress=None;header.line.lit=true;header.line.failed=false;header.line.hints=if s.stopped{vec![]}else{vec![("⇧".into(),if s.route==CursorRoute::Kit{format!("Back to {}",s.label)}else{"Use in Kit".into()})]};header.style.hints=true;header.style.opacity=1.;header.dim.to=1.;
+            header.line.kind=sk_one_window::SlotKind::Typing;header.line.icon="mic".into();header.line.label.clear();header.line.title=if s.stopped{"Finishing dictation".into()}else{s.route.title(&s.label)};header.line.sub=s.partial.split_whitespace().collect::<Vec<_>>().join(" ");header.line.progress=None;header.line.lit=true;header.line.failed=false;header.line.hints=Vec::new();
+            if s.journal_failed.load(std::sync::atomic::Ordering::Acquire){header.line.sub="Audio recovery unavailable".into();}
+            if !s.stopped {
+                if let Some(key)=&s.keys.switch_label {header.line.hints.push((key.clone(),if s.route==CursorRoute::Kit{format!("Write in {}",s.label)}else{"Use in Kit".into()}));}
+                else if s.keys.switch_unavailable {header.line.sub="Switch shortcut unavailable".into();}
+            }
+            if s.keys.cancel_available {header.line.hints.push(("Esc".into(),"Cancel".into()));}
+            header.style.hints=true;header.style.opacity=1.;header.dim.to=1.;
         }
         header
     }

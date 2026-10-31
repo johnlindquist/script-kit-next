@@ -1186,7 +1186,7 @@ impl ScriptListApp {
                 "title": row.title,
             })),
             "placeholder": self.gpui_input_state.read(cx).presentation().placeholder().to_string(),
-            "line": self.one_window.slot_line(now),
+            "line": self.observable_prompt_header().line,
             "recent": self.one_window.recent_line(now),
             "staged": self.one_window.staged().map(|staged| staged.subject.title.as_str()),
         })

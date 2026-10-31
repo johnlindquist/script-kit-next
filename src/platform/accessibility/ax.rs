@@ -750,7 +750,7 @@ pub(crate) fn focused_geometry(
 }
 
 #[cfg(target_os = "macos")]
-fn string_for_range(element: AXUIElementRef, range: super::TextRangeUtf16) -> Result<String> {
+pub(crate) fn string_for_range(element: AXUIElementRef, range: super::TextRangeUtf16) -> Result<String> {
     let cf_range = CFRange {
         location: range.location as isize,
         length: range.length as isize,

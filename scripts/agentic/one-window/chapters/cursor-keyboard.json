@@ -1,0 +1,30 @@
+[
+  {
+    "name": "hold",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin"
+    }
+  },
+  {
+    "name": "redirect",
+    "key": "cmd-shift-escape"
+  },
+  {
+    "name": "return",
+    "key": "cmd-shift-escape"
+  },
+  {
+    "name": "kit",
+    "key": "cmd-shift-escape"
+  },
+  {
+    "name": "draft",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorFinal",
+      "words": "open slack"
+    },
+    "waitMs": 350
+  }
+]

@@ -100,9 +100,9 @@ impl ScriptListApp {
                 target: entry.target_label_snapshot.clone(),
                 timestamp: entry.timestamp.clone(),
                 audio_duration_ms: entry.audio_duration_ms,
-                subtitle: format!("{} · {duration} · {time}", entry.target_label_snapshot),
+                subtitle: format!("{} · {duration} · {time}", row.sub.as_deref().unwrap_or(&entry.target_label_snapshot)),
                 score: 0,
-                matched_field: crate::dictation::DictationHistorySearchField::Transcript,
+                matched_field: if row.sub.as_deref()==Some("Matched original words"){crate::dictation::DictationHistorySearchField::RawTranscript}else{crate::dictation::DictationHistorySearchField::Transcript},
                 evidence: None,
             },
         ))
@@ -116,7 +116,7 @@ impl ScriptListApp {
         self.one_window_open_view(
             OwnView::DictationHistory,
             "Dictation History".to_string(),
-            Some(EnterTarget::new("history", "Paste it at the cursor")),
+            Some(EnterTarget::new("history", "Open for review")),
             true,
             cx,
         );
@@ -152,7 +152,7 @@ impl ScriptListApp {
             );
             return;
         }
-        self.execute_root_dictation_history_paste(&id, cx);
+        self.restore_saved_take(&id,cx);
     }
 
     /// ⌘K puts the highlighted transcript in the line and lists what can be done with it.
@@ -160,6 +160,7 @@ impl ScriptListApp {
         let Some((id, preview)) = self.one_window_selected_dictation() else {
             return;
         };
+        self.bind_history_paste(&id,cx);
         self.one_window_handle(
             Event::Stage(sk_one_window::Subject {
                 kind: sk_one_window::SubjectKind::Thing,
@@ -189,7 +190,7 @@ impl ScriptListApp {
             actions
                 .iter()
                 .filter(|action| action.is_enabled())
-                .map(super::staging::action_row)
+                .filter_map(|action|{let mut row=super::staging::action_row(action);if action.id=="root_dictation_paste"{row.title=format!("Paste into {}",self.history_paste_label(id)?);}Some(row)})
                 .collect(),
         ))
     }
@@ -230,6 +231,7 @@ impl ScriptListApp {
             );
             return;
         }
+        self.clear_forgotten_draft(entry_id,cx);
         if self.one_window_own_view() == Some(OwnView::DictationHistory) {
             self.one_window_host.learns.view_rows = self.one_window_history_rows();
             self.one_window_republish_own(cx);

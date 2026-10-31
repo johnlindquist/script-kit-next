@@ -16,6 +16,7 @@ pub mod download;
 mod history;
 mod mic_check;
 pub mod polish;
+pub mod recovery;
 mod runtime;
 mod setup;
 pub mod takes;
@@ -48,7 +49,7 @@ pub use history::{
     build_history_entry, delete_history_entry, delete_history_held_title,
     format_history_duration_ms, format_history_timestamp, get_history_entry,
     hydrate_dictation_resource_from_history, load_history, load_history_result,
-    record_dictation_history, root_dictation_history_query_is_eligible, search_history,
+    record_dictation_history, record_entry, keep_reviewed, root_dictation_history_query_is_eligible, search_history,
     search_root_dictation_history, search_root_dictation_history_cached,
     search_root_dictation_history_direct, seed_owned_dictation_history, DictationHistoryEntry,
     DictationHistorySearchField, DictationHistorySearchHit, RootDictationHistorySearchHit,
@@ -67,11 +68,11 @@ pub use mic_check::{
     MicrophoneCheck, MicrophoneLevel, MICROPHONE_CHECK_DURATION,
 };
 pub use runtime::{
-    abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
+    start_protected_recording, abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
     claim_dictation_delivery, current_dictation_phase, cycle_dictation_target,
     delivery_receipt_generation, dictation_auto_stop_due, dictation_delivery_was_claimed,
     dictation_elapsed, dictation_stop_target, dictation_target_generation, finalize_progress,
-    current_capture_generation, finish_stop_capture, get_active_dictation_device, get_dictation_target,
+    discard_private_partial, current_capture_generation, finish_stop_capture, get_active_dictation_device, get_dictation_target,
     get_dictation_target_selection, is_dictation_busy, is_dictation_recording,
     is_dictation_stopping, last_delivery_receipt, last_partial_transcript, last_stop_receipt,
     last_wrong_target_refusal, maybe_unload_transcriber, next_dictation_delivery_id,

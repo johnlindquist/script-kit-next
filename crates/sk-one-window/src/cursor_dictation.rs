@@ -17,25 +17,9 @@ impl Route {
     pub fn title(self, original: &str) -> String {
         match self {
             Self::Original => format!("Writing in {original}"),
-            Self::Kit => "Use in Kit".into(),
+            Self::Kit => "Dictating into Script Kit".into(),
             Self::Markdown => "Review in Markdown".into(),
         }
-    }
-}
-/// A Shift already held at microphone start is not a tap. A Shift used to type
-/// another key is not a tap either (the counter observes counts, not characters).
-#[derive(Default)]
-pub struct ShiftTap {
-    previous: Option<bool>,
-    down_count: Option<u32>,
-}
-impl ShiftTap {
-    pub fn sample(&mut self, down: bool, keys: u32) -> bool {
-        let previous = self.previous.replace(down);
-        if previous == Some(false) && down {
-            self.down_count = Some(keys);
-        }
-        previous == Some(true) && !down && self.down_count.take() == Some(keys)
     }
 }
 pub fn insert_at(
@@ -59,22 +43,6 @@ pub fn insert_at(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn shift_only_after_start_and_not_as_part_of_another_chord() {
-        let mut s = ShiftTap::default();
-        for (d, k, toggles) in [
-            (true, 1, false),
-            (false, 1, false),
-            (true, 1, false),
-            (true, 2, false),
-            (false, 2, false),
-            (true, 2, false),
-            (false, 2, true),
-            (false, 2, false),
-        ] {
-            assert_eq!(s.sample(d, k), toggles);
-        }
-    }
     #[test]
     fn route_round_trip_and_unicode_selection() {
         let mut r = Route::default();

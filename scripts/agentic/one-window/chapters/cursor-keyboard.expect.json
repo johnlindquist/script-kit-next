@@ -1,0 +1,14 @@
+{
+  "hold": {
+    "input": ""
+  },
+  "redirect": {
+    "input": ""
+  },
+  "return": {
+    "input": ""
+  },
+  "draft": {
+    "input": "open slack"
+  }
+}

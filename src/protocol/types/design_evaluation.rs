@@ -268,7 +268,7 @@ pub enum OneWindowTalkDestination {
     deny_unknown_fields
 )]
 pub enum OneWindowFixtureCommand {
-    CursorBegin {},
+    CursorBegin { #[serde(default)] hands_free:bool, #[serde(default)] in_kit:bool, #[serde(default)] recoverable_sample:bool },
     CursorFinal { words: String },
     ShortcutOutside {},
     /// Starts the voice session "Start Dictation to Agent Chat/Notes" starts; the typed words

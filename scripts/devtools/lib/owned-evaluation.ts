@@ -78,7 +78,8 @@ export type FixtureControl =
       { operation: "emitText"; messageId: string; text: string } |
       { operation: "complete" | "fail"; messageId: string } |
       { operation: "retry" | "stop" }))
-  | { family: "oneWindow"; operation: "cursorBegin" | "shortcutOutside" }
+  | { family: "oneWindow"; operation: "cursorBegin"; handsFree?:boolean; inKit?:boolean; recoverableSample?:boolean }
+  | { family:"oneWindow"; operation:"shortcutOutside" }
   | { family: "oneWindow"; operation: "cursorFinal"; words: string }
   | { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
   | ({ family: "search" } & ({ operation: "prepare"; scenario: string } |

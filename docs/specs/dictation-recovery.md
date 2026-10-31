@@ -1,17 +1,18 @@
 # Dictation: finish, cancel, restore, forget
 
-**Target interaction contract, not a list of shipped recovery features.** The fast path is still **hold, speak, release, keep working**. Cancel means “don’t deliver this”; Forget means “destroy Kit’s copy.” Restore gets words back without writing into another app.
+The fast path is still **hold, speak, release, keep working**. Cancel means “don’t deliver this”; Forget means “destroy Kit’s copy.” Restore gets words back without writing into another app.
 
 ## While speaking
 
-Defaults below refer to the configurable [main and dictation shortcuts](gesture-grammar.md). The listening line names the destination: for example, **Writing in Mail**, **Use in Kit**, or **Review in Markdown**. Route and cancel actions must also be clickable and remappable without requiring Kit to take keyboard focus from the original field.
+Defaults below refer to the configurable [main and dictation shortcuts](gesture-grammar.md). The listening line names the destination: for example, **Writing in Mail**, **Dictating into Script Kit**, or **Review in Markdown**. During a recording, the line shows the available keyboard controls; ⌘K and bare Shift stay with the foreground app. The switch can be reassigned or disabled.
 
 | Intent | Default gesture | Contract |
 |---|---|---|
 | Open Kit / open Today | Tap `⌘;` from another app / tap twice | The first release opens the launcher, not a stale note. Two presses open Today; holding the second dictates there. A single tap in focused Kit retains its existing window toggle. |
 | Finish in the original field | Hold `⌘;`, speak, release | Insert the final text once at the captured selection if it is still safe. Either release order means finish. No confirmation on a safe direct write; no interpretation as a command, even for “send this email.” |
 | Dictate hands-free | Tap `⌘⇧;` to start; tap again to finish | No need to keep a key down. The contextual route uses the same finish/cancel rules as a hold. Show the actual destination, including any explicitly configured target. |
-| Use in Kit | Tap Shift alone **after** listening starts | Toggle between the original destination and editable launcher input for the **whole** recording. A Shift held at start, used in another chord, or released as part of finishing is not a toggle. Release does not run a reading; a separate deliberate `↵` does. |
+| Dictate into Kit | Bind **Dictate into Kit** | Start hands-free in Kit; press its shortcut again to finish. **Dictation Starting Destination** changes where the usual shortcut starts; explicit Today stays Today. |
+| Use in Kit | Press **⇧Esc** while listening | Toggle between the original destination and editable launcher input for the **whole** recording. Keep holding the main shortcut while adding ⇧Esc. Neither bare Shift nor modifier release is an action. Release does not run a reading; a separate deliberate `↵` does. |
 | Review in Markdown | **Review Dictation in Markdown** (bind if desired) | Finish into an editable draft instead of the original field. It is not Today. Length, wording and pauses never select this route. |
 | Cancel | `Esc` while recording or finishing, before dispatch | Stop the mic and revoke delivery for this take immediately. Ignore its later hotkey release and late results. Don’t paste, copy, send, open an editor, or steal focus. Say what actually survived: **Cancelled · Restore in Kit**, **Cancelled · No recording kept**, or **Couldn't save the recording**. If dispatch already occurred, don’t claim it was cancelled. |
 
@@ -35,6 +36,6 @@ Use the launcher and its existing `⌘K` list rather than another set of global 
 
 ## Boundary and acceptance
 
-Today the gesture grammar and changed-target withholding exist. A withheld draft is the latest one in memory, History `↵` can paste immediately, and cancellation is **not** a durable 24-hour recovery service. The separate legacy Talk and dedicated chat actions have their own dispatch behavior; neither is the contextual hold’s finish route. See the [current dictation guide](../guides/dictation.md) and the [comparison of installed Mac apps](https://faint-tangle-3qxj.here.now/).
+Protection applies to cursor dictation and **Dictate into Kit**. The separate Talk, legacy recordings and dedicated chat actions have different lifecycles. Unlinked legacy WAV files cannot reliably be identified from a historical transcript; forgetting a legacy row does not guess which WAV to remove. An external paste is not an atomic operation with its AX checks. Native hotkey delivery and insertion in a particular app need qualification on that desktop. See the [dictation guide](../guides/dictation.md) and [comparison of installed Mac apps](https://faint-tangle-3qxj.here.now/).
 
 A distinguishing test: dictate into Mail, press Escape, release the shortcut, restart Kit, and restore. Mail and the clipboard must be unchanged. Only the cancelled take should open, with its surviving words or audio. Reprocess it, change focus, and forget it while a callback is pending: no automatic delivery and no resurrection. Check the no-saving case separately: no durable take should exist to restore.

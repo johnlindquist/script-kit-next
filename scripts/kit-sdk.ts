@@ -1719,6 +1719,10 @@ export interface DictationPreferences {
    * @default true
    */
   keepRecordings?: boolean;
+  /** Start contextual dictation in editable Kit input. Explicit Today or app routes win. */
+  startInKit?: boolean;
+  /** Active-recording shortcut only, e.g. "Shift+Escape", "Alt+F12", or "off". */
+  switchShortcut?: string;
 
   /**
    * Names and terms dictation should spell your way. Words heard with other

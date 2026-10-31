@@ -855,7 +855,7 @@ impl ScriptListApp {
                         self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
                     }
                     scripts::SearchResult::DictationHistory(dictation_match) => {
-                        self.execute_root_dictation_history_paste(&dictation_match.id, cx);
+                        self.restore_saved_take(&dictation_match.id,cx);
                     }
                     scripts::SearchResult::BrowserTab(browser_tab_match) => {
                         self.execute_root_browser_tab_switch(&browser_tab_match.hit, cx);
@@ -1331,35 +1331,7 @@ impl ScriptListApp {
         entry_id: &str,
         cx: &mut Context<Self>,
     ) {
-        let Some(entry) = crate::dictation::get_history_entry(entry_id) else {
-            logging::log(
-                "ERROR",
-                &format!("Root dictation history entry not found: {entry_id}"),
-            );
-            self.one_window_notice(
-                crate::line_notice::FAILED,
-                "Failed to paste dictation".to_string(),
-                cx,
-            );
-            return;
-        };
-
-        let transcript = entry.transcript;
-        self.hide_main_and_reset(cx);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            let injector = crate::text_injector::TextInjector::new();
-            match injector.paste_text_reporting(&transcript, "The dictation") {
-                Err(error) => logging::log(
-                    "ERROR",
-                    &format!("Failed to paste root dictation history: {error}"),
-                ),
-                Ok(result) => logging::log(
-                    "EXEC",
-                    &format!("Root dictation history paste: {}", result.code()),
-                ),
-            }
-        });
+        self.paste_saved_take(entry_id,cx);
     }
 
     pub(crate) fn execute_root_browser_history_open(&mut self, url: &str, cx: &mut Context<Self>) {

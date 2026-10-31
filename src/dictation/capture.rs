@@ -111,6 +111,9 @@ pub(crate) fn run_processor(
     event_tx: async_channel::Sender<DictationCaptureEvent>,
     config: DictationCaptureConfig,
 ) {
+    process_with_journal(raw_rx,event_tx,config,None)
+}
+pub(super) fn process_with_journal(raw_rx:mpsc::Receiver<RawAudioChunk>,event_tx:async_channel::Sender<DictationCaptureEvent>,config:DictationCaptureConfig,mut journal:Option<super::recovery::AudioJournal>){
     let sample_rate_hz = config.sample_rate_hz.max(1);
     let chunk_sample_count = samples_for_duration(sample_rate_hz, config.chunk_duration).max(1);
     let mut visualiser = AudioVisualiser::new_speech(sample_rate_hz);
@@ -133,6 +136,7 @@ pub(crate) fn run_processor(
             }
         }
 
+        if let Some(writer)=journal.as_mut(){writer.push(sample_rate_hz,&normalized.samples);}
         pending_samples.extend_from_slice(&normalized.samples);
 
         while pending_samples.len() >= chunk_sample_count {
@@ -157,6 +161,7 @@ pub(crate) fn run_processor(
         }
     }
 
+    if let Some(writer)=journal.as_mut(){writer.flush();}
     // Flush remaining samples as a tail chunk. This is the last audio the
     // user spoke before stop — send it blocking so a momentarily full event
     // channel cannot silently drop the end of the recording. The stop
@@ -261,10 +266,20 @@ impl Drop for DictationCaptureHandle {
     }
 }
 
-#[cfg(target_os = "macos")]
 pub fn start_capture(
     config: DictationCaptureConfig,
     device_id: Option<&DictationDeviceId>,
+) -> Result<(
+    async_channel::Receiver<DictationCaptureEvent>,
+    DictationCaptureHandle,
+)> {
+    start_capture_with_journal(config,device_id,None)
+}
+#[cfg(target_os = "macos")]
+pub(crate) fn start_capture_with_journal(
+    config: DictationCaptureConfig,
+    device_id: Option<&DictationDeviceId>,
+    journal:Option<super::recovery::AudioJournal>,
 ) -> Result<(
     async_channel::Receiver<DictationCaptureEvent>,
     DictationCaptureHandle,
@@ -280,7 +295,7 @@ pub fn start_capture(
     let (raw_tx, raw_rx) = mpsc::sync_channel::<RawAudioChunk>(128);
     let processor_thread = std::thread::Builder::new()
         .name("dictation-processor".to_string())
-        .spawn(move || run_processor(raw_rx, event_tx, config))
+        .spawn(move || process_with_journal(raw_rx, event_tx, config,journal))
         .context("failed to spawn dictation processor thread")?;
 
     unsafe {
@@ -428,9 +443,10 @@ pub fn start_capture(
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn start_capture(
+pub(crate) fn start_capture_with_journal(
     _config: DictationCaptureConfig,
     _device_id: Option<&DictationDeviceId>,
+    _journal:Option<super::recovery::AudioJournal>,
 ) -> Result<(
     async_channel::Receiver<DictationCaptureEvent>,
     DictationCaptureHandle,

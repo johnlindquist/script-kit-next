@@ -157,11 +157,8 @@ impl ScriptListApp {
     /// The line above the input as drawn: the same line and style the renderer uses
     /// (`crate::one_window::slot_line::slot_line_elements`).
     fn main_view_slot_line_elements(&self) -> Vec<protocol::ElementInfo> {
-        let now = self.one_window_clock();
-        crate::one_window::slot_line::slot_line_elements(
-            &self.one_window.slot_line(now),
-            self.one_window.slot_style(now),
-        )
+        let header=self.observable_prompt_header();
+        crate::one_window::slot_line::slot_line_elements(&header.line, header.style)
     }
 
     /// The subject chip in the main input, projected from the reducer the renderer draws from:
@@ -251,7 +248,7 @@ impl ScriptListApp {
         }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let mut context = if self.has_launcher_tabs(){self.subject_tab_elements()}else{self.main_view_slot_line_elements()};
+                let mut context = if self.has_launcher_tabs() && !self.cursor_dictation_pending(){self.subject_tab_elements()}else{self.main_view_slot_line_elements()};
                 if self.has_launcher_tabs() && self.filter_text.is_empty() { if let Some(p)=self.one_window.subject_page() {let mut tile=protocol::ElementInfo::button(0,"Stage this subject");tile.semantic_id=format!("stage-subject:{}",p.id);tile.index=None;context.push(tile);} }
                 context.extend(self.main_input_subject_chip_element());
                 context.extend(self.main_input_context_chip_elements());

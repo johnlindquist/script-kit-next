@@ -1,23 +1,36 @@
 // Direct dictation owns a frozen cursor, not a Jev Talk reading. Partial audio is never
 // inserted, sent to the intent reader, or used to choose an action.
-use sk_one_window::cursor_dictation::{Route as CursorRoute, ShiftTap};
+use crate::hotkeys::dictation_keys::{Control as CursorControl, ListeningKeys};
+use sk_one_window::cursor_dictation::Route as CursorRoute;
 
 #[derive(Default)]
 pub(crate) struct CursorHost {
     active: Option<CursorCapture>,
     retired: Option<u64>,
     saved_draft: Option<String>,
+    pub(crate) reviewing: Option<String>,
+    paste_anchor: Option<(
+        String,
+        CursorField,
+        crate::dictation::DictationTargetSelection,
+    )>,
+    saved_id: Option<String>,
     pub(crate) dictated_input: Option<String>,
 }
 struct CursorCapture {
     generation: u64,
     app: gpui::WeakEntity<ScriptListApp>,
     held: bool,
+    direct_owner: bool,
     stopped: bool,
     revealed: bool,
     route: CursorRoute,
     label: String,
-    shift: ShiftTap,
+    keys: ListeningKeys,
+    take: Option<crate::dictation::recovery::TakeId>,
+    history_allowed: bool,
+    journal_failed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    revoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
     partial: String,
     anchor: CursorAnchor,
     selection: crate::dictation::DictationTargetSelection,
@@ -31,21 +44,31 @@ enum CursorAnchor {
     Day(crate::dictation::DayPageDictationDestinationSnapshot),
     External(Option<CursorField>),
 }
+#[derive(Debug, thiserror::Error)]
+#[error("Delivery unknown; check the original field before pasting again")]
+struct CursorDispatchUnknown;
 struct CursorField {
     #[cfg(target_os = "macos")]
     pid: i32,
     #[cfg(target_os = "macos")]
     element: crate::platform::accessibility::ax::OwnedAxElement,
     #[cfg(target_os = "macos")]
-    range: Option<crate::platform::accessibility::TextRangeUtf16>,
+    range: crate::platform::accessibility::TextRangeUtf16,
 }
 impl CursorField {
     #[cfg(target_os = "macos")]
     fn capture() -> Option<Self> {
-        use crate::platform::accessibility::{app_identity, ax};
+        use crate::platform::accessibility::app_identity;
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
             .ok()?;
         let pid = app_identity::current_frontmost_app_identity().process_id?;
+        Self::capture_pid(pid)
+    }
+    #[cfg(target_os = "macos")]
+    fn capture_pid(pid: i32) -> Option<Self> {
+        use crate::platform::accessibility::ax;
+        crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
+            .ok()?;
         if pid == std::process::id() as i32 {
             return None;
         }
@@ -54,15 +77,7 @@ impl CursorField {
         if ax::subrole(ptr).as_deref() == Some("AXSecureTextField") {
             return None;
         }
-        let range = ax::selected_text_range(ptr);
-        if range.is_none()
-            && !matches!(
-                ax::role(ptr).as_deref(),
-                Some("AXTextField" | "AXTextArea" | "AXComboBox")
-            )
-        {
-            return None;
-        }
+        let range = ax::selected_text_range(ptr)?;
         Some(Self {
             pid,
             element,
@@ -84,6 +99,13 @@ impl CursorField {
             matches!(&selection.destination,FrozenDictationDestination::ExternalApp{pid,..} if *pid==self.pid),
             "The original application changed"
         );
+        anyhow::ensure!(
+            crate::dictation::capture_frozen_external_destination()
+                .ok()
+                .as_ref()
+                == Some(&selection.destination),
+            "The original window changed"
+        );
         let now = Self::capture()
             .ok_or_else(|| anyhow::anyhow!("The original field is no longer focused"))?;
         anyhow::ensure!(
@@ -93,14 +115,37 @@ impl CursorField {
                 && !crate::platform::is_main_window_focused(),
             "The original field or selection changed"
         );
-        let result = crate::text_injector::TextInjector::new().paste_text_in(
-            crate::platform::synthetic_keys::KeyTarget::Process(self.pid),
-            words,
-        )?;
+        use crate::platform::promised_paste::{paste_text_with_options, PasteOptions};
         anyhow::ensure!(
-            result.landed(),
-            "Paste was not confirmed: {}",
-            result.code()
+            crate::permissions::can_post_keystrokes(),
+            "No permission to paste"
+        );
+        let _report = paste_text_with_options(
+            words,
+            Some(crate::platform::synthetic_keys::KeyTarget::Process(
+                self.pid,
+            )),
+            PasteOptions {
+                keep_text_if_unread: false,
+            },
+        )
+        .map_err(|_| CursorDispatchUnknown)?;
+        let inserted = crate::platform::accessibility::TextRangeUtf16 {
+            location: self.range.location,
+            length: words.encode_utf16().count(),
+        };
+        let after = Self::capture();
+        anyhow::ensure!(
+            after.as_ref().is_some_and(|f| f.pid == self.pid
+                && self.element.same_element(&f.element)
+                && f.range.location == inserted.location + inserted.length
+                && f.range.length == 0)
+                && crate::platform::accessibility::ax::string_for_range(
+                    self.element.as_ptr(),
+                    inserted
+                )
+                .is_ok_and(|s| s == words),
+            CursorDispatchUnknown
         );
         Ok(())
     }
@@ -110,33 +155,10 @@ impl CursorField {
     }
 }
 
-// Sample modifier flags only during our recording. No global keyboard hook, key contents,
-// or additional Input Monitoring permission. KeyDown event type = 10, combined session = 0.
-fn cursor_shift_sample() -> (bool, u32) {
-    #[cfg(target_os = "macos")]
-    {
-        if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)
-            .is_ok()
-        {
-            #[link(name = "CoreGraphics", kind = "framework")]
-            extern "C" {
-                fn CGEventSourceFlagsState(state: i32) -> u64;
-                fn CGEventSourceCounterForEventType(state: i32, event: u32) -> u32;
-            }
-            return unsafe {
-                (
-                    CGEventSourceFlagsState(0) & (1 << 17) != 0,
-                    CGEventSourceCounterForEventType(0, 10),
-                )
-            };
-        }
-    }
-    (false, 0)
-}
 impl ScriptListApp {
     pub(crate) fn cursor_voice_state(&self) -> serde_json::Value {
         let host = &self.one_window_host.cursor_voice;
-        serde_json::json!({"active":host.active.is_some(),"generation":host.active.as_ref().map(|s|s.generation),"route":host.active.as_ref().map(|s|match s.route{CursorRoute::Original=>"original",CursorRoute::Kit=>"kit",CursorRoute::Markdown=>"markdown"}),"stopping":host.active.as_ref().is_some_and(|s|s.stopped),"draftAvailable":host.saved_draft.is_some()})
+        serde_json::json!({"active":host.active.is_some(),"generation":host.active.as_ref().map(|s|s.generation),"route":host.active.as_ref().map(|s|match s.route{CursorRoute::Original=>"original",CursorRoute::Kit=>"kit",CursorRoute::Markdown=>"markdown"}),"switchShortcut":host.active.as_ref().and_then(|s|s.keys.switch_label.as_deref()),"switchUnavailable":host.active.as_ref().is_some_and(|s|s.keys.switch_unavailable),"cancelAvailable":host.active.as_ref().is_some_and(|s|s.keys.cancel_available),"stopping":host.active.as_ref().is_some_and(|s|s.stopped),"draftAvailable":host.saved_draft.is_some()})
     }
     fn shared_cursor_prompt(&self) -> bool {
         matches!(
@@ -154,6 +176,11 @@ impl ScriptListApp {
         else {
             return false;
         };
+        let s = self.one_window_host.cursor_voice.active.as_ref().unwrap();
+        s.revoked.store(true, std::sync::atomic::Ordering::Release);
+        let take = s.take.clone();
+        let saved = take.as_ref().map(|t| t.cancel(&s.partial));
+        crate::dictation::discard_private_partial(id);
         if crate::dictation::current_capture_generation() == Some(id) {
             self.request_active_dictation_stop(
                 crate::dictation::DictationStopReason::Hotkey,
@@ -161,7 +188,19 @@ impl ScriptListApp {
                 cx,
             );
         }
-        self.end_empty_cursor(id, cx)
+        self.end_empty_cursor(id, cx);
+        match (take, saved) {
+            (Some(t), Some(Ok(()))) => self.announce_recovered_cancel(&t, cx),
+            (_, Some(Err(e))) => {
+                self.notice_failed(format!("Couldn't save cancelled recording: {e}"), cx)
+            }
+            _ => self.one_window_notice(
+                crate::line_notice::INFO,
+                "Cancelled · No recording kept",
+                cx,
+            ),
+        }
+        true
     }
     pub(crate) fn cursor_dictation_pending(&self) -> bool {
         self.one_window_host.cursor_voice.active.is_some()
@@ -207,38 +246,108 @@ impl ScriptListApp {
         {
             return;
         }
+        let kit = !today && self.config.get_dictation_preferences().start_in_kit == Some(true);
         let target = if external {
             T::ExternalApp
         } else if matches!(self.current_view, AppView::DayPage { .. }) {
             T::DayPageToday
         } else if !today && self.shared_cursor_prompt() {
             T::MainWindowPrompt
-        } else if !today && matches!(self.current_view, AppView::ScriptList) {
+        } else if kit || (!today && matches!(self.current_view, AppView::ScriptList)) {
             T::MainWindowFilter
         } else {
             self.notice_failed("This field doesn't accept shortcut dictation", cx);
             return;
         };
         let action = DictationBuiltinAction::CurrentSurface;
-        if self.prepare_dictation_builtin_start(action, Some(target), cx)
-            != DictationStartPreflight::Ready
+        if self.prepare_dictation_builtin_start(
+            action,
+            Some(if kit { T::MainWindowFilter } else { target }),
+            cx,
+        ) != DictationStartPreflight::Ready
         {
             // Download/setup is a separate action. It must not replay a released hold.
             *pending_dictation_model_action().lock() = None;
             return;
         }
-        self.start_cursor_recording(target, true, cx);
+        self.start_cursor_recording(target, true, kit, cx);
+    }
+    fn cursor_context_target(&self) -> crate::dictation::DictationTarget {
+        use crate::dictation::DictationTarget as T;
+        if !crate::platform::is_main_window_focused() {
+            T::ExternalApp
+        } else if matches!(self.current_view, AppView::DayPage { .. }) {
+            T::DayPageToday
+        } else if self.shared_cursor_prompt() {
+            T::MainWindowPrompt
+        } else {
+            T::MainWindowFilter
+        }
+    }
+    fn toggle_kit_recording(
+        &mut self,
+        direct_owner: bool,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        use crate::dictation::DictationTarget as T;
+        if let Some(s) = self.one_window_host.cursor_voice.active.as_mut() {
+            if direct_owner && !s.direct_owner && !s.stopped {
+                s.route = CursorRoute::Kit;
+                cx.notify();
+                return Self::builtin_success(dctx, "Recording redirected into Kit");
+            }
+            self.stop_cursor_capture(cx);
+            return Self::builtin_success(dctx, "Finishing recording");
+        }
+        if crate::dictation::is_dictation_busy() || self.one_window_talking() {
+            return Self::builtin_error(
+                dctx,
+                "dictation_busy",
+                "Another recording owns the microphone",
+                "Finish that recording first",
+            );
+        }
+        let preflight = self.prepare_dictation_builtin_start(
+            DictationBuiltinAction::CurrentSurface,
+            Some(T::MainWindowFilter),
+            cx,
+        );
+        if preflight != DictationStartPreflight::Ready {
+            *pending_dictation_model_action().lock() = None;
+            return Self::builtin_success(dctx, preflight.success_detail());
+        }
+        let target = self.cursor_context_target();
+        self.start_cursor_recording(target, false, true, cx);
+        if let Some(s) = self.one_window_host.cursor_voice.active.as_mut() {
+            s.direct_owner = direct_owner;
+            Self::builtin_success(dctx, "Listening for Script Kit")
+        } else {
+            Self::builtin_error(
+                dctx,
+                "dictation_unavailable",
+                "Could not start recording",
+                "Check Dictation Setup",
+            )
+        }
     }
     fn start_cursor_recording(
         &mut self,
         target: crate::dictation::DictationTarget,
         held: bool,
+        kit: bool,
         cx: &mut Context<Self>,
     ) {
-        self.begin_cursor_recording(target, held, None, cx);
+        self.begin_cursor_recording(target, held, kit, None, cx);
     }
     #[cfg(feature = "owned-ui-evaluation")]
-    pub(crate) fn cursor_fixture_begin(&mut self, cx: &mut Context<Self>) -> anyhow::Result<()> {
+    pub(crate) fn cursor_fixture_begin(
+        &mut self,
+        hands_free: bool,
+        kit: bool,
+        sample: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
         use crate::dictation::DictationTarget as T;
         anyhow::ensure!(
             crate::runtime_policy::is_owned_evaluation() && !self.cursor_dictation_pending(),
@@ -255,7 +364,19 @@ impl ScriptListApp {
             .retired
             .unwrap_or(0)
             .saturating_add(1);
-        self.begin_cursor_recording(target, true, Some(generation), cx);
+        self.begin_cursor_recording(target, !hands_free, kit, Some(generation), cx);
+        if sample {
+            let s = self
+                .one_window_host
+                .cursor_voice
+                .active
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("no capture"))?;
+            let take = ProtectedTake::begin()?;
+            take.append(0, &[0.1; 1600], 16000)?;
+            s.partial = "keep these words".into();
+            s.take = Some(take);
+        }
         anyhow::ensure!(self.cursor_dictation_pending(), "capture_not_started");
         Ok(())
     }
@@ -278,6 +399,9 @@ impl ScriptListApp {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("no_cursor_capture"))?;
         s.stopped = true;
+        if let Some(t) = &s.take {
+            t.ready(&words, &words)?;
+        }
         let id = s.generation;
         let selection = s.selection.clone();
         self.handle_dictation_transcript(
@@ -298,6 +422,7 @@ impl ScriptListApp {
         &mut self,
         target: crate::dictation::DictationTarget,
         held: bool,
+        kit: bool,
         fixture: Option<u64>,
         cx: &mut Context<Self>,
     ) {
@@ -335,6 +460,18 @@ impl ScriptListApp {
         };
         let selection = match self.capture_dictation_target_selection(target, cx) {
             Ok(s) => s,
+            Err(_) if kit && target == T::ExternalApp => {
+                crate::dictation::DictationTargetSelection {
+                    target,
+                    destination: crate::dictation::FrozenDictationDestination::Unavailable {
+                        target_id: "original".into(),
+                        generation: 0,
+                    },
+                    display_label: "original field".into(),
+                    icon_identity: None,
+                    selection_generation: 0,
+                }
+            }
             Err(e) => {
                 self.notice_failed(
                     format!("Cannot identify the dictation destination: {e}"),
@@ -345,7 +482,8 @@ impl ScriptListApp {
         };
         let label = match &anchor {
             CursorAnchor::External(_) => selection.display_label.clone(),
-            CursorAnchor::Input { .. } => "Script Kit".into(),
+            CursorAnchor::Input { .. } if target == T::MainWindowPrompt => "prompt field".into(),
+            CursorAnchor::Input { .. } => "launcher field".into(),
             CursorAnchor::Day(_) => {
                 if let AppView::DayPage { entity } = &self.current_view {
                     entity.read(cx).document_label()
@@ -355,19 +493,37 @@ impl ScriptListApp {
             }
         };
         crate::dictation::clear_dictation_return_origin();
+        let prefs = self.config.get_dictation_preferences();
+        let history_allowed = prefs.save_history_enabled() && fixture.is_none();
+        let mut journal_failed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let take = if history_allowed && crate::dictation::takes::keep_recordings_enabled(&prefs) {
+            match crate::dictation::recovery::TakeId::begin() {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    self.notice_failed(format!("Couldn't protect this recording: {e}"), cx);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let generation = if let Some(id) = fixture {
             if !crate::runtime_policy::is_owned_evaluation() {
                 return;
             }
             id
         } else {
-            match crate::dictation::toggle_dictation(target) {
-                Ok(crate::dictation::DictationToggleOutcome::Started) => {}
-                Ok(_) => return,
-                Err(e) => {
-                    self.notice_failed(format!("Couldn't start dictation: {e}"), cx);
-                    return;
+            let journal = take.clone().map(|t| {
+                let writer = crate::dictation::recovery::AudioJournal::new(t);
+                journal_failed = writer.failed.clone();
+                writer
+            });
+            if let Err(e) = crate::dictation::start_protected_recording(target, journal) {
+                if let Some(t) = &take {
+                    let _ = t.forget();
                 }
+                self.notice_failed(format!("Couldn't start dictation: {e}"), cx);
+                return;
             }
             let Some(generation) = crate::dictation::current_capture_generation() else {
                 return;
@@ -375,19 +531,31 @@ impl ScriptListApp {
             crate::dictation::set_dictation_session_selection(selection.clone());
             generation
         };
-        let mut shift = ShiftTap::default();
-        let (d, k) = cursor_shift_sample();
-        shift.sample(d, k);
+        let keys = ListeningKeys::install(
+            generation,
+            held,
+            prefs.switch_shortcut.as_deref().unwrap_or("Shift+Escape"),
+            fixture.is_some(),
+        );
         let revealed = target == T::ExternalApp && !script_kit_gpui::is_main_window_visible();
         self.one_window_host.cursor_voice.active = Some(CursorCapture {
             generation,
             app: cx.weak_entity(),
             held,
+            direct_owner: false,
             stopped: false,
             revealed,
-            route: CursorRoute::Original,
+            route: if kit {
+                CursorRoute::Kit
+            } else {
+                CursorRoute::Original
+            },
             label,
-            shift,
+            keys,
+            take,
+            history_allowed,
+            journal_failed,
+            revoked: Default::default(),
             partial: String::new(),
             anchor,
             selection,
@@ -407,15 +575,24 @@ impl ScriptListApp {
                 .await;
             let keep = this
                 .update(cx, |app, cx| {
+                    app.drain_cursor_controls(cx);
                     if !app
                         .one_window_host
                         .cursor_voice
                         .active
                         .as_ref()
-                        .is_some_and(|s| s.generation == generation && !s.stopped)
-                        || crate::dictation::current_capture_generation() != Some(generation)
+                        .is_some_and(|s| s.generation == generation)
                     {
                         return false;
+                    }
+                    if app
+                        .one_window_host
+                        .cursor_voice
+                        .active
+                        .as_ref()
+                        .is_some_and(|s| s.stopped)
+                    {
+                        return true;
                     }
                     if let Some(partial) =
                         crate::dictation::snapshot_live_state().map(|live| live.transcript)
@@ -427,10 +604,10 @@ impl ScriptListApp {
                             }
                         }
                     }
-                    app.poll_cursor_shift(cx);
+
                     if crate::dictation::dictation_auto_stop_due() {
                         app.stop_cursor_capture(cx);
-                        return false;
+                        return true;
                     }
                     true
                 })
@@ -441,12 +618,47 @@ impl ScriptListApp {
         })
         .detach();
     }
-    fn poll_cursor_shift(&mut self, cx: &mut Context<Self>) {
-        let (d, k) = cursor_shift_sample();
-        if let Some(s) = self.one_window_host.cursor_voice.active.as_mut() {
-            if s.shift.sample(d, k) {
-                self.toggle_cursor_kit(cx);
+    fn drain_cursor_controls(&mut self, cx: &mut Context<Self>) {
+        let Some(s) = self.one_window_host.cursor_voice.active.as_mut() else {
+            return;
+        };
+        let events = s.keys.take_pending();
+        if !s.stopped && s.keys.after_toggle_release() {
+            cx.notify();
+        }
+        for control in events {
+            match control {
+                CursorControl::Switch => {
+                    self.toggle_cursor_kit(cx);
+                }
+                CursorControl::Cancel => {
+                    self.cancel_cursor(cx);
+                    break;
+                }
             }
+        }
+    }
+    pub(crate) fn cursor_local_key(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(s) = self.one_window_host.cursor_voice.active.as_ref() else {
+            return false;
+        };
+        // Native Carbon owns these keys in a live session. Hidden evaluation uses the
+        // same chord table without registering anything on the operator's desktop.
+        match s
+            .keys
+            .fixture_control(&event.keystroke.key, event.keystroke.modifiers)
+        {
+            Some(_) if event.is_held => true,
+            Some(CursorControl::Switch) => {
+                self.toggle_cursor_kit(cx);
+                true
+            }
+            Some(CursorControl::Cancel) => self.cancel_cursor(cx),
+            None => false,
         }
     }
     pub(crate) fn toggle_cursor_kit(&mut self, cx: &mut Context<Self>) -> bool {
@@ -464,7 +676,7 @@ impl ScriptListApp {
         true
     }
     fn stop_cursor_capture(&mut self, cx: &mut Context<Self>) {
-        self.poll_cursor_shift(cx);
+        self.drain_cursor_controls(cx);
         let Some(s) = self.one_window_host.cursor_voice.active.as_mut() else {
             return;
         };
@@ -472,6 +684,7 @@ impl ScriptListApp {
             return;
         }
         s.stopped = true;
+        s.keys.finishing();
         self.request_active_dictation_stop(crate::dictation::DictationStopReason::Hotkey, true, cx);
         cx.notify();
     }
@@ -525,12 +738,39 @@ impl ScriptListApp {
             let result = handle.map(|h| {
                 h.update(cx, |_, window, cx| {
                     app.update(cx, |app, cx| {
+                        app.drain_cursor_controls(cx);
                         let Some(capture) = app.take_cursor(request.session_generation) else {
                             return;
                         };
                         let original = capture.route == CursorRoute::Original;
+                        let take = capture.take.clone();
+                        let save = capture.history_allowed && timing.record_history;
+                        if let Some(t) = &take {
+                            if t.dispatching().is_err() {
+                                app.one_window_host.cursor_voice.saved_draft =
+                                    Some(request.transcript.text().into());
+                                app.notice_failed(
+                                    "Couldn't confirm the saved recording · nothing delivered",
+                                    cx,
+                                );
+                                return;
+                            }
+                        }
                         match app.finish_cursor_words(capture, &request, window, cx) {
                             Ok(target) => {
+                                if save {
+                                    if let Err(e) = app.keep_finished_cursor(
+                                        take.as_ref(),
+                                        request.transcript.text(),
+                                        target,
+                                        timing.audio_duration,
+                                    ) {
+                                        app.notice_failed(
+                                            format!("Couldn't save dictation history: {e}"),
+                                            cx,
+                                        );
+                                    }
+                                }
                                 let selection = if original {
                                     Some(request.selection.clone())
                                 } else {
@@ -552,10 +792,23 @@ impl ScriptListApp {
                                 }
                             }
                             Err(error) => {
+                                let unknown = error.is::<CursorDispatchUnknown>();
+                                if !unknown {
+                                    if let Some(t) = &take {
+                                        let _ = t.withheld();
+                                    }
+                                }
+                                app.one_window_host.cursor_voice.saved_id =
+                                    take.as_ref().map(|t| t.id.clone());
                                 app.one_window_host.cursor_voice.saved_draft =
                                     Some(request.transcript.text().into());
                                 app.notice_failed(
-                                    format!("Dictation kept for Markdown review: {error}"),
+                                    if unknown {
+                                        "Delivery unknown · check the field before pasting again"
+                                            .into()
+                                    } else {
+                                        format!("Dictation kept for Markdown review: {error}")
+                                    },
                                     cx,
                                 );
                             }
@@ -570,7 +823,10 @@ impl ScriptListApp {
             });
             if !matches!(result, Some(Ok(()))) {
                 app.update(cx, |app, cx| {
-                    app.take_cursor(request.session_generation);
+                    let Some(capture) = app.take_cursor(request.session_generation) else {
+                        return;
+                    };
+                    app.one_window_host.cursor_voice.saved_id = capture.take.map(|t| t.id);
                     app.one_window_host.cursor_voice.saved_draft =
                         Some(request.transcript.text().into());
                     cx.notify();
@@ -586,6 +842,14 @@ impl ScriptListApp {
             s.route = CursorRoute::Markdown;
             cx.notify();
             return true;
+        }
+        if let Some(id) = self.one_window_host.cursor_voice.saved_id.clone() {
+            if ProtectedTake::existing(&id).get().is_ok() {
+                self.restore_saved_take(&id, cx);
+                return true;
+            }
+            self.one_window_host.cursor_voice.saved_id = None;
+            self.one_window_host.cursor_voice.saved_draft = None;
         }
         if self.one_window_host.cursor_voice.saved_draft.is_none() {
             return false;
@@ -624,6 +888,7 @@ impl ScriptListApp {
             template: None,
         });
         self.construct_prompt_seed(seed, cx)?;
+        self.one_window_host.cursor_voice.reviewing = None;
         if !self.main_services.host_policy().is_hidden() {
             self.dispatch_window_event(
                 crate::window_orchestrator::WindowEvent::ShowMain { activate_app: true },
@@ -655,14 +920,15 @@ impl ScriptListApp {
                 self.prepare_shortcut_launcher(cx),
                 "A prompt or unsaved note still owns the window"
             );
-            self.one_window_host.cursor_voice.dictated_input = Some(words.into());
+            let words = crate::components::text_input::normalize_single_line_text(words);
+            self.one_window_host.cursor_voice.dictated_input = Some(words.clone());
             if !self.main_services.host_policy().is_hidden() {
                 self.dispatch_window_event(
                     crate::window_orchestrator::WindowEvent::ShowMain { activate_app: true },
                     cx,
                 );
             }
-            self.set_filter_text_immediate(words.into(), window, cx);
+            self.set_filter_text_immediate(words, window, cx);
             self.focus_main_filter(window, cx);
             return Ok(T::MainWindowFilter);
         }

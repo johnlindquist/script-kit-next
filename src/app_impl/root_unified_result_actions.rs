@@ -45,6 +45,7 @@ pub(crate) enum RootUnifiedResultAction {
     AiVaultCopyWorkspacePath,
     AiVaultCopyTitle,
     AiVaultRevealInCmux,
+    DictationReview,
     DictationPaste,
     DictationCopyTranscript,
     DictationAttachToAi,
@@ -108,6 +109,7 @@ impl RootUnifiedResultAction {
         Self::AiVaultCopyWorkspacePath,
         Self::AiVaultCopyTitle,
         Self::AiVaultRevealInCmux,
+        Self::DictationReview,
         Self::DictationPaste,
         Self::DictationCopyTranscript,
         Self::DictationAttachToAi,
@@ -171,6 +173,7 @@ impl RootUnifiedResultAction {
             Self::AiVaultCopyWorkspacePath => "root_ai_vault_copy_workspace_path",
             Self::AiVaultCopyTitle => "root_ai_vault_copy_title",
             Self::AiVaultRevealInCmux => "root_ai_vault_reveal_in_cmux",
+            Self::DictationReview=>"root_dictation_review",
             Self::DictationPaste => "root_dictation_paste",
             Self::DictationCopyTranscript => "root_dictation_copy_transcript",
             Self::DictationAttachToAi => "root_dictation_attach_to_ai",
@@ -577,6 +580,7 @@ pub(crate) fn root_unified_actions_for_subject(subject: &RootUnifiedActionSubjec
             actions
         }
         RootUnifiedActionSubject::Dictation { .. } => vec![
+            action(RootUnifiedResultAction::DictationReview,"Review recording versions","Open"),
             action(
                 RootUnifiedResultAction::DictationPaste,
                 "Paste Dictation",
@@ -927,6 +931,7 @@ pub(crate) fn execute_root_unified_result_action(
             );
             true
         }
+        (RootUnifiedResultAction::DictationReview,RootUnifiedActionSubject::Dictation{id,..})=>{app.open_take_actions(id,cx);true},
         (
             RootUnifiedResultAction::DictationPaste,
             RootUnifiedActionSubject::Dictation { id, .. },
@@ -1262,6 +1267,7 @@ mod tests {
         assert_eq!(
             action_ids,
             vec![
+                "root_dictation_review",
                 "root_dictation_paste",
                 "root_dictation_copy_transcript",
                 "root_dictation_attach_to_ai",

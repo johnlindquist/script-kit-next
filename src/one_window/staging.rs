@@ -98,6 +98,7 @@ impl ScriptListApp {
             text: self.filter_text.clone(),
             row,
         });
+        if !self.one_window.in_view() && matches!(self.selected_main_list_search_result_owned(),Some(crate::scripts::SearchResult::DictationHistory(_))){self.one_window_history_stage(cx);return true;}
         self.one_window_key(Key::CmdK, cx).taken()
     }
 

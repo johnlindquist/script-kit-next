@@ -219,8 +219,8 @@ impl Evaluator {
                         .control(command, &mut self.cx.app.borrow_mut())?,
                 );
             }
-            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::CursorBegin {}) => {
-                let RootOwner::Main(main)=&mounted.owner else{anyhow::bail!("main_window_required")};main.update(&mut **self.cx.app.borrow_mut(),|app,cx|app.cursor_fixture_begin(cx))?;
+            FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::CursorBegin {hands_free,in_kit,recoverable_sample}) => {
+                let RootOwner::Main(main)=&mounted.owner else{anyhow::bail!("main_window_required")};main.update(&mut **self.cx.app.borrow_mut(),|app,cx|app.cursor_fixture_begin(hands_free,in_kit,recoverable_sample,cx))?;
             }
             FixtureControl::OneWindow(crate::protocol::OneWindowFixtureCommand::CursorFinal {words}) => {
                 let RootOwner::Main(main)=&mounted.owner else{anyhow::bail!("main_window_required")};main.update(&mut **self.cx.app.borrow_mut(),|app,cx|app.cursor_fixture_final(words,cx))?;
