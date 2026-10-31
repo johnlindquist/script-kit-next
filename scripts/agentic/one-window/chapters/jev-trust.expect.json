@@ -1,0 +1,11 @@
+{
+  "compound":{"enter":"↵ Open Slack → Tile Slack Right Half"},
+  "recall":{"enter":"↵ Search facts the user asked script kit to remember for “sarah's birthday”"},
+  "recall-search":{"input":"brain:sarah's birthday"},
+  "quit-reading":{"enter":"↵ Quit Slack"},
+  "quit-hold":{"input":"","lineTitle":"Quit Slack"},
+  "quit-cancel":{"lineTitle":"Didn't run: Quit Slack"},
+  "offline-unavailable":{"enter":"↵ Unavailable"},
+  "offline-no-effect":{"lineTitle":"Can't run these steps offline. Nothing was sent or changed."},
+  "offline-notes":{"enter":"↵ Do these 2 things"}
+}

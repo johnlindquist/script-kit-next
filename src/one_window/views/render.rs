@@ -22,13 +22,17 @@ struct ViewRow {
     word: Option<super::super::reading::WordRow>,
 }
 
+fn form_value(view: &HostedView, index: usize) -> &str {
+    match view { HostedView::Form(form) => form.fields.get(index).map_or("", |field| field.value.as_str()), _ => "" }
+}
+
 fn field_icon(name: SlotName) -> &'static str {
     match name {
-        SlotName::Who => "message",
+        SlotName::Who => "user",
         SlotName::What => "edit",
-        SlotName::When => "bolt",
+        SlotName::When => "clock",
         SlotName::Where => "folder",
-        SlotName::Event => "star",
+        SlotName::Event => "calendar",
         SlotName::Body => "file",
     }
 }
@@ -41,14 +45,14 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
             .enumerate()
             .map(|(i, f)| ViewRow {
                 id: format!("form-field:{:?}", f.name).to_lowercase(),
-                title: if f.state == FieldState::Needed {
-                    format!("{} · Needs you", f.label)
-                } else {
-                    f.value.clone()
-                },
+                title: f.label.clone(),
                 description: Some(match f.state {
-                    FieldState::Needed => "Type it here".to_string(),
-                    FieldState::Filled => format!("{} · {}", f.label, f.source_words()),
+                    FieldState::Needed => match f.name {
+                        SlotName::Who => "Enter a recipient", SlotName::When => "Enter a date or time",
+                        SlotName::Where => "Enter a location", SlotName::What | SlotName::Body => "Enter the text",
+                        SlotName::Event => "Enter an event",
+                    }.to_string(),
+                    FieldState::Filled => format!("{} · {}", f.value, f.source_words()),
                 }),
                 icon: field_icon(f.name),
                 selected: form.caret == Some(i),
@@ -227,7 +231,7 @@ fn reveal_above_footer(
 impl ScriptListApp {
     /// The open view, or the staged subject's rows while the input is empty; `None` leaves the
     /// launcher's list in place.
-    pub(crate) fn one_window_view_element(&self) -> Option<AnyElement> {
+    pub(crate) fn one_window_view_element(&self, cx: &gpui::Context<Self>) -> Option<AnyElement> {
         let (head, rows) = if let Some(view) = self.one_window_hosted_view() {
             (view.label(), view_rows(view))
         } else if self.one_window.staged().is_some()
@@ -266,12 +270,22 @@ impl ScriptListApp {
             .pb(crate::main_list_footer_overlay_total_padding());
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
-            let item = ListItem::new(row.title, colors)
+            let form_field = row.id.starts_with("form-field:").then(|| row.id.clone());
+            let (title, detail, label) = if let Some(HostedView::Form(form)) = self.one_window_hosted_view() {
+                let field = &form.fields[ix];
+                let value = if field.state == FieldState::Needed { row.description.unwrap_or_default() } else { field.value.clone() };
+                let label = div().w(px(theme.def().list.main_hint_fragment_role_width)).text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM).text_color(gpui::rgba(crate::theme::AppChromeColors::from_theme(&self.theme).text_muted_rgba))
+                    .child(row.title).into_any_element();
+                (value, (field.from.is_some()).then(|| field.source_words().to_string()), Some(label))
+            } else { (row.title, row.description, None) };
+            let item = ListItem::new(title, colors)
                 .index(ix)
                 .selected(row.selected)
                 .main_menu_theme(theme)
                 .semantic_id_opt(Some(row.id))
-                .description_opt(row.description);
+                .leading_accessory_opt(label)
+                .description_opt(detail);
             let item = match &row.word {
                 Some(word) => item
                     .leading_accessory(word_chip(word))
@@ -279,13 +293,16 @@ impl ScriptListApp {
                     .disabled(word.dim),
                 None => item.icon_kind(
                     IconKind::from_icon_hint(row.icon)
-                        .unwrap_or_else(|| IconKind::Svg("check".into())),
+                        .unwrap_or_else(|| IconKind::Svg(row.icon.into())),
                 ),
             };
             list = list.child(
-                div()
+                div().id(gpui::SharedString::from(selector.clone()))
                     .flex_none()
                     .debug_selector(move || selector.clone())
+                    .when_some(form_field, |d, id| d.cursor_pointer().on_click(cx.listener(move |app, _, window, cx| {
+                        if app.one_window_pick_form_field(&id, cx) { app.focus_main_filter(window, cx); }
+                    })))
                     .child(item),
             );
         }
@@ -416,7 +433,7 @@ impl ScriptListApp {
                     ..ElementInfo::redacted_choice(
                         ix,
                         &row.title,
-                        &row.title,
+                        if matches!(view, HostedView::Form(_)) { form_value(view, ix) } else { &row.title },
                         row.selected,
                         ElementContentKind::UserContent,
                     )
@@ -457,6 +474,13 @@ pub(crate) fn header_element(ix: usize, label: &str) -> ElementInfo {
 fn staged_icon(icon: Option<&str>) -> &'static str {
     match icon {
         Some("message" | "reply") => "message",
+        Some("external-link") => "external-link",
+        Some("sparkles") => "sparkles",
+        Some("notebook-pen") => "notebook-pen",
+        Some("text-cursor") => "text-cursor",
+        Some("clipboard") => "clipboard",
+        Some("panel-left") => "panel-left",
+        Some("panel-right") => "panel-right",
         Some("copy") => "copy",
         Some("append" | "edit") => "edit",
         Some("open") => "arrowright",

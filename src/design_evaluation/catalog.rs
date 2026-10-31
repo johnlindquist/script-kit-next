@@ -156,6 +156,7 @@ fn main_descriptor(id: &str, family: &str, route: &str, presentation: &str) -> F
 fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
     let (route, owner) = match id {
         "main.script-list"
+        | "main.subject-tabs"
         | "main.root-search-frame-stability"
         | "main-search-contract"
         | "main.menu-syntax-trigger"

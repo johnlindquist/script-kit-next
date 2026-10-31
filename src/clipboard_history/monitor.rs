@@ -414,6 +414,7 @@ fn capture_clipboard_content(
     }
 
     let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+    let generation = super::change_detection::get_pasteboard_change_count();
     let pre_capture = ClipboardPreCaptureProbe::live();
     if let Some(reason) = reject_before_reading_payload(source_bundle_id.as_deref(), pre_capture) {
         record_rejection(reason);
@@ -455,6 +456,7 @@ fn capture_clipboard_content(
                     ) {
                         TextCaptureOutcome::Stored(entry_id) => {
                             debug!(entry_id = %entry_id, "Added text entry to history");
+                            remember_tab_copy(generation, &entry_id);
                             process_text_sediment(&entry_id, &text, chrono::Utc::now());
                             *last_text_hash = Some(text_hash);
                         }
@@ -485,6 +487,7 @@ fn capture_clipboard_content(
                     |content| add_entry(content, ContentType::Text),
                 ) {
                     TextCaptureOutcome::Stored(entry_id) => {
+                        remember_tab_copy(generation, &entry_id);
                         debug!(
                             entry_id = %entry_id,
                             "Updated timestamp for existing text entry"
@@ -613,6 +616,21 @@ fn capture_text_entry(
         Ok(entry_id) => TextCaptureOutcome::Stored(entry_id),
         Err(error) => TextCaptureOutcome::Failed(error.to_string()),
     }
+}
+
+// Keep only the id of the last accepted write. A subsequent rejected copy, cleared history,
+// changed pasteboard, or disabled monitor cannot disclose its predecessor as the current copy.
+static TAB_COPY: parking_lot::Mutex<Option<(i64, Instant, String)>> = parking_lot::Mutex::new(None);
+fn remember_tab_copy(generation: Option<i64>, id: &str) {
+    *TAB_COPY.lock() = generation.map(|g| (g, Instant::now(), id.to_owned()));
+}
+pub fn recent_tab_copy() -> Option<(String,u64)> {
+    if STOP_MONITORING.get().is_none_or(|s|s.load(Ordering::Relaxed)) {return None;}
+    let (g, at, id) = TAB_COPY.lock().clone()?;
+    let age = at.elapsed().as_millis() as u64;
+    if age >= sk_one_window::window::subject_tabs::COPY_FRESH_MS || Some(g) != super::change_detection::get_pasteboard_change_count() { return None; }
+    let body = super::get_entry_content(&id)?;
+    (Some(g) == super::change_detection::get_pasteboard_change_count()).then_some((body, age))
 }
 
 /// Compute a simple hash of text content for change detection.

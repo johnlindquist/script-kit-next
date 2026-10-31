@@ -96,7 +96,7 @@ impl ElementCollectionOutcome {
     pub fn selected_semantic_id(&self) -> Option<String> {
         self.elements
             .iter()
-            .find(|element| element.selected == Some(true))
+            .find(|element| element.selected == Some(true) && element.role.as_deref()!=Some("tab"))
             .map(|element| element.semantic_id.clone())
     }
 }
@@ -251,7 +251,8 @@ impl ScriptListApp {
         }
         let mut outcome = match &self.current_view {
             AppView::ScriptList => {
-                let mut context = self.main_view_slot_line_elements();
+                let mut context = if self.has_launcher_tabs(){self.subject_tab_elements()}else{self.main_view_slot_line_elements()};
+                if self.has_launcher_tabs() && self.filter_text.is_empty() { if let Some(p)=self.one_window.subject_page() {let mut tile=protocol::ElementInfo::button(0,"Stage this subject");tile.semantic_id=format!("stage-subject:{}",p.id);tile.index=None;context.push(tile);} }
                 context.extend(self.main_input_subject_chip_element());
                 context.extend(self.main_input_context_chip_elements());
                 let context_count = context.len();
@@ -1504,13 +1505,25 @@ impl ScriptListApp {
             AppView::CreationFeedback { payload } => {
                 self.collect_creation_feedback_elements(payload, limit)
             }
-            AppView::WebcamView { .. } => {
+            AppView::WebcamView { entity } => {
+                use crate::prompts::webcam_session::WebcamPhase;
+
+                let session = &entity.read(cx).session;
+                let mut panel = protocol::ElementInfo::panel("webcam");
+                // value: live | countdown | review; text: what is on screen, with the saved
+                // photo's file name while it is reviewed.
+                panel.value = Some(session.phase_name().to_string());
+                panel.text = Some(match session.phase() {
+                    WebcamPhase::Live => "Camera".to_string(),
+                    WebcamPhase::Countdown { remaining } => format!("Capturing in {remaining}"),
+                    WebcamPhase::Review { path } => format!(
+                        "Photo saved · {}",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    ),
+                });
                 let total_count = 1;
                 let elements: Vec<protocol::ElementInfo> =
-                    vec![protocol::ElementInfo::panel("webcam")]
-                        .into_iter()
-                        .take(limit)
-                        .collect();
+                    vec![panel].into_iter().take(limit).collect();
                 ElementCollectionOutcome::partial(
                     "webcam",
                     protocol::ProjectionReason::SemanticControlsUnavailable,
@@ -1562,16 +1575,12 @@ impl ScriptListApp {
             )
             .with_warning("panel_only_about"),
 
-            AppView::CreateAiPresetView { .. } => ElementCollectionOutcome::partial(
-                "createAiPreset",
-                protocol::ProjectionReason::SemanticControlsUnavailable,
-                vec![protocol::ElementInfo::panel("create-ai-preset")]
-                    .into_iter()
-                    .take(limit)
-                    .collect(),
-                1,
-            )
-            .with_warning("panel_only_create_ai_preset"),
+            AppView::CreateAiPresetView { entity } => {
+                let (fields, count) = self.collect_form_prompt_elements(entity.read(cx), limit.saturating_sub(1), cx);
+                let mut elements = vec![protocol::ElementInfo::panel("create-ai-preset")];
+                elements.extend(fields); elements.truncate(limit);
+                ElementCollectionOutcome::complete("createAiPreset", elements, count + 1)
+            }
 
             AppView::ScriptIssuesView { .. } => ElementCollectionOutcome::partial(
                 "scriptIssues",
@@ -1988,7 +1997,11 @@ impl ScriptListApp {
         limit: usize,
         cx: &Context<Self>,
     ) -> (Vec<protocol::ElementInfo>, usize) {
-        let total_count = form.fields.len() + 1;
+        let issue_count = form.fields.iter().filter(|(_, field)| {
+            matches!(field, crate::form_prompt::FormFieldEntity::TextField(e)
+                if e.read(cx).visible_submit_hint().is_some())
+        }).count();
+        let total_count = form.fields.len() + 1 + issue_count;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
         let semantic_prefix = form.semantic_prefix();
@@ -2007,8 +2020,12 @@ impl ScriptListApp {
             let field_name = format!("{semantic_prefix}-{}", field.name);
             let field_label = field.label.clone().unwrap_or_else(|| field.name.clone());
             let focused = index == form.focused_index;
+            let hint = match entity {
+                crate::form_prompt::FormFieldEntity::TextField(e) => e.read(cx).visible_submit_hint(),
+                _ => None,
+            };
 
-            let element = match entity {
+            let mut element = match entity {
                 crate::form_prompt::FormFieldEntity::TextField(text_field) => {
                     let text_field = text_field.read(cx);
                     Self::input_element(
@@ -2060,7 +2077,16 @@ impl ScriptListApp {
                 }
             };
 
+            if hint.is_some() {
+                element.status_kind = Some("invalid".into());
+            }
             elements.push(element);
+            if let Some(text) = hint {
+                let mut issue = protocol::ElementInfo::panel(&format!("{semantic_prefix}-error-{index}"));
+                issue.text = Some(text.into());
+                issue.role = Some("alert".into());
+                Self::push_limited_element(&mut elements, limit, issue);
+            }
         }
 
         (elements, total_count)
@@ -2169,7 +2195,7 @@ impl ScriptListApp {
             Self::preview_value(input_text, 240)
         };
 
-        let mut total_count = 2;
+        let mut total_count = 2 + usize::from(env_prompt.can_toggle_visibility());
         if env_prompt.exists_in_keyring {
             total_count += 1;
         }
@@ -2192,20 +2218,15 @@ impl ScriptListApp {
                 Some(0),
             ),
         );
-        Self::push_limited_element(
-            &mut elements,
-            limit,
-            Self::input_element(
-                "env-value",
-                env_prompt
-                    .prompt
-                    .clone()
-                    .unwrap_or_else(|| "Value".to_string()),
-                Some(display_value),
-                true,
-                Some(1),
-            ),
-        );
+        let mut input = Self::input_element("env-value", if env_prompt.secret { "Secret value" } else { "Value" },
+            Some(display_value), true, Some(1));
+        if env_prompt.validation_message().is_some() { input.status_kind = Some("invalid".into()); }
+        Self::push_limited_element(&mut elements, limit, input);
+        if env_prompt.can_toggle_visibility() {
+            let mut toggle = protocol::ElementInfo::button(0,env_prompt.visibility_label());
+            toggle.semantic_id = env_prompt.visibility_id().into();
+            Self::push_limited_element(&mut elements,limit,toggle);
+        }
 
         if env_prompt.exists_in_keyring {
             Self::push_limited_element(
@@ -2348,13 +2369,17 @@ impl ScriptListApp {
                 .get(index)
                 .cloned()
                 .unwrap_or_default();
-            elements.push(Self::input_element(
+            let mut field = Self::input_element(
                 format!("template-{}", input.name).as_str(),
                 input.label.clone(),
                 Some(Self::preview_value(value.as_str(), 180)),
                 index == template_prompt.current_input,
                 Some(index),
-            ));
+            );
+            if template_prompt.validation_errors.get(index).is_some_and(Option::is_some) {
+                field.status_kind = Some("invalid".into());
+            }
+            elements.push(field);
         }
 
         (elements, total_count)
@@ -2529,7 +2554,7 @@ impl ScriptListApp {
                             label,
                             icon.as_deref(),
                             None,
-                            crate::list_item::SectionPresentationFamily::Launcher,
+                            if self.has_launcher_tabs() && self.filter_text.is_empty() {crate::list_item::SectionPresentationFamily::PreserveAuthored} else {crate::list_item::SectionPresentationFamily::Launcher},
                         );
                         elements.push(protocol::ElementInfo {
                             semantic_id: protocol::generate_semantic_id(

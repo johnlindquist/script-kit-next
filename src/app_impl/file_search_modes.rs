@@ -73,9 +73,43 @@ impl ScriptListApp {
     }
 
     /// What the rename row shows now.
-    pub(crate) fn file_search_rename_preview(&self, _cx: &App) -> Option<RenamePreview> {
+    pub(crate) fn file_search_rename_preview(&self) -> Option<RenamePreview> {
         let edit = self.file_search_rename.as_ref()?;
         Some(rename_preview(&edit.path, &edit.typed))
+    }
+
+    pub(crate) fn file_search_rename_footer_buttons(
+        &self,
+    ) -> Option<Vec<crate::footer_popup::FooterButtonConfig>> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+        if !self.file_search_renaming() {
+            return None;
+        }
+        let preview = self.file_search_rename_preview()?;
+        let run = FooterButtonConfig::new(FooterAction::Run, "↵", "Rename");
+        Some(vec![
+            if preview.ready { run } else { run.disabled_reason("invalid_file_name") },
+            FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel"),
+        ])
+    }
+
+    pub(crate) fn file_search_rename_footer_action(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.file_search_renaming() {
+            return false;
+        }
+        match action {
+            crate::footer_popup::FooterAction::Run => {
+                self.commit_file_search_rename(window, cx);
+                true
+            }
+            crate::footer_popup::FooterAction::Close => self.cancel_file_search_borrowed_input(window, cx),
+            _ => false,
+        }
     }
 
     /// Keeps the typed name in step with the input.
@@ -99,7 +133,7 @@ impl ScriptListApp {
         if let Some(edit) = self.file_search_rename.as_mut() {
             edit.typed = typed;
         }
-        let Some(preview) = self.file_search_rename_preview(cx) else {
+        let Some(preview) = self.file_search_rename_preview() else {
             return;
         };
         if !preview.ready {
@@ -370,10 +404,9 @@ impl ScriptListApp {
     pub(crate) fn file_search_borrowed_hints(
         &self,
         selected: Option<&crate::file_search::FileResult>,
-        cx: &App,
     ) -> Option<Vec<SharedString>> {
         if self.file_search_renaming() {
-            let preview = self.file_search_rename_preview(cx)?;
+            let preview = self.file_search_rename_preview()?;
             let first = if preview.ready {
                 format!("\u{21b5} {}", preview.title)
             } else {

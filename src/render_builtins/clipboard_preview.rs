@@ -217,12 +217,16 @@ impl ScriptListApp {
                                 .text_color(rgb(text_dimmed))
                                 .child("No entry selected"),
                         )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child("Use \u{2191}\u{2193} to inspect history"),
-                        ),
+                        .child(div().text_xs().text_color(rgb(text_muted)).child(
+                            match &self.current_view {
+                                AppView::ClipboardHistoryView { filter, .. }
+                                    if !filter.is_empty() =>
+                                {
+                                    "Clear the filter to see your history"
+                                }
+                                _ => "Copy something to add it to history",
+                            },
+                        )),
                 );
             }
         }

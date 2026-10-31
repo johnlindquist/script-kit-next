@@ -31,13 +31,18 @@ fn intent_fixture_world() -> Option<Arc<intent_engine::FixtureWorld>> {
 
 impl ScriptListApp {
     pub(crate) fn settle_intent_oracle_slot(&mut self) {
-        if !matches!(self.intent_launcher.oracle_slot(), OracleSlot::Unloaded) {
-            return;
-        }
-        if std::env::var(INTENT_ENV_TOGGLE).is_ok_and(|value| value.trim() == "0") {
+        let setting = std::env::var(INTENT_ENV_TOGGLE).ok();
+        let local_only = self.main_services.is_production() && !self.config.jev_intent_enabled && setting.as_deref() != Some("1");
+        if setting.as_deref() == Some("0") || local_only {
             self.intent_launcher
                 .set_oracle_slot(OracleSlot::Off("disabled"));
-        } else if !self.main_services.is_production() {
+            return;
+        }
+        if matches!(self.intent_launcher.oracle_slot(), OracleSlot::Off("disabled")) {
+            self.intent_launcher.set_oracle_slot(OracleSlot::Unloaded);
+        }
+        if !matches!(self.intent_launcher.oracle_slot(), OracleSlot::Unloaded) { return; }
+        if !self.main_services.is_production() {
             match intent_fixture_world() {
                 Some(world) => self
                     .intent_launcher
@@ -57,8 +62,15 @@ impl ScriptListApp {
         for scriptlet in &self.scriptlets {
             (Arc::as_ptr(scriptlet) as usize).hash(&mut hasher);
         }
-        self.builtin_entries.len().hash(&mut hasher);
-        self.apps.len().hash(&mut hasher);
+        for entry in &self.builtin_entries {
+            entry.id.hash(&mut hasher);
+            entry.name.hash(&mut hasher);
+            entry.description.hash(&mut hasher);
+        }
+        for app in &self.apps {
+            app.path.hash(&mut hasher);
+            app.name.hash(&mut hasher);
+        }
         hasher.finish()
     }
 
@@ -78,18 +90,43 @@ impl ScriptListApp {
         catalog
     }
 
+    /// A staged window's chip names its app; a staged non-app must never silently target
+    /// whichever browser was last active. Without a chip use the cached real front app only.
+    pub(crate) fn intent_tab_browser(&self) -> Option<&'static str> {
+        if let Some(staged) = self.one_window.staged() {
+            return crate::one_window::staging::subject_app(&staged.subject)
+                .and_then(crate::browser_tabs::named_tab_browser);
+        }
+        if let Some(page)=self.one_window.subject_page() {return crate::one_window::staging::subject_app(&page.source.subject).and_then(crate::browser_tabs::named_tab_browser);}
+        if self.main_services.is_production() {
+            crate::frontmost_app_tracker::get_last_real_app()
+                .and_then(|app| crate::browser_tabs::named_tab_browser(&app.bundle_id))
+        } else {
+            None
+        }
+    }
+
     /// Fingerprints the screen Jev reads against, so a remembered reading is for this screen.
     pub(crate) fn intent_screen_key(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
         if self.main_services.is_production() {
-            live::screen_key()
-        } else {
-            0
+            live::screen_key().hash(&mut hasher);
         }
+        self.one_window.page_for_action().map(|p|p.id).hash(&mut hasher);
+        self.one_window_host.cursor_voice.dictated_input.as_ref().is_some_and(|s| s==&self.filter_text).hash(&mut hasher);
+        self.intent_tab_browser().hash(&mut hasher);
+        self.intent_catalog_revision().hash(&mut hasher);
+        self.intent_launcher.context_revision().hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Asks Jev to read `text`; the answer goes back to the one-window host as request `id`.
     pub(crate) fn ask_jev(&mut self, id: u64, text: String, screen: u64, cx: &mut Context<Self>) {
         self.settle_intent_oracle_slot();
+        if self.main_services.is_production() && (self.intent_launcher.is_off() || crate::intent::sensitive_words(&text) || !crate::intent::wants_reading(&text)) {
+            self.one_window_jev_answered(id, text, screen, Err(JevError::Refused("local request")), cx);
+            return;
+        }
         let world = if self.main_services.is_production() {
             None
         } else {
@@ -102,6 +139,7 @@ impl ScriptListApp {
         let slot = self.intent_launcher.oracle_slot().clone();
         let last_action = self.intent_launcher.last_action().cloned();
         let live_screen = self.main_services.is_production();
+        let dictated=self.one_window_host.cursor_voice.dictated_input.as_ref()==Some(&text);
         let request = text.clone();
         cx.spawn(async move |this, cx| {
             let (loaded, result) = cx
@@ -133,11 +171,13 @@ impl ScriptListApp {
                             ..intent_engine::ScreenContext::default()
                         }
                     };
+                    let speech=crate::intent::jev::DictatedOracle(oracle.as_ref());
+                    let reader:&dyn Oracle=if dictated{&speech}else{oracle.as_ref()};
                     let plan = intent_engine::understand(
                         &request,
                         &screen,
                         &catalog,
-                        oracle.as_ref(),
+                        reader,
                         &EngineOptions::default(),
                     );
                     (loaded, plan)
@@ -167,18 +207,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> Option<Result<(), &'static str>> {
         let screen = self.intent_screen_key();
-        let plan = self
-            .intent_launcher
-            .plan(text, key)
-            .or_else(|| {
-                self.intent_launcher
-                    .recalled(text, screen)?
-                    .into_iter()
-                    .find(|reading| reading.key == key)
-                    .map(|reading| reading.plan)
-            })
-            .or_else(|| self.intent_launcher.plan_for_row(key, screen));
+        let plan = self.intent_launcher.plan_for_row(key, screen);
         if let Some(plan) = plan {
+            if let Some(why) = intent_engine::launcher::unavailable(&plan) {
+                self.one_window_notice(crate::line_notice::INFO, format!("Can't do this yet · needs {why}"), cx);
+                return Some(Err("intent_plan_unavailable"));
+            }
             if self.one_window_open_plan(&plan, cx) {
                 return Some(Ok(()));
             }
@@ -231,9 +265,22 @@ impl ScriptListApp {
         plan: &Arc<Plan>,
         cx: &mut Context<Self>,
     ) -> Result<(), &'static str> {
-        if !plan.ready {
+        if !plan.ready || intent_engine::launcher::unavailable(plan).is_some() {
             return Err("intent_plan_not_ready");
         }
+        if plan.pathway != intent_engine::Pathway::Automate && plan.steps.iter().any(intent_engine::launcher::quits_application) {
+            let held = plan.clone();
+            self.one_window_hold("power", &plan.title, Box::new(move |app,cx| {
+                if let Err(error) = app.execute_admitted_intent(&held,cx) {
+                    app.one_window_notice(crate::line_notice::FAILED,format!("Couldn't run the requested quit: {error}"),cx);
+                }
+            }),cx);
+            return Ok(());
+        }
+        self.execute_admitted_intent(plan,cx)
+    }
+
+    fn execute_admitted_intent(&mut self, plan: &Arc<Plan>, cx: &mut Context<Self>) -> Result<(), &'static str> {
         tracing::info!(
             target: "script_kit::intent",
             event = "intent_plan_run",
@@ -241,6 +288,13 @@ impl ScriptListApp {
             steps = plan.steps.len(),
             clauses = plan.clauses.len(),
         );
+        // Inspection and approval belong to one live window. Reject a mixed plan
+        // before any sibling step can run, even when the inspection is last.
+        if plan.steps.iter().any(|s| matches!(s, Step::InspectFilename { .. }))
+            && (plan.steps.len() != 1 || plan.pathway == intent_engine::Pathway::Automate)
+        {
+            return Err("intent_step_not_combinable");
+        }
         if let Some(action) = last_action_for(plan) {
             self.intent_launcher.record(action);
         }
@@ -249,6 +303,15 @@ impl ScriptListApp {
         }
         if let [only] = plan.steps.as_slice() {
             match only {
+                Step::InspectFilename { app, pid, window_id, title, filename } => {
+                    return self.inspect_desktop_filename(app.clone(), *pid, *window_id, title.clone(), filename.clone(), cx);
+                }
+                Step::FocusTab { app, query } if !self.main_services.is_production() => {
+                    // Explicit transport receipt: owned evaluation must never activate a real app.
+                    crate::runtime_policy::record_completed_fixture_effect();
+                    self.one_window_notice(crate::line_notice::INFO, format!("Requested “{query}” tab in {app}"), cx);
+                    return Ok(());
+                }
                 Step::Capture { .. } | Step::Recall { .. } => {
                     return self.pivot_intent_to_typed_line(plan, cx);
                 }
@@ -276,10 +339,11 @@ impl ScriptListApp {
                     target, body, when, ..
                 } => append_capture_to_day(target, body, when.as_deref())?,
                 Step::Remember { text, .. } => append_memory_to_day(text)?,
-                Step::Menu { .. } | Step::Window { .. } | Step::OpenUrl { .. } => {
+                Step::FocusTab { .. } | Step::Menu { .. } | Step::Window { .. } | Step::OpenUrl { .. } => {
                     later.push(step.clone())
                 }
-                Step::Recall { .. }
+                Step::InspectFilename { .. }
+                | Step::Recall { .. }
                 | Step::Ask { .. }
                 | Step::Delegate { .. }
                 | Step::Transform { .. } => return Err("intent_step_not_combinable"),
@@ -443,7 +507,7 @@ impl ScriptListApp {
         self.flush_pending_main_menu_query(cx);
         cx.notify();
         if matches!(plan.pathway, intent_engine::Pathway::Capture) {
-            let _dispatch = self.execute_selected(cx);
+            self.execute_selected(cx).map_err(|_| "intent_capture_not_dispatched")?;
         }
         Ok(())
     }
@@ -463,7 +527,7 @@ impl ScriptListApp {
             _ => text.to_string(),
         };
         append_memory_to_day(&text)?;
-        self.one_window_notice(crate::line_notice::INFO, "Remembered".to_string(), cx);
+        self.one_window_notice(crate::line_notice::INFO, "Saved to today's note".to_string(), cx);
         self.close_and_reset_window(cx);
         Ok(())
     }
@@ -598,6 +662,7 @@ fn last_action_for(plan: &Plan) -> Option<LastAction> {
 }
 
 fn append_memory_to_day(text: &str) -> Result<(), &'static str> {
+    if text.trim().is_empty() { return Err("intent_memory_empty"); }
     crate::brain::substrate::BrainSubstrate::default_kit()
         .append_to_day(
             chrono::Utc::now(),
@@ -679,25 +744,29 @@ fn desktop_step_failure(step: &Step, error: &anyhow::Error) -> String {
 }
 
 fn run_desktop_step_with_retries(step: &Step) -> anyhow::Result<()> {
+    if let Step::FocusTab { app, query } = step {
+        return crate::browser_tabs::focus_named_tab(app, query);
+    }
     // A second attempt would open a second tab.
     if let Step::OpenUrl { url, app } = step {
         return live::open_url(url, app.as_deref());
     }
     let mut last_error = None;
-    for _ in 0..WINDOW_STEP_ATTEMPTS {
+    let attempts = if matches!(step, Step::Menu { .. }) || intent_engine::launcher::quits_application(step) { 1 } else { WINDOW_STEP_ATTEMPTS };
+    for attempt_no in 0..attempts {
         let attempt = match step {
             Step::Window { op, app } => live::run_window_step(op, app),
             #[cfg(target_os = "macos")]
             Step::Menu {
                 bundle_id, path, ..
             } => script_kit_gpui::menu_executor::execute_menu_action(bundle_id, path),
-            _ => return Ok(()),
+            _ => anyhow::bail!("unsupported desktop step"),
         };
         match attempt {
             Ok(()) => return Ok(()),
             Err(error) => last_error = Some(error),
         }
-        std::thread::sleep(WINDOW_STEP_RETRY);
+        if attempt_no + 1 < attempts { std::thread::sleep(WINDOW_STEP_RETRY); }
     }
     Err(last_error.unwrap_or_else(|| anyhow::anyhow!("step did not run")))
 }

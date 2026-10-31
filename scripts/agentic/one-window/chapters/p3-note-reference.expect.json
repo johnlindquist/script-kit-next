@@ -1,0 +1,6 @@
+{
+  "missing-note": { "input": "@notes:qxneverexists", "view": null },
+  "return-without-a-note": { "input": "@notes:qxneverexists", "view": null },
+  "matching-note": { "enter": "↵ Attach Note", "view": null },
+  "attach-note": { "input": "@notes:Launch-plan ", "view": null }
+}

@@ -19,6 +19,8 @@ pub struct TemplatePrompt {
     /// Currently focused input index
     pub current_input: usize,
     input_revision: u64,
+    pub(super) editors: Vec<Entity<crate::components::FormTextField>>,
+    pub(super) scroll: gpui::ScrollHandle,
     /// Focus handle for keyboard input
     pub focus_handle: FocusHandle,
     /// Callback when user submits
@@ -50,6 +52,7 @@ impl TemplatePrompt {
     }
 
     pub(super) fn set_current_input(&mut self, index: usize) {
+        self.scroll.scroll_to_item(index);
         if self.current_input != index {
             self.advance_input_revision();
             self.current_input = index;
@@ -81,6 +84,8 @@ impl TemplatePrompt {
             validation_errors,
             current_input: 0,
             input_revision: 0,
+            editors: Vec::new(),
+            scroll: gpui::ScrollHandle::new(),
             focus_handle,
             on_submit,
             theme,
@@ -382,13 +387,15 @@ impl TemplatePrompt {
 
     /// Set the current input value programmatically
     pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
-        if let Some(value) = self.values.get_mut(self.current_input) {
-            if *value == text {
-                return;
-            }
-            *value = text;
-            if let Some(input) = self.inputs.get(self.current_input) {
-                self.validation_errors[self.current_input] =
+        self.set_value_at(self.current_input, &text, cx);
+    }
+
+    pub(super) fn set_value_at(&mut self, index: usize, text: &str, cx: &mut Context<Self>) {
+        if let Some(value) = self.values.get_mut(index) {
+            if value == text { return; }
+            *value = text.to_string();
+            if let Some(input) = self.inputs.get(index) {
+                self.validation_errors[index] =
                     Self::validate_input_value(input, value).err();
             }
             self.advance_input_revision();
@@ -608,7 +615,7 @@ mod seeded_behavior_tests {
             .update(cx, |_, window, cx| {
                 let prompt = prompt.read(cx);
                 assert_eq!(prompt.current_input, 1);
-                assert!(prompt.focus_handle.is_focused(window));
+                assert!(prompt.focus_handle(cx).is_focused(window));
                 assert!(prompt.validation_errors[0].is_none());
             })
             .unwrap();
@@ -623,7 +630,7 @@ mod seeded_behavior_tests {
             .update(cx, |_, window, cx| {
                 let prompt = prompt.read(cx);
                 assert_eq!(prompt.current_input, 0);
-                assert!(prompt.focus_handle.is_focused(window));
+                assert!(prompt.focus_handle(cx).is_focused(window));
                 assert_eq!(prompt.values, ["edited-fixture", "ada@example.invalid"]);
             })
             .unwrap();
@@ -675,7 +682,7 @@ mod seeded_behavior_tests {
             "{{name}} {{email}}",
             Arc::new(move |_, value| output.lock().push(value)),
         );
-        for key in ["cmd-w", "cmd-k", "cmd-q", "cmd-v", "ctrl-a", "fn-a"] {
+        for key in ["cmd-w", "cmd-k", "cmd-q", "ctrl-a", "fn-a"] {
             assert!(!dispatch_template_key(cx, window, key, Some("ignored")));
         }
         for key in [
@@ -694,7 +701,7 @@ mod seeded_behavior_tests {
                 assert_eq!(prompt.values, ["", ""]);
                 assert_eq!(prompt.current_input, 0);
                 assert_eq!(prompt.dictation_input_revision(cx), 0);
-                assert!(prompt.focus_handle.is_focused(window));
+                assert!(prompt.focus_handle(cx).is_focused(window));
             })
             .unwrap();
         assert!(submitted.lock().is_empty());

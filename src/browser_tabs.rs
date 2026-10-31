@@ -335,6 +335,45 @@ fn combine_browser_tab_results(
     Ok(tabs)
 }
 
+pub(crate) fn named_tab_browser(name: &str) -> Option<&'static str> {
+    SUPPORTED_BROWSERS
+        .iter()
+        .find(|b| b.app_name.eq_ignore_ascii_case(name) || b.bundle_id.eq_ignore_ascii_case(name))
+        .map(|b| b.app_name)
+}
+
+pub(crate) fn named_tab_program(app: &str, query: &str) -> Option<String> {
+    let browser = SUPPORTED_BROWSERS.iter().find(|b| b.app_name == app)?;
+    Some(format!(
+        "{}(Application({}), {}, {})",
+        include_str!("browser_tabs/focus_named.js").trim_end(),
+        serde_json::to_string(browser.bundle_id).ok()?,
+        serde_json::to_string(query).ok()?,
+        browser.family == BrowserFamily::Safari
+    ))
+}
+
+pub(crate) fn focus_named_tab(app: &str, query: &str) -> Result<()> {
+    anyhow::ensure!(
+        !crate::runtime_policy::is_owned_evaluation(),
+        "native tab activation unavailable in owned evaluation"
+    );
+    let script = named_tab_program(app, query).context("Unsupported browser")?;
+    let result =
+        crate::platform::run_jxa_with_timeout(&script, "focus_named_browser_tab", BROWSER_TIMEOUT)
+            .with_context(|| {
+                format!("Couldn't verify the tab in {app} — check Automation access")
+            })?;
+    match result.trim() {
+        "focused" => Ok(()),
+        "not-running" => bail!("{app} isn't running"),
+        "not-found" => bail!("No {app} tab matches “{query}”"),
+        "ambiguous" => bail!("Several {app} tabs match “{query}” — use a more specific title"),
+        "changed" => bail!("The tab changed before it could be focused"),
+        _ => bail!("Couldn't verify the selected tab in {app}"),
+    }
+}
+
 pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
     let browser = supported_browser_for(tab).ok_or_else(|| {
         anyhow!(

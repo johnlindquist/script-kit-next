@@ -127,6 +127,7 @@ pub(crate) enum FooterAction {
     /// picker so the user can change the agent (goose provider) and model used by
     /// the next launch.
     AgentModel,
+    UndoLast,
     /// Click the left corner's Today button — opens today's note under the input.
     Today,
 }
@@ -361,6 +362,7 @@ impl FooterAction {
             Self::Cwd => "cwd",
             Self::AgentModel => "agentModel",
             Self::Today => "today",
+            Self::UndoLast => "undo-last",
         }
     }
 
@@ -2424,7 +2426,7 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::PasteResponse => metrics.paste_response_slot_width,
         FooterAction::Cwd => metrics.ai_slot_width,
         FooterAction::AgentModel => metrics.ai_slot_width,
-        FooterAction::Today => metrics.ai_slot_width,
+        FooterAction::Today | FooterAction::UndoLast => metrics.ai_slot_width,
     }
     .into()
 }

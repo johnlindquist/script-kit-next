@@ -3,8 +3,10 @@
 
 pub(crate) mod automations;
 pub(crate) mod capture;
+mod desktop_fill;
 pub(crate) mod chat_entry;
 pub(crate) mod chat_host;
+mod chat_presentation;
 pub(crate) mod chips;
 pub(crate) mod connections;
 pub(crate) mod height_host;
@@ -22,6 +24,7 @@ pub(crate) mod share;
 pub(crate) mod shortcut_view;
 pub(crate) mod slot_line;
 pub(crate) mod staging;
+pub(crate) mod subject_tabs;
 pub(crate) mod talk_host;
 pub(crate) mod view_staging;
 pub(crate) mod views;

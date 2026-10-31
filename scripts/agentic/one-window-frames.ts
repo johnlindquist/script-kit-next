@@ -31,7 +31,7 @@ export interface TalkToControl { family: "oneWindow"; operation: "talkTo"; desti
 export interface SummonControl { family: "oneWindow"; operation: "summon" }
 /** Stands in for the app the user came from: the line names its front window, so Space stages it. */
 export interface FocusWindowControl { family: "oneWindow"; operation: "focusWindow"; app: string; title: string }
-export type OneWindowControl = TalkToControl | SummonControl | FocusWindowControl;
+export type OneWindowControl = TalkToControl | SummonControl | FocusWindowControl | {family:"oneWindow";operation:"cursorBegin"|"shortcutOutside"} | {family:"oneWindow";operation:"cursorFinal";words:string};
 /** `click` names a painted node (its debug selector); the step clicks its center with an owned GPUI mouse event. */
 export interface Step { name: string; type?: string; append?: string; key?: string; click?: string; control?: OneWindowControl; waitMs?: number }
 const MODIFIERS = new Set(["cmd", "ctrl", "alt", "shift"]);
@@ -68,7 +68,8 @@ export function parseSteps(value: unknown): Step[] {
       const focusWindow = keys === "app,family,operation,title" && control!.operation === "focusWindow" &&
         [control!.app, control!.title].every(value =>
           typeof value === "string" && value.trim().length > 0 && value.length <= 128);
-      if (control?.family !== "oneWindow" || !(talkTo || summon || focusWindow))
+      const cursor = keys === "family,operation" && ["cursorBegin","shortcutOutside"].includes(String(control!.operation)) || keys === "family,operation,words" && control!.operation === "cursorFinal" && typeof control!.words === "string" && control!.words.length > 0 && control!.words.length <= 256;
+      if (control?.family !== "oneWindow" || !(talkTo || summon || focusWindow || cursor))
         throw new EvaluationContractError("invalid_step_control", [step.name]);
     }
     for (const text of [step.type, step.append])
@@ -456,10 +457,19 @@ const MAX_STALE_RETRIES = 25;
  * refuses the key as stale before dispatch (dispatchCompleted false). Retry only when the observable
  * filter proves the key was not applied (text keys), and for other keys rely on that pre-dispatch refusal.
  */
-async function actWithRetry(client: OwnedEvaluationClient, target: AutomationInstance, action: OwnedAction): Promise<{ response: Json; retries: number }> {
+async function actWithRetry(client: OwnedEvaluationClient, target: AutomationInstance, action: OwnedAction, paintedNode?: string): Promise<{ response: Json; retries: number }> {
   const textKey = action.type === "key" && typeof action.text === "string" && !(action.modifiers ?? []).length;
   for (let retries = 0; ; retries++) {
     const before = textKey ? (await client.inspect(target)).inputValue : undefined;
+    // Bind a coordinate to the exact completed frame that supplied its bounds, not to a new inspection.
+    if (action.type === "gpuiEvent" && action.frame) {
+      try { return { response: await client.act(target, action, action.frame.target), retries }; }
+      catch (error) {
+        if (!paintedNode || retries >= 3 || !(error instanceof DriverCommandRefused) || error.code !== "stale_target_identity") throw error;
+        action = await clickAction(client, target, paintedNode);
+        continue;
+      }
+    }
     try { return { response: await client.act(target, action), retries }; }
     catch (error) {
       const refusedBeforeDispatch = (error instanceof EvaluationContractError && error.code === "completed_action_receipt_required") ||
@@ -521,7 +531,7 @@ async function runRuntime(options: {
       }
       let firstBefore: number | undefined; let lastEffect: string | undefined;
       for (const action of actions) {
-        const { response, retries } = await actWithRetry(client, dispatchTo, action);
+        const { response, retries } = await actWithRetry(client, dispatchTo, action, step.click);
         const receipt = response.actionReceipt ?? response.results?.[0]?.actionReceipt;
         firstBefore ??= receipt?.before?.frameGeneration;
         lastEffect = receipt?.effect?.kind;

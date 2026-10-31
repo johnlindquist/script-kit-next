@@ -93,6 +93,7 @@ impl ScriptListApp {
         if !matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
             self.current_view = AppView::PermissionsWizardView { selected_index: 0 };
             self.note_main_route_changed();
+            self.pending_focus = Some(FocusTarget::AppRoot);
             self.spawn_permissions_wizard_poll(cx);
         }
         cx.notify();

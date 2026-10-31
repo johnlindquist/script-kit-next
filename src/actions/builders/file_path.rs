@@ -740,6 +740,17 @@ mod namespace_tests {
     }
 
     #[test]
+    fn move_to_ranks_the_folder_action_above_trash() {
+        let actions = get_file_context_actions(&sample_file_info(false));
+        let score = |id: &str, query: &str| {
+            let action = actions.iter().find(|a| a.id == id).unwrap();
+            crate::actions::ActionsDialog::score_action(action, query)
+        };
+        assert!(score("file:move_path", "move to") > score("file:move_to_trash", "move to"));
+        assert!(score("file:move_to_trash", "trash") > score("file:move_path", "trash"));
+    }
+
+    #[test]
     fn test_get_file_context_actions_prefixes_ids_with_file_namespace() {
         let file_actions = get_file_context_actions(&sample_file_info(false));
         assert!(file_actions

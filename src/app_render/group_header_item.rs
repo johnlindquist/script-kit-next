@@ -51,6 +51,8 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
             "Voice Dictation to Agent Chat".to_string()
         }
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
+        builtins::BuiltInFeature::UseDictationInKit => "Use Dictation in Kit".into(),
+        builtins::BuiltInFeature::ReviewDictationMarkdown => "Review Dictation in Markdown".into(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
         builtins::BuiltInFeature::AgentChatHistory => "Agent Chat History".to_string(),
         builtins::BuiltInFeature::AiVault => "AI Vault".to_string(),

@@ -341,7 +341,7 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::FormPrompt => {
-                if let AppView::FormPrompt { entity, .. } = &self.current_view {
+                if let AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } = &self.current_view {
                     let fh = entity.read(cx).focus_handle(cx);
                     window.focus(&fh, cx);
                     // FormPrompt has its own focus handling

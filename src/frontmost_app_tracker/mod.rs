@@ -119,6 +119,7 @@ fn advance_fetch_generation(state: &mut TrackerState) -> u64 {
 struct TrackerState {
     /// The last "real" application (not Script Kit)
     last_real_app: Option<TrackedApp>,
+    window_seen: Option<std::time::Instant>,
     /// Cached menu bar items for the last real app
     cached_menu_items: Vec<MenuBarItem>,
     /// Identity that owns the current cached menu items, if any.
@@ -196,6 +197,7 @@ fn publish_tracked_app(tracked: TrackedApp) {
         previous.pid != tracked.pid || previous.bundle_id != tracked.bundle_id
     });
     state.last_real_app = Some(tracked);
+    state.window_seen = Some(std::time::Instant::now());
     if identity_changed {
         state.cached_menu_items.clear();
         state.cached_menu_identity = None;
@@ -501,8 +503,40 @@ pub fn start_tracking() {
 /// Get the last "real" application that was active before Script Kit.
 ///
 /// Returns `None` if no app has been tracked yet (e.g., Script Kit just launched).
+pub fn observed_window_age_ms() -> u64 {
+    TRACKER_STATE.read().window_seen.map_or(0, |at| at.elapsed().as_millis() as u64)
+}
+
 pub fn get_last_real_app() -> Option<TrackedApp> {
     TRACKER_STATE.read().last_real_app.clone()
+}
+
+/// Identity of the context available without another Accessibility read. Hash under the
+/// tracker lock so app and menu state cannot come from different cache generations.
+pub fn intent_context_key() -> u64 {
+    use std::hash::{Hash, Hasher};
+    fn menus(items: &[MenuBarItem], hash: &mut impl Hasher) {
+        items.len().hash(hash);
+        for item in items {
+            item.title.hash(hash);
+            item.enabled.hash(hash);
+            if let Some(shortcut) = &item.shortcut {
+                shortcut.key.hash(hash);
+                shortcut.modifiers.hash(hash);
+            }
+            menus(&item.children, hash);
+        }
+    }
+    let state = TRACKER_STATE.read();
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    if let Some(app) = &state.last_real_app {
+        app.pid.hash(&mut hash);
+        app.bundle_id.hash(&mut hash);
+        app.window_title.hash(&mut hash);
+    }
+    state.fetching_menu_generation.hash(&mut hash);
+    menus(&state.cached_menu_items, &mut hash);
+    hash.finish()
 }
 
 /// Re-read the tracked app's focused window title and return the updated app.
@@ -540,6 +574,7 @@ fn publish_window_title(pid: i32, bundle_id: &str, title: Option<String>) -> boo
     match state.last_real_app.as_mut() {
         Some(app) if app.pid == pid && app.bundle_id == bundle_id && app.window_title != title => {
             app.window_title = title;
+            state.window_seen = Some(std::time::Instant::now());
             true
         }
         _ => false,

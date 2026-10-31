@@ -38,6 +38,9 @@ impl OneWindow {
             fx.push(Effect::EnterIgnored);
             return true;
         }
+        if let Some(taken) = self.subject_key(now, &key, fx) {
+            return taken;
+        }
         let empty = self.text.is_empty();
         match &key {
             Key::CmdZ if empty => {
@@ -227,10 +230,31 @@ impl OneWindow {
         if self.work_run(now, &row, fx) {
             return;
         }
+        let page = row
+            .key
+            .starts_with("subject/")
+            .then(|| self.page_for_action())
+            .flatten();
+        if row.key.starts_with("subject/")
+            && !page
+                .as_ref()
+                .is_some_and(|p| row.key.starts_with(&format!("subject/{}/", p.id)))
+        {
+            fx.push(Effect::EnterIgnored);
+            return;
+        }
+        if let Some(page) = &page {
+            if row.key == format!("subject/{}/edit", page.id) {
+                self.staged = None;
+                self.set_input(now, page.source.body.to_string(), fx);
+                return;
+            }
+        }
         let staged_entry = self
             .staged
             .as_ref()
             .and_then(|s| s.subject.entry)
+            .or_else(|| page.and_then(|p| p.source.subject.entry))
             .or_else(|| self.share_last(&row));
         let from_staged = self
             .staged

@@ -22,6 +22,8 @@ pub fn plan_verb(plan: &Plan) -> &'static str {
                 "Run"
             }
         }
+        Pathway::AppCommand if matches!(plan.steps.first(), Some(Step::InspectFilename { .. })) => "Inspect Field",
+        Pathway::AppCommand if matches!(plan.steps.first(), Some(Step::FocusTab { .. })) => "Focus Tab",
         Pathway::AppCommand => "Click",
         Pathway::Window => match window_action(plan) {
             Some(WindowAction::Quit) => "Quit",
@@ -60,6 +62,8 @@ pub fn plan_subtitle(plan: &Plan) -> String {
                 _ => "Runs a command".to_string(),
             },
             Pathway::AppCommand => match plan.steps.first() {
+                Some(Step::InspectFilename { filename, .. }) => format!("Preview “{filename}” · leaves Save open"),
+                Some(Step::FocusTab { app, .. }) => format!("Switches to a matching open tab in {app}"),
                 Some(Step::Menu { app, .. }) => format!("{app} menu"),
                 _ => "App menu".to_string(),
             },

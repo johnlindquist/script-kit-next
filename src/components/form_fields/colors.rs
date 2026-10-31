@@ -2,7 +2,7 @@
 ///
 /// This struct holds the color values needed for form field rendering,
 /// allowing efficient use in closures without cloning the full theme.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FormFieldColors {
     /// Background color of the input
     pub background: u32,
@@ -40,12 +40,14 @@ impl FormFieldColors {
         let ui_font_size = theme.get_fonts().ui_size;
         let chrome = crate::theme::AppChromeColors::from_theme(theme);
         Self {
-            background: theme.colors.background.search_box,
-            background_focused: theme.colors.background.main,
+            // Tint the field with foreground ink, not a second coat of the window color.
+            // This keeps the boundary legible on both light and dark surfaces.
+            background: chrome.text_primary_hex,
+            background_focused: chrome.text_primary_hex,
             text: gpui::rgb(chrome.text_primary_hex),
             placeholder: gpui::rgba(chrome.placeholder_text_rgba),
-            label: gpui::rgba(chrome.text_muted_rgba),
-            border: theme.colors.ui.border,
+            label: gpui::rgba(chrome.text_strong_rgba),
+            border: chrome.text_primary_hex,
             border_focused: chrome.accent_hex,
             cursor: gpui::rgb(chrome.accent_hex),
             error: theme.colors.ui.error,
@@ -64,8 +66,8 @@ impl FormFieldColors {
 
         let typography = crate::designs::DesignTypography::default();
         Self {
-            background: colors.background_secondary,
-            background_focused: colors.background,
+            background: colors.text_primary,
+            background_focused: colors.text_primary,
             text: gpui::rgb(colors.text_primary),
             placeholder: gpui::rgba(hex_to_rgba_with_opacity(
                 colors.text_primary,
@@ -75,7 +77,7 @@ impl FormFieldColors {
                 colors.text_primary,
                 OPACITY_TEXT_MUTED,
             )),
-            border: colors.border,
+            border: colors.text_primary,
             border_focused: colors.accent,
             cursor: gpui::rgb(colors.accent),
             error: colors.error,
@@ -158,6 +160,8 @@ pub struct FormFieldMetrics {
     pub input_line_height: f32,
     /// Vertical gap between a label and its field surface.
     pub field_gap_px: f32,
+    /// Space between two fields, distinct from the smaller label-to-control gap.
+    pub field_stack_gap_px: f32,
     /// Horizontal padding inside a compact form field surface.
     pub field_padding_x_px: f32,
     /// Vertical padding inside a compact form field surface.
@@ -217,6 +221,7 @@ impl FormFieldMetrics {
             input_font_size,
             input_line_height: (input_font_size * line_height_normal).max(input_font_size + 4.0),
             field_gap_px: 6.0,
+            field_stack_gap_px: 16.0,
             field_padding_x_px: 10.0,
             field_padding_y_px: 8.0,
             field_radius_px: 6.0,

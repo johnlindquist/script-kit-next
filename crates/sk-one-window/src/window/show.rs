@@ -156,7 +156,7 @@ impl OneWindow {
         if let Some(staged) = &self.staged {
             return Some(SubjectChip::of(&staged.subject, true));
         }
-        if !self.views.is_empty() {
+        if !self.views.is_empty() || self.tabs_visible() {
             return None;
         }
         (self.text.is_empty() && !self.focused.title.is_empty()).then(|| {

@@ -1,7 +1,5 @@
 import { Driver, type Json } from "../devtools/driver";
 
-const HOLD_MS = 360;
-
 async function simulateMainHotkeyGesture(
   driver: Driver,
   phase: "down" | "up",
@@ -26,29 +24,11 @@ export async function openDayPage(driver: Driver, runId: string): Promise<Json> 
     return state;
   }
 
-  if (state.windowVisible === true && state.promptType === "none") {
-    await driver.batch([{ type: "setInput", text: "" }], { timeoutMs: 5000 });
-    await Bun.sleep(120);
-    await tapMainHotkey(driver, runId, "hide-launcher-before-day-page-hold");
-    await driver.waitForState({ windowVisible: false }, { timeoutMs: 8000 });
-    await Bun.sleep(120);
-    state = (await driver.getState({ timeoutMs: 5000 })) as Json;
+  // This helper opens Today; it must never exercise the microphone shortcut.
+  for (const stroke of [1, 2]) {
+    await simulateMainHotkeyGesture(driver, "down", `${runId}-today-${stroke}-down`);
+    await simulateMainHotkeyGesture(driver, "up", `${runId}-today-${stroke}-up`);
   }
-
-  if (state.windowVisible === true) {
-    await driver.simulateKey("escape");
-    await Bun.sleep(420);
-    state = (await driver.getState({ timeoutMs: 5000 })) as Json;
-    if (state.windowVisible === true && state.promptType === "none") {
-      await tapMainHotkey(driver, runId, "hide-launcher-after-escape-before-day-page-hold");
-      await driver.waitForState({ windowVisible: false }, { timeoutMs: 8000 });
-      await Bun.sleep(120);
-    }
-  }
-
-  await simulateMainHotkeyGesture(driver, "down", `${runId}-open-day-page-hold-down`);
-  await Bun.sleep(HOLD_MS);
-  await simulateMainHotkeyGesture(driver, "up", `${runId}-open-day-page-hold-up`);
   await driver.waitForState(
     { windowVisible: true, promptType: "dayPage" },
     { timeoutMs: 8000 },

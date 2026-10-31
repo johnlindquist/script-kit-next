@@ -268,6 +268,9 @@ pub enum OneWindowTalkDestination {
     deny_unknown_fields
 )]
 pub enum OneWindowFixtureCommand {
+    CursorBegin {},
+    CursorFinal { words: String },
+    ShortcutOutside {},
     /// Starts the voice session "Start Dictation to Agent Chat/Notes" starts; the typed words
     /// stand in for the heard ones because evaluation never opens a microphone.
     TalkTo {
@@ -584,11 +587,22 @@ impl NativeSafetyProbe {
     ];
 }
 
-/// The only coordinator-owned SDK child accepted by the native evaluator.
+/// Fixed coordinator-owned SDK scripts accepted by the native evaluator.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SdkPromptFixtureId {
     #[serde(rename = "sdk.arg-roundtrip.v1")]
     ArgRoundtrip,
+    #[serde(rename = "sdk.form-correction.v1")]
+    FormCorrection,
+}
+
+impl SdkPromptFixtureId {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::ArgRoundtrip => "sdk.arg-roundtrip.v1",
+            Self::FormCorrection => "sdk.form-correction.v1",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]

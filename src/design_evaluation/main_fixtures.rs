@@ -49,6 +49,20 @@ pub(crate) fn mount_main_fixture(
     app.gpui_input_state
         .update(cx, |input, cx| input.set_value(initial_filter, window, cx));
     let view = match id {
+        "main.subject-tabs" => {
+            use crate::one_window::subject_tabs::{window_source,copy_source,selection_source};
+            use sk_one_window::{Subject, SubjectKind, Event, window::subject_tabs::TabsEvent};
+            let text="TypeError: Cannot read properties of undefined";
+            let win=Subject {kind:SubjectKind::Window,title:"zsh — ~/projects/site".into(),sub:"Ghostty".into(),icon:"terminal".into(),..Subject::default()};
+            let selection=Subject {kind:SubjectKind::Selection,title:text.into(),sub:"in Ghostty".into(),icon:"text-cursor".into(),..Subject::default()};
+            let now=app.one_window_clock();
+            app.one_window.handle(now,Event::Notice(sk_one_window::notice::Notice::new("check","Added reminder: call mom")));
+            app.one_window.handle(now,Event::Subjects(TabsEvent::Open{window:Some(window_source(win,65_000)),copy:copy_source("https://github.com/script-kit/app/pull/412",40_000)}));
+            let mut selected=selection_source(selection,text); selected.age_ms=6_000;
+            app.one_window.handle(now,Event::Subjects(TabsEvent::Observe(selected)));
+            prepare_launcher_files(app,root)?;
+            AppView::ScriptList
+        }
         "main.script-list" | "main.root-search-frame-stability" | "main-search-contract" => {
             if id == "main.root-search-frame-stability" {
                 let MainServices::OwnedFixtures(sources) = &mut app.main_services else {
@@ -453,8 +467,13 @@ pub(crate) fn mount_main_fixture(
     } else if matches!(app.current_view, AppView::FileSearchView { .. }) {
         app.recompute_file_search_display_indices();
     }
-    app.gpui_input_state
-        .update(cx, |input, cx| input.focus(window, cx));
+    if matches!(app.current_view, AppView::PermissionsWizardView { .. }) {
+        app.pending_focus = Some(FocusTarget::AppRoot);
+        app.focus_handle.focus(window, cx);
+    } else {
+        app.gpui_input_state
+            .update(cx, |input, cx| input.focus(window, cx));
+    }
     cx.notify();
     Ok(())
 }

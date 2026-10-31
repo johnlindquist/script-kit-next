@@ -21,6 +21,7 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
 
 fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
     match entry.feature {
+        builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => false,
         builtins::BuiltInFeature::App(_) => false,
         builtins::BuiltInFeature::MenuBarAction(_) => false,
         builtins::BuiltInFeature::SystemAction(_) => false,

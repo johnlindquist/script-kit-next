@@ -6,7 +6,7 @@
 //! - Validates empty names, invalid path characters, and duplicate filenames
 
 use gpui::{
-    div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, SharedString, Window,
+    div, prelude::*, px, Context, Entity, FocusHandle, Focusable, Render, SharedString, Window,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::theme;
-use crate::ui_foundation::{is_key_backspace, is_key_enter, printable_char};
+use crate::ui_foundation::is_key_enter;
 
 use super::SubmitCallback;
 

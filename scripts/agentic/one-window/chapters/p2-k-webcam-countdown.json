@@ -1,0 +1,12 @@
+[{"name":"webcam-live","waitMs":800},
+ {"name":"webcam-actions-live","key":"cmd-k","waitMs":500},
+ {"name":"webcam-filter-countdown","append":"3 sec","waitMs":400},
+ {"name":"webcam-countdown-3","key":"enter","waitMs":200},
+ {"name":"webcam-countdown-2","waitMs":1000},
+ {"name":"webcam-review","waitMs":2600},
+ {"name":"webcam-actions-review","key":"cmd-k","waitMs":500},
+ {"name":"webcam-actions-review-closed","key":"escape","waitMs":400},
+ {"name":"webcam-retake","key":"escape","waitMs":400},
+ {"name":"webcam-capture-now","key":"enter","waitMs":400},
+ {"name":"webcam-copy-path","key":"cmd-shift-c","waitMs":500},
+ {"name":"webcam-copy-image","key":"enter","waitMs":500}]

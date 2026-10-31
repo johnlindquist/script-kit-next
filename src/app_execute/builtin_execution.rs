@@ -40,6 +40,7 @@ static DICTATION_MIC_CHECK_RUNNING: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 include!("builtin_execution_support.rs");
+include!("cursor_dictation.rs");
 use crate::dictation::{dictation_mutation_error_outcome, with_frozen_dictation_destination};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2578,6 +2579,10 @@ impl ScriptListApp {
             }
             builtins::BuiltInFeature::DictationToFrontmostApp => self
                 .execute_dictation_builtin_action(DictationBuiltinAction::FrontmostApp, dctx, cx),
+            builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => {
+                let changed=if matches!(entry.feature,builtins::BuiltInFeature::UseDictationInKit){self.toggle_cursor_kit(cx)}else{self.review_cursor_draft(cx)};
+                if changed{Self::builtin_success(dctx,"Dictation destination selected")}else{Self::builtin_error(dctx,"dictation_unavailable","No eligible dictation","Start a recording first")}
+            }
             builtins::BuiltInFeature::DictationToNotes => {
                 self.execute_dictation_builtin_action(DictationBuiltinAction::Notes, dctx, cx)
             }
@@ -4364,6 +4369,10 @@ impl ScriptListApp {
             "{}", action.opening_message()
         );
 
+        if self.cursor_dictation_pending() {
+            self.stop_cursor_capture(cx);
+            return Self::builtin_success(dctx, "Finishing dictation");
+        }
         if crate::dictation::is_dictation_stopping() {
             tracing::info!(
                 category = "DICTATION",
@@ -4420,6 +4429,10 @@ impl ScriptListApp {
             return Self::builtin_success(dctx, action.success_detail());
         }
 
+        if matches!(action, DictationBuiltinAction::CurrentSurface | DictationBuiltinAction::FrontmostApp) && (matches!(dictation_target,crate::dictation::DictationTarget::ExternalApp | crate::dictation::DictationTarget::MainWindowFilter | crate::dictation::DictationTarget::MainWindowPrompt) || (dictation_target==crate::dictation::DictationTarget::DayPageToday && matches!(self.current_view, AppView::DayPage{..}))) {
+            self.start_cursor_recording(dictation_target,false,cx);
+            return Self::builtin_success(dctx,action.success_detail());
+        }
         self.start_ready_dictation_builtin_action(
             action,
             dictation_target,
@@ -4931,6 +4944,7 @@ impl ScriptListApp {
                                     cx,
                                 );
                             }
+                            Ok(_) if this.end_empty_cursor(session_generation,cx) => {}
                             Ok(_) if this.one_window_talking() => {
                                 this.one_window_talk_final(String::new(), None, cx);
                             }
@@ -4938,6 +4952,7 @@ impl ScriptListApp {
                                 let _ = this.restore_dictation_return_origin(cx);
                             }
                             Err(error) => {
+                                if this.end_empty_cursor(session_generation,cx) { this.notice_failed(format!("Couldn't finish recording: {error}"),cx); return; }
                                 let error_text = error.to_string();
                                 tracing::error!(
                                     category = "DICTATION",
@@ -5516,6 +5531,10 @@ impl ScriptListApp {
             target,
             record_history,
         } = timing;
+        if session_generation!=0 && (self.one_window_host.cursor_voice.retired.is_some_and(|id|session_generation<=id) || self.one_window_host.cursor_voice.active.as_ref().is_some_and(|s| session_generation<s.generation)) && preserved_request.is_none() {return;}
+        if !matches!(&result,Ok(Some(words)) if !words.trim().is_empty()) && self.end_empty_cursor(session_generation,cx) {
+            self.one_window_notice(crate::line_notice::INFO,"No transcript to insert",cx);return;
+        }
         match result {
             Ok(Some(transcript)) => {
                 let recovery_request = preserved_request;
@@ -5564,7 +5583,7 @@ impl ScriptListApp {
                             String::new()
                         }
                     });
-                if self.one_window_talking() {
+                if !self.cursor_dictation_pending() && self.one_window_talking() {
                     let type_it: crate::one_window::talk_host::TalkPaste =
                         Box::new(move |app, text, cx| {
                             app.handle_dictation_transcript(
@@ -5673,6 +5692,10 @@ impl ScriptListApp {
                     return;
                 }
 
+                if self.one_window_host.cursor_voice.active.as_ref().is_some_and(|s|s.generation==session_generation) {
+                    self.deliver_cursor_once(request,timing,cx);
+                    return;
+                }
                 let internal_result = self.mutate_internal_dictation_request(&request, None, cx);
 
                 if !matches!(target, crate::dictation::DictationTarget::ExternalApp) {
@@ -7744,7 +7767,11 @@ impl ScriptListApp {
     /// tracked frontmost app > launcher main filter fallback > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
         let has_frontmost_app_target = Self::has_dictation_frontmost_target();
-        let target = if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+        let kit_focused=script_kit_gpui::is_main_window_visible() && platform::is_main_window_focused();
+        let target = if !kit_focused && has_frontmost_app_target { crate::dictation::DictationTarget::ExternalApp }
+        else if kit_focused && matches!(self.current_view,AppView::DayPage{..}) { crate::dictation::DictationTarget::DayPageToday }
+        else if kit_focused && self.can_accept_dictation_into_main_filter() { crate::dictation::DictationTarget::MainWindowFilter }
+        else if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             crate::dictation::DictationTarget::TabAiHarness
         } else if self.one_window.chat().is_some() {
             crate::dictation::DictationTarget::MainWindowFilter

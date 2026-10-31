@@ -3758,11 +3758,16 @@ impl ActionsDialog {
         } else {
             let (title_matched, indices) = highlight_ctx.indices_for(&action.title);
             if title_matched {
-                score += Self::title_match_tier(&indices, query_char_count);
-                // A title that is exactly what's typed leads one that only starts with it.
-                if action.title_lower == search_lower {
-                    score += 20;
-                }
+                // Unicode matching highlights words, not their intervening spaces. Rank an
+                // exact command by its title rather than those indices: “move to” means
+                // “Move to…” before the longer “Move to Trash”.
+                score += if action.title_lower == search_lower
+                    || action.title_lower.strip_suffix('…') == Some(search_lower)
+                {
+                    130 // Above a prefix even with both description and shortcut bonuses.
+                } else {
+                    Self::title_match_tier(&indices, query_char_count)
+                };
                 title_indices = indices;
             }
         }

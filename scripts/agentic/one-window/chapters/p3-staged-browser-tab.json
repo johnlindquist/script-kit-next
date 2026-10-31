@@ -1,0 +1,32 @@
+[
+  {
+    "name": "chrome",
+    "control": {
+      "family": "oneWindow",
+      "operation": "focusWindow",
+      "app": "Google Chrome",
+      "title": "News"
+    },
+    "waitMs": 150
+  },
+  {
+    "name": "stage",
+    "key": "space",
+    "waitMs": 250
+  },
+  {
+    "name": "query",
+    "type": "Focus on the herdr tab",
+    "waitMs": 1250
+  },
+  {
+    "name": "enter",
+    "key": "enter",
+    "waitMs": 650
+  },
+  {
+    "name": "unstage",
+    "key": "escape",
+    "waitMs": 400
+  }
+]

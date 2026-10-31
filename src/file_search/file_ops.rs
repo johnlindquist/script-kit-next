@@ -49,14 +49,98 @@ pub enum OnConflict {
 }
 
 /// Where a move or copy put the item, and what it set aside to get there.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Placed {
     pub path: PathBuf,
+    pub undo_identity: FileIdentity,
     /// The item that was at the destination and went to the Trash (`OnConflict::Replace`),
     /// with where the Trash put it, so an undo can bring it back.
     pub replaced: Option<(PathBuf, PathBuf)>,
     /// The move crossed volumes, so it was a copy followed by removing the original.
     pub across_volumes: bool,
+}
+
+/// An open handle keeps the item alive across the undo interval. This prevents an unlinked
+/// file's inode from being recycled for a replacement, and identifies a symlink itself.
+#[derive(Debug)]
+pub struct FileIdentity(std::fs::File);
+
+impl FileIdentity {
+    pub fn capture(path: &Path) -> Result<Self, FileOpError> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.custom_flags(libc::O_EVTONLY | libc::O_SYMLINK);
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.custom_flags(libc::O_PATH | libc::O_NOFOLLOW);
+        }
+        options
+            .open(path)
+            .map(Self)
+            .map_err(|e| FileOpError::Other(format!("Couldn't identify the item: {e}")))
+    }
+
+    fn matches(&self, path: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            match (self.0.metadata(), std::fs::symlink_metadata(path)) {
+                (Ok(expected), Ok(found)) => {
+                    expected.dev() == found.dev() && expected.ino() == found.ino()
+                }
+                _ => false,
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            false
+        }
+    }
+
+    /// Claim the entry in a private sibling directory, then check its identity again before
+    /// moving or trashing it. A concurrent swap between the initial check and rename must
+    /// never authorize the inverse operation on the replacement.
+    pub fn undo_at(
+        &self,
+        path: &Path,
+        undo: impl FnOnce(&Path) -> Result<(), FileOpError>,
+    ) -> Result<(), FileOpError> {
+        let changed = || FileOpError::Other("The item at that location has changed".into());
+        if !self.matches(path) {
+            return Err(changed());
+        }
+        let parent = path.parent().ok_or_else(changed)?;
+        let name = path.file_name().ok_or_else(changed)?;
+        let staging = tempfile::Builder::new()
+            .prefix(".script-kit-undo-")
+            .tempdir_in(parent)
+            .map_err(|e| FileOpError::Other(format!("Couldn't prepare the undo: {e}")))?;
+        let held = staging.path().join(name);
+        rename_no_replace(path, &held)?;
+        let result = if self.matches(&held) {
+            undo(&held)
+        } else {
+            Err(changed())
+        };
+        if result.is_err() && exists_no_follow(&held) {
+            if let Err(e) = rename_no_replace(&held, path) {
+                // Another writer can claim the now-free name. Preserve BOTH items rather
+                // than letting TempDir's destructor remove the one we set aside.
+                let _retained = staging.keep();
+                return Err(FileOpError::Other(format!(
+                    "Item preserved at {}: {e}",
+                    held.display()
+                )));
+            }
+        }
+        result
+    }
 }
 
 fn exists_no_follow(path: &Path) -> bool {
@@ -204,21 +288,27 @@ fn map_rename_error(error: std::io::Error, to: &Path) -> FileOpError {
 /// Keeps permissions, dates, tags and other extended attributes; links are copied as links.
 /// A copy that fails part way is removed.
 pub fn copy_no_replace(from: &Path, to: &Path) -> Result<(), FileOpError> {
+    copy_with_identity(from, to).map(|_| ())
+}
+
+fn copy_with_identity(from: &Path, to: &Path) -> Result<FileIdentity, FileOpError> {
     if exists_no_follow(to) {
         return Err(exists_error(to));
     }
     let metadata = std::fs::symlink_metadata(from)
         .map_err(|e| FileOpError::Other(format!("Couldn't read the original: {e}")))?;
-    let result = copy_tree(from, to, &metadata);
-    if result.is_err() && exists_no_follow(to) {
-        // Only what this copy created can be here: the destination was free a moment ago.
-        let _ = if metadata.is_dir() {
-            std::fs::remove_dir_all(to)
-        } else {
-            std::fs::remove_file(to)
-        };
-    }
-    result
+    let staging = tempfile::Builder::new()
+        .prefix(".script-kit-copy-")
+        .tempdir_in(
+            to.parent()
+                .ok_or_else(|| FileOpError::Other("The destination has no parent".into()))?,
+        )
+        .map_err(|e| FileOpError::Other(format!("Couldn't prepare the copy: {e}")))?;
+    let copy = staging.path().join("item");
+    copy_tree(from, &copy, &metadata)?;
+    let identity = FileIdentity::capture(&copy)?;
+    rename_no_replace(&copy, to)?;
+    Ok(identity)
 }
 
 #[cfg(target_os = "macos")]
@@ -294,22 +384,25 @@ fn remove_original(path: &Path) -> std::io::Result<()> {
 /// Moves `from` to `to` without replacing anything. Across volumes it copies, then removes the
 /// original; if the original can't be removed the copy stays and the error says so.
 pub fn move_no_replace(from: &Path, to: &Path) -> Result<bool, FileOpError> {
-    move_no_replace_with(from, to, rename_no_replace)
+    move_no_replace_with(from, to, rename_no_replace).map(|(across, _)| across)
 }
 
 fn move_no_replace_with(
     from: &Path,
     to: &Path,
     rename: impl Fn(&Path, &Path) -> Result<(), FileOpError>,
-) -> Result<bool, FileOpError> {
+) -> Result<(bool, FileIdentity), FileOpError> {
+    let original = FileIdentity::capture(from)?;
     match rename(from, to) {
-        Ok(()) => Ok(false),
+        Ok(()) => Ok((false, original)),
         Err(FileOpError::CrossVolume) => {
-            copy_no_replace(from, to)?;
-            remove_original(from).map_err(|e| {
-                FileOpError::Other(format!("Copied it, but couldn't remove the original: {e}"))
+            let copy = copy_with_identity(from, to)?;
+            original.undo_at(from, |held| {
+                remove_original(held).map_err(|e| {
+                    FileOpError::Other(format!("Copied it, but couldn't remove the original: {e}"))
+                })
             })?;
-            Ok(true)
+            Ok((true, copy))
         }
         Err(error) => Err(error),
     }
@@ -371,6 +464,7 @@ pub fn move_into(
     let (target, replaces) = destination_for(item, folder, on_conflict)?;
     if target == item {
         return Ok(Placed {
+            undo_identity: FileIdentity::capture(item)?,
             path: target,
             replaced: None,
             across_volumes: false,
@@ -382,8 +476,9 @@ pub fn move_into(
     } else {
         None
     };
-    match move_no_replace(item, &target) {
-        Ok(across_volumes) => Ok(Placed {
+    match move_no_replace_with(item, &target, rename_no_replace) {
+        Ok((across_volumes, undo_identity)) => Ok(Placed {
+            undo_identity,
             path: target,
             replaced,
             across_volumes,
@@ -424,8 +519,9 @@ pub fn copy_into(
     } else {
         None
     };
-    match copy_no_replace(item, &target) {
-        Ok(()) => Ok(Placed {
+    match copy_with_identity(item, &target) {
+        Ok(undo_identity) => Ok(Placed {
+            undo_identity,
             path: target,
             replaced,
             across_volumes: false,
@@ -610,6 +706,39 @@ mod tests {
     }
 
     #[test]
+    fn undo_never_takes_a_replacement_even_with_identical_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let moved = dir.path().join("moved");
+        let parked = dir.path().join("parked");
+        fs::write(&moved, "identical").unwrap();
+        let identity = FileIdentity::capture(&moved).unwrap();
+        fs::rename(&moved, &parked).unwrap();
+        fs::copy(&parked, &moved).unwrap();
+        assert!(identity.undo_at(&moved, |_| panic!("wrong file")).is_err());
+        assert!(identity.matches(&parked));
+        assert_eq!(fs::read(&parked).unwrap(), fs::read(&moved).unwrap());
+    }
+
+    #[test]
+    fn undo_preserves_both_files_if_a_writer_claims_the_rollback_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let moved = dir.path().join("moved");
+        fs::write(&moved, "original").unwrap();
+        let identity = FileIdentity::capture(&moved).unwrap();
+        let mut preserved = PathBuf::new();
+        let error = identity
+            .undo_at(&moved, |held| {
+                preserved = held.into();
+                fs::write(&moved, "other writer").unwrap();
+                Err(FileOpError::Other("cannot restore".into()))
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains(&*preserved.to_string_lossy()));
+        assert!(identity.matches(&preserved));
+        assert_eq!(fs::read_to_string(moved).unwrap(), "other writer");
+    }
+
+    #[test]
     fn move_into_replace_sets_the_old_item_aside_first() {
         let dir = tempfile::tempdir().unwrap();
         let src_dir = dir.path().join("src");
@@ -656,9 +785,9 @@ mod tests {
         fs::write(folder.join("sub/b.txt"), "B").unwrap();
         let target = dir.path().join("moved");
 
-        let across =
+        let (across, identity) =
             move_no_replace_with(&folder, &target, |_, _| Err(FileOpError::CrossVolume)).unwrap();
-        assert!(across);
+        assert!(across && identity.matches(&target));
         assert!(!folder.exists());
         assert_eq!(fs::read_to_string(target.join("sub/b.txt")).unwrap(), "B");
     }

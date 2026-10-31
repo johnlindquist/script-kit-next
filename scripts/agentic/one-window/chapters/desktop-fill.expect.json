@@ -1,0 +1,9 @@
+{
+  "launcher": {},
+  "reading": {"enter":"↵ Inspect filename in Workshop Editor"},
+  "preview": {"header":"OR PICK ONE","enter":"↵ Fill filename","lineTitle":"Fill filename with “Workshop outline”?"},
+  "cancel": {"lineTitle":"Filename left unchanged"},
+  "reading-again": {"enter":"↵ Inspect filename in Workshop Editor"},
+  "preview-again": {"lineTitle":"Fill filename with “Workshop outline”?"},
+  "applied": {"lineTitle":"Filename filled; Save sheet left open"}
+}

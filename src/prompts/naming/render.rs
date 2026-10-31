@@ -3,8 +3,11 @@ use super::*;
 const NAMING_PROMPT_BODY_SELECTOR: &str = "naming-prompt-body-content";
 
 impl Focusable for NamingPrompt {
-    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
-        self.focus_handle.clone()
+    fn focus_handle(&self, cx: &gpui::App) -> FocusHandle {
+        self.editor
+            .as_ref()
+            .map(|e| e.read(cx).get_focus_handle())
+            .unwrap_or_else(|| self.focus_handle.clone())
     }
 }
 
@@ -13,63 +16,46 @@ impl Render for NamingPrompt {
         let tokens = get_tokens(self.design_variant);
         let spacing = tokens.spacing();
 
-        let text_primary = rgb(self.theme.colors.text.primary);
-        let text_secondary = rgb(self.theme.colors.text.secondary);
-        let text_muted = rgb(self.theme.colors.text.muted);
-        let error_color = rgb(self.theme.colors.ui.error);
+        let palette = crate::components::prompt_text_palette(&self.theme);
+        let (text_primary, text_secondary, text_muted) =
+            (palette.primary, palette.label, palette.help);
+        let colors = crate::components::FormFieldColors::from_theme(&self.theme);
 
-        let (title, destination_label, preview_label, preview_kind) = match self.target {
-            NamingTarget::Script => (
-                "Name your script",
-                "Destination",
-                "Filename",
-                "TypeScript script",
-            ),
-            NamingTarget::Extension => (
-                "Name your scriptlet bundle",
-                "Destination",
-                "Bundle Filename",
-                "Markdown bundle",
-            ),
+        let title = match self.target {
+            NamingTarget::Script => "Name your script",
+            NamingTarget::Extension => "Name your scriptlet bundle",
         };
 
         let placeholder = self
             .placeholder
             .clone()
             .unwrap_or_else(|| match self.target {
-                NamingTarget::Script => "My Cool Script".to_string(),
-                NamingTarget::Extension => "My Cool Scriptlet Bundle".to_string(),
+                NamingTarget::Script => "Daily notes".to_string(),
+                NamingTarget::Extension => "Writing tools".to_string(),
             });
 
-        let validation_message = self
-            .validation_error
-            .as_ref()
-            .map(NamingValidationError::message);
-
-        let input_value = if self.friendly_name.is_empty() {
-            SharedString::from(placeholder)
-        } else {
-            SharedString::from(self.friendly_name.clone())
-        };
-
-        let input_state = if self.validation_error.is_some() {
-            crate::components::PromptFieldState::Error
-        } else {
-            crate::components::PromptFieldState::Active
-        };
-        let input_style = crate::components::prompt_field_style(
-            &self.theme,
-            input_state,
-            self.friendly_name.is_empty(),
-        );
-        let preview_style = crate::components::prompt_field_style(
-            &self.theme,
-            crate::components::PromptFieldState::ReadOnly,
-            false,
-        );
+        let editor = self
+            .editor
+            .get_or_insert_with(|| {
+                let mut field = crate::protocol::Field::new("friendly-name".into())
+                    .with_label("Display name".into())
+                    .with_placeholder(placeholder);
+                field.value = Some(self.friendly_name.clone());
+                cx.new(|cx| crate::components::FormTextField::new(field, colors, cx))
+            })
+            .clone();
+        let issue = self
+            .visible_issue()
+            .map(|error| SharedString::from(error.message()));
+        editor.update(cx, |field, cx| {
+            field.sync_host(&self.friendly_name, issue, colors, cx)
+        });
+        if !editor.read(cx).get_focus_handle().is_focused(window) {
+            editor.read(cx).get_focus_handle().focus(window, cx);
+        }
+        let preview_style = crate::components::prompt_preview_style(&self.theme);
 
         let preview_filename = self.filename_preview();
-        let destination_text = SharedString::from(self.target_directory.display().to_string());
         let preview_path_text = SharedString::from(
             self.target_directory
                 .join(&preview_filename)
@@ -99,17 +85,7 @@ impl Render for NamingPrompt {
                         text_muted,
                         spacing.gap_sm,
                     ))
-                    .child(
-                        crate::components::prompt_form_section(
-                            "Friendly Name",
-                            text_secondary,
-                            spacing.gap_sm,
-                            crate::components::prompt_text_field(input_value, input_style),
-                        )
-                        .when_some(validation_message, |d, message| {
-                            d.child(crate::components::prompt_form_help(message, error_color))
-                        }),
-                    )
+                    .child(editor)
                     .when_some(
                         self.template.as_ref().map(|t| t.label.clone()),
                         |d, label| {
@@ -132,23 +108,7 @@ impl Render for NamingPrompt {
                         },
                     )
                     .child(crate::components::prompt_form_section(
-                        destination_label,
-                        text_secondary,
-                        spacing.gap_sm,
-                        crate::components::prompt_surface(
-                            preview_style.background,
-                            preview_style.border,
-                        )
-                        .child(
-                            crate::components::prompt_scroll_value_with_id(
-                                "naming-destination-path",
-                                destination_text,
-                                text_muted,
-                            ),
-                        ),
-                    ))
-                    .child(crate::components::prompt_form_section(
-                        preview_label,
+                        "File to create",
                         text_secondary,
                         spacing.gap_sm,
                         crate::components::prompt_surface(
@@ -172,10 +132,6 @@ impl Render for NamingPrompt {
                                     "naming-preview-path",
                                     preview_path_text,
                                     text_muted,
-                                ))
-                                .child(crate::components::prompt_form_help(
-                                    format!("{preview_kind} ({})", self.extension_label()),
-                                    text_secondary,
                                 )),
                         ),
                     )),
@@ -207,19 +163,20 @@ impl Render for NamingPrompt {
 
                     if is_key_enter(key) {
                         this.submit(cx);
-                        return;
-                    }
-
-                    if is_key_backspace(key) {
-                        this.handle_backspace(cx);
-                        return;
-                    }
-
-                    if let Some(ch) = printable_char(event.keystroke.key_char.as_deref()) {
-                        this.handle_char(ch, cx);
+                        cx.stop_propagation();
                     }
                 },
             )
+            .capture_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+                if let Some(value) = this
+                    .editor
+                    .as_ref()
+                    .and_then(|e| crate::components::FormTextField::apply_bound_edit(e, event, cx))
+                {
+                    this.set_input(value, cx);
+                    cx.stop_propagation();
+                }
+            }))
     }
 }
 
@@ -278,10 +235,6 @@ mod tests {
         assert!(
             SOURCE.contains("prompt_form_section("),
             "render.rs should use prompt_form_section"
-        );
-        assert!(
-            SOURCE.contains("prompt_form_help("),
-            "render.rs should use prompt_form_help"
         );
     }
 

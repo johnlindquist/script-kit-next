@@ -243,42 +243,15 @@ impl ScriptListApp {
         undo: LedgerRun,
         cx: &mut Context<Self>,
     ) {
-        let shared: std::rc::Rc<std::cell::RefCell<Option<LedgerRun>>> =
-            std::rc::Rc::new(std::cell::RefCell::new(Some(undo)));
-        let from_line = shared.clone();
-        self.one_window_done_undoable(
-            icon,
-            title,
-            Box::new(move |app, cx| {
-                if let Some(undo) = from_line.borrow_mut().take() {
-                    undo(app, cx);
-                }
-            }),
-            cx,
-        );
-        self.file_search_undo_generation = self.file_search_undo_generation.wrapping_add(1);
-        let from_view = shared;
-        self.file_search_last_undo = Some((
-            self.file_search_undo_generation,
-            Box::new(move |app, cx| {
-                if let Some(undo) = from_view.borrow_mut().take() {
-                    undo(app, cx);
-                }
-            }),
-        ));
+        self.file_search_last_undo = self.record_one_window_undo(icon, title, undo, cx);
     }
 
-    /// ⌘Z in File Search: takes back its latest change. Returns whether there was one.
+    /// ⌘Z in File Search consumes the same entry and callback as the line.
     pub(crate) fn file_search_undo_last(&mut self, cx: &mut Context<Self>) -> bool {
-        match self.file_search_last_undo.take() {
-            Some((_, undo)) => {
-                tracing::info!(target: "script_kit::file_search", event = "undo_last");
-                undo(self, cx);
-                cx.notify();
-                true
-            }
-            None => false,
-        }
+        let Some(id) = self.file_search_last_undo.take() else {
+            return false;
+        };
+        self.one_window_handle(Event::UndoEntry(id), cx).consumed
     }
 
     pub(crate) fn one_window_done_undoable(
@@ -288,6 +261,16 @@ impl ScriptListApp {
         undo: LedgerRun,
         cx: &mut Context<Self>,
     ) {
+        self.record_one_window_undo(icon, title, undo, cx);
+    }
+
+    fn record_one_window_undo(
+        &mut self,
+        icon: &str,
+        title: impl Into<String>,
+        undo: LedgerRun,
+        cx: &mut Context<Self>,
+    ) -> Option<u64> {
         let title = title.into();
         self.one_window_handle(
             Event::Done(Done {
@@ -306,8 +289,18 @@ impl ScriptListApp {
             .filter(|e| e.title == title && e.can_undo())
             .map(|e| e.id);
         if let Some(id) = kept {
-            self.one_window_host.ledger.undo.insert(id, undo);
+            // Keep the history, but not an unbounded collection of closures, open
+            // file descriptors and potentially unlinked files in a resident app.
+            let callbacks = &mut self.one_window_host.ledger.undo;
+            callbacks.insert(id, undo);
+            if callbacks.len() > super::lessons_host::RUNS_REMEMBERED {
+                if let Some(oldest) = callbacks.keys().copied().min() {
+                    callbacks.remove(&oldest);
+                    self.one_window.release_undo(oldest);
+                }
+            }
         }
+        kept
     }
 
     /// Effects that stand for work the ledger keeps: a wait running out, an undo, a rerun, and
@@ -340,12 +333,17 @@ impl ScriptListApp {
                     run(self, cx);
                 }
             }
-            Effect::Undo { entry } => match self.one_window_host.ledger.undo.remove(&entry) {
-                Some(undo) => undo(self, cx),
-                None => {
-                    tracing::info!(target: "script_kit::one_window", event = "undo_not_kept", entry)
+            Effect::Undo { entry } => {
+                if self.file_search_last_undo == Some(entry) {
+                    self.file_search_last_undo = None;
                 }
-            },
+                match self.one_window_host.ledger.undo.remove(&entry) {
+                    Some(undo) => undo(self, cx),
+                    None => {
+                        tracing::info!(target: "script_kit::one_window", event = "undo_not_kept", entry)
+                    }
+                }
+            }
             Effect::Again { entry } => self.one_window_run_again(entry, cx),
             Effect::ViewKey(key) if self.one_window_in_history() => {
                 self.one_window_history_key(key, cx)

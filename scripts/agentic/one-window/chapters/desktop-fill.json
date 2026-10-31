@@ -1,0 +1,9 @@
+[
+  {"name":"launcher"},
+  {"name":"reading","type":"Name this export “Workshop outline”; don’t save.","waitMs":1400},
+  {"name":"preview","key":"enter","waitMs":750},
+  {"name":"cancel","key":"escape","waitMs":350},
+  {"name":"reading-again","type":"Name this export “Workshop outline”; don’t save.","waitMs":1400},
+  {"name":"preview-again","key":"cmd-1","waitMs":750},
+  {"name":"applied","key":"enter","waitMs":500}
+]

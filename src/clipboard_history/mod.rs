@@ -31,6 +31,7 @@ mod exclusions;
 mod image;
 mod macos_paste;
 mod monitor;
+pub use monitor::recent_tab_copy;
 pub mod ocr;
 mod open_with;
 pub mod paste_sequential;
@@ -113,7 +114,7 @@ pub use temp_file::save_entry_to_temp_file;
 pub use open_with::{get_apps_for_file, open_file_with_app, AppInfo};
 
 // Secret rejection
-pub use rejection::{configure_secret_rejection, SecretRejectionConfig};
+pub use rejection::{configure_secret_rejection, matches_secret_content, SecretRejectionConfig};
 
 // Monitor/Init
 #[allow(unused_imports)]

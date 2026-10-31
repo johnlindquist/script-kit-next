@@ -259,7 +259,7 @@ fn main_window_footer_contract_legacy_view_buttons_match_real_keyboard_actions()
     assert_eq!(
         grammar(&create_ai_preset_footer_buttons(true, true)),
         vec![
-            (FooterAction::Run, "↵", "Save Preset"),
+            (FooterAction::Run, "⌘↵", "Save Preset"),
             (FooterAction::Ai, "⇥", "Next Field"),
             (FooterAction::Close, "Esc", "Cancel"),
         ]

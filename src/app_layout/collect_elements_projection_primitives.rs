@@ -452,23 +452,10 @@ impl ScriptListApp {
         let total_count = 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
-        Self::push_limited_element(
-            &mut elements,
-            limit,
-            Self::input_element(
-                "naming-friendly-name",
-                naming_prompt
-                    .placeholder
-                    .clone()
-                    .unwrap_or_else(|| "Name".to_string()),
-                Some(Self::preview_value(
-                    naming_prompt.friendly_name.as_str(),
-                    180,
-                )),
-                true,
-                Some(0),
-            ),
-        );
+        let mut input = Self::input_element("naming-friendly-name", "Display name",
+            Some(Self::preview_value(&naming_prompt.friendly_name, 180)), true, Some(0));
+        if naming_prompt.visible_issue().is_some() { input.status_kind = Some("invalid".into()); }
+        Self::push_limited_element(&mut elements, limit, input);
         Self::push_limited_element(
             &mut elements,
             limit,

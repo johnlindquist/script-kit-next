@@ -151,8 +151,12 @@ export function assertOwnedEvaluationCommand(permit: OwnedEvaluationPermit, comm
       throw new NoninteractiveSafetyError(type, "unknown evaluator operation");
     if (body.operation === "mount" && !entry.facts.fixtureIds.includes(String(body.fixtureId)))
       throw new NoninteractiveSafetyError(type, "fixture outside sealed subset");
-    if (body.operation === "sdkPrompt" && !entry.facts.fixtureIds.includes("sdk.arg-roundtrip.v1"))
-      throw new NoninteractiveSafetyError(type, "SDK fixture outside sealed subset");
+    if (body.operation === "sdkPrompt") {
+      const cmd = object(body.command);
+      const sealed = ["sdk.arg-roundtrip.v1", "sdk.form-correction.v1"].filter(id => entry.facts.fixtureIds.includes(id));
+      if (!cmd || !sealed.length || (cmd.operation === "begin" && !sealed.includes(String(cmd.fixtureId))))
+        throw new NoninteractiveSafetyError(type, "SDK fixture outside sealed subset");
+    }
     if (body.operation === "captureFrame") {
       const target = object(body.target);
       if (!target || target.type !== "instance" || typeof target.id !== "string" || !target.id ||

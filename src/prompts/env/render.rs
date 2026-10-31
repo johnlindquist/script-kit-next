@@ -1,6 +1,10 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::theme::AppChromeColors;
+use gpui_component::{
+    button::{Button, ButtonVariants as _},
+    Sizable as _,
+};
 
 impl Focusable for EnvPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -39,13 +43,9 @@ impl Render for EnvPrompt {
             .unwrap_or_else(|| env_default_description(&self.key, self.exists_in_keyring))
             .into();
 
-        let field_state = if self.validation_error.is_some() {
-            crate::components::PromptFieldState::Error
-        } else {
-            crate::components::PromptFieldState::Active
-        };
-        let field_style =
-            crate::components::prompt_field_style(&self.theme, field_state, input_is_empty);
+        let metrics = crate::components::FormFieldMetrics::from_colors(
+            crate::components::FormFieldColors::from_theme(&self.theme),
+        );
 
         // Input body: cursor + placeholder when empty, masked/text with cursor when filled
         let input_body = if input_is_empty {
@@ -72,12 +72,48 @@ impl Render for EnvPrompt {
                 .child(self.render_input_text(chrome.text_primary_hex, accent_color))
         };
 
+        let input_body = div()
+            .w_full()
+            .flex()
+            .items_center()
+            .gap(px(metrics.field_gap_px))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .overflow_x_hidden()
+                    .font_family(crate::list_item::FONT_MONO)
+                    .child(input_body),
+            )
+            .when(self.secret && !input_is_empty, |row| {
+                let label = self.visibility_label();
+                row.child(
+                    Button::new("env:visibility")
+                        .accessibility_id(self.visibility_id())
+                        .accessibility_label(label)
+                        .icon(if self.reveal_secret {
+                            gpui_component::IconName::EyeOff
+                        } else {
+                            gpui_component::IconName::Eye
+                        })
+                        .label(if self.reveal_secret { "Hide" } else { "Show" })
+                        .xsmall()
+                        .text()
+                        .tab_stop(false)
+                        .tooltip(format!("{label} · ⌃⇧R"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.focus_handle.focus(window, cx);
+                            this.toggle_secret_reveal(cx);
+                        })),
+                )
+            });
+
         // Stacked minimal body — no hero icon, no centered card
         let mut body = div()
             .w_full()
             .flex()
             .flex_col()
-            .gap(px(16.0))
+            .gap(px(metrics.field_stack_gap_px))
             // Title + description intro
             .child(crate::components::prompt_form_intro(
                 title,
@@ -86,34 +122,19 @@ impl Render for EnvPrompt {
                 text.help,
                 6.0,
             ))
-            // Labeled input section
-            .child(crate::components::prompt_form_section(
+            .child(crate::components::labeled_control(
+                &self.theme,
+                "env-value",
                 env_input_label(self.secret),
-                text.label,
-                6.0,
-                crate::components::prompt_single_line_control_surface(
-                    field_style.background,
-                    field_style.border,
-                )
-                .flex()
-                .items_center()
-                .child(input_body),
+                self.focus_handle.is_focused(window),
+                self.validation_error.clone().map(Into::into),
+                input_body.into_any_element(),
             ))
             // Storage hint
             .child(crate::components::prompt_form_help(
                 env_storage_hint_text(self.secret, self.secret_store_error.as_ref()),
                 text.help,
-            ))
-            // Running status
-            .child(crate::components::prompt_form_help(
-                env_running_status(&self.key),
-                text.help,
             ));
-
-        // Validation error
-        if let Some(error) = self.validation_error.clone() {
-            body = body.child(div().text_xs().text_color(rgb(error_color)).child(error));
-        }
 
         // Existing key status + delete action
         if self.exists_in_keyring {
@@ -161,7 +182,6 @@ impl Render for EnvPrompt {
             .w_full()
             .h_full()
             .text_color(text.primary)
-            .font_family(crate::list_item::FONT_MONO)
             .child(
                 crate::components::render_inset_prompt_body(
                     "env-body-scroll",
@@ -169,7 +189,7 @@ impl Render for EnvPrompt {
                     crate::components::PromptBodyInsets::MainMenu(self.design_variant),
                 )
                 .flex_1()
-                .overflow_y_hidden(),
+                .overflow_y_scroll(),
             );
         // Footer is owned by the outer wrapper shell (render_prompts::other.rs)
         // which provides the canonical three-key hint strip.
@@ -191,6 +211,17 @@ impl Render for EnvPrompt {
                     let key = event.keystroke.key.as_str();
                     let modifiers = &event.keystroke.modifiers;
 
+                    if modifiers.control
+                        && modifiers.shift
+                        && !modifiers.platform
+                        && !modifiers.alt
+                        && key.eq_ignore_ascii_case("r")
+                        && this.can_toggle_visibility()
+                    {
+                        this.toggle_secret_reveal(cx);
+                        cx.stop_propagation();
+                        return;
+                    }
                     if matches!(env_key_action(key), Some(EnvKeyAction::Submit)) {
                         this.submit(cx);
                         return;
@@ -209,6 +240,9 @@ impl Render for EnvPrompt {
                     );
 
                     if handled {
+                        if this.input.text().is_empty() {
+                            this.reveal_secret = false;
+                        }
                         if this.validation_error.is_some() && previous_text != this.input.text() {
                             this.validation_error = None;
                         }
@@ -260,17 +294,6 @@ mod tests {
         assert!(
             render_code.contains("prompt_surface_rendered"),
             "env render should emit prompt_surface_rendered tracing"
-        );
-        assert!(
-            render_code.contains("prompt_form_intro(")
-                && render_code.contains("prompt_form_section(")
-                && render_code.contains("prompt_form_help("),
-            "env render should use the shared create-flow form helpers"
-        );
-        assert!(
-            render_code.contains("prompt_field_style(")
-                && render_code.contains("prompt_text_palette("),
-            "env render should use shared create-flow color helpers"
         );
         assert!(
             !render_code.contains("text_muted_hex"),

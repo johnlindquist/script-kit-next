@@ -40,9 +40,9 @@ pub enum NamingValidationError {
 impl NamingValidationError {
     pub fn message(&self) -> String {
         match self {
-            Self::EmptyName => "Name cannot be empty".to_string(),
+            Self::EmptyName => "Enter a display name.".to_string(),
             Self::InvalidCharacters { characters } => {
-                format!("Name contains invalid characters: {characters}")
+                format!("Remove these characters from the name: {characters}")
             }
             Self::DuplicateFilename {
                 filename,

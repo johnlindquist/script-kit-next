@@ -938,7 +938,7 @@ app.run(move |cx: &mut App| {
             }
         }).detach();
 
-        // Main window hotkey listener — gesture classifier (key-down show, tap toggle, double-tap Agent Chat)
+        // Main shortcut: tap for the launcher, hold for the cursor, second press for Today.
         spawn_main_hotkey_gesture_listener(cx, app_entity.clone(), window);
 
         // Notes hotkey listener - event-driven via async_channel

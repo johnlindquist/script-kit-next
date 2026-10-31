@@ -9,6 +9,37 @@ pub const VIEW: &str = "steps";
 pub const LABEL: &str = "Steps";
 /// The key of the local "Do these N things" row.
 pub const ROW_KEY: &str = "steps";
+pub const OFFLINE_UNAVAILABLE: &str = "steps:offline-unavailable";
+
+/// Only these forms have a verified local executor. Never hand an unsupported
+/// clause to an agent or write it as a note instead of performing its verb.
+pub fn offline_note(text: &str) -> Option<&str> {
+    let (head, body) = text.split_once(':')?;
+    matches!(
+        head.trim().to_ascii_lowercase().as_str(),
+        "add to today's note" | "add to today’s note" | "note"
+    )
+    .then(|| body.trim())
+    .filter(|s| !s.is_empty())
+}
+
+pub fn offline_supported(text: &str) -> bool {
+    let parts = split(text);
+    (2..=4).contains(&parts.len()) && parts.iter().all(|s| offline_note(s).is_some())
+}
+
+pub fn offline_row(text: &str) -> Option<Row> {
+    let row = steps_row(text)?;
+    Some(if offline_supported(text) {
+        row
+    } else {
+        Row::new(OFFLINE_UNAVAILABLE, "Can't run all these steps offline")
+            .with_sub("Only explicit additions to today's note can run here. Nothing will be sent.")
+            .with_enter_label("Unavailable")
+            .with_score(0)
+            .fallback()
+    })
+}
 
 /// Words that start a new job after "and" ("… and tell mo …").
 const JOB_VERBS: &[&str] = &[
@@ -387,6 +418,19 @@ mod tests {
     use super::*;
 
     const S10: &str = "move standup to tomorrow at 9, tell mo i'm running late and add to today's note: ship beta notes";
+
+    #[test]
+    fn offline_steps_never_send_delegate_or_apply_a_partial_list() {
+        let blocked = offline_row("add to today's note: lunch and tell Mo I'm late").unwrap();
+        assert_eq!(blocked.key, OFFLINE_UNAVAILABLE);
+        assert_eq!(blocked.enter_words(), "Unavailable");
+        assert!(!offline_supported(
+            "delete my note: lunch then add to today's note: lunch"
+        ));
+        assert!(offline_supported(
+            "add to today's note: apples then add to today's note: pears"
+        ));
+    }
 
     fn spec(text: &str, needs: Option<&str>) -> StepSpec {
         StepSpec {

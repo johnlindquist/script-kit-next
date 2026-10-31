@@ -742,6 +742,8 @@ impl ScriptListApp {
         direct: bool,
         cx: &mut Context<Self>,
     ) {
+        self.one_window_host.note_open_revision=self.one_window_host.note_open_revision.wrapping_add(1);
+        let revision=self.one_window_host.note_open_revision;
         let app = cx.entity();
         cx.defer(move |cx| {
             // The app has one window; the stored handle names it once the window is registered.
@@ -755,6 +757,7 @@ impl ScriptListApp {
             };
             let _ = handle.update(cx, |_, window, cx| {
                 app.update(cx, |app, cx| {
+                    if revision!=app.one_window_host.note_open_revision {return;}
                     if let Err(error) = app.open_note_in_editor(target, back, window, cx) {
                         app.one_window_notice(
                             crate::line_notice::FAILED,

@@ -284,6 +284,8 @@ pub enum BuiltInFeature {
     DictationToFrontmostApp,
     /// Voice dictation that always targets the notes editor
     DictationToNotes,
+    UseDictationInKit,
+    ReviewDictationMarkdown,
     /// Dictation transcript history browser
     DictationHistory,
     /// Settings hub for viewing configuration panels
@@ -546,6 +548,8 @@ impl BuiltInEntry {
             BuiltInFeature::Dictation => "Start Dictation to Current App",
             BuiltInFeature::DictationToAiHarness => "Start Dictation to Agent Chat",
             BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
+            BuiltInFeature::UseDictationInKit => "Use Dictation in Kit",
+            BuiltInFeature::ReviewDictationMarkdown => "Review Dictation in Markdown",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
             BuiltInFeature::DictationHistory => "Open Dictation History",
             BuiltInFeature::Settings => "Open Script Kit Settings",
@@ -674,6 +678,8 @@ impl BuiltInEntry {
             BuiltInFeature::Dictation => "Dictate App",
             BuiltInFeature::DictationToAiHarness => "Dictate Chat",
             BuiltInFeature::DictationToFrontmostApp => "Dictate App",
+            BuiltInFeature::UseDictationInKit => "Use in Kit",
+            BuiltInFeature::ReviewDictationMarkdown => "Review in Markdown",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
             BuiltInFeature::DictationHistory => "History",
             BuiltInFeature::Settings => "Kit Settings",
@@ -1984,7 +1990,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "builtin/webcam",
             "Capture Webcam Photo",
             "Open the webcam prompt and capture a photo",
-            vec!["webcam", "camera", "capture", "photo", "image"],
+            vec!["webcam", "camera", "capture", "photo", "image", "picture", "selfie", "countdown"],
             BuiltInFeature::Webcam,
             "camera",
         ));
@@ -2008,6 +2014,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "mic",
         ));
 
+        entries.push(BuiltInEntry::new_with_icon("builtin/use-dictation-in-kit","Use Dictation in Kit","Switch the current recording between its original field and the launcher",vec!["use in kit","voice command"],BuiltInFeature::UseDictationInKit,"mic"));
+        entries.push(BuiltInEntry::new_with_icon("builtin/review-dictation-markdown","Review Dictation in Markdown","Review the current recording or a withheld transcript without pasting it",vec!["dictation draft","review dictation"],BuiltInFeature::ReviewDictationMarkdown,"mic"));
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-to-ai",
             "Dictate to Agent Chat",

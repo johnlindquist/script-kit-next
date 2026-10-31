@@ -403,6 +403,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
 
     let defaults = Config::default();
     Config {
+        jev_intent_enabled: parse_required_field(object, "jevIntentEnabled", false, correlation_id),
         hotkey: parse_required_field(object, "hotkey", defaults.hotkey.clone(), correlation_id),
         bun_path: parse_optional_field(object, "bun_path", correlation_id),
         editor: parse_optional_field(object, "editor", correlation_id),

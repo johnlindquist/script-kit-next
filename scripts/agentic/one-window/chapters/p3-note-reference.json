@@ -1,0 +1,6 @@
+[
+  { "name": "missing-note", "type": "@notes:qxneverexists", "waitMs": 650 },
+  { "name": "return-without-a-note", "key": "enter", "waitMs": 500 },
+  { "name": "matching-note", "type": "@notes:Launch", "waitMs": 650 },
+  { "name": "attach-note", "key": "enter", "waitMs": 500 }
+]

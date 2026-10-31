@@ -205,11 +205,29 @@ impl ScriptListApp {
         let subject = self
             .resolved_main_menu_selected_subject()
             .ok_or_else(|| anyhow::anyhow!("main_menu_selected_subject_not_current"))?;
-        let row = match subject {
+        let (row, results_query) = match subject {
+            ResolvedMainMenuSelection::SearchResult {
+                row,
+                result: scripts::SearchResult::BuiltIn(builtin),
+            } => (
+                row,
+                crate::one_window::ledger_view::own_row_key(&builtin.entry.id)
+                    .and_then(|key| key.strip_prefix(sk_one_window::contract::ALL_RESULTS_KEY)),
+            ),
             ResolvedMainMenuSelection::SearchResult { row, .. }
-            | ResolvedMainMenuSelection::Calculator { row, .. } => row,
+            | ResolvedMainMenuSelection::Calculator { row, .. } => (row, None),
         };
         anyhow::ensure!(row.eligibility.activatable, "main_menu_row_not_activatable");
+        // An agent activates this exact published link. Synthesizing Enter instead
+        // loses the destination when keyboard input is parked with the window hidden.
+        if let Some(query) = results_query {
+            let query = query.to_owned();
+            let observation = self.selected_row_dispatch_observation();
+            self.one_window_open_all_results(&query, cx)?;
+            self.set_main_menu_dispatch_observation(observation);
+            self.update_main_menu_dispatch_status("completed", None);
+            return Ok(());
+        }
         if self.menu_syntax_trigger_picker_owns_main_keyboard()
             || self.menu_syntax_object_selector_owns_main_keyboard()
         {

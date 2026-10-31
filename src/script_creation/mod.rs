@@ -886,6 +886,7 @@ mod tests {
 
         // With no config editor and no EDITOR env, should return "code"
         let default_config = Config {
+            jev_intent_enabled: false,
             hotkey: config.hotkey.clone(),
             bun_path: None,
             editor: None,
@@ -934,6 +935,7 @@ mod tests {
 
         // With config editor set, should use that
         let custom_config = Config {
+            jev_intent_enabled: false,
             hotkey: config.hotkey.clone(),
             bun_path: None,
             editor: Some("vim".to_string()),

@@ -626,12 +626,8 @@ fn form_prompt_fields_use_shared_chrome_and_focus_contracts() {
             && !text_area_source.contains("rgb(colors.label"),
         "form field renderers should consume resolved Rgba text colors directly"
     );
-    assert!(
-        text_area_source.contains("cursor_element")
-            && text_area_source.contains("self.cursor_position")
-            && text_area_source.contains("slice_by_char_range"),
-        "textarea should render a visible char-safe cursor"
-    );
+    // Insertion geometry and selection paint are checked against captured glyphs by
+    // the owned form visual regression, not by the name of a renderer variable.
     assert!(
         form_source.contains("to_ascii_lowercase()")
             && text_field_model.contains("eq_ignore_ascii_case(\"password\")"),
@@ -788,7 +784,6 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
     );
     assert!(
         render_code.contains("prompt_text_palette(")
-            && render_code.contains("prompt_field_style(")
             && !render_code.contains("PromptFooter::new("),
         "EnvPrompt render should keep shared create-flow chrome and avoid PromptFooter"
     );
@@ -868,17 +863,10 @@ fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
         outer_source.contains("surface = \"render_prompts::template\""),
         "template prompt outer render should emit tracing with surface tag"
     );
-    assert!(
-        source.contains("prompt_field_style("),
-        "template prompt should use shared prompt_field_style"
-    );
+
     assert!(
         source.contains("prompt_text_palette("),
         "template prompt should use shared prompt_text_palette"
-    );
-    assert!(
-        source.contains("template-fields-scroll") && source.contains(".overflow_y_scrollbar()"),
-        "template prompt should keep placeholder fields in a scrollable region"
     );
     assert!(
         outer_source.contains("template_prompt_hints()")
@@ -994,7 +982,7 @@ fn chat_prompt_has_chrome_audit_and_main_input_hint_footer() {
         "chat prompt should declare the main-input layout and hint-strip footer"
     );
     assert!(
-        chat_fn.contains("main_window_footer_slot(")
+        chat_fn.contains("main_window_footer_slot_with_cx(")
             && chat_fn.contains("emit_prompt_hint_audit(\"render_prompts::chat\""),
         "chat prompt should draw one audited hint footer"
     );

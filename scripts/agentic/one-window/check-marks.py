@@ -61,6 +61,14 @@ def load_frames(d):
             m["_png"], m["_stem"] = png, name[:-5]
             m["_app_marks"] = app_marks(os.path.join(d, name[:-5] + ".capture.json"))
             m["_agent_owns"] = app_owns(os.path.join(d, name[:-5] + ".capture.json"))
+            capture = os.path.join(d, name[:-5] + ".capture.json")
+            if os.path.exists(capture):
+                state = (json.load(open(capture)).get("state") or {}).get("oneWindow") or {}
+                m["_chips"] = [chip["token"] for chip in state.get("context", [])]
+                # Mark ranges index the editable words, not the composed sentence with
+                # invisible @tokens appended for intent routing.
+                if "inputWords" in state:
+                    m["inputValue"] = state["inputWords"]
             frames.append(m)
     return frames
 
@@ -279,6 +287,9 @@ def grade(m, expect):
     s = m.get("scale", 2)
     img = np.asarray(Image.open(m["_png"]).convert("RGB")).astype(int)
     pill_fails = owner_fails(img, m, s, (expect or {}).get("owner"))
+    if expect and "chips" in expect:
+        if expect["chips"] != m.get("_chips") or bool(expect["chips"]) != bool(m.get("inputChips")):
+            pill_fails.append("attached context chips differ from the expected tokens or paint bounds")
     m = words_only(m)
     geo = text_geometry(img, m, s)
     app = m.get("_app_marks")

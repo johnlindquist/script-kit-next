@@ -60,7 +60,7 @@ fn window_action(id: &str) -> Option<(crate::intent::WindowOp, String)> {
 
 /// The app a front-window subject belongs to: the line names the window by its title and the
 /// app under it, or by the app alone when the window has no title of its own.
-fn subject_app(subject: &Subject) -> Option<&str> {
+pub(crate) fn subject_app(subject: &Subject) -> Option<&str> {
     match subject.kind {
         SubjectKind::Window if !subject.sub.trim().is_empty() => Some(subject.sub.trim()),
         SubjectKind::Window | SubjectKind::App => {

@@ -1,130 +1,38 @@
-# Spec: One-Key Gesture Grammar
+# Type, talk, and Today
 
-Status: implemented (T2/T8/T9/T11 in flight). Owning decision:
-[ADR 0002](../adr/0002-one-key-gesture-grammar.md). Product framing:
-`VISION.md` → "The Memory Layer".
+The **main shortcut** is configurable. With `⌘;`, hold both keys to talk; either release order finishes the recording. Releasing Command first is **not** a command to redirect the text.
 
-## Summary
+| Starting point | Gesture | Result |
+|---|---|---|
+| Another app owns the keyboard; Kit may be hidden or pinned behind it | Tap | Open the launcher for typing on the first release, without waiting for a possible second tap. A stale Today view isn't the launcher. |
+| Kit already has focus | Tap | Toggle the window closed. Typing commits the first tap. |
+| Another app owns the keyboard | Hold | Dictate for its original field. Kit may show the listening line without becoming key. Release pastes; it does not ask Jev whether the words sound like an instruction. |
+| The launcher, a note editor, or a supported Kit prompt has focus | Hold | Insert at the captured selection. A changed destination is not permission to replace another field. |
+| From inside or outside Kit | Tap, tap | Open Today in the Markdown note editor. |
+| From inside or outside Kit | Tap, hold | Open Today and dictate into that editor. This is two presses, not three. |
+| Empty launcher | ⌘↵ | Open a clean chat. |
 
-The existing main hotkey keeps the launcher contract: tap opens or closes the
-main window. The launcher opens on key-down in 100% of cases; hold and
-double-tap can escalate the already-open window before the tap resolves.
-Every surface opens in place under the same input. No new chords.
+The default hold threshold is 250 ms. The second press must **begin** within 300 ms of the first release. Key repeat doesn't count. Opening Kit on *release*, rather than on initial key-down, keeps an external hold from stealing its own destination.
 
-## Gesture Table
+## Where the words go
 
-| Gesture | Window closed | Window open (launcher or Day Page) |
-| --- | --- | --- |
-| Tap | Launcher, visible on key-down | Close main window |
-| Hold (≥ hold threshold) | Day Page | — (window already open; see Open Questions) |
-| Double-tap | Agent Chat | Agent Chat; while the chat is showing, a double-tap hides the window |
-| Cmd+Enter | — | Agent Chat on an empty input; "Do It" once words are typed |
-| Esc | — | Back one step (let go of what's staged, back one view, clear the input), then hide |
+- **Use in Kit:** tap and release Shift after listening starts, or click the listening line. Tap again to switch back. The whole final transcript goes to the chosen destination. In Kit it's editable input; press ↵ separately to run a reading. Remote intent reading still requires opt-in. The model is told when command text came from speech; names, negation and literal values are not a license to guess.
+- **Hands-free:** quick-tap the configured dictation shortcut to start, then tap it again to stop. Existing explicit target preferences and dedicated chat/note actions remain separate from the main shortcut's contextual hold.
+- **Long passages:** length never changes the destination. Bind **Review Dictation in Markdown** (`builtin/review-dictation-markdown`) to choose an editable local draft instead of pasting. This does not create a Today entry. A failed or stale direct delivery retains the latest withheld draft in memory for that same action. Review before leaving an unsaved draft.
+- **Controls:** `builtin/use-dictation-in-kit` toggles the destination without ending the recording. Both actions are available to shortcut bindings and the existing builtin-command interface. `getState`'s one-window snapshot exposes `cursorDictation`: active generation, route, stopping flag and draft availability, not audio or transcript contents.
+- Ordinary external delivery requires an identifiable, non-secure accessible field. It checks the captured process, field and selection again before dispatching a process-targeted paste. A changed or unidentifiable field is not replaced with whatever is now focused. The check and OS dispatch are not an atomic operation.
 
-## State Machine
+The [dictation recovery contract](dictation-recovery.md) defines the target behavior of Escape, Restore, Retry, Paste and Forget, including which shortcuts stay local to Kit. Its durable recovery rules are not current storage guarantees.
 
-```text
-CLOSED
-  └─ key-down ──────────────► LAUNCHER_VISIBLE (render immediately, no waiting)
-        │
-        ├─ key-up < HOLD_MS ───► TAP_PENDING
-        │     ├─ key-down < DOUBLE_MS ──► AGENT_CHAT (in place)
-        │     └─ DOUBLE_MS elapses ─────► LAUNCHER (plain tap, steady state)
-        │
-        └─ key still down at HOLD_MS ──► DAY_PAGE
-              └─ key-up ──► no-op (Day Page stays; dictation is owned by the
-                            dictation hotkey and the voice key)
+## Focus ownership map
 
-LAUNCHER (open, steady)
-  ├─ tap ──► CLOSED
-  ├─ double-tap ──► AGENT_CHAT
-  ├─ Cmd+Enter (empty input) ──► AGENT_CHAT
-  └─ Esc (nothing staged, empty input) ──► CLOSED
+| Owner | Why it takes focus | Shortcut rule |
+|---|---|---|
+| `src/main_sections/gesture_routing.rs`, `src/hotkeys/gesture.rs` | Main global key-down/up, including a visible but non-key panel | Classify the physical gesture separately from visibility. Pinning a note is not ownership of the keyboard. A tap normalizes the launcher; a hold does not call the activating show path. |
+| `src/main_sections/window_visibility.rs` | Hidden-window show, deferred native activation, focus after layout | Stale deferred shows must not revive a window hidden since the request. A real Today open retains editor focus rather than focusing the launcher input. |
+| `src/one_window/notes.rs`, `src/main_sections/day_page_notes.rs` | An explicit Notes hotkey, tray item, deeplink or SDK open | Keep these targeted opens. A later launcher summon supersedes a waiting note; flush dirty Day Page text before switching. An outstanding script prompt is not silently reset. |
+| `src/main_entry/app_run_setup.rs`, `src/window_orchestrator/` | Script prompts, tray/SDK shows, chat entries and requested window activation | Preserve their view ownership. `ShowMain { activate_app: false }` still makes the panel **key**; it is not suitable for external cursor dictation. |
+| `src/platform/visibility_focus.rs`, `src/app_execute/cursor_dictation.rs` | Listening indicator and explicit transition into Kit | The indicator uses the non-key background reveal. Direct dictation neither raises the old app nor invokes the legacy delayed refocus-and-paste path. |
+| `src/main_sections/render_impl.rs` | File-search drag/click focus repair | This is a response to a pointer action in Kit, not a main-shortcut routing rule. |
 
-DAY_PAGE (open, steady)
-  ├─ tap ──► CLOSED
-  ├─ double-tap / Cmd+Enter ──► AGENT_CHAT
-  └─ Esc ──► back one view
-
-AGENT_CHAT (open, steady)
-  ├─ tap / double-tap ──► CLOSED
-  └─ Esc ──► back one view (the sentence goes back to the input)
-```
-
-Confirmed timings (`src/hotkeys/gesture.rs`, module-level constants):
-
-- `HOLD_MS` = 250ms — long enough that fast taps never trip it, short enough
-  that hold-to-open-Day-Page feels immediate.
-- `DOUBLE_MS` = 300ms — second key-down window after a tap's key-up.
-
-## Hard Requirements
-
-1. **Key-down instant.** The launcher renders on key-down, before any
-   tap/hold/double-tap classification. Classification only ever *deepens* an
-   already-visible window. Any design that delays first paint to disambiguate
-   is rejected.
-2. **No window swaps.** Launcher, Day Page, and Agent Chat are views of the
-   main window under the same input (the one-window host, `src/one_window/**`;
-   the chat is a work view and `AppView` stays `ScriptList`). Notes open as a
-   view under the same input (see Notes below). There is no second window.
-3. **The input never moves.** The input row keeps its position and size across
-   launcher, Day Page, and chat; the view replaces the list beneath it, and the
-   first header stays in place. It must read as the same window showing
-   something else, not a screen change.
-4. **No tap carry-over.** Tapping while the launcher is open closes the main
-   window. It must not move search input into the Day Page; Day Page entry is
-   owned by hold-from-closed and explicit in-app triggers.
-5. **No dictation on the main hotkey's hold.** Hold opens the Day Page and
-   nothing else. Dictation is invoked through the dictation hotkey or the voice
-   key, which open the voice view under the same input; the Day Page does not
-   start, render, or manage dictation.
-6. **Tap-to-dismiss remains.** Tap-while-open closes the main window, matching
-   the established launcher hotkey convention. Esc remains a dismiss path too.
-7. **Shared note behavior.** The Day Page and the note view under the main
-   input must not fork note behavior: day notes stay `brain/days/<date>.md`
-   and other notes stay in the notes database, whichever surface writes them
-   (per the shared component contract in `CLAUDE.md`).
-
-## Notes
-
-There is no Notes window. A note opens as a view under the main input: its
-lines are rows under a `NOTE · <name>` header and the input never moves. Its role is unchanged: a note about something *other than*
-today — pinned reference material, a document being drafted alongside other
-work. The Day Page and a note must feel identical because they share the same
-storage and the same input.
-
-## Day Page Content Rendering
-
-The Day Page shows everything captured today — deliberate captures, auto-kept
-URLs, promoted clipboard entries, Agent Chat traces — in
-time order. Long content renders truncated as excerpt cards (the underlying
-file structure already enforces this: long captures are fragment files
-referenced by excerpt + link, per
-[ADR 0003](../adr/0003-markdown-files-as-memory-substrate.md)).
-
-## Open Questions
-
-- **Hold while the window is already open:** still unanswered. Current behavior
-  (T8): `HoldStart` while open is not wired — hold only opens the Day Page from
-  closed; tap-while-open closes the main window.
-- ~~Exact `HOLD_MS`/`DOUBLE_MS` values~~ — **answered:** `HOLD_MS = 250`,
-  `DOUBLE_MS = 300` in `src/hotkeys/gesture.rs`, overridable for tests.
-- ~~Where double-tap lands~~ — **answered:** a clean quick chat under the same
-  input, never the launcher's selected row as context
-  (`one_window_open_chat(ChatEntry::quick())` in
-  `src/main_sections/gesture_routing.rs`).
-- ~~Key-repeat suppression while held~~ — **answered:** repeated `KeyDown`
-  while already down are ignored (`src/hotkeys/gesture.rs`, unit-tested).
-
-## Verification Expectations
-
-Per repo policy, prefer behavior tests and runtime proof over source audits:
-
-- Gesture classification: unit tests on the extracted state machine (timings
-  injected, no sleeps).
-- Key-down render: devtools probe proving launcher target identity exists
-  before `HOLD_MS` elapses after key-down.
-- No swap: window identity receipt (same window id across
-  launcher → Day Page → Agent Chat transitions), with the input's y unchanged.
-- Tap-while-open: runtime receipt showing the main window hides instead of
-  opening the Day Page.
+Microphone permission, transcription quality, native Carbon key-up order and delivery in an individual third-party app require a real, authorized desktop to qualify. Hidden renderer fixtures supply synthetic final text; they do not record audio or paste into the host desktop.

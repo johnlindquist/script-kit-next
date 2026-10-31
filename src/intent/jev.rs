@@ -16,11 +16,9 @@ use crate::runtime_policy::{self, ExternalEffect};
 pub const JEV_ENDPOINT: &str = "https://api.typesafe.ai/v1/systemone";
 /// TypeSafe rejects choice questions with more options than this.
 pub const JEV_MAX_CHOICES: usize = 255;
-const DEFAULT_MODEL: &str = "jev-latest";
+pub const DEFAULT_MODEL: &str = "jev-1.14.0";
 /// Past this the launcher has moved on; a late plan would only be thrown away.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(6);
-/// The key stays where the Jev demos keep it; it is read, never copied.
-const DEMOS_ENV_FILE: &str = "dev/jev-demos/.env";
 
 /// Options in the order they are offered. A repeated label replaces the earlier
 /// description in place, the way a JSON object literal would.
@@ -131,6 +129,71 @@ impl Questions {
                     });
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Check the response against this request before any answer becomes an action.
+    /// Scores are model evidence, not authorization; malformed evidence is refused.
+    pub fn validate_answers(&self, answers: &Answers) -> Result<(), JevError> {
+        let unit = |value: f64| value.is_finite() && (0.0..=1.0).contains(&value);
+        for (name, question) in self.iter() {
+            let invalid = |reason| JevError::InvalidAnswer {
+                question: name.to_string(),
+                reason,
+            };
+            let answer = answers.get(name).ok_or_else(|| invalid("missing answer"))?;
+            match (question, answer) {
+                (
+                    Question::Choice { criteria, .. },
+                    Answer::Choice {
+                        choice,
+                        confidence,
+                        probabilities,
+                    },
+                ) => {
+                    if !criteria.contains(choice) {
+                        return Err(invalid("choice was not offered"));
+                    }
+                    if !unit(*confidence)
+                        || probabilities
+                            .0
+                            .iter()
+                            .any(|(label, p)| !criteria.contains(label) || !unit(*p))
+                        || probabilities.get(choice).is_none()
+                    {
+                        return Err(invalid("invalid choice probabilities"));
+                    }
+                }
+                (Question::Noul { .. }, Answer::Noul { noul }) if unit(*noul) => {}
+                (
+                    Question::Score { criteria, .. },
+                    Answer::Score {
+                        score,
+                        confidence,
+                        probabilities,
+                    },
+                ) => {
+                    if criteria.is_empty()
+                        || !score.is_finite()
+                        || !(0.0..=(criteria.len() - 1) as f64).contains(score)
+                        || !unit(*confidence)
+                        || probabilities.0.iter().any(|(label, p)| {
+                            !unit(*p)
+                                || label.parse::<usize>().map_or(true, |i| i >= criteria.len())
+                        })
+                    {
+                        return Err(invalid("invalid rubric score"));
+                    }
+                }
+                _ => return Err(invalid("wrong answer type or probability")),
+            }
+        }
+        if answers.keys().any(|name| self.get(name).is_none()) {
+            return Err(JevError::InvalidAnswer {
+                question: "response".into(),
+                reason: "answer names an unasked question",
+            });
         }
         Ok(())
     }
@@ -247,11 +310,39 @@ pub enum JevError {
     Transport(String),
     #[error("Jev answered with something unreadable: {0}")]
     Decode(String),
+    #[error("Jev returned an invalid answer for {question}: {reason}")]
+    InvalidAnswer {
+        question: String,
+        reason: &'static str,
+    },
 }
 
 /// Anything that can answer Jev questions: the live client, or recorded answers in tests.
 pub trait Oracle: Send + Sync {
     fn ask(&self, state: &serde_json::Value, questions: &Questions) -> Result<JevResult, JevError>;
+}
+
+/// Tags every question in the same plan, including a clause or a filename follow-up.
+/// The transcript remains verbatim: only the interpretation instructions change.
+pub struct DictatedOracle<'a>(pub &'a dyn Oracle);
+impl Oracle for DictatedOracle<'_> {
+    fn ask(&self,state:&serde_json::Value,questions:&Questions)->Result<JevResult,JevError>{
+        let mut state=state.clone();
+        state["inputSource"]=serde_json::json!("dictation");
+        state["transcriptionGuidance"]=serde_json::json!("This is a final speech transcript. Allow likely homophones, fillers and missing punctuation when interpreting the requested action. Preserve negation, literal text, names and recipients; prefer no match when those are ambiguous.");
+        self.0.ask(&state,questions)
+    }
+}
+
+#[cfg(test)]
+mod speech_origin_tests {
+    use super::*;
+    #[test]
+    fn dictated_questions_keep_literal_words_and_attach_provenance_without_changing_typed_requests(){
+        struct Inspect;
+        impl Oracle for Inspect { fn ask(&self,state:&serde_json::Value,_:&Questions)->Result<JevResult,JevError>{assert_eq!(state["request"],"don't send this to Erin");assert_eq!(state["inputSource"],"dictation");assert!(state["transcriptionGuidance"].as_str().unwrap().contains("negation"));Err(JevError::Refused("fixture"))} }
+        let typed=serde_json::json!({"request":"don't send this to Erin"});let _=DictatedOracle(&Inspect).ask(&typed,&Questions::default());assert!(typed.get("inputSource").is_none());
+    }
 }
 
 #[derive(Clone)]
@@ -277,20 +368,17 @@ impl JevConfig {
         }
     }
 
-    /// Environment first, then Script Kit's secret store, then the Jev demos' `.env`.
+    /// Environment first, then Script Kit's secret store. Never read another project's .env.
     pub fn load() -> Result<Self, JevError> {
         runtime_policy::check(ExternalEffect::Credentials)
             .map_err(|error| JevError::Refused(error.code))?;
-        let demos = demos_env();
         let api_key = env_nonempty("SCRIPT_KIT_TYPESAFE_API_KEY")
             .or_else(|| env_nonempty("TYPESAFE_API_KEY"))
             .or_else(|| {
                 crate::secrets::get_secret("TYPESAFE_API_KEY").filter(|v| !v.trim().is_empty())
             })
-            .or_else(|| demos.get("TYPESAFE_API_KEY").cloned())
             .ok_or(JevError::MissingKey)?;
         let model = env_nonempty("TYPESAFE_MODEL")
-            .or_else(|| demos.get("TYPESAFE_MODEL").cloned())
             .unwrap_or_else(|| DEFAULT_MODEL.to_string());
         Ok(Self::new(api_key, model))
     }
@@ -301,29 +389,6 @@ fn env_nonempty(name: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-}
-
-fn demos_env() -> HashMap<String, String> {
-    let Some(path) = dirs::home_dir().map(|home| home.join(DEMOS_ENV_FILE)) else {
-        return HashMap::new();
-    };
-    std::fs::read_to_string(path)
-        .map(|text| parse_env(&text))
-        .unwrap_or_default()
-}
-
-pub(crate) fn parse_env(text: &str) -> HashMap<String, String> {
-    text.lines()
-        .filter_map(|line| {
-            let (key, value) = line.trim().split_once('=')?;
-            let key = key.trim();
-            if key.is_empty() || !key.chars().all(|c| c.is_ascii_uppercase() || c == '_') {
-                return None;
-            }
-            let value = value.trim().trim_matches('"').to_string();
-            (!value.is_empty()).then(|| (key.to_string(), value))
-        })
-        .collect()
 }
 
 pub struct JevClient {
@@ -406,6 +471,8 @@ impl Oracle for JevClient {
             .body_mut()
             .read_to_string()
             .map_err(|error| JevError::Transport(error.to_string()))?;
-        decode_response(status, &text, started.elapsed().as_millis() as u64)
+        let result = decode_response(status, &text, started.elapsed().as_millis() as u64)?;
+        questions.validate_answers(&result.answers)?;
+        Ok(result)
     }
 }

@@ -12,14 +12,17 @@ import type { RuntimeJourneyReceipt } from "./design.ts";
 
 export const SDK_FIXTURE_ID = "sdk.arg-roundtrip.v1" as const;
 const ROOT = resolve(import.meta.dir, "../..");
-const ENTRYPOINT = join(ROOT, "scripts/devtools/fixtures/sdk-arg-roundtrip.ts");
+const SDK_FIXTURES = {
+  [SDK_FIXTURE_ID]: { file: "scripts/devtools/fixtures/sdk-arg-roundtrip.ts", type: "arg" },
+  "sdk.form-correction.v1": { file: "scripts/devtools/fixtures/sdk-form-correction.ts", type: "form" },
+} as const;
 const SDK = join(ROOT, "scripts/kit-sdk.ts");
 type Case = "submit" | "cancel" | "full" | "disconnected";
 interface SdkFixtureEvidence {
   fixtureId: string; event: string; submissionCount: number; submittedValue: string | null;
   rpcResolved: boolean; promptResolved: boolean;
   received: Array<{ type: string; id: string; value: string | null }>;
-  code?: number; state?: Json; value?: string;
+  code?: number; state?: Json; value?: string | Record<string, string> | null;
 }
 interface SdkChild {
   process: OwnedProcess;
@@ -38,7 +41,9 @@ async function required<T>(promise: Promise<T>): Promise<T> {
 }
 
 /** No caller-provided argv, preload, environment, script, or command is accepted. */
-async function launchSdkChild(claim: OutputClaim, caseId: Case): Promise<SdkChild> {
+async function launchSdkChild(claim: OutputClaim, caseId: Case | "keyboard" | "button", fixtureId: keyof typeof SDK_FIXTURES = SDK_FIXTURE_ID): Promise<SdkChild> {
+  const fixture = SDK_FIXTURES[fixtureId];
+  const ENTRYPOINT = join(ROOT, fixture.file);
   const hashes: Record<string, string> = {};
   for (const [name, path] of [["entrypointSha256", ENTRYPOINT], ["sdkSha256", SDK]]) {
     const stat = lstatSync(path!);
@@ -55,7 +60,7 @@ async function launchSdkChild(claim: OutputClaim, caseId: Case): Promise<SdkChil
       XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, ".local/share"),
       XDG_CACHE_HOME: join(home, ".cache"), TMPDIR: tmp, LANG: "en_US.UTF-8", TZ: "UTC",
       PATH: `${dirname(process.execPath)}:/opt/homebrew/bin:/usr/bin:/bin`,
-      SDK_TEST_AUTOSUBMIT: "0", SCRIPT_KIT_SDK_FIXTURE: SDK_FIXTURE_ID },
+      SDK_TEST_AUTOSUBMIT: "0", SCRIPT_KIT_SDK_FIXTURE: fixtureId },
     timeoutMs: 45000, maxOutputBytes: 1024 * 1024 });
   const prompt = Promise.withResolvers<Json>(), rpc = Promise.withResolvers<Json>();
   const rpcEvidence = Promise.withResolvers<SdkFixtureEvidence>(), exitEvidence = Promise.withResolvers<SdkFixtureEvidence>();
@@ -81,14 +86,14 @@ async function launchSdkChild(claim: OutputClaim, caseId: Case): Promise<SdkChil
   const consumers = [
     readLines(child.stdout, line => {
       const message = JSON.parse(line) as Json;
-      if (message.type === "arg" && ++promptCount === 1) prompt.resolve(message);
+      if (message.type === fixture.type && ++promptCount === 1) prompt.resolve(message);
       else if (message.type === "getState" && message.requestId === "2" && Object.keys(message).sort().join(",") === "requestId,type" && ++rpcCount === 1) rpc.resolve(message);
       else throw new EvaluationContractError("sdk_fixture_unregistered_message");
     }),
     readLines(child.stderr, line => {
       if (!line.startsWith("SDK_FIXTURE ")) return;
       const evidence = JSON.parse(line.slice("SDK_FIXTURE ".length)) as SdkFixtureEvidence;
-      if (evidence.fixtureId !== SDK_FIXTURE_ID) throw new EvaluationContractError("sdk_fixture_identity_mismatch");
+      if (evidence.fixtureId !== fixtureId) throw new EvaluationContractError("sdk_fixture_identity_mismatch");
       if (evidence.event === "rpc" && ++rpcEvidenceCount === 1) rpcEvidence.resolve(evidence);
       else if (evidence.event === "exit" && ++exitEvidenceCount === 1) exitEvidence.resolve(evidence);
       else if (evidence.event !== "resolved") throw new EvaluationContractError("sdk_fixture_unknown_observation");
@@ -102,8 +107,12 @@ async function launchSdkChild(claim: OutputClaim, caseId: Case): Promise<SdkChil
   void readers.catch(error => { for (const item of pending) item.reject(error); });
   return { process: child, prompt: prompt.promise, rpc: rpc.promise, rpcEvidence: rpcEvidence.promise,
     exitEvidence: exitEvidence.promise, readers,
-    provenance: { fixtureId: SDK_FIXTURE_ID, entrypoint: "scripts/devtools/fixtures/sdk-arg-roundtrip.ts",
+    provenance: { fixtureId, entrypoint: fixture.file,
       sdk: "scripts/kit-sdk.ts", ...hashes, identity: child.identity, sandbox } };
+}
+
+export function launchFormCorrectionFixture(claim: OutputClaim, route: "keyboard" | "button" | "cancel") {
+  return launchSdkChild(claim, route, "sdk.form-correction.v1");
 }
 
 async function control(client: OwnedEvaluationClient, target: AutomationInstance, command: SdkPromptCommand): Promise<SdkPromptResult> {

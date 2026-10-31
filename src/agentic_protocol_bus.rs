@@ -29,6 +29,8 @@ struct ProtocolResponseEnvelope<'a> {
     request_id: &'a str,
     #[serde(rename = "responseType")]
     response_type: &'a str,
+    #[serde(rename = "protocolVersion")]
+    protocol_version: u16,
     #[serde(rename = "correlationId")]
     correlation_id: String,
     #[serde(rename = "finishedAtMs")]
@@ -206,6 +208,9 @@ pub fn append_from_json_line(json: &str) {
     let Some(path) = bus_path_from_env() else {
         return;
     };
+    let Ok(version) = crate::protocol::version::read_wire_version(&value) else {
+        return;
+    };
 
     let envelope = ProtocolResponseEnvelope {
         schema_version: SCHEMA_VERSION,
@@ -214,6 +219,7 @@ pub fn append_from_json_line(json: &str) {
         session_generation: &session_generation_from_env(),
         request_id: &request_id,
         response_type: &response_type_from_json(&value),
+        protocol_version: version.get(),
         correlation_id: format!("stdin:req:{request_id}"),
         finished_at_ms: now_ms(),
         response: value,
@@ -274,10 +280,15 @@ mod tests {
             std::env::set_var("SCRIPT_KIT_AGENTIC_SESSION_GENERATION", "gen-1");
 
             append_from_json_line(
-                r#"{"type":"stateResult","requestId":"req-1","promptType":"none"}"#,
+                r#"{"type":"stateResult","requestId":"req-1","protocolVersion":2,"promptType":"none"}"#,
             );
 
             let raw = fs::read_to_string(&path).expect("bus file");
+            let envelope: Value = serde_json::from_str(&raw).expect("response envelope");
+            assert_eq!(
+                envelope["protocolVersion"],
+                envelope["response"]["protocolVersion"]
+            );
             assert!(raw.contains(r#""kind":"protocolResponse""#));
             assert!(raw.contains(r#""requestId":"req-1""#));
             assert!(raw.contains(r#""responseType":"stateResult""#));

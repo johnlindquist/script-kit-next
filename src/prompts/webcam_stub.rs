@@ -23,6 +23,9 @@ pub struct WebcamPrompt {
     pub frame_width: u32,
     pub frame_height: u32,
     frame: Option<std::sync::Arc<gpui::RenderImage>>,
+    /// Shared phase state so the app's webcam actions compile on every platform. Capture is
+    /// unsupported here, so a session never reaches review.
+    pub session: super::webcam_session::WebcamSession,
 }
 
 impl WebcamPrompt {
@@ -40,6 +43,7 @@ impl WebcamPrompt {
             frame_width: 0,
             frame_height: 0,
             frame: None,
+            session: super::webcam_session::WebcamSession::default(),
         }
     }
 

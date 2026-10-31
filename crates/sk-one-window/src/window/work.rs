@@ -109,6 +109,7 @@ impl OneWindow {
             }
             WorkEvent::ModelWrote { text, done } => self.with_chat(|c| c.wrote(&text, done)),
             WorkEvent::ModelNext(rows) => self.with_chat(|c| c.ranked(rows)),
+            WorkEvent::ModelEndedEmpty { stopped } => self.with_chat(|c| { c.phase = chat::Phase::EndedEmpty { stopped }; }),
             WorkEvent::ModelFailed { message } => self.with_chat(|c| c.failed(&message)),
             WorkEvent::OpenSteps { sentence } => {
                 let open = Steps::open(&sentence);
@@ -621,7 +622,7 @@ mod tests {
             }]
         );
         assert_eq!(win.text(), "", "the chat's input clears for the next turn");
-        assert_eq!(win.enter_target(20).label, "The model is writing…");
+        assert_eq!(win.enter_target(20).label, "Waiting for the model…");
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub mod context_snapshot;
 
 // Computer-use vocabulary over the existing automation inspection protocol
 pub mod computer_use;
+pub mod desktop_fill;
 
 // Unified icon system - single API for all icon sources
 // Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles

@@ -2133,6 +2133,8 @@ export interface BrainRemoteConfig {
  * ```
  */
 export interface Config {
+  /** Opt in to sending launcher words, app names and command/menu choices to TypeSafe after typing pauses. Default: false. */
+  jevIntentEnabled?: boolean;
   /**
    * Main keyboard shortcut to open Script Kit.
    * This is the global hotkey that activates Script Kit from any application.

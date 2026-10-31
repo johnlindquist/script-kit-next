@@ -285,7 +285,7 @@ fn render_menu_syntax_form(
                 .flex_1()
                 .flex()
                 .flex_col()
-                .gap(px(field_metrics.field_gap_px))
+                .gap(px(field_metrics.field_stack_gap_px))
                 .children(form.fields.iter().map(|field| {
                     let input = inputs
                         .iter()
@@ -1022,7 +1022,7 @@ impl ScriptListApp {
         let active_filter_empty_copy = "There are no search results with this filter applied.";
         let list_element: AnyElement = if let Some(view) = self.render_one_window_work_view(cx) {
             view
-        } else if let Some(view) = self.one_window_view_element() {
+        } else if let Some(view) = self.one_window_view_element(cx) {
             view
         } else if menu_syntax_owns_main_list
             && !trigger_picker_owns_main_list_for_render
@@ -1139,6 +1139,9 @@ impl ScriptListApp {
             let grouped_items_clone = grouped_items.clone();
             let flat_results_clone = flat_results.clone();
             let projected_rows = self.main_menu_committed_rows_snapshot();
+            let panel_rows = if self.has_launcher_tabs() && self.filter_text.is_empty() { self.one_window.subject_page().map_or(0, |p|p.source.rows.len()) } else {0};
+            let panel_fill=crate::components::subject_tab_bar::panel_color(&self.theme);
+            let panel_edge=px(crate::components::subject_tab_bar::PANEL_INSET);
             let committed_calculator = self.main_menu_committed_calculator().cloned();
             let painted_query = self.main_menu_committed_query_stamp();
 
@@ -1186,20 +1189,16 @@ impl ScriptListApp {
                                     } else {
                                         effective_section_header_height
                                     };
-                                    div()
+                                    let head=div()
                                         .id(ElementId::NamedInteger(
                                             format!("section-header-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
                                         .debug_selector(move || format!("oneWindowSectionHeader:{ix}"))
                                         .h(px(h_px))
-                                        .child(render_section_header(
-                                            label,
-                                            icon.as_deref(),
-                                            theme_colors,
-                                            is_first,
-                                        ))
-                                        .into_any_element()
+                                        .when(is_first && panel_rows>0,|d|d.bg(panel_fill))
+                                        .child(crate::list_item::render_section_header_for_family(label,icon.as_deref(),theme_colors,is_first,if panel_rows>0 {crate::list_item::SectionPresentationFamily::PreserveAuthored} else {crate::list_item::SectionPresentationFamily::Launcher}));
+                                    if is_first && panel_rows>0 {div().w_full().px(panel_edge).child(head).into_any_element()} else {head.into_any_element()}
                                 }
                                 GroupedListItem::Status(status) => {
                                     div()
@@ -1383,6 +1382,7 @@ impl ScriptListApp {
                                             format!("script-item-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
+                                        .when(ix>0 && ix<=panel_rows,|d|d.bg(panel_fill).when(ix==panel_rows,|d|d.rounded_b(px(current_main_menu_theme.def().row.radius))))
                                         .when(stale, |row| {
                                             row.opacity(crate::theme::opacity::OPACITY_STALE_ROW)
                                         })
@@ -1404,7 +1404,7 @@ impl ScriptListApp {
                                             }
                                         }).absolute().top_0().left_0().size_full())
                                     });
-                                    row_element.into_any_element()
+                                    if ix>0 && ix<=panel_rows {div().w_full().px(panel_edge).child(row_element).into_any_element()} else {row_element.into_any_element()}
                                 }
                             }
                         } else {
@@ -2035,6 +2035,12 @@ impl ScriptListApp {
             .font_family(font_family)
             .key_context("script_list")
             .track_focus(&self.focus_handle)
+            .on_modifiers_changed(cx.listener(|this,event:&gpui::ModifiersChangedEvent,_,cx| {
+                this.one_window_host.tab_modifier_generation=this.one_window_host.tab_modifier_generation.wrapping_add(1);
+                let generation=this.one_window_host.tab_modifier_generation;
+                if !event.modifiers.platform || !this.has_launcher_tabs() { if this.one_window_host.tab_hints {this.one_window_host.tab_hints=false; cx.notify();} return; }
+                cx.spawn(async move |this,cx|{cx.background_executor().timer(std::time::Duration::from_millis(350)).await; let _=this.update(cx,|app,cx|{if app.one_window_host.tab_modifier_generation==generation {app.one_window_host.tab_hints=true;cx.notify();}});}).detach();
+            }))
             .capture_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 if this.preempt_empty_script_list_escape_close(event, window, cx) {
                     cx.stop_propagation();
@@ -2167,6 +2173,11 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
+        let input_body=if self.has_launcher_tabs() { let p=self.one_window.subject_page().expect("tab to draw");
+            div().flex().flex_1().min_w(px(0.)).items_center().gap(px(menu_def.slot_line.gap_px))
+                .child(div().id(gpui::SharedString::from(format!("stage-subject:{}",p.id))).when(self.filter_text.is_empty(),|d| {let id=p.id.clone();d.cursor_pointer().role(gpui::Role::Button).aria_label("Stage this subject").on_click(cx.listener(move|app,_,window,cx|{if app.stage_tab_tile(&id,cx) {app.focus_main_filter(window,cx);}}))}).size(px(menu_def.slot_line.chip.height_px)).rounded(px(menu_def.slot_line.chip.radius_px)).border_1().border_color(rgba((self.theme.colors.text.primary<<8)|menu_def.slot_line.chip.offered_edge_alpha)).flex().items_center().justify_center().child(crate::one_window::slot_line::render_slot_icon(&p.source.icon,menu_def.slot_line.icon_size,self.theme.colors.text.primary)))
+                .child(div().min_w(px(0.)).flex_1().child(input_body)).when(self.is_pinned,|d|d.child(crate::one_window::slot_line::render_pinned(&self.theme,menu_def))).into_any_element()
+        } else {input_body};
         let input = crate::components::main_view_chrome::render_main_view_input_shell(
             &self.theme,
             menu_def,
@@ -2189,11 +2200,10 @@ impl ScriptListApp {
             },
         );
 
-        let header = crate::components::main_view_chrome::MainViewHeaderChrome::canonical(
-            menu_def,
-            self.render_main_view_slot_line(menu_def),
-            input,
-        );
+        let header = if self.one_window.tabs_enabled() {
+            let band=if self.has_launcher_tabs() && !self.cursor_dictation_pending(){self.render_subject_bar(cx)}else{self.render_main_view_slot_line(menu_def)};
+            crate::components::main_view_chrome::MainViewHeaderChrome::tabbed(menu_def,band,input)
+        } else {crate::components::main_view_chrome::MainViewHeaderChrome::canonical(menu_def,self.render_main_view_slot_line(menu_def),input)};
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {
             margin_x: shell.divider_margin_x,
             height: if is_default_design {

@@ -130,8 +130,13 @@ impl JevSlots {
             .slots
             .iter()
             .position(|s| s.row.as_ref().is_some_and(|r| keep == Some(r.key.as_str())));
-        let mut rows = down_rows(text)
-            .into_iter()
+        // Only a failed/offline reading admits the local splitter. Use these same
+        // reserved rows so a second name match can never race the Jev result.
+        let mut fallback = down_rows(text);
+        if let Some(local) = crate::steps::offline_row(text) {
+            fallback.insert(0, local);
+        }
+        let mut rows = fallback.into_iter()
             .filter(|row| keep != Some(row.key.as_str()));
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if kept == Some(i) {

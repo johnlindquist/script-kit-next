@@ -1703,12 +1703,14 @@ impl ScriptListApp {
                         .text_color(rgb(text_dimmed))
                         .child("No file selected"),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_muted))
-                        .child("Use \u{2191}\u{2193} to inspect results"),
-                )
+                .when(filtered_len > 0, |panel| {
+                    panel.child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child("Use \u{2191}\u{2193} to inspect results"),
+                    )
+                })
         };
 
         let is_directory_query = crate::file_search::parse_directory_path(query).is_some();
@@ -1767,7 +1769,7 @@ impl ScriptListApp {
         // ⌘↵ (Explain) / ⌘⇧↵ (Plan) are now visible in the footer
         // so users can discover them without guessing.
         let ai_hint = "⌘↵ Explain with AI · ⌘⇧↵ Plan with AI";
-        let borrowed_hints = self.file_search_borrowed_hints(selected_file.as_ref(), cx);
+        let borrowed_hints = self.file_search_borrowed_hints(selected_file.as_ref());
         let file_search_hints = if let Some(hints) = borrowed_hints {
             hints
         } else if self.is_in_attachment_portal() {
@@ -1948,6 +1950,16 @@ impl ScriptListApp {
                 .child(list_element)
                 .child(list_scrollbar)
         };
+        let rename_preview = self.file_search_rename_preview();
+        let section_title = if rename_preview.is_some() {
+            "Rename file"
+        } else if query.trim().is_empty() {
+            "Files"
+        } else {
+            "Results"
+        };
+        let section_status = rename_preview.as_ref().map(|preview| preview.title.as_str())
+            .or_else(|| is_loading.then_some("Indexing files"));
         let list_pane = div()
             .w_full()
             .h_full()
@@ -1955,12 +1967,8 @@ impl ScriptListApp {
             .flex_col()
             .child(
                 crate::components::builtin_leading_separator::render_builtin_leading_separator(
-                    if query.trim().is_empty() {
-                        "Files"
-                    } else {
-                        "Results"
-                    },
-                    is_loading.then_some("Indexing files"),
+                    section_title,
+                    section_status,
                     list_colors,
                     self.current_main_menu_theme,
                 ),

@@ -1,5 +1,6 @@
 mod form_prompt_render_tests {
     use super::*;
+    use crate::components::form_fields::field_value_is_valid_for_submit as form_field_value_is_valid_for_submit;
 
     #[test]
     fn form_enter_behavior_submits_non_textarea_on_enter() {

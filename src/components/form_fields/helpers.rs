@@ -86,3 +86,53 @@ pub(crate) fn form_field_type_allows_candidate_value(
         _ => true,
     }
 }
+
+#[inline]
+fn is_valid_email_submit_value(value: &str) -> bool {
+    if value.is_empty() {
+        return true;
+    }
+
+    if value
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return false;
+    }
+
+    let mut parts = value.split('@');
+    let local = parts.next().unwrap_or_default();
+    let domain = parts.next().unwrap_or_default();
+
+    if local.is_empty() || domain.is_empty() || parts.next().is_some() {
+        return false;
+    }
+
+    if domain.starts_with('.') || domain.ends_with('.') {
+        return false;
+    }
+
+    domain.contains('.')
+}
+
+#[inline]
+fn is_valid_number_submit_value(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed.parse::<f64>().is_ok()
+}
+
+#[inline]
+pub(crate) fn field_value_is_valid_for_submit(field_type: Option<&str>, value: &str) -> bool {
+    match field_type {
+        Some(field_type) if field_type.eq_ignore_ascii_case("email") => {
+            is_valid_email_submit_value(value)
+        }
+        Some(field_type) if field_type.eq_ignore_ascii_case("number") => {
+            is_valid_number_submit_value(value)
+        }
+        _ => true,
+    }
+}

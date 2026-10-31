@@ -12,6 +12,7 @@ pub mod chat_with;
 pub mod clipboard;
 pub mod connect;
 pub mod contract;
+pub mod cursor_dictation;
 pub mod enter;
 pub mod form;
 pub mod history;

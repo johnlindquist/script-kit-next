@@ -1545,6 +1545,8 @@ export interface AiPreferences {
  * ```
  */
 export interface Config extends BaseConfig {
+  /** Opt in to TypeSafe launcher readings (words, app names and command/menu choices); default is local-only. */
+  jevIntentEnabled?: boolean;
   /**
    * Unified root search controls.
    *

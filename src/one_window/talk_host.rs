@@ -27,6 +27,7 @@ pub(crate) type TalkPaste =
 pub(crate) struct TalkHost {
     /// Bumped per session, so a pump from an older one stops.
     generation: u64,
+    request_revision: u64,
     /// The microphone is on for this session (off in the owned evaluator).
     listening: bool,
     /// How the words are typed when letting go picks typing.
@@ -178,13 +179,15 @@ impl ScriptListApp {
         last: bool,
         cx: &mut Context<Self>,
     ) {
+        self.one_window_host.learns.talk.request_revision += 1;
+        let revision = self.one_window_host.learns.talk.request_revision;
         if last && self.one_window_host.learns.talk.listening {
             self.one_window_talk_stop_listening(cx);
             return;
         }
         self.settle_intent_oracle_slot();
         let slot = self.intent_launcher.oracle_slot().clone();
-        if matches!(slot, OracleSlot::Off(_)) {
+        if matches!(slot, OracleSlot::Off(_)) || (self.main_services.is_production() && crate::intent::sensitive_words(&words)) {
             if last {
                 self.one_window_handle(Event::Talk(TalkEvent::Unread { words }), cx);
                 self.one_window_republish_own(cx);
@@ -197,6 +200,7 @@ impl ScriptListApp {
             .map(|talk| talk.app.clone())
             .unwrap_or_default();
         let state = talk_state(&words, &app, !last);
+        let generation = self.one_window_host.learns.talk.generation;
         cx.spawn(async move |this, cx| {
             let answer = cx
                 .background_executor()
@@ -212,6 +216,11 @@ impl ScriptListApp {
                 })
                 .await;
             let _ = this.update(cx, |app, cx| {
+                if app.one_window_host.learns.talk.generation != generation
+                    || app.one_window_host.learns.talk.request_revision != revision
+                {
+                    return;
+                }
                 let event = match answer
                     .ok()
                     .and_then(|result| result.answers.get("mode").cloned())
@@ -240,7 +249,15 @@ impl ScriptListApp {
     /// Jev's ordinary reading of the final words is what the request would run.
     fn one_window_talk_read_request(&mut self, words: String, cx: &mut Context<Self>) {
         self.one_window_host.learns.talk_request = Some(words.clone());
-        self.ask_jev(0, words, self.intent_screen_key(), cx);
+        self.one_window_send_jev(words, self.intent_screen_key(), cx);
+    }
+
+    pub(super) fn one_window_talk_unread(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.one_window_host.learns.talk_request.as_deref() == Some(text) {
+            self.one_window_host.learns.talk_request = None;
+            self.one_window_handle(Event::Talk(TalkEvent::Unread { words: text.into() }), cx);
+            self.one_window_republish_own(cx);
+        }
     }
 
     /// Jev read `text`; while the voice view waits on those words, its top reading becomes the
@@ -254,10 +271,11 @@ impl ScriptListApp {
         if self.one_window_host.learns.talk_request.as_deref() != Some(text) {
             return;
         }
-        self.one_window_host.learns.talk_request = None;
         let Some(top) = readings.first() else {
+            self.one_window_talk_unread(text, cx);
             return;
         };
+        self.one_window_host.learns.talk_request = None;
         let row = Row::new(top.key.clone(), top.plan.title.clone())
             .with_sub(crate::intent::plan_subtitle(&top.plan));
         let answer = self.one_window.talk().and_then(|talk| talk.answer.clone());
@@ -284,6 +302,7 @@ impl ScriptListApp {
     /// The voice session is over: whatever is still listening stops, and nothing it heard is
     /// delivered anywhere else.
     pub(crate) fn one_window_talk_ended(&mut self) {
+        self.one_window_cancel_jev();
         let talk = &mut self.one_window_host.learns.talk;
         talk.generation += 1;
         talk.paste = None;

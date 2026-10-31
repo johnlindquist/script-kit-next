@@ -7,13 +7,10 @@ use gpui::AsyncApp;
 use crate::hotkeys::gesture::GestureEvent;
 use crate::hotkeys::process_main_hotkey_physical_event;
 
-/// True while the in-flight gesture began from the closed (window hidden) state,
-/// i.e. its key-down emitted `ShowImmediate`. The classifier does not carry this
-/// distinction, but routing needs it: the opening tap's deferred `Tap` must NOT
-/// immediately hide the window it just opened, and `HoldStart` only acts for
-/// hold-from-closed (hold-while-open is intentionally dead until a later task).
-static MAIN_GESTURE_BEGAN_CLOSED: AtomicBool = AtomicBool::new(false);
-static MAIN_GESTURE_TAP_PREVIEW_APPLIED: AtomicBool = AtomicBool::new(false);
+// Only a key-up commits a tap. A hold must never focus Kit on the way to the microphone.
+static MAIN_GESTURE_TODAY: AtomicBool = AtomicBool::new(false);
+static MAIN_GESTURE_OUTSIDE: AtomicBool = AtomicBool::new(false);
+static MAIN_GESTURE_TAP_HANDLED: AtomicBool = AtomicBool::new(false);
 
 /// Start the async listener that classifies main-hotkey key-down/key-up pairs.
 ///
@@ -59,10 +56,12 @@ pub(crate) fn spawn_main_hotkey_gesture_listener(
             match waited {
                 Some(Ok(physical)) => {
                     correlation_id = Some(physical.correlation_id.clone());
+                    rearm_main_gesture_if_window_unfocused(&physical, &app_entity, cx);
                     events.extend(process_main_hotkey_physical_event(physical));
                     // Drain everything already queued so ordering follows the
                     // injected timestamps, not poll wall-clock time.
                     while let Ok(more) = receiver.try_recv() {
+                        rearm_main_gesture_if_window_unfocused(&more, &app_entity, cx);
                         events.extend(process_main_hotkey_physical_event(more));
                     }
                 }
@@ -98,6 +97,26 @@ pub(crate) fn spawn_main_hotkey_gesture_listener(
     .detach();
 }
 
+/// A press while the window is on screen but another app holds the keyboard
+/// (it survived a blur: pinned, a waiting popup, dictation) brings the keyboard
+/// back instead of hiding the window.
+fn rearm_main_gesture_if_window_unfocused(
+    physical: &hotkeys::MainHotkeyPhysicalEvent,
+    app_entity: &Entity<ScriptListApp>,
+    cx: &mut AsyncApp,
+) {
+    if physical.phase != hotkeys::MainHotkeyPhase::KeyDown {
+        return;
+    }
+    let unfocused = cx.update(|cx| app_entity.read(cx).main_window_shown_but_unfocused());
+    if unfocused && hotkeys::rearm_main_gesture_for_unfocused_window() {
+        logging::log(
+            "GESTURE",
+            "Main window shown but not key — this press refocuses it",
+        );
+    }
+}
+
 fn dispatch_main_gesture_event(
     event: GestureEvent,
     window: WindowHandle<Root>,
@@ -105,120 +124,96 @@ fn dispatch_main_gesture_event(
     cx: &mut App,
 ) {
     match event {
-        GestureEvent::ShowImmediate => {
-            logging::log("GESTURE", "ShowImmediate — key-down show");
-            MAIN_GESTURE_BEGAN_CLOSED.store(true, Ordering::SeqCst);
-            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(false, Ordering::SeqCst);
-            if !script_kit_gpui::is_main_window_visible() {
-                show_main_window_helper(window, app_entity, cx);
-            }
+        GestureEvent::BeginOutside | GestureEvent::BeginInside => {
+            let outside =
+                !script_kit_gpui::is_main_window_visible() || !platform::is_main_window_focused();
+            MAIN_GESTURE_OUTSIDE.store(outside, Ordering::SeqCst);
+            MAIN_GESTURE_TAP_HANDLED.store(false, Ordering::SeqCst);
         }
         GestureEvent::TapPreview => {
-            if MAIN_GESTURE_BEGAN_CLOSED.load(Ordering::SeqCst) {
-                return;
-            }
-            if !script_kit_gpui::is_main_window_visible() {
-                return;
-            }
-
-            let applied = window
-                .update(cx, |_root, window, cx| {
-                    app_entity.update(cx, |view, cx| {
-                        view.try_handle_main_hotkey_tap_preview(window, cx)
+            let outside = MAIN_GESTURE_OUTSIDE.load(Ordering::SeqCst);
+            let handled = if app_entity.read(cx).cursor_dictation_pending() {
+                true
+            } else if outside {
+                let launcher = app_entity.update(cx, |app, cx| app.prepare_shortcut_launcher(cx));
+                if !launcher {
+                    app_entity.update(cx, |app, cx| {
+                        app.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::ShowMain {
+                                activate_app: true,
+                            },
+                            cx,
+                        )
+                    });
+                    MAIN_GESTURE_TAP_HANDLED.store(true, Ordering::SeqCst);
+                    return;
+                }
+                if script_kit_gpui::is_main_window_visible() {
+                    let _ = window.update(cx, |_, win, cx| {
+                        app_entity.update(cx, |app, cx| app.refocus_shown_main_window(win, cx))
+                    });
+                } else {
+                    show_main_window_helper(window, app_entity.clone(), cx);
+                }
+                true
+            } else {
+                window
+                    .update(cx, |_, win, cx| {
+                        app_entity.update(cx, |app, cx| {
+                            app.try_handle_main_hotkey_tap_preview(win, cx)
+                        })
                     })
-                })
-                .unwrap_or(false);
-            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(applied, Ordering::SeqCst);
-            if applied {
-                logging::log("GESTURE", "TapPreview — immediate safe toggle applied");
-            }
+                    .unwrap_or(false)
+            };
+            MAIN_GESTURE_TAP_HANDLED.store(handled, Ordering::SeqCst);
         }
         GestureEvent::Tap => {
-            if MAIN_GESTURE_TAP_PREVIEW_APPLIED.swap(false, Ordering::SeqCst) {
-                logging::log("GESTURE", "Tap — final tap ignored after preview");
-                return;
-            }
-            let began_closed = MAIN_GESTURE_BEGAN_CLOSED.swap(false, Ordering::SeqCst);
-            if began_closed {
-                // The tap that opened the window resolves to the launcher
-                // steady state — it must not also toggle to Day Page.
-                logging::log(
-                    "GESTURE",
-                    "Tap — opening tap resolved (launcher steady state)",
-                );
-                return;
-            }
-            logging::log("GESTURE", "Tap — hide launcher (hotkey toggle)");
-            if !script_kit_gpui::is_main_window_visible() {
-                return;
-            }
-            let _ = window.update(cx, |_root, window, cx| {
-                app_entity.update(cx, |view, cx| {
-                    view.handle_main_hotkey_tap(window, cx);
+            if !MAIN_GESTURE_TAP_HANDLED.swap(false, Ordering::SeqCst)
+                && script_kit_gpui::is_main_window_visible()
+            {
+                let _ = window.update(cx, |_, win, cx| {
+                    app_entity.update(cx, |app, cx| app.handle_main_hotkey_tap(win, cx))
                 });
-            });
+            }
         }
         GestureEvent::DoubleTap => {
-            MAIN_GESTURE_BEGAN_CLOSED.store(false, Ordering::SeqCst);
-            MAIN_GESTURE_TAP_PREVIEW_APPLIED.store(false, Ordering::SeqCst);
-            // Double-tap while the quick-question surface is already showing
-            // reads as an impatient "close it". Re-opening the composer here
-            // made the window feel stuck: a single tap waits out the
-            // double-tap window before hiding, so pressing the hotkey
-            // rapidly while Quick AI was open always landed in this arm and
-            // kept the surface alive.
-            if script_kit_gpui::is_main_window_visible()
-                && app_entity.read(cx).one_window.chat().is_some()
+            MAIN_GESTURE_TODAY.store(false, Ordering::SeqCst);
+            if app_entity.read(cx).cursor_dictation_pending()
+                || app_entity.read(cx).prompt_receiver.is_some()
             {
-                logging::log(
-                    "GESTURE",
-                    "DoubleTap — quick AI already open, toggling closed",
-                );
-                let _ = window.update(cx, |_root, window, cx| {
-                    app_entity.update(cx, |view, cx| {
-                        view.handle_main_hotkey_tap(window, cx);
-                    });
-                });
                 return;
             }
-            logging::log("GESTURE", "DoubleTap — Agent Chat entry intent");
             if !script_kit_gpui::is_main_window_visible() {
                 show_main_window_helper(window, app_entity.clone(), cx);
             }
-            app_entity.update(cx, |view, cx| {
-                view.mark_opened_directly("gesture_double_tap");
-                // Double-tap is the quick-question entry: a CLEAN composer,
-                // never the launcher's auto-selected row as a context chip.
-                // Routing through the chip-staging entry here caused the
-                // 2026-07-10 "double-tap attaches the first selected item"
-                // regression.
-                view.one_window_open_chat(crate::one_window::chat_entry::ChatEntry::quick(), cx);
+            let _ = window.update(cx, |_, win, cx| {
+                app_entity.update(cx, |app, cx| {
+                    if let Err(error) = app.open_note_in_editor(
+                        crate::notes::NoteTarget::Today,
+                        crate::DayPageBack::Leave,
+                        win,
+                        cx,
+                    ) {
+                        app.notice_failed(format!("Couldn't open Today: {error}"), cx);
+                    } else {
+                        MAIN_GESTURE_TODAY.store(true, Ordering::SeqCst);
+                    }
+                })
             });
         }
-        GestureEvent::HoldStart => {
-            let began_closed = MAIN_GESTURE_BEGAN_CLOSED.load(Ordering::SeqCst);
-            if !began_closed {
-                // Hold-while-open semantics are intentionally dead (T8 scope).
-                logging::log("GESTURE", "HoldStart — ignored (hold-while-open is dead)");
+        GestureEvent::HoldStart | GestureEvent::TodayHoldStart => {
+            let today = event == GestureEvent::TodayHoldStart;
+            if today && !MAIN_GESTURE_TODAY.load(Ordering::SeqCst) {
                 return;
             }
-            logging::log("GESTURE", "HoldStart — show Day Page");
-            if !script_kit_gpui::is_main_window_visible() {
-                show_main_window_helper(window, app_entity.clone(), cx);
-            }
-            let _ = window.update(cx, |_root, window, cx| {
-                app_entity.update(cx, |view, cx| {
-                    view.show_day_page_view(window, cx);
-                    // Shown from a closed window: Esc closes it again.
-                    view.mark_opened_directly("gesture_hold_today");
-                });
+            let external = !today && MAIN_GESTURE_OUTSIDE.load(Ordering::SeqCst);
+            let _ = window.update(cx, |_, win, cx| {
+                app_entity.update(cx, |app, cx| {
+                    app.start_cursor_hold(external, today, win, cx)
+                })
             });
         }
-        GestureEvent::HoldEnd => {
-            // Hold release is inert: the Day Page is already showing.
-            // Dictation is owned by the dedicated dictation shortcut/window.
-            MAIN_GESTURE_BEGAN_CLOSED.store(false, Ordering::SeqCst);
-        }
+        GestureEvent::HoldEnd => app_entity.update(cx, |app, cx| app.finish_cursor_hold(cx)),
     }
 }
 
@@ -245,6 +240,34 @@ impl ScriptListApp {
             }
             _ => false,
         }
+    }
+
+    /// True when the window is on screen but not the key window, so typing
+    /// goes to another app.
+    pub(crate) fn main_window_shown_but_unfocused(&self) -> bool {
+        !self.main_services.host_policy().is_hidden()
+            && script_kit_gpui::is_main_window_visible()
+            && !platform::is_main_window_focused()
+    }
+
+    /// Give the keyboard back to the window that is already showing: make it
+    /// key without replaying the entry fade, and put the caret back in the
+    /// current view if nothing inside the window holds focus.
+    pub(crate) fn refocus_shown_main_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "FOCUS",
+            &format!(
+                "Main hotkey refocusing the shown window (view={})",
+                self.current_view.app_view_variant()
+            ),
+        );
+        window.activate_window();
+        self.focus_main_filter(window, cx);
+        cx.notify();
     }
 
     /// Tap-while-open: hide the launcher (the universal hotkey-toggle

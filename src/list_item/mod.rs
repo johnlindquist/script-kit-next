@@ -2299,6 +2299,10 @@ pub fn render_section_header(
     colors: ListItemColors,
     is_first: bool,
 ) -> impl IntoElement {
+    render_section_header_for_family(label,icon,colors,is_first,SectionPresentationFamily::Launcher)
+}
+
+pub fn render_section_header_for_family(label:&str, icon:Option<&str>, colors:ListItemColors, is_first:bool, family:SectionPresentationFamily)->impl IntoElement {
     let metrics = resolved_list_item_metrics();
     // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
     // Used with GPUI's list() component which supports variable-height items.
@@ -2318,7 +2322,7 @@ pub fn render_section_header(
         section_name,
         icon,
         count_text,
-        SectionPresentationFamily::Launcher,
+        family,
     );
     let tier_alpha = |tier| match tier {
         SectionTextTier::Strong => colors.alpha_strong,

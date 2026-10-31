@@ -1,0 +1,58 @@
+[
+  {
+    "name": "focus",
+    "key": "tab"
+  },
+  {
+    "name": "first",
+    "type": "a"
+  },
+  {
+    "name": "blank",
+    "key": "enter"
+  },
+  {
+    "name": "second",
+    "append": "ok"
+  },
+  {
+    "name": "selected-word",
+    "key": "shift-left"
+  },
+  {
+    "name": "selected-both",
+    "key": "shift-left"
+  },
+  {
+    "name": "replaced",
+    "append": "W"
+  },
+  {
+    "name": "all",
+    "key": "cmd-a"
+  },
+  {
+    "name": "empty",
+    "key": "backspace"
+  },
+  {
+    "name": "email",
+    "key": "shift-tab"
+  },
+  {
+    "name": "select-email",
+    "key": "cmd-a"
+  },
+  {
+    "name": "mixed",
+    "type": "Wié"
+  },
+  {
+    "name": "middle",
+    "key": "left"
+  },
+  {
+    "name": "insert-middle",
+    "append": "m"
+  }
+]

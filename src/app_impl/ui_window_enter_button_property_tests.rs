@@ -867,6 +867,33 @@ fn a_stale_jev_row_never_runs() {
 }
 
 #[test]
+fn a_late_answer_for_identical_words_cannot_replace_the_finished_request() {
+    let unchanged = in_launcher("late_same_words", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Reading);
+        let words = "play next track";
+        type_into_launcher(cx, window, &app, words);
+        wait(cx, 400);
+        let before = jev_titles(&app, cx);
+        app.update(cx, |app, cx| {
+            let mut late = app
+                .intent_launcher
+                .shown_top(words)
+                .expect("current plan")
+                .as_ref()
+                .clone();
+            late.reading.title = "Old response".into();
+            let screen = app.intent_screen_key();
+            app.one_window_jev_answered(0, words.into(), screen, Ok(late), cx);
+        });
+        before == jev_titles(&app, cx)
+    });
+    assert!(
+        unchanged,
+        "late successes must not replace the current rows"
+    );
+}
+
+#[test]
 fn enter_within_the_guard_after_something_finishes_is_ignored() {
     let (first, guarded, later) = in_launcher("enter_guard_after_done", 0, |cx| {
         let (app, window) = launcher(cx, Jev::Off);

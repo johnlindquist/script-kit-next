@@ -71,7 +71,7 @@ pub use runtime::{
     claim_dictation_delivery, current_dictation_phase, cycle_dictation_target,
     delivery_receipt_generation, dictation_auto_stop_due, dictation_delivery_was_claimed,
     dictation_elapsed, dictation_stop_target, dictation_target_generation, finalize_progress,
-    finish_stop_capture, get_active_dictation_device, get_dictation_target,
+    current_capture_generation, finish_stop_capture, get_active_dictation_device, get_dictation_target,
     get_dictation_target_selection, is_dictation_busy, is_dictation_recording,
     is_dictation_stopping, last_delivery_receipt, last_partial_transcript, last_stop_receipt,
     last_wrong_target_refusal, maybe_unload_transcriber, next_dictation_delivery_id,

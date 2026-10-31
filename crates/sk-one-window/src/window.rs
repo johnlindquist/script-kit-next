@@ -14,6 +14,10 @@ mod learning;
 mod ledger_rules;
 mod show;
 mod staging;
+pub mod subject_tabs;
+#[cfg(test)]
+mod subject_tabs_tests;
+use subject_tabs::{Tabs, TabsEvent};
 mod talking;
 #[cfg(test)]
 mod tests;
@@ -88,6 +92,7 @@ pub enum Key {
     Recent,
     CmdZ,
     Tab,
+    BackTab,
     CmdDigit(u8),
     Right,
     /// ← with the caret at the input's start: the chip before it is highlighted.
@@ -144,6 +149,7 @@ pub enum Event {
     /// The input's words changed because the user typed.
     Text(String),
     Key(Key),
+    Subjects(TabsEvent),
     /// `@` finished naming something: it becomes a chip after the subject. The host takes its
     /// token out of the input's words and keeps it at the sentence's end.
     Attach(ContextChip),
@@ -176,6 +182,9 @@ pub enum Event {
         target: EnterTarget,
     },
     Done(Done),
+    /// A hosted view requested Undo for its own completed operation.
+    UndoEntry(u64),
+    StopHold(u64),
     /// A view held a message on its own.
     Hold {
         label: String,
@@ -238,7 +247,12 @@ impl Event {
     fn is_user(&self) -> bool {
         matches!(
             self,
-            Event::Text(_) | Event::Key(_) | Event::Select(_) | Event::Summon | Event::Paste(_)
+            Event::Text(_)
+                | Event::Key(_)
+                | Event::Select(_)
+                | Event::Summon
+                | Event::Paste(_)
+                | Event::Subjects(TabsEvent::Pick(_) | TabsEvent::Paste(_))
         )
     }
 }
@@ -372,6 +386,7 @@ struct PendingDismiss {
 #[derive(Clone, Debug)]
 pub struct OneWindow {
     cfg: Config,
+    tabs: Tabs,
     text: String,
     list: ListState,
     host_names: Vec<Row>,
@@ -426,6 +441,7 @@ impl OneWindow {
             list: ListState::new(cfg.jev_first, cfg.stale_holds),
             holds: Holds::new(cfg.hold_ms),
             cfg,
+            tabs: Tabs::default(),
             text: String::new(),
             host_names: Vec::new(),
             host_pinned: Vec::new(),
@@ -488,6 +504,13 @@ impl OneWindow {
     }
     pub fn ledger(&self) -> &Ledger {
         &self.ledger
+    }
+    /// The host released the work (and any open file handle) for an older run.
+    /// Keep its history row, but never offer an inverse that can no longer run.
+    pub fn release_undo(&mut self, id: u64) {
+        if let Some(entry) = self.ledger.get_mut(id) {
+            entry.undo_kept = false;
+        }
     }
     pub fn holds(&self) -> &Holds {
         &self.holds
@@ -555,6 +578,7 @@ impl OneWindow {
     }
 
     pub fn handle(&mut self, now: Ms, ev: Event) -> Outcome {
+        let before_page = self.subject_page().map(|p| p.id);
         let now = now.max(self.now);
         self.now = now;
         let mut fx = Vec::new();
@@ -568,7 +592,21 @@ impl OneWindow {
         };
         self.tick(now, &mut fx);
         let consumed = self.apply(now, ev, &mut fx);
-        if let Some(focus) = focus {
+        let changed_page = before_page != self.subject_page().map(|p| p.id);
+        if changed_page
+            || (before_page
+                .as_deref()
+                .is_some_and(|id| id.starts_with("run-"))
+                && self.text.is_empty())
+        {
+            self.refresh_rows();
+        }
+        if changed_page && !self.chose && self.tabs_visible() && self.text.is_empty() {
+            self.list.sel = 0;
+            if focus.is_some() {
+                self.guard.arm(now);
+            }
+        } else if let Some(focus) = focus {
             self.keep_focus(now, focus);
         }
         self.sync_pause(now, &mut fx);
@@ -594,6 +632,7 @@ impl OneWindow {
                 true
             }
             Event::Key(key) => self.on_key(now, key, fx),
+            Event::Subjects(event) => self.subject_event(now, event),
             Event::Attach(chip) => self.attach(chip),
             Event::DropChips => {
                 let had = !self.context.is_empty();
@@ -691,6 +730,21 @@ impl OneWindow {
                 }
                 None => false,
             },
+            Event::StopHold(id) => {
+                if !self.holds.live().any(|h| h.id == id) {
+                    return false;
+                }
+                self.unsend(now, &[id], fx);
+                true
+            }
+            Event::UndoEntry(id) => {
+                if self.ledger.undo(now, id).is_some() {
+                    fx.push(Effect::Undo { entry: id });
+                    true
+                } else {
+                    false
+                }
+            }
             Event::Done(done) => {
                 self.done(now, done, fx);
                 true

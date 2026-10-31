@@ -26,6 +26,10 @@ import type { Config } from "@scriptkit/sdk";
  * as a setting lives in this one file.
  */
 export default {
+  // Local-only by default. Enable to send typed/dictated launcher words, app names
+  // and candidate command/menu descriptions to TypeSafe after a pause.
+  // jevIntentEnabled: true,
+
   // ===========================================================================
   // REQUIRED: Global Hotkey
   // ===========================================================================

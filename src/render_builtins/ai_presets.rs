@@ -279,128 +279,22 @@ impl ScriptListApp {
         )
     }
 
-    /// Render the create AI preset form.
-    fn render_create_ai_preset(
-        &mut self,
-        name: String,
-        system_prompt: String,
-        model: String,
-        active_field: usize,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let tokens = get_tokens(self.current_design);
-        let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
-        let design_visual = tokens.visual();
-
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
-        let accent = self.theme.colors.accent.selected;
-        let border = self.theme.colors.ui.border;
-
-        let entity = cx.entity().downgrade();
-
-        let fields: Vec<(&str, &str, &str, usize)> = vec![
-            ("Name", "Preset name (e.g., Code Reviewer)", &name, 0),
-            (
-                "System Prompt",
-                "Instructions for the AI",
-                &system_prompt,
-                1,
-            ),
-            (
-                "Model (optional)",
-                "Model ID or leave empty for any",
-                &model,
-                2,
-            ),
-        ];
-
-        let field_elements: Vec<AnyElement> = fields
-            .iter()
-            .map(|(label, placeholder, value, idx)| {
-                let is_active = *idx == active_field;
-                let label_color = if is_active { accent } else { text_dimmed };
-                let border_color = if is_active { accent } else { border };
-                let entity_for_click = entity.clone();
-                let field_idx = *idx;
-
-                div()
-                    .w_full()
-                    .mb(px(design_spacing.padding_md))
-                    .child(
-                        div()
-                            .text_size(px(design_typography.font_size_sm))
-                            .text_color(rgb(label_color))
-                            .mb(px(4.))
-                            .child(label.to_string()),
-                    )
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("preset-field-{}", idx)))
-                            .w_full()
-                            .px(px(design_spacing.padding_md))
-                            .py(px(design_spacing.padding_sm))
-                            .border_1()
-                            .border_color(rgb(border_color))
-                            .rounded(px(design_visual.radius_md))
-                            .text_size(px(design_typography.font_size_md))
-                            .text_color(rgb(text_primary))
-                            .cursor_pointer()
-                            .on_click(move |_event, _window, cx| {
-                                if let Some(app) = entity_for_click.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        if let AppView::CreateAiPresetView {
-                                            ref mut active_field,
-                                            ..
-                                        } = this.current_view
-                                        {
-                                            *active_field = field_idx;
-                                            cx.notify();
-                                        }
-                                    });
-                                }
-                            })
-                            .child(if value.is_empty() {
-                                div()
-                                    .text_color(rgb(text_muted))
-                                    .child(placeholder.to_string())
-                                    .into_any_element()
-                            } else {
-                                div().child(value.to_string()).into_any_element()
-                            }),
-                    )
-                    .into_any_element()
-            })
-            .collect();
-
-        div()
-            .flex().flex_col().w_full().h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .track_focus(&self.focus_handle)
-            .child(
-                div().w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .text_size(px(design_typography.font_size_xl))
-                    .child("Create AI Preset"),
-            )
-            .child(div().w_full().h(px(1.)).bg(rgb(border)))
-            .child(
-                div().flex_1().w_full().min_h(px(0.))
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .children(field_elements)
-                    .child(
-                        div().text_size(px(design_typography.font_size_xs))
-                            .text_color(rgb(text_muted))
-                            .child("Type to edit \u{00b7} Tab: next field \u{00b7} Enter: save \u{00b7} Esc: cancel"),
-                    ),
-            )
-            .into_any_element()
+    /// The preset has a domain-specific save, but editing is an ordinary native form.
+    fn render_create_ai_preset(&self, entity: Entity<FormPromptState>, cx: &mut Context<Self>) -> AnyElement {
+        let palette = crate::components::prompt_text_palette(&self.theme);
+        let metrics = crate::components::FormFieldMetrics::from_theme_and_design(&self.theme, self.current_design);
+        let fields = entity.clone();
+        crate::components::render_inset_prompt_body("preset-body", div().size_full().flex().flex_col().gap(px(metrics.field_stack_gap_px))
+            .child(crate::components::prompt_form_intro("Create AI preset", "Save instructions to use in future chats.", palette.primary, palette.help, metrics.field_gap_px))
+            .child(div().flex_1().min_h(px(0.)).child(entity)), crate::components::PromptBodyInsets::MainMenu(self.current_design))
+            .on_key_down(cx.listener(move |app, event: &gpui::KeyDownEvent, window, cx| {
+                let key = event.keystroke.key.as_str();
+                if form_enter_behavior(key, event.keystroke.modifiers.platform, focused_form_field_is_textarea(fields.read(cx))) == FormEnterBehavior::Submit {
+                    app.handle_create_ai_preset_key("enter", window, cx); cx.stop_propagation();
+                } else if crate::ui_foundation::is_key_escape(key) {
+                    app.handle_create_ai_preset_key("escape", window, cx); cx.stop_propagation();
+                }
+            })).into_any_element()
     }
 
     /// Select a preset from the search view and apply it in AI chat.
@@ -428,17 +322,10 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let AppView::CreateAiPresetView {
-            ref mut name,
-            ref mut system_prompt,
-            ref mut model,
-            ref mut active_field,
-        } = self.current_view
-        {
-            let active = *active_field;
+        if let AppView::CreateAiPresetView { entity } = &self.current_view {
+            let entity = entity.clone();
             if crate::ui_foundation::is_key_tab(key) {
-                *active_field = (active + 1) % 3;
-                cx.notify();
+                entity.update(cx, |form,cx| form.focus_next(window,cx));
             } else if crate::ui_foundation::is_key_enter(key) {
                 if self
                     .prompt_completion
@@ -448,9 +335,11 @@ impl ScriptListApp {
                     return;
                 }
                 let form_action = CreateAiPresetFormAction::Submit;
-                let name_val = name.clone();
-                let prompt_val = system_prompt.clone();
-                let model_val = AiPresetModelSelection::from_input(model.as_str()).as_create_arg();
+                if entity.update(cx, |form,cx| form.validated_submit_value(Some(window),cx)).is_none() { return; }
+                let values: std::collections::HashMap<_,_> = entity.read(cx).named_values(cx).into_iter().collect();
+                let name_val = &values["name"];
+                let prompt_val = &values["systemPrompt"];
+                let model_val = AiPresetModelSelection::from_input(&values["model"]).as_create_arg();
                 match crate::ai::presets::create_preset(&name_val, &prompt_val, model_val) {
                     Ok(preset) => {
                         tracing::info!(
@@ -503,26 +392,6 @@ impl ScriptListApp {
                     }
                 }
                 self.go_back_or_close(window, cx);
-            } else if crate::ui_foundation::is_key_backspace(key) {
-                match active {
-                    0 => {
-                        name.pop();
-                    }
-                    1 => {
-                        system_prompt.pop();
-                    }
-                    _ => {
-                        model.pop();
-                    }
-                }
-                cx.notify();
-            } else if key.chars().count() == 1 {
-                match active {
-                    0 => name.push_str(key),
-                    1 => system_prompt.push_str(key),
-                    _ => model.push_str(key),
-                }
-                cx.notify();
             }
         }
     }

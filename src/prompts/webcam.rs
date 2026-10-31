@@ -11,6 +11,7 @@ use gpui::{
 use super::base::DesignContext;
 use super::base::PromptBase;
 use super::SubmitCallback;
+use super::webcam_session::WebcamSession;
 use crate::camera::CaptureHandle;
 use crate::theme;
 
@@ -35,6 +36,10 @@ pub struct WebcamPrompt {
     /// Owns the AVFoundation capture session — dropped when prompt closes,
     /// which stops the camera and releases all resources.
     pub capture_handle: Option<CaptureHandle>,
+    /// Live preview → countdown → review of the saved photo.
+    pub session: WebcamSession,
+    /// The frame that was saved, shown frozen while it is reviewed.
+    pub still: Option<CVPixelBuffer>,
 }
 
 impl WebcamPrompt {
@@ -52,6 +57,8 @@ impl WebcamPrompt {
             frame_width: 0,
             frame_height: 0,
             capture_handle: None,
+            session: WebcamSession::default(),
+            still: None,
         }
     }
 
@@ -202,18 +209,30 @@ impl Render for WebcamPrompt {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let dc = DesignContext::new(&self.base.theme, self.base.design_variant);
         let colors = self.base.theme.colors.prompt_colors();
+        let overlay = super::webcam_session::render_overlay(&self.session, &dc);
 
-        // Camera preview: use gpui::surface() for zero-copy GPU rendering
-        if let Some(ref buf) = self.pixel_buffer {
-            div().size_full().child(
-                gpui::surface(buf.clone())
-                    .object_fit(ObjectFit::Contain)
-                    .w_full()
-                    .h_full(),
-            )
+        // Camera preview: use gpui::surface() for zero-copy GPU rendering. A reviewed photo
+        // stays frozen on the frame that was saved.
+        let frame = if self.session.photo_path().is_some() {
+            self.still.as_ref().or(self.pixel_buffer.as_ref())
+        } else {
+            self.pixel_buffer.as_ref()
+        };
+        if let Some(buf) = frame {
+            div()
+                .relative()
+                .size_full()
+                .child(
+                    gpui::surface(buf.clone())
+                        .object_fit(ObjectFit::Contain)
+                        .w_full()
+                        .h_full(),
+                )
+                .children(overlay)
         } else {
             // Placeholder while camera initializes or on error
             div()
+                .relative()
                 .flex()
                 .size_full()
                 .items_center()
@@ -225,6 +244,7 @@ impl Render for WebcamPrompt {
                         .text_color(rgb(colors.text_secondary))
                         .child(self.state_label()),
                 )
+                .children(overlay)
         }
     }
 }

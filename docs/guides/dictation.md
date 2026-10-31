@@ -1,6 +1,6 @@
 # Dictation
 
-Script Kit GPUI includes native, local dictation: hold a hotkey and speak. The main window fades in over the front app without taking its cursor, your words fill the main input as they're heard, and letting go either types them where you were or runs them as a request. Transcription runs on-device. There is no separate dictation window.
+Hold the main shortcut to dictate into the field where you started. Tap Shift during recording to put the final words into Kit instead. Release finishes transcription; it does not execute a command. Tap twice for Today, or hold the second press to dictate there. [Shortcut and focus map](../specs/gesture-grammar.md). Transcription runs on-device.
 
 ## First-Time Setup
 
@@ -34,9 +34,9 @@ export default {
 
 **Push-to-talk is the default**: hold the hotkey, speak, release to stop and transcribe. A quick tap keeps classic toggle behavior (tap to start, tap to stop).
 
-## Writing or a Request
+## The “Talk” launcher action
 
-While you talk, the list under the input is one header and two rows, each with Jev's percentage:
+The explicit Talk view is separate from direct cursor dictation. In that view, the list under the input is one header and two rows, each with Jev's percentage:
 
 - **Type it into <app>** (`⌘1`) — paste the words at the cursor you were in. The line above the input reads "Typing into · <app>" while this leads.
 - **The request** (`⌘2`) — run the words as something that should happen ("summarize what I copied").

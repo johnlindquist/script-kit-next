@@ -6337,6 +6337,7 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Cwd => "cwd",
             crate::footer_popup::FooterAction::AgentModel => "agentModel",
             crate::footer_popup::FooterAction::Today => "today",
+            crate::footer_popup::FooterAction::UndoLast => "undo-last",
         }
         .to_string()
     }
@@ -6729,7 +6730,7 @@ impl ScriptListApp {
                 entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
             }
-            AppView::FormPrompt { entity, .. } => {
+            AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } => {
                 let entity = entity.clone();
                 entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
@@ -6777,6 +6778,20 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if let Some(id)=semantic_id.strip_prefix("stage-subject:") {
+            anyhow::ensure!(submit && self.stage_tab_tile(id,cx),"stage_subject_requires_current_tile_and_submit"); return Ok(semantic_id.to_string());
+        }
+        if let Some(id)=semantic_id.strip_prefix("subject-tab:") {
+            anyhow::ensure!(!submit,"select the subject, then submit its action row");
+            anyhow::ensure!(self.has_launcher_tabs() && self.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Pick(id.to_string()),cx),"subject_tab_stale_or_unavailable");
+            return Ok(semantic_id.to_string());
+        }
+        if matches!(semantic_id, "env:show-secret" | "env:hide-secret") {
+            let AppView::EnvPrompt { entity, .. } = &self.current_view else { anyhow::bail!("env_prompt_not_active"); };
+            anyhow::ensure!(entity.read(cx).can_toggle_visibility() && entity.read(cx).visibility_id() == semantic_id, "secret_visibility_changed");
+            if submit { entity.clone().update(cx, |prompt,cx| prompt.toggle_secret_reveal(cx)); }
+            return Ok(semantic_id.to_string());
+        }
         if semantic_id == "footer:native:close"
             && matches!(self.current_view, AppView::QuickTerminalView { .. })
         {
@@ -6796,7 +6811,10 @@ impl ScriptListApp {
             return Ok(semantic_id.to_string());
         }
 
-        if let AppView::FormPrompt { entity, .. } = &self.current_view {
+        if submit && matches!(&self.current_view, AppView::CreateAiPresetView { .. }) {
+            anyhow::bail!("Select the field, then use the Save Preset action");
+        }
+        if let AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } = &self.current_view {
             let entity = entity.clone();
             let selected = entity.update(cx, |form, cx| {
                 let selected = form.focus_field_by_semantic_id(semantic_id);
@@ -7066,7 +7084,7 @@ impl ScriptListApp {
             }
             AppView::FormPrompt { id, entity } => {
                 let value = entity
-                    .update(cx, |form, cx| form.validated_submit_value(cx))
+                    .update(cx, |form, cx| form.validated_submit_value(None, cx))
                     .ok_or_else(|| anyhow::anyhow!("invalid_form_submission"))?;
                 self.submit_prompt_response(id, Some(value), cx);
             }

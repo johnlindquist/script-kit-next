@@ -151,6 +151,11 @@ impl FixtureWorld {
     /// The screen `text` was recorded against: its own, else that of the sentence it begins.
     pub fn screen_for(&self, text: &str) -> ScreenContext {
         let text = text.trim();
+        #[cfg(feature = "owned-ui-evaluation")]
+        if crate::runtime_policy::is_owned_evaluation() && text == crate::desktop_fill::owned::SENTENCE {
+            use crate::desktop_fill::owned as fixture;
+            return ScreenContext { front_app: super::FrontApp {name:fixture::APP.into(),bundle_id:"fixture.workshop-editor".into()},window_title:fixture::TITLE.into(),filename_window:Some((fixture::PID,fixture::WINDOW)), ..Default::default() };
+        }
         let ctx = self
             .screens
             .iter()
@@ -169,6 +174,12 @@ impl FixtureWorld {
 
 impl Oracle for FixtureWorld {
     fn ask(&self, state: &serde_json::Value, questions: &Questions) -> Result<JevResult, JevError> {
+        #[cfg(feature = "owned-ui-evaluation")]
+        if crate::runtime_policy::is_owned_evaluation() && questions.get("operation").is_some() && state["request"].as_str().is_some_and(|s|s.trim_start().starts_with("Name this export") && s.contains("[supplied name]")) {
+            // Explicitly synthetic reading for the owned Save-sheet chapter, not a provider result.
+            let answers = serde_json::from_value(serde_json::json!({"operation":{"type":"choice","choice":"fill_only","confidence":0.98,"probabilities":{"fill_only":0.98,"commit":0.01,"other":0.01}}})).map_err(|e|JevError::Decode(e.to_string()))?;
+            return Ok(JevResult {answers,..Default::default()});
+        }
         let key = answer_key(state, questions);
         let set = self
             .answers

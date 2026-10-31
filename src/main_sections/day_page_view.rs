@@ -242,16 +242,15 @@ impl DayPageView {
         &self,
         cx: &App,
     ) -> Result<crate::dictation::DayPageDictationDestinationSnapshot, String> {
-        let policy = crate::runtime_policy::owned_evaluation()
-            .ok_or_else(|| "stale_destination: owned Day policy missing".to_string())?;
+        let policy = crate::runtime_policy::owned_evaluation();
         let document_path = self
             .session
             .path()
             .cloned()
             .ok_or_else(|| "stale_destination: Day document is unbound".to_string())?;
-        policy
-            .require_owned_path(&document_path)
-            .map_err(|error| format!("stale_destination: {error}"))?;
+        if let Some(policy) = policy {
+            policy.require_owned_path(&document_path).map_err(|e| format!("stale_destination: {e}"))?;
+        }
         let editor = self.notes_editor.read(cx);
         let content = editor.content(cx);
         let insertion_anchor = editor.selection(cx);

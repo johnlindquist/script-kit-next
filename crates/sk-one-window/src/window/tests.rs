@@ -126,6 +126,27 @@ fn a_reading_that_takes_back_stops_the_message_it_names() {
 }
 
 #[test]
+fn releasing_an_undo_keeps_history_without_running_the_inverse() {
+    let mut window = OneWindow::default();
+    window.handle(
+        0,
+        Event::Done(Done {
+            title: "Renamed a file".into(),
+            risk: Some(Risk::Undo),
+            undo_kept: true,
+            ..Done::default()
+        }),
+    );
+    let id = window.ledger().last().unwrap().id;
+    assert!(window.ledger().get(id).unwrap().can_undo());
+    window.release_undo(id);
+    assert!(!window.handle(1, Event::UndoEntry(id)).consumed);
+    let entry = window.ledger().last().unwrap();
+    assert_eq!(entry.title, "Renamed a file");
+    assert!(!entry.can_undo());
+}
+
+#[test]
 fn a_reading_that_takes_back_undoes_the_last_run_when_nothing_waits() {
     let mut win = OneWindow::default();
     win.handle(

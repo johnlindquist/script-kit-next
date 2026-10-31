@@ -1,7 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
-    fn focus_target_for_orchestrator_token(
+    pub(crate) fn focus_target_for_orchestrator_token(
         &self,
         token: crate::window_orchestrator::FocusToken,
     ) -> Option<FocusTarget> {

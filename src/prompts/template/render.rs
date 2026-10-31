@@ -1,7 +1,6 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
-use crate::ui_foundation::{is_key_backspace, is_key_enter};
-use gpui::FontWeight;
+use crate::ui_foundation::is_key_enter;
 use gpui_component::scroll::ScrollableElement;
 
 const TEMPLATE_PROMPT_BODY_SELECTOR: &str = "template-prompt-body-content";
@@ -13,8 +12,11 @@ fn template_prompt_body_insets(
 }
 
 impl Focusable for TemplatePrompt {
-    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
-        self.focus_handle.clone()
+    fn focus_handle(&self, cx: &gpui::App) -> FocusHandle {
+        self.editors
+            .get(self.current_input)
+            .map(|e| e.read(cx).get_focus_handle())
+            .unwrap_or_else(|| self.focus_handle.clone())
     }
 }
 
@@ -27,24 +29,18 @@ impl Render for TemplatePrompt {
         let text_primary = text.primary;
         let text_secondary = text.label;
         let text_muted = text.help;
-        let error_color = rgb(self.theme.colors.ui.error);
+        let colors = crate::components::FormFieldColors::from_theme(&self.theme);
+        let metrics = crate::components::FormFieldMetrics::from_colors(colors);
 
         let description = if self.inputs.is_empty() {
             "This template has no editable placeholders. Review the preview and press Enter to submit."
                 .to_string()
         } else {
-            format!(
-                "Fill {} field(s). The preview updates as you type.",
-                self.inputs.len()
-            )
+            "Fill in the fields below to complete the preview.".to_string()
         };
 
         let preview = self.preview_template();
-        let preview_style = crate::components::prompt_field_style(
-            &self.theme,
-            crate::components::PromptFieldState::ReadOnly,
-            false,
-        );
+        let preview_style = crate::components::prompt_preview_style(&self.theme);
 
         let mut content = div()
             .id(gpui::ElementId::Name("window:template".into()))
@@ -61,12 +57,6 @@ impl Render for TemplatePrompt {
                 text_primary,
                 text_muted,
                 spacing.gap_sm,
-            ))
-            .child(crate::components::prompt_form_section(
-                "Preview",
-                text_secondary,
-                spacing.gap_sm,
-                crate::components::prompt_text_field(preview, preview_style),
             ));
 
         if self.inputs.is_empty() {
@@ -78,83 +68,53 @@ impl Render for TemplatePrompt {
             let mut fields = div()
                 .id("template-fields-scroll")
                 .w_full()
-                .flex()
                 .flex_1()
                 .min_h(px(0.))
+                .flex()
                 .flex_col()
-                .gap(px(spacing.gap_lg))
-                .overflow_y_scrollbar();
-            let mut previous_group: Option<String> = None;
-
+                .gap(px(metrics.field_stack_gap_px))
+                .overflow_y_scroll()
+                .track_scroll(&self.scroll);
             for (idx, input) in self.inputs.iter().enumerate() {
-                if !input.group.is_empty()
-                    && previous_group.as_deref() != Some(input.group.as_str())
-                {
-                    previous_group = Some(input.group.clone());
-                    fields = fields.child(
-                        div()
-                            .w_full()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(text_muted)
-                            .child(input.group.clone()),
-                    );
+                let value = &self.values[idx];
+                if self.editors.len() == idx {
+                    let label = if input.required {
+                        format!("{} (required)", input.label)
+                    } else {
+                        input.label.clone()
+                    };
+                    let mut def = crate::protocol::Field::new(input.name.clone())
+                        .with_label(label)
+                        .with_placeholder(input.placeholder.clone());
+                    def.value = Some(value.clone());
+                    self.editors
+                        .push(cx.new(|cx| crate::components::FormTextField::new(def, colors, cx)));
                 }
-
-                let is_current = idx == self.current_input;
-                let value = self.values.get(idx).cloned().unwrap_or_default();
-                let label = if input.required {
-                    format!("{} *", input.label)
-                } else {
-                    input.label.clone()
-                };
-                let display = if value.is_empty() {
-                    SharedString::from(input.placeholder.clone())
-                } else {
-                    SharedString::from(value.clone())
-                };
-                let validation_message = self.validation_errors.get(idx).and_then(|m| m.as_ref());
-
-                let field_state = if validation_message.is_some() {
-                    crate::components::PromptFieldState::Error
-                } else if is_current {
-                    crate::components::PromptFieldState::Active
-                } else {
-                    crate::components::PromptFieldState::Default
-                };
-                let field_style = crate::components::prompt_field_style(
-                    &self.theme,
-                    field_state,
-                    value.is_empty(),
-                );
-
-                let handle_select = cx.entity().downgrade();
-                let field_section = crate::components::prompt_form_section(
-                    label,
-                    text_secondary,
-                    spacing.gap_sm,
-                    crate::components::prompt_text_field(display, field_style),
-                )
-                .when_some(validation_message, |d, message| {
-                    d.child(crate::components::prompt_form_help(
-                        message.clone(),
-                        error_color,
-                    ))
-                })
-                .id(SharedString::from(format!("template-field-{idx}")))
-                .cursor_pointer()
-                .on_click(move |_event, _window, cx| {
-                    if let Some(entity) = handle_select.upgrade() {
-                        entity.update(cx, |this, cx| {
-                            if this.current_input != idx {
-                                this.set_current_input(idx);
-                                cx.notify();
-                            }
-                        });
-                    }
+                let editor = self.editors[idx].clone();
+                editor.update(cx, |field, cx| {
+                    field.sync_host(
+                        value,
+                        self.validation_errors[idx].clone().map(Into::into),
+                        colors,
+                        cx,
+                    )
                 });
-
-                fields = fields.child(field_section);
+                if idx == self.current_input
+                    && !editor.read(cx).get_focus_handle().is_focused(window)
+                {
+                    editor.read(cx).get_focus_handle().focus(window, cx);
+                }
+                fields = fields.child(
+                    div()
+                        .id(SharedString::from(format!("template-field-{idx}")))
+                        .flex_none()
+                        .w_full()
+                        .on_click(cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
+                            this.set_current_input(idx);
+                            cx.notify();
+                        }))
+                        .child(editor),
+                );
             }
 
             if self
@@ -168,9 +128,15 @@ impl Render for TemplatePrompt {
                 ));
             }
 
-            content = content.child(fields);
+            content = content.child(fields.vertical_scrollbar(&self.scroll));
         }
 
+        let content = content.child(crate::components::prompt_form_section(
+            "Preview",
+            text_secondary,
+            metrics.field_gap_px,
+            crate::components::prompt_text_field(preview, preview_style),
+        ));
         let content = crate::components::render_inset_prompt_body(
             "template-prompt-inset-body",
             content,
@@ -190,22 +156,7 @@ impl Render for TemplatePrompt {
                     }
                     _ => false,
                 },
-                |this, event, _window, cx| {
-                    let modifiers = &event.keystroke.modifiers;
-                    if modifiers.platform || modifiers.control || modifiers.function {
-                        return;
-                    }
-
-                    if is_key_backspace(&event.keystroke.key) && !modifiers.alt {
-                        this.handle_backspace(cx);
-                        cx.stop_propagation();
-                    } else if let Some(text) = event.keystroke.key_char.as_deref() {
-                        // Use committed text, including Option-produced Unicode, never key names.
-                        if this.handle_text(text, cx) {
-                            cx.stop_propagation();
-                        }
-                    }
-                },
+                |_this, _event, _window, _cx| {},
             )
             // Keymap actions run before raw key capture; consume traversal here
             // before the ancestor Root can move focus outside the template.
@@ -221,6 +172,13 @@ impl Render for TemplatePrompt {
             )
             .capture_key_down(
                 cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+                    if let Some(value) = this.editors.get(this.current_input).and_then(|field| {
+                        crate::components::FormTextField::apply_bound_edit(field, event, cx)
+                    }) {
+                        this.set_input(value, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
                     let modifiers = &event.keystroke.modifiers;
                     if modifiers.platform
                         || modifiers.control
@@ -319,10 +277,6 @@ mod tests {
             "render.rs should use prompt_text_field"
         );
         assert!(
-            SOURCE.contains("prompt_field_style("),
-            "render.rs should use prompt_field_style"
-        );
-        assert!(
             SOURCE.contains("prompt_text_palette("),
             "render.rs should use the shared text palette"
         );
@@ -335,7 +289,7 @@ mod tests {
             "template fields should have a stable scroll region id"
         );
         assert!(
-            SOURCE.contains(".overflow_y_scrollbar()"),
+            SOURCE.contains(".track_scroll(&self.scroll)"),
             "template fields should scroll when placeholders exceed available height"
         );
         assert!(

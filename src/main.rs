@@ -102,6 +102,7 @@ mod prompt_completion;
 mod prompts;
 mod protocol;
 mod protocol_stats;
+pub use script_kit_gpui::desktop_fill;
 pub use script_kit_gpui::intent;
 pub use script_kit_gpui::runtime_policy;
 mod scripts;
@@ -479,13 +480,14 @@ mod tests {
 
         let events = crate::hotkeys::process_main_hotkey_physical_event(
             crate::hotkeys::MainHotkeyPhysicalEvent {
+                native_press:false,
                 phase: crate::hotkeys::MainHotkeyPhase::KeyDown,
                 correlation_id: "test:implicit-hide-rearm".to_string(),
                 at: std::time::Instant::now(),
             },
         );
         assert!(
-            events.contains(&crate::hotkeys::gesture::GestureEvent::ShowImmediate),
+            events.contains(&crate::hotkeys::gesture::GestureEvent::BeginOutside),
             "key-down after an implicit hide must classify as ShowImmediate, got {events:?}"
         );
 

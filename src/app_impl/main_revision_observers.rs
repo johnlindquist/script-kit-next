@@ -88,7 +88,7 @@ impl ScriptListApp {
         }
         match &self.current_view {
             AppView::DivPrompt { entity, .. } => observe!(entity),
-            AppView::FormPrompt { entity, .. } => {
+            AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } => {
                 observe!(entity);
                 let fields: Vec<_> = entity
                     .read(cx)

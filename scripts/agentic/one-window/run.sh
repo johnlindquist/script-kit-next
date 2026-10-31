@@ -81,6 +81,9 @@ for steps in "$here"/chapters/*.json; do
   spec=(); [ -f "${steps%.json}.marks.json" ] && spec=(--expect "${steps%.json}.marks.json")
   python3 "$here/check-marks.py" "$out/$name/frames" --json "$out/$name/marks.json" --evidence "$out/$name/marks" \
     ${spec[@]+"${spec[@]}"} >"$out/$name/marks.md" 2>&1; mcode=$?
+  if [ "$name" = p3-form-edit ]; then
+    python3 "$here/check-form-edit.py" "$out/$name/frames" >"$out/$name/field-pixels.json" || ccode=1
+  fi
   echo "$name capture=$fcode grade=$ccode marks=$mcode"
   { echo "## $name — capture $fcode, grade $ccode, marks $mcode"; echo; cat "$out/$name/check.md"; echo
     cat "$out/$name/marks.md"; echo; } >>"$out/summary.md"

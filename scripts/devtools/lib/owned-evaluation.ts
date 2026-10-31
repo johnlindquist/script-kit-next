@@ -78,6 +78,8 @@ export type FixtureControl =
       { operation: "emitText"; messageId: string; text: string } |
       { operation: "complete" | "fail"; messageId: string } |
       { operation: "retry" | "stop" }))
+  | { family: "oneWindow"; operation: "cursorBegin" | "shortcutOutside" }
+  | { family: "oneWindow"; operation: "cursorFinal"; words: string }
   | { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
   | ({ family: "search" } & ({ operation: "prepare"; scenario: string } |
       { operation: "release"; runIds: readonly number[] } | { operation: "advance"; milliseconds: number }))
@@ -114,11 +116,12 @@ export interface NativeSafetyProbeResult {
   windowStateUnchanged: boolean; ownedCopyUnchanged: boolean; elapsedMs: number;
 }
 
+export type SdkFixtureId = "sdk.arg-roundtrip.v1" | "sdk.form-correction.v1";
 export type SdkPromptCommand =
-  | { operation: "begin"; fixtureId: "sdk.arg-roundtrip.v1"; message: Json; channel: "connected" | "full" | "disconnected" }
+  | { operation: "begin"; fixtureId: SdkFixtureId; message: Json; channel: "connected" | "full" | "disconnected" }
   | { operation: "drain" | "releaseCapacity" | "close" };
 export interface SdkPromptResult {
-  operation: "sdkPrompt"; ok: true; fixtureId?: "sdk.arg-roundtrip.v1"; closed?: boolean;
+  operation: "sdkPrompt"; ok: true; fixtureId?: SdkFixtureId; closed?: boolean;
   completion: { completed: boolean; retired: boolean; error: string | null;
     receipt: { prompt: { id: string; generation: number }; sequence: number; outcome: Json } | null };
   messages: Json[]; forwarded: number; capacityHeld?: boolean;

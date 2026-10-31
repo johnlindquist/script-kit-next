@@ -1,0 +1,37 @@
+[
+  {
+    "name": "empty"
+  },
+  {
+    "name": "refuse",
+    "key": "enter"
+  },
+  {
+    "name": "draft",
+    "type": "dmo"
+  },
+  {
+    "name": "left",
+    "key": "left"
+  },
+  {
+    "name": "left-again",
+    "key": "left"
+  },
+  {
+    "name": "insert",
+    "append": "e"
+  },
+  {
+    "name": "next",
+    "key": "tab"
+  },
+  {
+    "name": "second-value",
+    "type": "reader"
+  },
+  {
+    "name": "previous",
+    "key": "shift-tab"
+  }
+]

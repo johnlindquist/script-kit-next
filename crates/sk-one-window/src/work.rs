@@ -31,6 +31,8 @@ pub enum WorkEvent {
     },
     /// What Jev ranks to do with the reply.
     ModelNext(Vec<Row>),
+    /// The transport ended without producing any assistant text. A stop isn't a failure.
+    ModelEndedEmpty { stopped: bool },
     /// The model couldn't answer; what the screen says about it.
     ModelFailed {
         message: String,

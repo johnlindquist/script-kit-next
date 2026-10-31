@@ -397,7 +397,7 @@ mod tests {
                 choice: Some("once".into())
             }]
         );
-        assert_eq!(win.enter_target(600).label, "The model is writing…");
+        assert_eq!(win.enter_target(600).label, "Waiting for the model…");
     }
 
     #[test]

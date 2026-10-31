@@ -163,9 +163,34 @@ impl ScriptListApp {
         // Hide cursor while typing - automatically shows when mouse moves
         self.hide_mouse_cursor(cx);
 
-        // Global shortcuts (Cmd+W, ESC for dismissable prompts)
+        // ↵ runs the phase's first action (capture, capture now, copy image). Escape steps back
+        // one phase first: a countdown is cancelled, a reviewed photo goes back to the camera.
+        // Only the live camera dismisses.
         // Note: Escape when actions popup is open is handled by central interceptor
         if !self.show_actions_popup {
+            let key = event.keystroke.key.as_str();
+            let modifiers = &event.keystroke.modifiers;
+            let bare = !modifiers.platform && !modifiers.shift && !modifiers.alt && !modifiers.control;
+            if bare && crate::ui_foundation::is_key_enter(key) {
+                self.webcam_run_primary(cx);
+                cx.stop_propagation();
+                return;
+            }
+            if modifiers.platform
+                && modifiers.shift
+                && !modifiers.alt
+                && !modifiers.control
+                && key.eq_ignore_ascii_case("c")
+                && self.webcam_copy_path(cx)
+            {
+                cx.stop_propagation();
+                return;
+            }
+            if bare && crate::ui_foundation::is_key_escape(key) && self.webcam_step_back(cx) {
+                cx.stop_propagation();
+                return;
+            }
+            // Global shortcuts (Cmd+W, ESC for dismissable prompts)
             let _ = self.handle_global_shortcut_with_options(
                 event,
                 GlobalShortcutEscape::FromDismissPolicy,
@@ -285,7 +310,7 @@ impl ScriptListApp {
         crate::components::render_universal_footer_action_rail(
             "prompt",
             "↵",
-            "Capture Photo".into(),
+            self.webcam_primary_label(Some(&**cx)).into(),
             on_capture,
             on_actions,
             on_ai,
@@ -542,13 +567,16 @@ impl ScriptListApp {
             exception_reason: None,
         });
         crate::components::emit_prompt_hint_audit("render_prompts::chat", &hints);
-        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
-            hints,
-            Some(crate::components::render_hint_strip_leading_text(
-                status,
-                self.theme.colors.text.primary,
-            )),
-        ));
+        let footer = self.main_window_footer_slot_with_cx(
+            crate::components::render_simple_hint_strip(
+                hints,
+                Some(crate::components::render_hint_strip_leading_text(
+                    status,
+                    self.theme.colors.text.primary,
+                )),
+            ),
+            Some(cx),
+        );
 
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
         let menu_def = self.current_main_menu_theme.def();
@@ -616,7 +644,9 @@ impl ScriptListApp {
                 "media_capture_surface_with_hint_strip",
             ),
         );
-        let hints = crate::components::universal_prompt_hints_with_primary_label("Capture Photo");
+        let hints = crate::components::universal_prompt_hints_with_primary_label(
+            self.webcam_primary_label(Some(&**cx)),
+        );
         crate::components::emit_surface_prompt_hint_audit(
             "render_prompts::webcam",
             &hints,
@@ -628,34 +658,11 @@ impl ScriptListApp {
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(theme);
 
-        // Use explicit height from layout constants
-        let content_height =
-            window_resize::main_window_content_height(window_resize::layout::STANDARD_HEIGHT);
-
-        div()
-            .flex()
-            .flex_col()
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
-            .w_full()
-            .h(content_height)
-            .overflow_hidden()
-            .rounded(px(0.0))
+        let footer =
+            self.main_window_footer_slot_with_cx(self.clickable_webcam_hint_strip(cx), Some(cx));
+        crate::components::render_simple_prompt_shell(0.0, vibrancy_bg, entity, footer)
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Content area - flex-1 to fill remaining space above footer
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .overflow_hidden()
-                    .child(entity),
-            )
-            // Capture-owned hint strip footer (native or GPUI)
-            .when_some(
-                self.main_window_footer_slot(self.clickable_webcam_hint_strip(cx)),
-                |d, footer| d.child(footer),
-            )
             .into_any_element()
     }
 

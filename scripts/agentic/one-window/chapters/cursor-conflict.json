@@ -1,0 +1,26 @@
+[
+  {
+    "name": "typed",
+    "type": "keep "
+  },
+  {
+    "name": "capture-before-edit",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin"
+    }
+  },
+  {
+    "name": "user-edit",
+    "append": " now"
+  },
+  {
+    "name": "withhold",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorFinal",
+      "words": "never overwrite"
+    },
+    "waitMs": 300
+  }
+]

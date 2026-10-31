@@ -50,7 +50,32 @@ fn recorded(keystroke: &gpui::Keystroke) -> RecordedShortcut {
     }
 }
 
+/// The part of a shortcut still needed before Return can use it.
+fn shortcut_hint(keys: &RecordedShortcut) -> Option<&'static str> {
+    if keys.is_complete() {
+        None
+    } else if keys.key.is_some() {
+        Some("Add a modifier (⌘, ⌃, ⌥ or ⇧)")
+    } else if keys.cmd || keys.ctrl || keys.alt || keys.shift {
+        Some("Press a key with the modifier")
+    } else {
+        Some("Press a modifier and a key")
+    }
+}
+
 impl ScriptListApp {
+    pub(crate) fn shortcut_submit_block_reason(&self) -> Option<&'static str> {
+        if self.one_window_own_view() != Some(OwnView::Shortcut) {
+            return None;
+        }
+        let recording = self.one_window_host.learns.shortcut.as_ref()?;
+        shortcut_hint(&recording.keys).or_else(|| {
+            (matches!(recording.keys_for, KeysFor::Command)
+                && self.one_window_shortcut_conflict(&recording.keys).is_some())
+            .then_some("Choose an unused shortcut")
+        })
+    }
+
     /// Opens the shortcut view for the script or saved run called `name`.
     pub(crate) fn one_window_open_shortcut_view(&mut self, name: String, cx: &mut Context<Self>) {
         let script = self
@@ -102,7 +127,7 @@ impl ScriptListApp {
         self.one_window_open_view(
             OwnView::Shortcut,
             head,
-            Some(EnterTarget::new("shortcut:empty", "Press the keys first")),
+            Some(EnterTarget::new("shortcut:empty", "Record shortcut")),
             true,
             cx,
         );
@@ -161,7 +186,7 @@ impl ScriptListApp {
                     }
                     (true, None) if for_script => ("shortcut:use", format!("Use {caps}")),
                     (true, None) => ("shortcut:save", format!("Save {caps}")),
-                    (false, _) => ("shortcut:empty", "Press the keys first".to_string()),
+                    (false, _) => ("shortcut:empty", "Record shortcut".to_string()),
                 };
                 if let Some(recording) = self.one_window_host.learns.shortcut.as_mut() {
                     recording.keys = keys;
@@ -232,10 +257,12 @@ impl ScriptListApp {
         } else {
             caps.concat()
         };
-        let sub = match recording.keys_for {
-            KeysFor::Command => "Enter saves them · Esc backs out",
-            KeysFor::Script(_) => "Enter uses them · Esc cancels",
-        };
+        let sub = self
+            .shortcut_submit_block_reason()
+            .unwrap_or(match recording.keys_for {
+                KeysFor::Command => "Enter saves them · Esc backs out",
+                KeysFor::Script(_) => "Enter uses them · Esc cancels",
+            });
         let row = Row::new("shortcut:keys", title)
             .with_sub(sub)
             .with_icon("shortcut");

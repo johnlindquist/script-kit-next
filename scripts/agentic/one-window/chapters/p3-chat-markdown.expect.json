@@ -1,0 +1,17 @@
+{
+  "waiting": {
+    "enter": "Waiting for the model…",
+    "view": "chat"
+  },
+  "writing": {
+    "enter": "Writing the reply…",
+    "view": "chat"
+  },
+  "ready": {
+    "enter": "↵ Copy it",
+    "view": "chat"
+  },
+  "lower-action": {
+    "enter": "↵ Make it shorter"
+  }
+}

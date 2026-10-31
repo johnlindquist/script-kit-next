@@ -758,6 +758,14 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.clear_file_search_action_target();
+        let identity = match crate::file_search::file_ops::FileIdentity::capture(std::path::Path::new(path)) {
+            Ok(identity) => identity,
+            Err(e) => {
+                self.notice_failed(rename_action.failure_message(e.to_string()), cx);
+                self.restore_file_search_input_focus(cx);
+                return;
+            }
+        };
         match crate::file_search::rename_path(path, new_name) {
             Ok(new_path) if new_path == path => {
                 self.restore_file_search_input_focus(cx);
@@ -775,10 +783,9 @@ impl ScriptListApp {
                     "pencil",
                     rename_action.success_hud(new_name.trim()),
                     Box::new(
-                        move |this, cx| match crate::file_search::file_ops::rename_no_replace(
-                            std::path::Path::new(&new_path),
-                            std::path::Path::new(&original),
-                        ) {
+                        move |this, cx| match identity.undo_at(std::path::Path::new(&new_path), |held| {
+                            crate::file_search::file_ops::rename_no_replace(held, std::path::Path::new(&original))
+                        }) {
                             Ok(()) => this.refresh_file_search_after_mutation(
                                 &new_path,
                                 Some(&original),
@@ -890,22 +897,22 @@ impl ScriptListApp {
             },
             title,
             Box::new(move |this, cx| {
-                let undone = match kind {
+                let undone = placed.undo_identity.undo_at(std::path::Path::new(&new_path), |held| match kind {
                     PlaceKind::Move => {
                         let back_dir = std::path::Path::new(&original)
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_default();
                         crate::file_search::file_ops::move_no_replace(
-                            std::path::Path::new(&new_path),
+                            held,
                             &back_dir.join(&original_name),
                         )
                         .map(|_| ())
                     }
-                    PlaceKind::Copy => crate::file_search::move_to_trash(&new_path)
+                    PlaceKind::Copy => crate::file_search::move_to_trash(&held.to_string_lossy())
                         .map(|_| ())
                         .map_err(FileOpError::Other),
-                };
+                });
                 if let Err(e) = undone {
                     this.notice_failed(format!("Couldn't undo the {verb}: {e}"), cx);
                     return;

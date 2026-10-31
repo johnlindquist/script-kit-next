@@ -382,11 +382,7 @@ impl RenderOnce for CreationFeedbackPanel {
         let text_primary = rgb(theme.colors.text.primary);
         let text_secondary = rgb(theme.colors.text.secondary);
         let text_muted = rgb(theme.colors.text.muted);
-        let path_style = crate::components::prompt_field_style(
-            &theme,
-            crate::components::PromptFieldState::ReadOnly,
-            false,
-        );
+        let path_style = crate::components::prompt_preview_style(&theme);
         let button_colors = ButtonColors::from_theme(&theme);
 
         let artifact_path = payload.artifact_path.clone();
@@ -541,14 +537,7 @@ mod create_flow_layout_tests {
         );
     }
 
-    #[test]
-    fn creation_feedback_uses_prompt_field_style() {
-        let production_code = SOURCE.split("#[cfg(test)]").next().unwrap_or(SOURCE);
-        assert!(
-            production_code.contains("prompt_field_style("),
-            "creation_feedback.rs should use prompt_field_style instead of inline color math"
-        );
-    }
+
 
     #[test]
     fn creation_feedback_uses_scroll_value() {

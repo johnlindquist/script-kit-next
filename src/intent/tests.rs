@@ -10,7 +10,7 @@ use super::engine::{
     build_questions, compose_plan, understand, EngineOptions, Pathway, Plan, Step, CAPTURE_TARGETS,
 };
 use super::jev::{
-    decode_response, parse_env, Answer, Answers, Criteria, JevConfig, JevError, JevResult, Oracle,
+    decode_response, Answer, Answers, Criteria, JevConfig, JevError, JevResult, Oracle,
     Probabilities, Question, Questions,
 };
 use super::launcher::{readings, IntentLauncher};
@@ -204,6 +204,102 @@ fn clauses_lend_the_first_verb_to_short_tails() {
 }
 
 #[test]
+fn conjunctions_and_quotes_do_not_turn_content_into_commands() {
+    for request in [
+        "buy bread and butter",
+        "rename the note to \"Bread and butter, then tea\"",
+        "save 'Research and development, then lunch'",
+        "write “Hello, world and friends”",
+    ] {
+        assert_eq!(split_clauses(request), [request]);
+    }
+    assert_eq!(
+        split_clauses("rename the note to \"Bread and butter\" then open Google Chrome"),
+        [
+            "rename the note to \"Bread and butter\"",
+            "open Google Chrome"
+        ]
+    );
+    assert_eq!(
+        split_clauses("open Slack and put it on the right"),
+        ["open Slack", "put it on the right"]
+    );
+    assert_eq!(
+        split_clauses("don't stop the music then open Slack"),
+        ["don't stop the music", "open Slack"]
+    );
+}
+
+#[test]
+fn very_long_requests_keep_source_backed_slots_with_a_hard_budget() {
+    let request = (0..10_000)
+        .map(|i| format!("word{i}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let words = tokenize(&request);
+    assert!(span_candidates(&request, &words, 0).is_empty());
+    let spans = span_candidates(&request, &words, 8);
+    assert_eq!(spans.len(), 8);
+    assert!(spans.iter().any(|span| span.label == request));
+    assert!(spans.iter().any(|span| span.label == "word9999"));
+    for span in spans {
+        assert_eq!(
+            span.label,
+            request[words[span.from].start..words[span.to - 1].end]
+        );
+    }
+}
+
+#[test]
+fn retrieval_keeps_late_exact_and_fuzzy_targets_across_sources() {
+    let mut catalog = catalog();
+    let mut ctx = screen();
+    for i in 0..300 {
+        for kind in [CommandKind::Builtin, CommandKind::Script, CommandKind::App] {
+            catalog.commands.push(command(
+                &format!("{kind:?}-{i}"),
+                kind,
+                &format!("Unrelated item {i}"),
+                "Ordinary unrelated action",
+            ));
+        }
+        ctx.menus.push(MenuCommand {
+            menu: "File".into(),
+            label: format!("Unrelated menu {i}"),
+            shortcut: None,
+        });
+    }
+    catalog.commands.push(command(
+        "rare",
+        CommandKind::Script,
+        "Quokka Dashboard",
+        "Open reports",
+    ));
+    ctx.menus.push(MenuCommand {
+        menu: "Tools".into(),
+        label: "Quokka Dashboard".into(),
+        shortcut: None,
+    });
+    for request in ["open Quokka Dashboard", "open quoka dashbord"] {
+        let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+        for (name, expected) in [
+            ("script", "Quokka Dashboard"),
+            ("menu", "Tools › Quokka Dashboard"),
+        ] {
+            let Some(Question::Choice { criteria, .. }) = built.questions.get(name) else {
+                panic!("choice")
+            };
+            assert!(
+                criteria.contains(expected),
+                "{request}: {name} lost its target"
+            );
+            assert!(criteria.contains("none"));
+            assert!(criteria.len() <= super::engine::CANDIDATE_LIMIT + 1);
+        }
+    }
+}
+
+#[test]
 fn a_repeated_option_keeps_its_place_and_takes_the_new_description() {
     let mut criteria = Criteria::default();
     criteria.set("none", None);
@@ -305,20 +401,98 @@ fn responses_decode_and_failures_say_why() {
 }
 
 #[test]
-fn env_files_yield_quoted_and_bare_values_only() {
-    let parsed = parse_env(
-        "# comment\nTYPESAFE_API_KEY=\"abc123\"\nTYPESAFE_MODEL = jev-1.13.0\nlower=nope\nEMPTY=\n",
+fn malformed_jev_evidence_is_refused_before_use() {
+    let mut criteria = Criteria::default();
+    criteria.set("run", None);
+    criteria.set("none", None);
+    let mut questions = Questions::default();
+    questions.insert(
+        "action",
+        Question::Choice {
+            instructions: String::new(),
+            criteria,
+        },
     );
-    assert_eq!(
-        parsed.get("TYPESAFE_API_KEY").map(String::as_str),
-        Some("abc123")
+    questions.insert(
+        "complete",
+        Question::Noul {
+            instructions: String::new(),
+        },
     );
-    assert_eq!(
-        parsed.get("TYPESAFE_MODEL").map(String::as_str),
-        Some("jev-1.13.0")
+    questions.insert(
+        "reuse",
+        Question::Score {
+            instructions: String::new(),
+            criteria: vec!["never".into(), "often".into()],
+        },
     );
-    assert!(!parsed.contains_key("lower"));
-    assert!(!parsed.contains_key("EMPTY"));
+    let valid = Answers::from([
+        (
+            "action".into(),
+            choice_answer("run", &[("run", 0.8), ("none", 0.2)]),
+        ),
+        ("complete".into(), Answer::Noul { noul: 0.9 }),
+        (
+            "reuse".into(),
+            Answer::Score {
+                score: 0.5,
+                confidence: 0.8,
+                probabilities: Probabilities::default(),
+            },
+        ),
+    ]);
+    questions.validate_answers(&valid).unwrap();
+    let mut absent = valid.clone();
+    absent.remove("complete");
+    assert!(matches!(
+        questions.validate_answers(&absent),
+        Err(JevError::InvalidAnswer { .. })
+    ));
+    for answer in [
+        choice_answer("invented", &[("invented", 1.0)]),
+        choice_answer("run", &[("run", f64::NAN)]),
+        choice_answer("run", &[("run", 1.1)]),
+        choice_answer("run", &[("invented", 1.0)]),
+        Answer::Noul { noul: 1.0 },
+    ] {
+        let mut bad = valid.clone();
+        bad.insert("action".into(), answer);
+        assert!(questions.validate_answers(&bad).is_err());
+    }
+    for value in [f64::INFINITY, -0.1, 1.1] {
+        let mut bad = valid.clone();
+        bad.insert("complete".into(), Answer::Noul { noul: value });
+        assert!(questions.validate_answers(&bad).is_err());
+        bad = valid.clone();
+        bad.insert(
+            "reuse".into(),
+            Answer::Score {
+                score: value,
+                confidence: 1.0,
+                probabilities: Probabilities::default(),
+            },
+        );
+        assert!(questions.validate_answers(&bad).is_err());
+    }
+}
+
+#[test]
+fn missing_or_invalid_completion_never_makes_a_plan_ready() {
+    let request = "remind me to call mom tomorrow at 5pm";
+    let (ctx, catalog) = (screen(), catalog());
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    for complete in [
+        None,
+        Some(Answer::Noul { noul: 1.2 }),
+        Some(choice_answer("yes", &[("yes", 1.0)])),
+    ] {
+        let mut answers = answers_for_reminder();
+        answers.remove("complete");
+        if let Some(answer) = complete {
+            answers.insert("complete".into(), answer);
+        }
+        assert!(!compose_plan(request, &ctx, &catalog, &built, &answers).ready);
+    }
 }
 
 #[test]
@@ -414,9 +588,9 @@ fn a_row_still_on_screen_after_the_words_moved_on_runs_what_it_says() {
     let key = rows[0].key.clone();
     let mut launcher = IntentLauncher::default();
     launcher.remember(request, 7, &rows);
-    launcher.show(request, &rows);
+    launcher.show(request, 7, &rows);
     let typed = "remind me to call mom tomorrow at 5pm!";
-    launcher.show(typed, &[]);
+    launcher.show(typed, 7, &[]);
 
     assert!(
         launcher.plan(typed, &key).is_none(),
@@ -433,6 +607,35 @@ fn a_row_still_on_screen_after_the_words_moved_on_runs_what_it_says() {
         launcher.plan_for_row(&key, 8).is_none(),
         "readings of another screen don't run here"
     );
+}
+
+#[test]
+fn shown_and_cached_plans_cannot_cross_contexts() {
+    let request = "remind me to call mom tomorrow at 5pm";
+    let (ctx, catalog) = (screen(), catalog());
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let rows = readings(compose_plan(
+        request,
+        &ctx,
+        &catalog,
+        &built,
+        &answers_for_reminder(),
+    ));
+    let key = rows[0].key.clone();
+    let mut launcher = IntentLauncher::default();
+    launcher.show(request, 7, &rows);
+    launcher.remember(request, 7, &rows);
+    assert!(launcher.plan_for_row(&key, 7).is_some());
+    assert!(launcher.plan_for_row(&key, 8).is_none());
+    launcher.show(request, 8, &[]);
+    assert!(launcher.plan_for_row(&key, 8).is_none());
+    let revision = launcher.context_revision();
+    launcher.record(LastAction {
+        summary: "Changed the last action".into(),
+        steps: Vec::new(),
+    });
+    assert_ne!(launcher.context_revision(), revision);
+    assert!(launcher.recalled(request, 7).is_none());
 }
 
 #[test]
@@ -791,6 +994,41 @@ fn after_opening_an_app_later_steps_act_on_it() {
 }
 
 #[test]
+fn oversized_compounds_refuse_every_step_without_reading_subclauses() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct CountReads(AtomicUsize);
+    impl Oracle for CountReads {
+        fn ask(&self, state: &serde_json::Value, _: &Questions) -> Result<JevResult, JevError> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(JevResult {
+                answers: after_opening_slack(state["request"].as_str().unwrap()),
+                ..JevResult::default()
+            })
+        }
+    }
+    let reader = CountReads(AtomicUsize::new(0));
+    let plan = understand(
+        "open slack and slack and slack and slack and slack",
+        &screen(),
+        &catalog(),
+        &reader,
+        &EngineOptions::default(),
+    )
+    .unwrap();
+    assert!(!plan.ready);
+    assert!(plan.steps.is_empty(), "no partial compound may execute");
+    assert!(
+        readings(plan).iter().all(|row| !row.plan.ready),
+        "no alternative row may bypass the compound limit"
+    );
+    assert_eq!(
+        reader.0.load(Ordering::SeqCst),
+        1,
+        "overflow never fans out"
+    );
+}
+
+#[test]
 fn a_saved_reminder_asks_for_its_content_next_time() {
     let request = "remind me to call mom tomorrow at 5pm";
     let (ctx, catalog) = (screen(), catalog());
@@ -1100,6 +1338,38 @@ fn window_answers(op: &str, target: &str) -> Answers {
 }
 
 #[test]
+fn choosing_a_named_window_placement_finishes_an_incomplete_sentence() {
+    let mut ctx = screen();
+    ctx.front_app.name = "ChatGPT".into();
+    let catalog = catalog();
+    let front = "the front window (ChatGPT)";
+    let read = |request: &str, op: &str, target: &str| {
+        let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+        let mut answers = window_answers(op, target);
+        answers.insert("complete".into(), Answer::Noul { noul: 0.1 });
+        compose_plan(request, &ctx, &catalog, &built, &answers)
+    };
+
+    let plan = read("center the", "Center", front);
+    assert!(!plan.ready);
+    let row = &readings(plan)[0];
+    assert_eq!(row.plan.title, "Center ChatGPT");
+    assert!(row.plan.ready);
+    assert!(
+        matches!(row.plan.steps.as_slice(), [Step::Window { op, app }]
+        if app == "ChatGPT" && op.label == "Center")
+    );
+
+    for plan in [
+        read("center every", "Center", "every window"),
+        read("close this app", "Close Window", front),
+        read("quit this app", "Quit App", front),
+    ] {
+        assert!(!readings(plan)[0].plan.ready);
+    }
+}
+
+#[test]
 fn quitting_or_closing_ends_only_the_app_the_user_named() {
     let (ctx, catalog) = (screen(), catalog());
     let front = "the front window (Google Chrome)";
@@ -1159,6 +1429,22 @@ fn closing_a_named_app_with_no_window_open_waits() {
 }
 
 #[test]
+fn launcher_qualifies_services_and_opens_the_real_brain_search() {
+    let (ctx,catalog)=(screen(),catalog()); let request="search my records";
+    let built=build_questions(request,&ctx,&catalog,&EngineOptions::default());
+    let mut plan=compose_plan(request,&ctx,&catalog,&built,&answers_for_reminder());
+    plan.reading.pathway=Pathway::Recall;plan.alternatives.clear();plan.reading.missing=None;plan.ready=true;
+    for service in sk_one_window::connect::INTEGRATIONS {
+        plan.reading.steps=vec![Step::Recall{source:service.key.into(),query:Some("practice".into())}];
+        let rows=readings(plan.clone()); assert!(!rows[0].plan.ready && rows[0].plan.missing.is_some());
+    }
+    plan.reading.steps=vec![Step::Recall{source:"brain".into(),query:Some("spring kite".into())}];
+    let rows=readings(plan);assert!(rows[0].plan.ready && !rows[0].plan.typed_is_proposed);assert_eq!(rows[0].plan.typed.as_deref(),Some("brain:spring kite"));
+    assert!(super::sensitive_words("the wifi password is example"));
+    assert!(!super::sensitive_words("open Copper Clock"));
+}
+
+#[test]
 fn a_quit_plan_reads_and_saves_as_a_quit() {
     let (ctx, catalog) = (screen(), catalog());
     let request = "quit slack";
@@ -1170,6 +1456,7 @@ fn a_quit_plan_reads_and_saves_as_a_quit() {
         &built,
         &window_answers("Quit App", "Slack"),
     );
+    assert!(super::launcher::quits_application(&plan.steps[0]));
     assert_eq!(super::present::plan_verb(&plan), "Quit");
     assert!(super::present::plan_subtitle(&plan).starts_with("Quits an app"));
     let script = plan_to_script(&plan, &ScriptOptions::default());
@@ -1239,6 +1526,16 @@ fn only_web_addresses_the_user_typed_are_read_as_pages() {
     ] {
         assert_eq!(web(request), None, "{request:?}");
     }
+}
+
+#[test]
+fn a_named_tab_request_does_not_launch_an_app_or_guess_a_menu_command() {
+    let plan = super::engine::named_tab_plan("Focus on the herdr tab", "Google Chrome").unwrap();
+    assert!(plan.ready);
+    assert!(matches!(&plan.steps[..], [Step::FocusTab {app,query}] if app=="Google Chrome" && query=="herdr"));
+    assert!(super::engine::named_tab_plan("Focus on the next tab", "Google Chrome").is_none());
+    assert!(super::engine::named_tab_plan("Open a new tab", "Google Chrome").is_none());
+    assert!(super::engine::named_tab_plan("Focus on the herdr tab", "Finder").is_none());
 }
 
 #[test]

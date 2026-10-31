@@ -42,7 +42,7 @@ What's changed:
 Script Kit is one window you tell what should happen.
 
 - **Say it.** Type or speak a sentence ("when does LeBron play next", "remind Sam about the deck
-  friday"). Jev reads it against what's on screen and the list offers what it could mean; ⌘1–3 run
+  friday"). With [remote Jev readings enabled](docs/guides/jev-intent.md), TypeSafe receives your words and candidate actions; local search is the default. ⌘1–3 run
   Jev's readings, ↵ runs the highlighted row, and its label always names exactly what will run.
 - **Or say it exactly.** Symbols complete in the list and underline themselves: `@selection`,
   `@clipboard`, `@file:…` (what to act on), `/command` (what to do), `>:dev`, `todo;` (where it goes),
@@ -56,6 +56,20 @@ Script Kit is one window you tell what should happen.
   reversible ones happen at once with ⌘Z.
 - **It learns.** What you ran becomes an instant match next time, and runs that did several things
   are saved as scripts you can bind to a shortcut.
+
+Jev selects from application-owned choices; it does not invent command IDs or slot text.
+Commands, scripts, apps, menus, and text tools each have a relevance-ranked shortlist of up to
+48 candidates, plus an explicit `none` choice. Quoted text stays intact when splitting requests;
+compound requests support up to four steps and refuse to execute a partial overflow.
+
+Required answers, choice labels, and probability ranges are validated before use. Missing
+completion evidence leaves a plan unready. Late responses must belong to the current request;
+cached plans are scoped to the tracked app/menu state, catalog, and last action. Confidence is
+ranking evidence, not permission to execute.
+
+Offline intent regression coverage runs with
+`./scripts/agentic/agent-cargo.sh test --lib intent::`. Recorded Jev answers exercise plan
+composition, not the accuracy or latency of the current hosted model. For a live pinned-model score, see [Measuring readings](docs/guides/jev-intent.md#measuring-readings).
 
 ## Quick Start
 

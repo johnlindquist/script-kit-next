@@ -1,7 +1,7 @@
 /// The front window as the line above the input names it: its title, beside the app's own icon.
 /// A title that ends with the app's own name ("README.md — Zed") drops it, since the line already
 /// says "in Zed".
-fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_one_window::Subject {
+pub(crate) fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_one_window::Subject {
     let window_title = app
         .window_title
         .as_deref()
@@ -18,6 +18,7 @@ fn front_window_subject(app: &crate::frontmost_app_tracker::TrackedApp) -> sk_on
             String::new()
         },
         icon: app_icon_name(&app.bundle_id),
+        row_key: Some(format!("front-pid:{}",app.pid)),
         ..Default::default()
     }
 }
@@ -67,6 +68,7 @@ impl ScriptListApp {
         // system-wide focused element can already point at Script Kit itself.
         let source_app = crate::frontmost_app_tracker::get_last_real_app();
         let source_pid = source_app.as_ref().map(|app| app.pid);
+        self.begin_subject_tabs(source_app.as_ref().map(|a| crate::one_window::subject_tabs::window_source(front_window_subject(a), crate::frontmost_app_tracker::observed_window_age_ms())),token,cx);
         if let Some(app) = &source_app {
             self.focus_front_window(app, cx);
             // Tab and same-app window switches change the title without an
@@ -82,13 +84,12 @@ impl ScriptListApp {
                         return;
                     };
                     if view.shown_selection_hint_token != token
-                        || view.shown_selection_hint_text.is_some()
                         || fresh.pid != shown.pid
                         || fresh.window_title == shown.window_title
                     {
                         return;
                     }
-                    view.focus_front_window(&fresh, cx);
+                    if view.shown_selection_hint_text.is_none() {view.focus_front_window(&fresh, cx);} else {view.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Observe(crate::one_window::subject_tabs::window_source(front_window_subject(&fresh),crate::frontmost_app_tracker::observed_window_age_ms())),cx);}
                     cx.notify();
                 });
             })
@@ -145,7 +146,7 @@ impl ScriptListApp {
                 if let Some(text) = app.shown_selection_hint_text.as_deref() {
                     let snippet =
                         crate::components::main_view_chrome::selection_hint_snippet(text, 48);
-                    app.focus_slot_line(sk_one_window::Subject {
+                    let selected = sk_one_window::Subject {
                         kind: sk_one_window::SubjectKind::Selection,
                         label: "Selected".into(),
                         title: format!("\u{201c}{snippet}\u{201d}"),
@@ -155,7 +156,10 @@ impl ScriptListApp {
                             .unwrap_or_default(),
                         icon: source_icon.clone(),
                         ..Default::default()
-                    }, cx);
+                    };
+                    let source=crate::one_window::subject_tabs::selection_source(selected.clone(),text);
+                    app.focus_slot_line(selected,cx);
+                    app.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Observe(source),cx);
                 }
                 app.spine_live_preview_cache.seed_selection_preview(
                     selection,
@@ -179,7 +183,9 @@ impl ScriptListApp {
         app: &crate::frontmost_app_tracker::TrackedApp,
         cx: &mut Context<Self>,
     ) {
-        self.focus_slot_line(front_window_subject(app), cx);
+        let subject=front_window_subject(app);
+        if self.one_window.tabs_enabled() { self.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Observe(crate::one_window::subject_tabs::window_source(subject.clone(),crate::frontmost_app_tracker::observed_window_age_ms())),cx); }
+        self.focus_slot_line(subject, cx);
     }
 
     /// Header hint chip shown only while the main menu is up AND the passive

@@ -82,6 +82,7 @@ impl ScriptListApp {
                 | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::FavoritesBrowseView { .. }
                 | AppView::BrowserHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }

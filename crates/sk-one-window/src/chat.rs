@@ -98,6 +98,7 @@ pub enum Phase {
     /// The reply is written; Jev is ranking what to do with it.
     Ranking,
     Ready,
+    EndedEmpty { stopped: bool },
     /// The model couldn't answer; what the screen says about it.
     Failed(String),
 }
@@ -309,6 +310,26 @@ impl Chat {
         self.sign_in = provider;
     }
 
+    /// Status is not an action. An approval or sign-in takes priority over progress.
+    pub fn activity_label(&self) -> Option<&'static str> {
+        if self.acting.is_some() || self.asks.is_some() || self.sign_in.is_some() {
+            return None;
+        }
+        match self.phase {
+            Phase::Writing
+                if self
+                    .turns
+                    .last()
+                    .is_some_and(|t| t.who == Who::Model && !t.text.is_empty()) =>
+            {
+                Some("Writing the reply…")
+            }
+            Phase::Writing => Some("Waiting for the model…"),
+            Phase::Ranking => Some("Finding next steps…"),
+            _ => None,
+        }
+    }
+
     pub fn reply(&self) -> Option<&str> {
         self.turns
             .iter()
@@ -433,6 +454,16 @@ impl Chat {
                 row.enter_words(),
             )
         };
+        if let Some(status) = self.activity_label() {
+            return EnterTarget::new(
+                if self.phase == Phase::Writing {
+                    "chat:writing"
+                } else {
+                    "chat:ranking"
+                },
+                status,
+            );
+        }
         if let Some(row) = rows.get(self.sel).filter(|_| self.acting.is_some()) {
             return target(row);
         }
@@ -455,6 +486,7 @@ impl Chat {
             Phase::Idle => EnterTarget::new("chat:idle", "Say what to ask the model"),
             Phase::Writing => EnterTarget::new("chat:writing", "The model is writing…"),
             Phase::Ranking => EnterTarget::new("chat:ranking", "Jev is reading the draft…"),
+            Phase::EndedEmpty { .. } => EnterTarget::new("chat:idle", "Say what to ask next"),
             Phase::Ready => EnterTarget::new("chat:idle", "Say what to change"),
             Phase::Failed(_) => EnterTarget::new("chat:failed", "Say it again to retry"),
         }
@@ -477,6 +509,9 @@ impl Chat {
     /// words are a new turn (or pick a model), and with nothing typed the highlighted row.
     pub fn press_enter(&mut self, typed: &str) -> ChatKey {
         let typed = typed.trim();
+        if self.activity_label().is_some() {
+            return ChatKey::Nothing;
+        }
         let picked = self
             .acting
             .as_ref()
@@ -588,7 +623,7 @@ mod tests {
     fn a_sentence_opens_the_chat_writing_its_first_turn() {
         let chat = Chat::open("brainstorm names for the launch party");
         assert_eq!(chat.turns.len(), 1);
-        assert_eq!(chat.enter("").label, "The model is writing…");
+        assert_eq!(chat.enter("").label, "Waiting for the model…");
         let quick = Chat::open("  ");
         assert!(quick.turns.is_empty());
         assert_eq!(quick.enter("").id, "chat:idle");
@@ -598,9 +633,9 @@ mod tests {
     fn enter_follows_the_reply_then_the_next_step_then_what_you_type() {
         let mut chat = Chat::open("write it for me");
         chat.wrote("Hi Sarah,", false);
-        assert_eq!(chat.enter("").label, "The model is writing…");
+        assert_eq!(chat.enter("").label, "Writing the reply…");
         chat.wrote("Hi Sarah, beta Oct 14.", true);
-        assert_eq!(chat.enter("").label, "Jev is reading the draft…");
+        assert_eq!(chat.enter("").label, "Finding next steps…");
         chat.ranked(vec![Row::new("use", "Use it as the reply to Sarah")]);
         assert_eq!(
             chat.enter(""),
@@ -614,7 +649,7 @@ mod tests {
                 with: Vec::new()
             }
         );
-        assert_eq!(chat.enter("").label, "The model is writing…");
+        assert_eq!(chat.enter("").label, "Waiting for the model…");
         assert_eq!(chat.reply(), Some("Hi Sarah, beta Oct 14."));
     }
 
@@ -665,6 +700,19 @@ mod tests {
             panic!("a turn");
         };
         assert!(with.is_empty(), "context goes once");
+    }
+
+    #[test]
+    fn a_draft_cannot_start_a_second_turn_while_the_first_is_writing() {
+        let mut chat = Chat::open("First question");
+        assert_eq!(chat.enter("Follow-up").label, "Waiting for the model…");
+        chat.wrote("Partial reply", false);
+        assert_eq!(chat.enter("Follow-up").label, "Writing the reply…");
+        assert_eq!(chat.press_enter("Follow-up"), ChatKey::Nothing);
+        assert_eq!(chat.turns.len(), 2);
+        chat.wrote("Full reply", true);
+        chat.ranked(vec![]);
+        assert!(matches!(chat.press_enter("Follow-up"), ChatKey::Ask { .. }));
     }
 
     #[test]

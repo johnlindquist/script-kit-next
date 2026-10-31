@@ -85,7 +85,7 @@ fn create_ai_preset_footer_buttons(
     use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
     vec![
-        FooterButtonConfig::new(FooterAction::Run, "↵", "Save Preset")
+        FooterButtonConfig::new(FooterAction::Run, "⌘↵", "Save Preset")
             .enabled(enabled && can_submit),
         FooterButtonConfig::new(FooterAction::Ai, "⇥", "Next Field").enabled(enabled),
         FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel").enabled(enabled),
@@ -242,25 +242,8 @@ fn has_selected_clipboard_entry(app: &ScriptListApp) -> bool {
         return false;
     };
 
-    let filtered_entries: Vec<_> = if filter.is_empty() {
-        app.cached_clipboard_entries.iter().collect()
-    } else {
-        let filter_lower = filter.to_lowercase();
-        app.cached_clipboard_entries
-            .iter()
-            .filter(|entry| {
-                entry.text_preview.to_lowercase().contains(&filter_lower)
-                    || entry
-                        .ocr_text
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_lowercase()
-                        .contains(&filter_lower)
-            })
-            .collect()
-    };
-
-    filtered_entries.get(*selected_index).is_some()
+    app.clipboard_history_selected_visible_row(filter, *selected_index)
+        .is_some()
 }
 
 fn has_selected_emoji_entry(app: &ScriptListApp) -> bool {

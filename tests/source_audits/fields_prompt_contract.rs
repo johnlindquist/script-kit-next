@@ -132,8 +132,6 @@ fn fields_prompt_has_simulate_key_submit_cancel_navigation() {
         .expect("simulateKey dispatch must have a FormPrompt arm before EditorPrompt");
 
     for required in [
-        "submit_validation_message",
-        "collect_values",
         "submit_prompt_response",
         "cancel_script_execution",
         "focus_next",

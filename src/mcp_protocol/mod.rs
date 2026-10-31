@@ -16,6 +16,7 @@
 #![allow(dead_code)]
 
 // --- merged from part_000.rs ---
+mod desktop_fill;
 use crate::mcp_clipboard_tools;
 use crate::mcp_computer_use_tools;
 use crate::mcp_config_tools;
@@ -130,6 +131,8 @@ impl McpMethod {
 
 #[derive(Clone)]
 pub struct McpRuntimeContext {
+    /// Only set by the HTTP transport after bearer authentication. Never from tool arguments.
+    pub desktop_principal: Option<String>,
     pub computer: Option<
         Arc<dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync>,
     >,
@@ -142,6 +145,7 @@ pub struct McpRuntimeContext {
 impl Default for McpRuntimeContext {
     fn default() -> Self {
         Self {
+            desktop_principal: None,
             computer: None,
             notes_mutation_bridge: None,
             kit_runtime_bridge: None,
@@ -409,6 +413,7 @@ pub fn handle_tools_list_with_scripts(
     // Mutation tools must be listed and routed before generic kit/* fallback.
     let mut all_tools = mcp_control::build_default_mutation_registry().definitions();
     all_tools.extend(mcp_kit_tools::get_kit_tool_definitions());
+    all_tools.extend(desktop_fill::definitions());
     all_tools.extend(mcp_computer_use_tools::get_computer_use_tool_definitions());
 
     // Get scripts/* namespace tools (only scripts with schema.input)
@@ -454,6 +459,7 @@ pub async fn handle_tools_call_with_runtime(
         None,
         None,
         legacy_all_scopes(),
+        None,
         uuid::Uuid::new_v4().to_string(),
     )
     .await
@@ -485,6 +491,7 @@ pub async fn handle_tools_call_with_runtime_context(
         notes_bridge,
         kit_runtime_bridge.as_deref(),
         token_scopes,
+        runtime_context.and_then(|ctx| ctx.desktop_principal.clone()),
         trace_id,
     )
     .await
@@ -497,6 +504,7 @@ async fn handle_tools_call_with_runtime_parts(
     notes_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
     kit_runtime_bridge: Option<&(dyn mcp_kit_tools::McpKitRuntimeBridge + Send + Sync)>,
     token_scopes: Vec<String>,
+    desktop_principal: Option<String>,
     trace_id: String,
 ) -> JsonRpcResponse {
     // Validate params
@@ -527,6 +535,9 @@ async fn handle_tools_call_with_runtime_parts(
         .cloned()
         .unwrap_or(serde_json::json!({}));
 
+    if matches!(tool_name, desktop_fill::PROPOSE | desktop_fill::APPLY | desktop_fill::STATUS) {
+        return JsonRpcResponse::success(request.id, desktop_fill::call(tool_name, arguments, desktop_principal, &token_scopes).await);
+    }
     if mcp_notes_tools::is_notes_tool(tool_name)
         || mcp_scripts_tools::is_scripts_tool(tool_name)
         || mcp_clipboard_tools::is_clipboard_tool(tool_name)

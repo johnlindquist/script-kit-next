@@ -162,6 +162,20 @@ impl ScriptListApp {
         }
     }
 
+    /// Click and semantic selection load the same field into the existing main input. Neither submits it.
+    pub(crate) fn one_window_pick_form_field(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.one_window_hosted_view(), Some(HostedView::Form(_))) { return false; }
+        let Some(HostedView::Form(form)) = self.one_window_host.view.as_mut() else { return false; };
+        let Some(i) = form.fields.iter().position(|f| format!("form-field:{:?}", f.name).to_lowercase() == id) else { return false; };
+        form.caret = Some(i);
+        let words = form.fields[i].value.clone();
+        self.one_window_host.view_text = Some(words.clone());
+        self.one_window_set_input(words.clone(), cx);
+        self.one_window_handle(Event::Text(words), cx);
+        cx.notify();
+        true
+    }
+
     fn one_window_hosted_key(&mut self, key: Key, cx: &mut Context<Self>) -> Vec<Event> {
         let Some(view) = self.one_window_host.view.as_mut() else {
             return Vec::new();
@@ -211,6 +225,7 @@ impl ScriptListApp {
                 if let Some(HostedView::Form(form)) = &self.one_window_host.view {
                     if let Err(reason) = self.one_window_finish_form(form.clone()) {
                         tracing::warn!(target: "script_kit::one_window", reason, "form not saved");
+                        self.one_window_notice(crate::line_notice::FAILED, "Couldn't complete this form. Nothing was sent or scheduled.", cx);
                         return events;
                     }
                 }
@@ -248,7 +263,7 @@ impl ScriptListApp {
             Verb::Note => append_to_day(crate::brain::substrate::DayEntry::Capture {
                 text: value(SlotName::What).unwrap_or_default(),
             }),
-            Verb::Message | Verb::Schedule | Verb::Move | Verb::Other(_) => Ok(()),
+            Verb::Message | Verb::Schedule | Verb::Move | Verb::Other(_) => Err("form_executor_unavailable"),
         }
     }
 
@@ -318,7 +333,9 @@ impl ScriptListApp {
             return true;
         }
         let key = match self.one_window_hosted_view() {
-            Some(HostedView::Form(_)) if !modifiers.platform => match key.as_str() {
+            Some(HostedView::Form(form)) if !modifiers.platform => match key.as_str() {
+                "left" | "arrowleft" | "right" | "arrowright" if modifiers.shift ||
+                    form.caret.and_then(|i| form.fields.get(i)).is_none_or(|f| f.alts.is_empty()) => return false,
                 "tab" if modifiers.shift => Key::Up,
                 "tab" => Key::Tab,
                 "right" | "arrowright" => Key::Right,
@@ -386,12 +403,15 @@ impl ScriptListApp {
     /// ⌘V in the main window. Into the empty input it stages what was copied; otherwise the paste
     /// is the input's. Returns whether the window took it.
     pub(crate) fn one_window_stage_paste(&mut self, cx: &mut Context<Self>) -> bool {
-        if !self.one_window_owns_list() {
+        if !self.one_window_owns_list() || !self.filter_text.is_empty() || self.one_window.in_view() {
             return false;
         }
         let Some(text) = self.one_window_clipboard_text(cx) else {
             return false;
         };
+        if self.one_window.tabs_visible() && self.filter_text.is_empty() {
+            return super::subject_tabs::copy_source(&text,0).is_some_and(|s|self.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Paste(s),cx));
+        }
         self.one_window_handle(Event::Paste(text), cx).taken()
     }
 
@@ -414,6 +434,10 @@ impl ScriptListApp {
         row: &Row,
         cx: &mut Context<Self>,
     ) -> Option<anyhow::Result<()>> {
+        if row.key == "act:Send it to someone" {
+            self.one_window_notice(crate::line_notice::INFO, "Messaging isn't available here yet. Nothing was sent.", cx);
+            return Some(Err(anyhow::anyhow!("messaging unavailable")));
+        }
         let subject = self.one_window_host.acting_on.clone()?;
         if subject.kind != SubjectKind::Clipboard {
             return None;
@@ -425,10 +449,6 @@ impl ScriptListApp {
             subject: Some(subject.clone()),
         };
         match row.title.as_str() {
-            "Send it to someone" => {
-                let form = Form::new(&reading(Verb::Message));
-                self.one_window_open_hosted(HostedView::Form(form), Some(String::new()), cx);
-            }
             "Remind me about it" => {
                 let form = Form::new(&reading(Verb::Remind));
                 self.one_window_open_hosted(HostedView::Form(form), Some(String::new()), cx);

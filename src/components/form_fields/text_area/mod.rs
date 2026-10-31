@@ -87,6 +87,7 @@ pub struct FormTextArea {
     /// Selection anchor (char index), None if no selection
     pub selection_anchor: Option<usize>,
     input_revision: u64,
+    viewport: super::editable_text::FieldViewport,
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
     /// Number of visible rows
@@ -109,6 +110,7 @@ impl FormTextArea {
             cursor_position: cursor_pos,
             selection_anchor: None,
             input_revision: 0,
+            viewport: Default::default(),
             focus_handle: cx.focus_handle(),
             rows,
             state,
@@ -370,9 +372,8 @@ impl FormTextArea {
     // ───── Editing ─────
 
     fn insert_text_at_cursor(&mut self, text: &str) {
-        if self.has_selection() {
-            self.delete_selection();
-        }
+        // Discard a collapsed Shift-selection anchor as well.
+        self.delete_selection();
         if !text.is_empty() {
             self.advance_input_revision();
         }
@@ -386,6 +387,7 @@ impl FormTextArea {
         if self.has_selection() {
             self.delete_selection();
         } else if self.cursor_position > 0 {
+            self.clear_selection();
             self.advance_input_revision();
             drain_char_range(
                 &mut self.value,
@@ -401,6 +403,7 @@ impl FormTextArea {
         if self.has_selection() {
             self.delete_selection();
         } else if self.cursor_position < char_len(&self.value) {
+            self.clear_selection();
             self.advance_input_revision();
             drain_char_range(
                 &mut self.value,

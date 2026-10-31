@@ -180,7 +180,6 @@ impl OneWindow {
         let Some(talk) = self.talk_end() else {
             return;
         };
-        fx.push(Effect::TalkEnded);
         match reading {
             Reading::Type => {
                 self.ledger.record(
@@ -198,6 +197,8 @@ impl OneWindow {
                     text: talk.heard,
                     app: talk.app.clone(),
                 });
+                // The host keeps the single-use delivery callback until TalkEnded.
+                fx.push(Effect::TalkEnded);
                 self.away = true;
                 fx.push(Effect::Hide {
                     app: Some(talk.app),
@@ -205,6 +206,7 @@ impl OneWindow {
                 self.home(now, String::new(), fx);
             }
             Reading::Ask => {
+                fx.push(Effect::TalkEnded);
                 self.home(now, talk.heard, fx);
                 if let Some(row) = talk.ask_row {
                     self.run(now, row, RunHow::Slot, fx);

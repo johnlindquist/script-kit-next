@@ -1,7 +1,6 @@
 //! The launcher's commands and the live screen, as the intent engine sees them. Lives in
 //! the binary so it reads the binary's own tracker, window, and command state.
 
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::app_launcher::AppInfo;
@@ -147,9 +146,15 @@ pub fn menus_from_bar(items: &[MenuBarItem]) -> Vec<MenuCommand> {
 pub fn live_screen(last_action: Option<LastAction>) -> ScreenContext {
     let front = crate::frontmost_app_tracker::get_last_real_app();
     let menus = menus_from_bar(&crate::frontmost_app_tracker::get_cached_menu_items());
-    let mut open_windows: Vec<OpenWindow> = crate::window_control::list_windows()
-        .unwrap_or_default()
-        .into_iter()
+    let windows = crate::window_control::list_windows().unwrap_or_default();
+    let filename_window = front.as_ref().and_then(|front| {
+        let title = front.window_title.as_deref().filter(|t| !t.is_empty())?;
+        let mut found = windows.iter().filter(|w| w.pid == front.pid && w.bundle_id.as_deref() == Some(&front.bundle_id) && w.title == title && w.is_focused && !w.is_minimized);
+        let w = found.next()?;
+        if found.next().is_some() { return None; }
+        Some((u32::try_from(w.pid).ok()?, w.handle.native_window_id?.0))
+    });
+    let mut open_windows: Vec<OpenWindow> = windows.into_iter()
         .filter(|w| !w.app.is_empty() && w.app != "Script Kit")
         .map(|w| OpenWindow {
             app: w.app,
@@ -159,6 +164,7 @@ pub fn live_screen(last_action: Option<LastAction>) -> ScreenContext {
     open_windows.truncate(OPEN_WINDOW_LIMIT);
     ScreenContext {
         id: "live".into(),
+        filename_window,
         front_app: front
             .as_ref()
             .map(|app| FrontApp {
@@ -185,16 +191,9 @@ pub fn live_screen(last_action: Option<LastAction>) -> ScreenContext {
     }
 }
 
-/// Cheap fingerprint of the screen, so a plan recalled for the same words is only
-/// reused on the same app.
+/// Cached app/menu identity; never enumerates windows on the UI thread.
 pub fn screen_key() -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    #[cfg(target_os = "macos")]
-    if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
-        app.bundle_id.hash(&mut hasher);
-        app.window_title.hash(&mut hasher);
-    }
-    hasher.finish()
+    crate::frontmost_app_tracker::intent_context_key()
 }
 
 /// The catalog comes from the library crate, whose `TilePosition` is a different type

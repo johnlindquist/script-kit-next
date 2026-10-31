@@ -624,15 +624,25 @@ impl ScriptListApp {
                     FocusTarget::AppRoot,
                 )
             }
-            PromptSeed::CreatePreset(seed) => (
-                AppView::CreateAiPresetView {
-                    name: seed.name,
-                    system_prompt: seed.system_prompt,
-                    model: seed.model,
-                    active_field: seed.active_field.min(2),
-                },
-                FocusTarget::AppRoot,
-            ),
+            PromptSeed::CreatePreset(seed) => {
+                let fields = [("name", "Name", "text", "Code reviewer", seed.name),
+                    ("systemPrompt", "Instructions", "textarea", "How should the model respond?", seed.system_prompt),
+                    ("model", "Model (optional)", "text", "Use the default model", seed.model)]
+                    .into_iter().map(|(key,label,kind,placeholder,value)| {
+                        let mut field = Field::new(key.into()).with_label(label.into()).with_type(kind.into()).with_placeholder(placeholder.into());
+                        field.value = Some(value); field
+                    }).collect();
+                let colors = crate::components::FormFieldColors::from_theme(&theme);
+                let entity = cx.new(|cx| {
+                    let mut form = crate::form_prompt::FormPromptState::from_fields(id, fields, colors, cx);
+                    form.output_mode = crate::form_prompt::FormPromptOutputMode::Preset;
+                    if let crate::form_prompt::FormFieldEntity::TextField(name) = &form.fields[0].1 {
+                        name.update(cx, |field,_| field.required_hint = Some("Enter a name for this preset."));
+                    }
+                    form.focused_index = seed.active_field.min(2); form
+                });
+                (AppView::CreateAiPresetView { entity }, FocusTarget::FormPrompt)
+            }
             PromptSeed::CreationFeedback(seed) => {
                 if let Some(policy) = crate::runtime_policy::owned_evaluation() {
                     policy.require_owned_path(&seed.payload.artifact_path)?;
@@ -853,7 +863,7 @@ impl ScriptListApp {
                 observation.selected_index =
                     (!form.fields.is_empty()).then_some(form.focused_index);
                 observation.values = form.field_values(cx);
-                observation.validation_error = form.validation_error.clone();
+                observation.validation_error = form.visible_validation_message(cx).map(str::to_owned);
             }
             AppView::EditorPrompt { entity, .. } | AppView::ScratchPadView { entity, .. } => {
                 let editor = entity.read(cx);
@@ -976,25 +986,21 @@ impl ScriptListApp {
                 observation
                     .values
                     .push(("frameHeight".into(), prompt.frame_height.to_string()));
-            }
-            AppView::CreateAiPresetView {
-                name,
-                system_prompt,
-                model,
-                active_field,
-            } => {
-                observation.values = vec![
-                    ("name".into(), name.clone()),
-                    ("systemPrompt".into(), system_prompt.clone()),
-                    ("model".into(), model.clone()),
-                ];
-                observation.input = observation
+                observation
                     .values
-                    .get(*active_field)
-                    .map(|(_, value)| value.clone())
-                    .unwrap_or_default();
-                observation.choice_count = 3;
-                observation.selected_index = Some(*active_field);
+                    .push(("phase".into(), prompt.session.phase_name().to_string()));
+                if let Some(path) = prompt.session.photo_path() {
+                    observation
+                        .values
+                        .push(("photoPath".into(), path.display().to_string()));
+                }
+            }
+            AppView::CreateAiPresetView { entity } => {
+                let form = entity.read(cx);
+                observation.values = form.named_values(cx);
+                observation.input = form.focused_value(cx).unwrap_or_default();
+                observation.choice_count = form.fields.len();
+                observation.selected_index = Some(form.focused_index);
             }
             AppView::CreationFeedback { payload } => observation.values.push((
                 "artifact".into(),
@@ -1037,7 +1043,10 @@ impl ScriptListApp {
             .chat_submission_count
             .hash(&mut state);
         match &self.current_view {
-            AppView::EnvPrompt { entity, .. } => entity.read(cx).input_text().hash(&mut state),
+            AppView::EnvPrompt { entity, .. } => {
+                entity.read(cx).input_text().hash(&mut state);
+                entity.read(cx).visibility_id().hash(&mut state);
+            }
             AppView::ArgPrompt { choices, .. }
             | AppView::MiniPrompt { choices, .. }
             | AppView::MicroPrompt { choices, .. } => {
@@ -1065,7 +1074,7 @@ impl ScriptListApp {
             AppView::DivPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.update_theme(theme, cx))
             }
-            AppView::FormPrompt { entity, .. } => {
+            AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } => {
                 entity.update(cx, |prompt, cx| prompt.update_theme(&theme, cx))
             }
             AppView::EditorPrompt { entity, .. } | AppView::ScratchPadView { entity, .. } => {
@@ -1180,9 +1189,18 @@ pub(crate) fn prompt_fixture_seed(
             PromptSeed::Naming(NamingPromptSeed { common, config: crate::prompts::NamingPromptConfig::new(crate::prompts::NamingTarget::Script, directory, "ts"), input: "Fixture Script".into() })
         }
         "prompt.webcam" => {
-            let (width, height) = (320, 180);
+            // A real camera frame: 1080p, a smooth diagonal gradient plus fixed per-pixel sensor
+            // noise, so the preview's downscaling quality is visible in captures.
+            let (width, height) = (1920, 1080);
             let mut nv12 = vec![128; width * height * 3 / 2];
-            for row in 0..height { for col in 0..width { nv12[row * width + col] = 32 + ((row + col) % 192) as u8; } }
+            for row in 0..height {
+                for col in 0..width {
+                    let gradient = 48 + ((row + col) * 160 / (width + height)) as i32;
+                    let hash = ((row * 1973 + col * 9277) ^ (row * col * 26699)) as u32;
+                    let noise = (hash.wrapping_mul(2654435761) >> 27) as i32 - 16;
+                    nv12[row * width + col] = (gradient + noise).clamp(16, 235) as u8;
+                }
+            }
             PromptSeed::Webcam(WebcamPromptSeed { common, width: width as u32, height: height as u32, nv12 })
         }
         "prompt.scratch-pad" => {

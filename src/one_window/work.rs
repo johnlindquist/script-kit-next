@@ -46,6 +46,7 @@ pub(crate) struct ModelThread {
 #[derive(Default)]
 pub(crate) struct WorkHost {
     pub(crate) chat: Option<ModelThread>,
+    pub(super) presentation: super::chat_presentation::ChatPresentation,
     pub(crate) agents: HashMap<String, ModelThread>,
     /// What waits in the line for the chat's next turn, by the key its subject carries.
     pub(crate) parts: HashMap<String, crate::ai::message_parts::AiContextPart>,
@@ -98,39 +99,6 @@ fn work_of_plan(plan: &crate::intent::Plan) -> Option<WorkEvent> {
     }
 }
 
-/// "tell mo i'm running late" → ("Mo", "I'm running late").
-fn message_step(text: &str) -> Option<(String, String)> {
-    let rest = text.strip_prefix("tell ")?;
-    let (who, what) = rest.split_once(' ')?;
-    let cap = |s: &str| {
-        let mut c = s.chars();
-        c.next()
-            .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
-            .unwrap_or_default()
-    };
-    Some((cap(who), cap(what.trim_start_matches("that "))))
-}
-
-/// "add to today's note: ship beta notes" → "ship beta notes".
-fn note_step(text: &str) -> Option<&str> {
-    let (head, body) = text.split_once(':')?;
-    head.contains("note")
-        .then(|| body.trim())
-        .filter(|b| !b.is_empty())
-}
-
-/// The service a reading needs: one it recalls from that Script Kit can't read yet.
-pub(crate) fn needs_of(plan: &crate::intent::Plan) -> Option<String> {
-    plan.steps.iter().find_map(|step| match step {
-        crate::intent::engine::Step::Recall { source, .. } => connect::integration(source)
-            .filter(|_| {
-                crate::intent::engine::recall_source(source).is_none_or(|s| s.builtin.is_none())
-            })
-            .map(|i| i.key.to_string()),
-        _ => None,
-    })
-}
-
 /// "Needs Google Calendar · <what it does> · ↵ connects it" for a row that waits on a service.
 pub(crate) fn needs_subtitle(row: &Row, work: &sk_one_window::work::Work) -> Option<String> {
     let label = connect::needs_label(row, work.connections())?;
@@ -138,32 +106,6 @@ pub(crate) fn needs_subtitle(row: &Row, work: &sk_one_window::work::Work) -> Opt
         Some(sub) => format!("{label} · {sub}"),
         None => label,
     })
-}
-
-/// A sentence with several jobs gets the local "Do these N things" row first.
-pub(crate) fn steps_row(
-    text: &str,
-    rows: &mut Vec<Row>,
-    results: &mut HashMap<String, crate::scripts::SearchResult>,
-) {
-    let Some(row) = steps::steps_row(text) else {
-        return;
-    };
-    results.insert(
-        row.key.clone(),
-        crate::scripts::SearchResult::Intent(crate::scripts::IntentMatch {
-            slot: crate::intent::READINGS,
-            request: text.to_string(),
-            title: row.title.clone(),
-            subtitle: row.sub.clone().unwrap_or_default(),
-            verb: "Run",
-            reading: false,
-            stale: false,
-            plan: None,
-            score: 100,
-        }),
-    );
-    rows.push(row);
 }
 
 impl ScriptListApp {
@@ -192,7 +134,7 @@ impl ScriptListApp {
         let said = self.one_window.said();
         let plan = self
             .intent_launcher
-            .plan(self.one_window.text(), &row.key)
+            .plan_for_row(&row.key, self.intent_screen_key())
             .filter(|plan| plan.ready);
         if row.key == super::chat_entry::ABOUT_KEY {
             let entry = match self.one_window_host.work.about.take() {
@@ -201,6 +143,10 @@ impl ScriptListApp {
                     .capturing(crate::ai::TabAiCaptureKind::DefaultContext),
             };
             self.one_window_open_chat(entry, cx);
+            return true;
+        }
+        if row.key == steps::OFFLINE_UNAVAILABLE {
+            self.one_window_notice(crate::line_notice::INFO, "Can't run these steps offline. Nothing was sent or changed.", cx);
             return true;
         }
         let event = if row.key == steps::ROW_KEY {
@@ -285,10 +231,15 @@ impl ScriptListApp {
                 self.one_window_handle(Event::Done(done), cx);
             }
             WorkEffect::ReadSteps { sentence } => {
+                if !steps::offline_supported(&sentence) {
+                    self.one_window_handle(Event::View(sk_one_window::ViewOp::Back),cx);
+                    self.one_window_notice(crate::line_notice::INFO,"Can't run these steps offline. Nothing was changed.",cx);
+                    return;
+                }
                 let steps = steps::split(&sentence)
                     .into_iter()
                     .map(|text| StepSpec {
-                        needs: connect::named_in(&text).map(str::to_string),
+                        needs: None,
                         title: Some(text.clone()),
                         text,
                     })
@@ -296,8 +247,10 @@ impl ScriptListApp {
                 self.one_window_work_later(WorkEvent::StepsRead { sentence, steps }, cx);
             }
             WorkEffect::RunSteps { steps } => {
+                let supported = steps.iter().all(|(_, s)| steps::offline_note(s).is_some());
+                if !supported { self.one_window_notice(crate::line_notice::FAILED, "Can't run these steps offline. Nothing was sent or changed.", cx); }
                 for (index, text) in steps {
-                    let event = if self.one_window_run_step(&text, cx) {
+                    let event = if supported && self.one_window_run_step(&text, cx) {
                         WorkEvent::StepDone { index }
                     } else {
                         WorkEvent::StepFailed { index }
@@ -306,7 +259,7 @@ impl ScriptListApp {
                 }
             }
             WorkEffect::SignIn { integration } => {
-                super::connections::sign_in(integration, cx);
+                self.one_window_work_later(super::connections::unavailable(integration), cx);
             }
             WorkEffect::CopyInstead { integration, text } => {
                 tracing::info!(target: "script_kit::one_window", event = "copy_instead", integration);
@@ -364,19 +317,9 @@ impl ScriptListApp {
         }
     }
 
-    /// A step of "Do all": a message waits in the line before it goes, a note line lands in
-    /// today's note, and anything else is handed to an agent that works in the strip. False when
-    /// the step didn't do what it said; the line says why.
+    /// Run only the offline effect we can observe completing.
     fn one_window_run_step(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
-        if let Some((who, what)) = message_step(text) {
-            self.one_window_handle(
-                Event::Hold {
-                    label: format!("To {who}: “{what}”"),
-                    request: text.to_string(),
-                },
-                cx,
-            );
-        } else if let Some(body) = note_step(text) {
+        if let Some(body) = steps::offline_note(text) {
             if let Err(error) = crate::intent_launcher::append_capture_to_day("note", body, None) {
                 tracing::warn!(target: "script_kit::one_window", event = "step_note_failed", error);
                 self.one_window_notice(
@@ -387,12 +330,7 @@ impl ScriptListApp {
                 return false;
             }
         } else {
-            self.one_window_handle(
-                Event::Work(WorkEvent::Background {
-                    task: text.to_string(),
-                }),
-                cx,
-            );
+            return false;
         }
         true
     }
@@ -499,9 +437,15 @@ impl ScriptListApp {
         thread: &Entity<AgentChatThread>,
         cx: &mut Context<Self>,
     ) {
-        let (status, reply) = {
+        let (status, reply, ended) = {
+            use sk_protocol::ai_reliability::AiPhase;
             let t = thread.read(cx);
-            (t.status, reply_of(t))
+            let ended = match &t.reliability_state().phase {
+                AiPhase::Cancelled { .. } => Some(true),
+                AiPhase::Succeeded { .. } => Some(false),
+                _ => None,
+            };
+            (t.status, reply_of(t), ended)
         };
         let work = &mut self.one_window_host.work;
         let model = if id == CHAT_THREAD {
@@ -531,6 +475,7 @@ impl ScriptListApp {
                 Status::Error => vec![WorkEvent::ModelFailed {
                     message: "The model couldn't answer".into(),
                 }],
+                Status::Idle if reply.is_empty() && ended.is_some() => vec![WorkEvent::ModelEndedEmpty { stopped: ended == Some(true) }],
                 _ if reply.is_empty() => Vec::new(),
                 _ if written => vec![
                     WorkEvent::ModelWrote {
@@ -569,9 +514,21 @@ impl ScriptListApp {
 
 /// Sends a turn: the fixture answers from its queue, a live session from the provider.
 fn submit(model: &ModelThread, text: &str, cx: &mut Context<ScriptListApp>) {
+    // The owned schedule specimen exercises the same provider event stream and parser as a
+    // live reply. Deliberately leave time to inspect the wait, split emphasis, and completion.
+    let schedule = model
+        .fixture
+        .as_ref()
+        .filter(|_| text == "Show the fixture schedule")
+        .and_then(|control| {
+            let generation = control.receipts().ok()?.len() as u64 + 1;
+            control.queue_turn(Vec::new()).ok()?;
+            Some((control.clone(), generation))
+        });
     let asks = model
         .fixture
         .as_ref()
+        .filter(|_| schedule.is_none())
         .and_then(|control| super::chat_host::fixture_turn(control, text, FIXTURE_REPLY));
     let words = text.to_string();
     model.thread.update(cx, |thread, cx| {
@@ -580,27 +537,22 @@ fn submit(model: &ModelThread, text: &str, cx: &mut Context<ScriptListApp>) {
             tracing::warn!(target: "script_kit::one_window", event = "model_submit_failed", %error);
         }
     });
+    if let Some((control, generation)) = schedule {
+        use crate::ai::agent_chat::events::AgentChatEvent;
+        cx.spawn(async move |_, cx| {
+            for (wait, event) in [
+                (1800, AgentChatEvent::AgentMessageDelta("The next game is **Saturday".into())),
+                (2600, AgentChatEvent::AgentMessageDelta(" at 6:00 p.m.** against the Hornets.\n\n- Watch on **NBA TV**.\n- Check the [schedule](https://example.org/schedule).\n\n```text\n6:00 • Tip-off\n```".into())),
+                (500, AgentChatEvent::completed("fixture")),
+            ] {
+                cx.background_executor().timer(std::time::Duration::from_millis(wait)).await;
+                if control.latest_generation().ok()!=Some(generation) || control.emit(generation,event).is_err() { break; }
+            }
+        }).detach();
+    }
     if let (Some(control), Some(asks)) = (model.fixture.as_ref(), asks) {
         if let Err(error) = control.request_permission(asks) {
             tracing::warn!(target: "script_kit::one_window", event = "fixture_permission_failed", %error);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn steps_read_messages_and_note_lines() {
-        assert_eq!(
-            message_step("tell mo i'm running late"),
-            Some(("Mo".into(), "I'm running late".into()))
-        );
-        assert_eq!(
-            note_step("add to today's note: ship beta notes"),
-            Some("ship beta notes")
-        );
-        assert_eq!(note_step("move standup to 10"), None);
     }
 }

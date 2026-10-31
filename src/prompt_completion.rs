@@ -345,8 +345,7 @@ impl PromptCompletionBinding {
     }
 }
 
-/// Equality includes every wire field: only the registered provider-free Arg
-/// entrypoint may enter production prompt transport from the coordinator.
+/// Equality includes every wire field. No caller-selected HTML, actions or script paths.
 #[cfg(any(test, feature = "owned-ui-evaluation"))]
 pub(crate) fn reviewed_sdk_message(
     fixture: crate::protocol::SdkPromptFixtureId,
@@ -355,17 +354,17 @@ pub(crate) fn reviewed_sdk_message(
     use crate::protocol::SdkPromptFixtureId;
     use anyhow::{ensure, Context as _};
     use serde_json::{json, Value};
-    ensure!(
-        fixture == SdkPromptFixtureId::ArgRoundtrip,
-        "sdk_fixture_not_registered"
-    );
     let id = message
         .get("id")
         .and_then(Value::as_str)
         .context("sdk_prompt_id_missing")?;
     ensure!(id == "1", "sdk_fixture_prompt_id_mismatch");
-    let expected = json!({"type":"arg","id":"1","placeholder":"Owned SDK completion",
-        "choices":[{"name":"SDK first","value":"sdk-first"},{"name":"SDK second","value":"sdk-second"}]});
+    let expected = match fixture {
+        SdkPromptFixtureId::ArgRoundtrip => json!({"type":"arg","id":"1","placeholder":"Owned SDK completion",
+            "choices":[{"name":"SDK first","value":"sdk-first"},{"name":"SDK second","value":"sdk-second"}]}),
+        SdkPromptFixtureId::FormCorrection => json!({"type":"form","id":"1","html":
+            r#"<form><label for="email">Email</label><input id="email" name="email" type="email" value="invalid"/><label for="notes">Notes</label><textarea id="notes" name="notes">First line</textarea></form>"#}),
+    };
     ensure!(message == expected, "sdk_fixture_message_mismatch");
     Ok((id.to_owned(), serde_json::from_value(message)?))
 }
@@ -508,6 +507,7 @@ mod completion_epoch_tests {
         let mut wrong = message;
         wrong["id"] = json!("2");
         assert!(reviewed_sdk_message(SdkPromptFixtureId::ArgRoundtrip, wrong).is_err());
+        assert!(reviewed_sdk_message(SdkPromptFixtureId::FormCorrection, json!({"type":"form","id":"1","html":"<input name='anything'>"})).is_err());
         assert!(serde_json::from_value::<SdkPromptFixtureId>(json!("arbitrary-script")).is_err());
     }
 }

@@ -147,6 +147,9 @@ pub(crate) fn act(icon: &str, title: &str, say: &str, act: RowAct) -> Row {
         .with_enter_label(title)
         .with_icon(icon)
         .with_act(act);
+    if title == "Send it to someone" {
+        return row.with_enter_label("Unavailable").with_sub("Messaging isn't available in the launcher yet");
+    }
     if say.is_empty() {
         row
     } else {

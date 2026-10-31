@@ -155,6 +155,8 @@ impl ScriptListApp {
                         logging::log("STDIN", "SimulateKey: taken by the input's chips");
                         return DispatchOutcome::success();
                     }
+                    if !has_cmd && !_has_alt && !_has_ctrl && key_lower == "tab" && view.cycle_launcher_tab(has_shift,ctx) { return DispatchOutcome::success(); }
+                    if has_cmd && !has_shift && !_has_alt && !_has_ctrl && key_lower == "v" && view.one_window.tabs_visible() && view.one_window_stage_paste(ctx) { return DispatchOutcome::success(); }
                     if view.consume_return_to_script_list_enter_guard(
                         &key_lower,
                         &gpui::Modifiers {
@@ -1216,30 +1218,17 @@ impl ScriptListApp {
                         );
                     } else {
                         match key_lower.as_str() {
-                            "enter" | "return" if !has_shift && !has_cmd => {
-                                let validation_message = entity_clone
-                                    .update(ctx, |form, cx| form.submit_validation_message(cx));
-                                if let Some(message) = validation_message {
-                                    logging::log(
-                                        "STDIN",
-                                        &format!(
-                                            "SimulateKey: Enter blocked FormPrompt validation: {}",
-                                            message
-                                        ),
-                                    );
-                                    view.one_window_notice(crate::line_notice::INFO, message, ctx);
+                            "enter" | "return" if !_has_alt && !_has_ctrl => {
+                                if form_enter_behavior(&key_lower, has_cmd, focused_form_field_is_textarea(entity_clone.read(ctx))) == FormEnterBehavior::Submit {
+                                    if let Some(values) = entity_clone.update(ctx, |form, cx| form.validated_submit_value(Some(window), cx)) {
+                                        view.submit_prompt_response(prompt_id_clone.clone(), Some(values), ctx);
+                                    }
                                 } else {
-                                    logging::log(
-                                        "STDIN",
-                                        "SimulateKey: Enter in FormPrompt - submitting form",
-                                    );
-                                    let values = entity_clone
-                                        .update(ctx, |form, cx| form.collect_values(cx));
-                                    view.submit_prompt_response(
-                                        prompt_id_clone.clone(),
-                                        Some(values),
-                                        ctx,
-                                    );
+                                    let event = gpui::KeyDownEvent {
+                                        keystroke: gpui::Keystroke { key: key_lower.clone(), key_char: None, modifiers: gpui::Modifiers { shift: has_shift, ..Default::default() } },
+                                        is_held: false, prefer_character_input: false,
+                                    };
+                                    entity_clone.update(ctx, |form, cx| form.handle_key_input(&event, cx));
                                 }
                             }
                             "escape" | "esc" if !has_cmd => {

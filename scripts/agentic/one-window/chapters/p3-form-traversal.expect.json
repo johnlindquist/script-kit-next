@@ -1,0 +1,29 @@
+{
+  "next-field": {
+    "input": "First line\nSecond line"
+  },
+  "select-text": {
+    "input": "First line\nSecond line"
+  },
+  "sample": {
+    "input": "ab"
+  },
+  "backspace": {
+    "input": "a"
+  },
+  "newline": {
+    "input": "a\n"
+  },
+  "second-line": {
+    "input": "a\nok"
+  },
+  "previous": {
+    "input": "invalid"
+  },
+  "valid-email": {
+    "input": "test@example.org"
+  },
+  "click-next": {
+    "input": "a\nok"
+  }
+}

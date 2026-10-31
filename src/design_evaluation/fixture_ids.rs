@@ -3,6 +3,7 @@
 pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
     &[
         "main.script-list",
+        "main.subject-tabs",
         "main.root-search-frame-stability",
         "main-search-contract",
         "main.about",

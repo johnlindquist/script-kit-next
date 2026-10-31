@@ -24,7 +24,7 @@ fn runs_path() -> PathBuf {
 }
 
 /// How many of the last runs the next session remembers.
-const RUNS_REMEMBERED: usize = 50;
+pub(super) const RUNS_REMEMBERED: usize = 50;
 
 /// The last runs as written to disk, with the wall-clock time they were written so the next
 /// session can tell how long ago each ran.
@@ -58,7 +58,7 @@ fn runs_fingerprint(window: &sk_one_window::OneWindow) -> u64 {
 
 /// Plans of the sentences learned this session, by learned row key.
 #[derive(Default)]
-pub(crate) struct LearnedPlans(HashMap<String, Arc<Plan>>);
+pub(crate) struct LearnedPlans(HashMap<String, (u64, Arc<Plan>)>);
 
 impl ScriptListApp {
     /// Loads what earlier sessions learned and ran, once.
@@ -142,12 +142,13 @@ impl ScriptListApp {
     /// Something new was learned: keep its plan for this session and the lesson for the next.
     pub(crate) fn one_window_learned(&mut self) {
         if let Some(lesson) = self.one_window.lessons().learned().first() {
-            if let Some(plan) = self.intent_launcher.plan(&lesson.said, &lesson.row.key) {
+            let context = self.intent_screen_key();
+            if let Some(plan) = self.intent_launcher.plan_for_row(&lesson.row.key, context) {
                 self.one_window_host
                     .learns
                     .plans
                     .0
-                    .insert(lesson.key(), plan);
+                    .insert(lesson.key(), (context, plan));
             }
         }
         if !self.main_services.is_production() {
@@ -236,7 +237,16 @@ impl ScriptListApp {
             .lesson(&row.key)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("one_window_lesson_missing"))?;
-        if let Some(plan) = self.one_window_host.learns.plans.0.get(&row.key).cloned() {
+        let context = self.intent_screen_key();
+        if let Some((_, plan)) = self
+            .one_window_host
+            .learns
+            .plans
+            .0
+            .get(&row.key)
+            .filter(|(key, _)| *key == context)
+            .cloned()
+        {
             return self
                 .execute_intent_plan(&plan, cx)
                 .map_err(anyhow::Error::msg);

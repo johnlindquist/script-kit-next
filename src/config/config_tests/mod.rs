@@ -33,6 +33,7 @@ fn test_clipboard_history_max_text_length_default() {
 #[test]
 fn test_config_serialization() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["ctrl".to_string(), "alt".to_string()],
             key: "KeyA".to_string(),
@@ -104,6 +105,7 @@ fn test_hotkey_config_default_values() {
 #[test]
 fn test_config_with_bun_path() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -157,6 +159,7 @@ fn test_config_with_bun_path() {
 #[test]
 fn test_config_without_bun_path() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -210,6 +213,7 @@ fn test_config_without_bun_path() {
 #[test]
 fn test_config_serialization_skip_none_bun_path() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -268,6 +272,7 @@ fn test_config_serialization_skip_none_bun_path() {
 #[test]
 fn test_config_serialization_preserves_multiple_modifiers() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["ctrl".to_string(), "shift".to_string(), "alt".to_string()],
             key: "KeyP".to_string(),
@@ -393,6 +398,7 @@ fn test_hotkey_config_clone() {
 #[test]
 fn test_config_with_empty_modifiers_list() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec![],
             key: "KeyA".to_string(),
@@ -452,6 +458,7 @@ fn test_config_key_preservation() {
     let keys = vec!["Semicolon", "KeyK", "KeyP", "Space", "Enter"];
     for key in keys {
         let config = Config {
+            jev_intent_enabled: false,
             hotkey: HotkeyConfig {
                 modifiers: vec!["meta".to_string()],
                 key: key.to_string(),
@@ -510,6 +517,7 @@ fn test_config_key_preservation() {
 #[test]
 fn test_config_with_editor() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -568,6 +576,7 @@ fn test_config_with_editor() {
 #[test]
 fn test_config_without_editor() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -628,6 +637,7 @@ fn test_config_without_editor() {
 #[test]
 fn test_get_editor_from_config() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -693,6 +703,7 @@ fn test_get_editor_from_env() {
     std::env::set_var("EDITOR", "emacs");
 
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -764,6 +775,7 @@ fn test_get_editor_default() {
     std::env::remove_var("EDITOR");
 
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -835,6 +847,7 @@ fn test_config_editor_priority() {
 
     // Config with editor set should take precedence over env var
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -967,6 +980,7 @@ fn test_config_get_padding_default() {
 #[test]
 fn test_config_get_padding_custom() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1034,6 +1048,7 @@ fn test_config_get_editor_font_size_default() {
 #[test]
 fn test_config_get_editor_font_size_custom() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1105,6 +1120,7 @@ fn test_config_get_terminal_font_size_default() {
 #[test]
 fn test_config_get_terminal_font_size_custom() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1237,6 +1253,7 @@ fn test_config_serialization_skips_none_ui_settings() {
 #[test]
 fn test_config_serialization_includes_set_ui_settings() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1362,6 +1379,7 @@ fn test_builtin_config_deserialization_with_defaults() {
 #[test]
 fn test_config_with_builtins() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1642,6 +1660,7 @@ fn test_config_serialization_skips_none_builtins() {
 #[test]
 fn test_config_serialization_includes_set_builtins() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1811,6 +1830,7 @@ fn test_process_limits_serialization_skips_none() {
 #[test]
 fn test_config_with_process_limits() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -1963,6 +1983,7 @@ fn test_config_serialization_skips_none_process_limits() {
 #[test]
 fn test_config_serialization_includes_set_process_limits() {
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -2108,6 +2129,7 @@ fn test_requires_confirmation_user_override_disable() {
     );
 
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -2176,6 +2198,7 @@ fn test_requires_confirmation_user_override_enable() {
     );
 
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),
@@ -2317,6 +2340,7 @@ fn test_requires_confirmation_with_partial_command_config() {
     );
 
     let config = Config {
+        jev_intent_enabled: false,
         hotkey: HotkeyConfig {
             modifiers: vec!["meta".to_string()],
             key: "Semicolon".to_string(),

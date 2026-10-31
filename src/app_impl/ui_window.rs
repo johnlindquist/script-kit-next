@@ -55,6 +55,19 @@ impl ScriptListApp {
         // The label describes the highlighted row, including while a newer
         // query waits to be filtered; Enter finishes that query before running.
         match self.painted_main_menu_selected_subject() {
+            Some(ResolvedMainMenuSelection::SearchResult {
+                result: scripts::SearchResult::Note(_) | scripts::SearchResult::File(_),
+                ..
+            }) if matches!(
+                self.active_spine_context_subsearch(),
+                Some((
+                    crate::spine::catalog_subsearch::ContextSubsearchSource::Notes,
+                    _
+                ))
+            ) =>
+            {
+                "Attach Note".to_string()
+            }
             Some(ResolvedMainMenuSelection::SearchResult { result, .. }) => {
                 main_window_result_action_label(result, frontmost_app_name.as_deref())
             }
@@ -166,7 +179,16 @@ impl ScriptListApp {
             );
         }
 
+        if self.one_window_view_staged().is_none()
+            && self.file_search_rename_footer_action(action, window, cx)
+        {
+            return;
+        }
+
         match action {
+            crate::footer_popup::FooterAction::UndoLast => {
+                if self.has_launcher_tabs() { if let Some(id)=self.one_window.ledger().last().filter(|e|e.can_undo()).map(|e|e.id) {self.one_window_handle(sk_one_window::Event::UndoEntry(id),cx);} }
+            }
             crate::footer_popup::FooterAction::Today => self.show_day_page_view(window, cx),
             crate::footer_popup::FooterAction::Run => {
                 if let AppView::SettingsView {
@@ -254,9 +276,7 @@ impl ScriptListApp {
                     let entity = entity.clone();
                     entity.update(cx, |editor, cx| editor.submit(cx));
                 } else if matches!(self.current_view, AppView::WebcamView { .. }) {
-                    if self.capture_webcam_photo(cx) {
-                        self.hide_main_and_reset(cx);
-                    }
+                    self.webcam_run_primary(cx);
                 } else if let AppView::PathPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.handle_enter(cx));
@@ -269,13 +289,9 @@ impl ScriptListApp {
                 } else if let AppView::FormPrompt { id, entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     let prompt_id = id.clone();
-                    let validation_message = entity.read(cx).submit_validation_message(cx);
-                    if let Some(message) = validation_message {
-                        self.one_window_notice(crate::line_notice::INFO, message, cx);
-                        return;
+                    if let Some(values) = entity.update(cx, |form, cx| form.validated_submit_value(Some(window), cx)) {
+                        self.submit_prompt_response(prompt_id, Some(values), cx);
                     }
-                    let values = entity.read(cx).collect_values(cx);
-                    self.submit_prompt_response(prompt_id, Some(values), cx);
                 } else if let AppView::ChatPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     self.submit_chat_prompt_draft(&entity, window, cx);
@@ -334,6 +350,7 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Stop => {
+                if self.has_launcher_tabs() { if let Some(id)=self.one_window.holds().newest().map(|h|h.id) {self.one_window_handle(sk_one_window::Event::StopHold(id),cx);} return; }
                 if let Some(model) = self
                     .one_window_host
                     .work
@@ -381,6 +398,12 @@ impl ScriptListApp {
                     return;
                 }
                 if action == crate::footer_popup::FooterAction::Copy
+                    && matches!(self.current_view, AppView::WebcamView { .. })
+                {
+                    self.webcam_copy_path(cx);
+                    return;
+                }
+                if action == crate::footer_popup::FooterAction::Copy
                     && matches!(self.current_view, AppView::ScriptTemplateCatalogView { .. })
                 {
                     let _ = self.copy_selected_script_template_markdown(cx);
@@ -425,7 +448,7 @@ impl ScriptListApp {
                         self.go_back_or_close(window, cx);
                     }
                 } else if matches!(self.current_view, AppView::CreateAiPresetView { .. }) {
-                    self.go_back_or_close(window, cx);
+                    self.handle_create_ai_preset_key("escape", window, cx);
                 } else if matches!(self.current_view, AppView::NotesBrowseView { .. }) {
                     if self.is_in_attachment_portal() {
                         self.close_attachment_portal_cancel(cx);
@@ -586,9 +609,29 @@ impl ScriptListApp {
 
         let one_window =
             matches!(self.current_view, AppView::ScriptList) && self.one_window_owns_list();
-        let run = if one_window {
-            main_window_run_footer_button(run_label, footer_disabled, None)
-                .selected(self.one_window_enter_arming())
+        let run = if self.one_window_view_staged().is_some() {
+            let selected = self.one_window_staged_enter_label();
+            main_window_run_footer_button(
+                selected.unwrap_or("No matching action").to_owned(),
+                footer_disabled,
+                selected.is_none().then_some("Choose a matching action"),
+            )
+        } else if one_window {
+            main_window_run_footer_button(
+                run_label,
+                footer_disabled,
+                self.shortcut_submit_block_reason().or_else(|| {
+                    self.one_window.views().top().filter(|v| v.name == sk_one_window::chat::VIEW)
+                        .and_then(|_| self.one_window.chat()?.activity_label())
+                }),
+            )
+            .selected(self.one_window_enter_arming())
+        } else if self.builtin_picker_has_selection() == Some(false) {
+            main_window_run_footer_button(
+                "No selection".to_owned(),
+                footer_disabled,
+                Some("Select a result first"),
+            )
         } else {
             main_window_run_footer_button(
                 run_label,
@@ -631,6 +674,53 @@ impl ScriptListApp {
         }
         crate::footer_popup::apply_footer_descriptor_test_fixture(&mut buttons);
         buttons
+    }
+
+    /// Use the same filtered rows as the view before advertising an activation.
+    fn builtin_picker_has_selection(&self) -> Option<bool> {
+        Some(match &self.current_view {
+            AppView::ClipboardHistoryView { .. } => has_selected_clipboard_entry(self),
+            AppView::EmojiPickerView { .. } => has_selected_emoji_entry(self),
+            AppView::FileSearchView { selected_index, .. } if !self.file_search_picking_place() => {
+                self.selected_file_search_result(*selected_index).is_some()
+            }
+            AppView::AppLauncherView {
+                filter,
+                selected_index,
+            } => self
+                .app_launcher_selected_visible_entry(filter, *selected_index)
+                .is_some(),
+            AppView::WindowSwitcherView {
+                filter,
+                selected_index,
+            } => self
+                .filtered_switcher_windows(filter)
+                .nth(*selected_index)
+                .is_some(),
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => self
+                .browser_tabs_selected_visible_row(filter, *selected_index)
+                .is_some(),
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => crate::browser_history::fuzzy_search_browser_history(
+                &self.cached_browser_history,
+                filter,
+            )
+            .get(*selected_index)
+            .is_some(),
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => self
+                .current_app_commands_selected_visible_row_name(filter, *selected_index)
+                .is_some(),
+            AppView::FavoritesBrowseView { .. } => self.selected_favorite_id().is_some(),
+            _ => return None,
+        })
     }
 
     fn main_window_footer_buttons_blocked(&self) -> bool {
@@ -688,6 +778,11 @@ impl ScriptListApp {
         &self,
         cx: Option<&gpui::App>,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        if self.one_window_view_staged().is_none() {
+            if let Some(buttons) = self.file_search_rename_footer_buttons() {
+                return buttons;
+            }
+        }
         if matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
@@ -770,8 +865,9 @@ impl ScriptListApp {
             return script_template_catalog_footer_buttons(enabled, has_selection);
         }
 
-        if let AppView::CreateAiPresetView { name, .. } = &self.current_view {
-            return create_ai_preset_footer_buttons(enabled, !name.trim().is_empty());
+        if let AppView::CreateAiPresetView { entity } = &self.current_view {
+            let can_save = cx.is_some_and(|cx| entity.read(cx).named_values(cx).iter().any(|(key,value)| key == "name" && !value.trim().is_empty()));
+            return create_ai_preset_footer_buttons(enabled, can_save);
         }
 
         if let AppView::NotesBrowseView { search } = &self.current_view {
@@ -995,12 +1091,28 @@ impl ScriptListApp {
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let actions_open = self.show_actions_popup;
             let enabled = !footer_disabled;
-            let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", "Capture Photo").enabled(enabled),
+            let reviewing = cx.is_some_and(|cx| self.webcam_review_path(cx).is_some());
+            let mut buttons = vec![FooterButtonConfig::new(
+                FooterAction::Run,
+                "↵",
+                self.webcam_primary_label(cx),
+            )
+            .enabled(enabled)];
+            if reviewing {
+                buttons.push(
+                    FooterButtonConfig::new(
+                        FooterAction::Copy,
+                        crate::prompts::webcam_session::COPY_PATH_SHORTCUT,
+                        "Copy Path",
+                    )
+                    .enabled(enabled),
+                );
+            }
+            buttons.push(
                 FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                     .selected(actions_open)
                     .enabled(enabled),
-            ];
+            );
             tracing::debug!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
@@ -1185,7 +1297,8 @@ impl ScriptListApp {
                 .get(*selected_index)
                 .and_then(|index| entries.get(*index));
             let runs = selected_tip.is_some_and(|tip| tip.try_it().is_some());
-            let enter_label = selected_tip.map_or_else(|| "Try It".to_string(), |tip| tip.enter_label());
+            let enter_label =
+                selected_tip.map_or_else(|| "Try It".to_string(), |tip| tip.enter_label());
             let secondary_label = if filter.trim().is_empty() {
                 "Back"
             } else {
@@ -1331,6 +1444,16 @@ impl ScriptListApp {
                 self.main_list_loading_elapsed_secs(),
             ));
         }
+        if self.has_launcher_tabs() {
+            use crate::footer_popup::{FooterAction,FooterLeftInfo};
+            let now=self.one_window_clock(); let line=self.one_window.slot_line(now);
+            if line.kind==sk_one_window::SlotKind::Holding || (line.kind==sk_one_window::SlotKind::Recent && self.one_window.ledger().last().is_some_and(|e|e.age(now)<120_000)) {
+                let holding=line.kind==sk_one_window::SlotKind::Holding;
+                let undo=line.hints.iter().any(|(k,_)|k=="⌘Z");
+                let label=if holding {format!("Stop · {} · {}",line.state_words().unwrap_or("Waiting"),line.title)} else if undo {format!("Undo · {}",line.title)} else {line.title};
+                config.left_info=Some(FooterLeftInfo {model_name:label,icon_token:Some(line.icon),keycap:undo.then(||"⌘Z".into()),action:if holding {Some(FooterAction::Stop)}else{undo.then_some(FooterAction::UndoLast)},..Default::default()});
+            }
+        }
         Some(config)
     }
 
@@ -1360,19 +1483,29 @@ impl ScriptListApp {
         &self,
         gpui_footer: gpui::AnyElement,
     ) -> Option<gpui::AnyElement> {
+        self.main_window_footer_slot_with_cx(gpui_footer, None)
+    }
+
+    pub(crate) fn main_window_footer_slot_with_cx(
+        &self,
+        gpui_footer: gpui::AnyElement,
+        cx: Option<&gpui::App>,
+    ) -> Option<gpui::AnyElement> {
         if crate::footer_popup::glass_scroll_bands_active() && self.main_window_uses_native_footer()
         {
             return Some(
                 crate::components::prompt_layout_shell::render_native_main_window_footer_hover_blocker(),
             );
         }
-        Some(match self.main_window_footer_config_with_cx(None) {
-            Some(config) => crate::components::footer_chrome::render_main_window_footer_config_rail(
-                config,
-                |action, _window, _cx| {
-                    crate::footer_popup::dispatch_main_window_footer_capsule(action);
-                },
-            ),
+        Some(match self.main_window_footer_config_with_cx(cx) {
+            Some(config) => {
+                crate::components::footer_chrome::render_main_window_footer_config_rail(
+                    config,
+                    |action, _window, _cx| {
+                        crate::footer_popup::dispatch_main_window_footer_capsule(action);
+                    },
+                )
+            }
             None => gpui_footer,
         })
     }
@@ -1480,19 +1613,28 @@ impl ScriptListApp {
     }
 
     pub(crate) fn prompt_header_context(&self) -> crate::one_window::slot_line::SlotLineView {
-        crate::one_window::slot_line::SlotLineView::of(
+        let mut header=crate::one_window::slot_line::SlotLineView::of(
             &self.one_window,
             &self.slot_dimmer,
             self.one_window_clock(),
             self.is_pinned,
-        )
+        );
+        if let Some(s)=self.one_window_host.cursor_voice.active.as_ref(){
+            header.line.kind=sk_one_window::SlotKind::Typing;header.line.icon="mic".into();header.line.label.clear();header.line.title=if s.stopped{"Finishing dictation".into()}else{s.route.title(&s.label)};header.line.sub=s.partial.split_whitespace().collect::<Vec<_>>().join(" ");header.line.progress=None;header.line.lit=true;header.line.failed=false;header.line.hints=if s.stopped{vec![]}else{vec![("⇧".into(),if s.route==CursorRoute::Kit{format!("Back to {}",s.label)}else{"Use in Kit".into()})]};header.style.hints=true;header.style.opacity=1.;header.dim.to=1.;
+        }
+        header
     }
 
     pub(crate) fn render_main_view_slot_line(
         &self,
         menu_def: crate::designs::MainMenuThemeDef,
     ) -> gpui::AnyElement {
-        self.prompt_header_context().render(&self.theme, menu_def)
+        let line=self.prompt_header_context().render(&self.theme, menu_def);
+        if let Some(s)=self.one_window_host.cursor_voice.active.as_ref().filter(|s|!s.stopped){
+            let owner=s.app.clone();let generation=s.generation;
+            return gpui::div().id("dictation-toggle-kit").debug_selector(|| "dictation-toggle-kit".to_owned()).role(gpui::Role::Button).aria_label("Switch dictation destination").child(line).on_click(move |_,_,cx|{let _=owner.update(cx,|app,cx|{if app.one_window_host.cursor_voice.active.as_ref().is_some_and(|s|s.generation==generation){app.toggle_cursor_kit(cx);}});}).into_any_element();
+        }
+        line
     }
 
     pub(crate) fn render_main_view_slot_line_header(

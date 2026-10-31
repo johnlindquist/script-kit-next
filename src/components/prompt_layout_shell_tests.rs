@@ -14,7 +14,7 @@ mod prompt_layout_shell_tests {
             _cx: &mut gpui::Context<Self>,
         ) -> impl gpui::IntoElement {
             let theme = crate::theme::Theme::default();
-            let style = super::prompt_field_style(&theme, super::PromptFieldState::Active, false);
+            let style = super::prompt_preview_style(&theme);
             super::prompt_text_field("Value", style)
                 .debug_selector(|| SINGLE_LINE_CONTROL_SELECTOR.to_string())
         }
@@ -87,26 +87,17 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn prompt_field_style_uses_theme_chrome_contract_for_default_and_active_states() {
-        let theme = crate::theme::Theme::light_default();
-        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-
-        let default_style =
-            super::prompt_field_style(&theme, super::PromptFieldState::Default, true);
-        let active_style =
-            super::prompt_field_style(&theme, super::PromptFieldState::Active, false);
-
-        assert_eq!(
-            default_style.background,
-            gpui::rgba(chrome.input_surface_rgba)
-        );
-        assert_eq!(default_style.border, gpui::rgba(chrome.badge_border_rgba));
-        assert_eq!(
-            default_style.value,
-            gpui::rgba(chrome.placeholder_text_rgba)
-        );
-        assert_eq!(active_style.background, gpui::rgba(chrome.selection_rgba));
-        assert_eq!(active_style.border, gpui::rgb(chrome.accent_hex));
+    fn focused_invalid_field_keeps_its_focus_signal_in_both_appearances() {
+        use crate::components::{FormFieldColors, FormFieldShellSpec, FormFieldValidation, resolve_form_field_shell_style};
+        for theme in [crate::theme::Theme::dark_default(), crate::theme::Theme::light_default()] {
+            let colors = FormFieldColors::from_theme(&theme);
+            let mut field = FormFieldShellSpec::neutral("email", Some("Email".into()), true, false, 32., None);
+            field.validation = FormFieldValidation::Invalid { message: "Enter an email address".into() };
+            let focused = resolve_form_field_shell_style(&field, colors);
+            assert_eq!(focused.border, colors.whisper_surface(true).border);
+            assert_eq!(focused.supporting, gpui::rgb(colors.error));
+            assert_ne!(focused.border, super::prompt_preview_style(&theme).border);
+        }
     }
 
     const OTHER_RENDERERS_SOURCE: &str = include_str!("../render_prompts/other.rs");
@@ -183,7 +174,7 @@ mod prompt_layout_shell_tests {
         for part in [
             "render_builtin_main_input_header(",
             "render_main_view_chrome_footer_flush(",
-            "main_window_footer_slot(",
+            "main_window_footer_slot", // both context-aware and ordinary shared footer slots
             "other_prompt_shell_handle_key_chat",
         ] {
             assert!(body.contains(part), "render_chat_prompt must use {part}");

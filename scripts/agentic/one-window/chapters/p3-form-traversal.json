@@ -1,0 +1,47 @@
+[
+  {
+    "name": "next-field",
+    "key": "tab",
+    "waitMs": 280
+  },
+  {
+    "name": "select-text",
+    "key": "cmd-a",
+    "waitMs": 280
+  },
+  {
+    "name": "sample",
+    "type": "ab",
+    "waitMs": 400
+  },
+  {
+    "name": "backspace",
+    "key": "backspace",
+    "waitMs": 280
+  },
+  {
+    "name": "newline",
+    "key": "enter",
+    "waitMs": 300
+  },
+  {
+    "name": "second-line",
+    "append": "ok",
+    "waitMs": 300
+  },
+  {
+    "name": "previous",
+    "key": "shift-tab",
+    "waitMs": 300
+  },
+  {
+    "name": "valid-email",
+    "type": "test@example.org",
+    "waitMs": 300
+  },
+  {
+    "name": "click-next",
+    "click": "footer-action:ai",
+    "waitMs": 400
+  }
+]

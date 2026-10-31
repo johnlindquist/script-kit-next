@@ -74,6 +74,19 @@ test("owned permits require verified feature capability, cannot serialize, and a
     expect(() => assertOwnedEvaluationCommand(permit, { type: "design", command: { ...capture, ...extra } })).toThrow("invalid atomic capture command");
 });
 
+test("SDK form and arg fixture permissions cannot substitute for one another", () => {
+  const { artifact, claim } = fixture();
+  for (const id of ["sdk.arg-roundtrip.v1", "sdk.form-correction.v1"]) {
+    const permit = issueOwnedEvaluationPermit(artifact, claim, ["main.script-list", id]);
+    consumeOwnedEvaluationPermit(permit);
+    const begin = (fixtureId: string) => assertOwnedEvaluationCommand(permit, { type: "design",
+      command: { operation: "sdkPrompt", command: { operation: "begin", fixtureId } } });
+    expect(() => begin(id)).not.toThrow();
+    for (const foreign of ["sdk.arg-roundtrip.v1", "sdk.form-correction.v1", "unknown"].filter(x => x !== id))
+      expect(() => begin(foreign)).toThrow("SDK fixture outside sealed subset");
+  }
+});
+
 test("owned scheduled capture admits exact expectations and rejects malformed or widened payloads", () => {
   const { artifact, claim } = fixture();
   const permit = issueOwnedEvaluationPermit(artifact, claim, ["main-search-contract"]); consumeOwnedEvaluationPermit(permit);

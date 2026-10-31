@@ -207,7 +207,8 @@ pub(crate) fn resolve_form_field_shell_style(
     let invalid = matches!(spec.validation, FormFieldValidation::Invalid { .. });
     FormFieldShellStyle {
         background: surface.background,
-        border: if invalid {
+        // Focus answers “where will typing go?” even when validation failed.
+        border: if invalid && !spec.focused {
             rgb(colors.error)
         } else {
             surface.border
@@ -293,13 +294,77 @@ pub(crate) fn render_form_field_shell(
         root = root.child(
             div()
                 .id(ElementId::Name(spec.supporting_message_id()))
-                .text_size(px(metrics.label_font_size))
-                .line_height(px(metrics.label_line_height))
-                .text_color(style.supporting)
-                .child(message.clone()),
+                .child(
+                    if matches!(spec.validation, FormFieldValidation::Invalid { .. }) {
+                        super::form_issue(message.clone(), style.supporting, metrics)
+                            .into_any_element()
+                    } else {
+                        div()
+                            .text_size(px(metrics.label_font_size))
+                            .line_height(px(metrics.label_line_height))
+                            .text_color(style.supporting)
+                            .child(message.clone())
+                            .into_any_element()
+                    },
+                ),
         );
     }
     root.into_any_element()
+}
+
+/// One-line control used by prompt-specific editors (e.g. masked credentials).
+/// The editor supplies its text/caret; the shared shell owns the surrounding UI.
+pub(crate) fn labeled_control(
+    theme: &crate::theme::Theme,
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    focused: bool,
+    issue: Option<SharedString>,
+    body: AnyElement,
+) -> AnyElement {
+    let colors = FormFieldColors::from_theme(theme);
+    let mut spec = FormFieldShellSpec::neutral(
+        id,
+        Some(label.into()),
+        focused,
+        false,
+        crate::components::prompt_single_line_control_metrics().total_height_px,
+        None,
+    );
+    if let Some(message) = issue {
+        spec.validation = FormFieldValidation::Invalid { message };
+    }
+    render_form_field_shell(&spec, colors, FormFieldMetrics::from_colors(colors), body)
+}
+
+/// The shape and words still identify an error without color or keyboard focus.
+pub(crate) fn form_issue(
+    message: impl Into<SharedString>,
+    color: Rgba,
+    metrics: FormFieldMetrics,
+) -> gpui::Div {
+    div()
+        .w_full()
+        .flex()
+        .items_start()
+        .gap(px(metrics.field_gap_px))
+        .text_size(px(metrics.label_font_size))
+        .line_height(px(metrics.label_line_height))
+        .text_color(color)
+        .child(
+            div()
+                .flex_none()
+                .h(px(metrics.label_line_height))
+                .flex()
+                .items_center()
+                .child(
+                    gpui::svg()
+                        .path("icons/warning.svg")
+                        .size(px(metrics.label_font_size))
+                        .text_color(color),
+                ),
+        )
+        .child(div().min_w(px(0.)).child(message.into()))
 }
 
 /// Map the menu-syntax domain snapshot into the same shell model consumed by

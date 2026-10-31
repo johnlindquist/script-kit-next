@@ -881,20 +881,46 @@ vertex SurfaceVertexOutput surface_vertex(
       {clip_distance.x, clip_distance.y, clip_distance.z, clip_distance.w}};
 }
 
+// Camera frames (e.g. 1920x1080) are usually drawn much smaller than their
+// native size. A single bilinear tap then reads only ~2x2 of the many texels
+// under each screen pixel and skips the rest, which aliases sensor noise and
+// edges into a grainy, over-sharpened look. Average evenly spaced bilinear taps
+// across the pixel's footprint instead (a box filter): one tap when the frame
+// is drawn at or above native size, up to 8x8 when shrunk 8x or more.
+constant int SURFACE_MAX_TAPS_PER_AXIS = 8;
+
 fragment float4 surface_fragment(SurfaceFragmentInput input [[stage_in]],
                                  texture2d<float> y_texture
                                  [[texture(SurfaceInputIndex_YTexture)]],
                                  texture2d<float> cb_cr_texture
                                  [[texture(SurfaceInputIndex_CbCrTexture)]]) {
-  constexpr sampler texture_sampler(mag_filter::linear, min_filter::linear);
+  constexpr sampler texture_sampler(mag_filter::linear, min_filter::linear,
+                                    address::clamp_to_edge);
   const float4x4 ycbcrToRGBTransform =
       float4x4(float4(+1.0000f, +1.0000f, +1.0000f, +0.0000f),
                float4(+0.0000f, -0.3441f, +1.7720f, +0.0000f),
                float4(+1.4020f, -0.7141f, +0.0000f, +0.0000f),
                float4(-0.7010f, +0.5291f, -0.8860f, +1.0000f));
-  float4 ycbcr = float4(
-      y_texture.sample(texture_sampler, input.texture_position).r,
-      cb_cr_texture.sample(texture_sampler, input.texture_position).rg, 1.0);
+
+  // Size of this screen pixel in texture coordinates, and in luma texels.
+  float2 footprint = fwidth(input.texture_position);
+  float2 luma_size = float2(y_texture.get_width(), y_texture.get_height());
+  int2 taps = clamp(int2(ceil(footprint * luma_size)), int2(1),
+                    int2(SURFACE_MAX_TAPS_PER_AXIS));
+
+  float luma = 0.0;
+  float2 chroma = float2(0.0);
+  for (int row = 0; row < taps.y; row++) {
+    for (int column = 0; column < taps.x; column++) {
+      float2 offset =
+          (float2(column, row) + 0.5) / float2(taps) - 0.5;
+      float2 position = input.texture_position + offset * footprint;
+      luma += y_texture.sample(texture_sampler, position).r;
+      chroma += cb_cr_texture.sample(texture_sampler, position).rg;
+    }
+  }
+  float count = float(taps.x * taps.y);
+  float4 ycbcr = float4(luma / count, chroma / count, 1.0);
 
   return ycbcrToRGBTransform * ycbcr;
 }

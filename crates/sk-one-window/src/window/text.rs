@@ -61,18 +61,14 @@ impl OneWindow {
             }
         }
         if empty && pins.is_empty() && self.staged.is_none() {
-            pins = self
-                .suggested
-                .iter()
-                .enumerate()
-                .map(|(i, r)| {
-                    let mut r = r.clone();
-                    if i == 0 && r.head.is_none() {
-                        r.head = Some(words::SUGGESTED.into());
-                    }
-                    r
-                })
-                .collect();
+            pins = self.subject_page().map(|p| p.rows()).unwrap_or_default();
+            pins.extend(self.suggested.iter().enumerate().map(|(i, r)| {
+                let mut r = r.clone();
+                if i == 0 && r.head.is_none() {
+                    r.head = Some(words::SUGGESTED.into());
+                }
+                r
+            }));
         }
         self.list.pinned = pins;
 
@@ -83,10 +79,14 @@ impl OneWindow {
         let (all, mut real): (Vec<Row>, Vec<Row>) = real
             .into_iter()
             .partition(|r| r.key.starts_with(crate::contract::ALL_RESULTS_KEY));
-        let mut names: Vec<Row> = Vec::new();
+        let mut names: Vec<Row> = self
+            .page_for_action()
+            .and_then(|p| p.reading(&self.text))
+            .into_iter()
+            .collect();
         if let Some(staged) = &self.staged {
             let (learned, rest): (Vec<Row>, Vec<Row>) = real.into_iter().partition(|r| r.learned);
-            names = learned;
+            names.extend(learned);
             real = rest;
             for r in staged.matches(&self.text) {
                 if !names.iter().any(|n| n.title.eq_ignore_ascii_case(&r.title)) {

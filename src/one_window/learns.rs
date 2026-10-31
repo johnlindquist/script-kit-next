@@ -154,8 +154,18 @@ impl ScriptListApp {
 
     /// Opens every result the search found for the words, in its sections, as a view under the
     /// same input. The words stay; Esc comes back to the few rows with the same words.
-    pub(crate) fn one_window_open_all_results(&mut self, cx: &mut Context<Self>) {
-        let text = self.one_window.text().to_string();
+    pub(crate) fn one_window_open_all_results(
+        &mut self,
+        query: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.one_window_owns_list()
+                && !self.one_window.in_view()
+                && self.one_window.text() == query,
+            "main_menu_semantic_target_not_current"
+        );
+        let text = query.to_owned();
         self.one_window_handle(
             Event::View(ViewOp::Open(ViewSpec {
                 name: OwnView::AllResults.name().to_string(),
@@ -180,6 +190,7 @@ impl ScriptListApp {
             self.set_selected_index(first, "one_window_all_results", cx);
         }
         self.one_window_follow_host_selection(cx);
+        Ok(())
     }
 
     /// Enter in every result's view runs the highlighted result as the launcher would, once the

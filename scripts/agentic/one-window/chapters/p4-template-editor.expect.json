@@ -1,0 +1,23 @@
+{
+  "empty": {
+    "input": ""
+  },
+  "refuse": {
+    "input": ""
+  },
+  "draft": {
+    "input": "dmo"
+  },
+  "insert": {
+    "input": "demo"
+  },
+  "next": {
+    "input": ""
+  },
+  "second-value": {
+    "input": "reader"
+  },
+  "previous": {
+    "input": "demo"
+  }
+}

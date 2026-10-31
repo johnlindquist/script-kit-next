@@ -1,0 +1,29 @@
+[
+  {
+    "name": "note"
+  },
+  {
+    "name": "hold",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin"
+    }
+  },
+  {
+    "name": "insert-note",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorFinal",
+      "words": "First line.\nSecond line."
+    },
+    "waitMs": 300
+  },
+  {
+    "name": "outside-tap",
+    "control": {
+      "family": "oneWindow",
+      "operation": "shortcutOutside"
+    },
+    "waitMs": 300
+  }
+]

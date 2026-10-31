@@ -322,12 +322,7 @@ enum AppView {
     },
     /// Showing create AI preset form
     /// Name + system prompt + model fields
-    CreateAiPresetView {
-        name: String,
-        system_prompt: String,
-        model: String,
-        active_field: usize,
-    },
+    CreateAiPresetView { entity: Entity<FormPromptState> },
     /// Showing settings hub with configuration panels
     /// Lists categories: Theme, Window Positions, Feature Toggles, and Hotkeys
     SettingsView {

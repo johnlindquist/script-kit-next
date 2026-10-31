@@ -7,9 +7,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
-use super::catalog::Catalog;
+use super::catalog::{Catalog, WindowAction};
 use super::context::LastAction;
-use super::engine::{Pathway, Plan, COMPLETE_THRESHOLD};
+use super::engine::{Pathway, Plan, Step, COMPLETE_THRESHOLD};
 use super::jev::{JevError, Oracle};
 
 /// Jev fills this many rows under the input.
@@ -41,6 +41,47 @@ pub struct JevRow {
     pub plan: Arc<Plan>,
 }
 
+/// Interpretations are not capabilities. Qualify every launcher alternative (not only the winner)
+/// before it can be cached, learned or offered to Enter.
+fn qualify(plan: &mut Plan) {
+    if let [Step::Recall { source, query }] = plan.steps.as_slice() {
+        if source == "brain" {
+            let query = query.as_deref().unwrap_or_default().to_owned();
+            plan.reading.typed = Some(format!("brain:{query}"));
+            plan.reading.typed_is_proposed = false;
+        }
+    }
+    if let Some(why) = unavailable(plan) {
+        plan.ready = false;
+        plan.reading.missing = Some(why.into());
+    }
+}
+
+/// Menu and window interpretations of the same quit share the cancellable hold.
+ pub fn quits_application(step: &Step) -> bool {
+    match step {
+        Step::Window {op,..} => op.action() == Some(WindowAction::Quit),
+        Step::Menu {path,..} => path.last().is_some_and(|name| name.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case("quit"))),
+        _ => false,
+    }
+}
+
+pub fn unavailable(plan: &Plan) -> Option<&'static str> {
+    let several = plan.steps.len() > 1 && plan.pathway != Pathway::Automate;
+    for step in &plan.steps {
+        match step {
+            Step::Recall { source, .. } if sk_one_window::connect::integration(source).is_some() => return Some("a service integration that isn't available yet"),
+            Step::Remember { subject: Some(s), .. } if s != "clipboard" => return Some("the words to save to today's note"),
+            Step::Capture { target, handler: None, .. } if !matches!(target.as_str(),"note"|"todo"|"reminder") => return Some("an installed capture command for this destination"),
+            Step::Recall { .. } | Step::Ask { .. } | Step::Delegate { .. } | Step::InspectFilename { .. } | Step::Transform { tool: None, .. } if several => return Some("a separate request for this step"),
+            Step::Capture { target, subject, .. } if several && (subject.is_some() || !matches!(target.as_str(),"note"|"todo"|"reminder")) => return Some("a separate request for this capture"),
+            Step::Remember { subject: Some(_), .. } if several => return Some("a separate request for this memory"),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Jev's readings of what was said: the plan it chose, then the alternatives it weighed, each
 /// complete enough to run on its own. At most [`READINGS`], never two with the same key.
 pub fn readings(plan: Plan) -> Vec<JevRow> {
@@ -63,7 +104,30 @@ pub fn readings(plan: Plan) -> Vec<JevRow> {
         });
     }
     let mut out: Vec<JevRow> = Vec::with_capacity(READINGS);
-    for plan in plans {
+    for (index, mut plan) in plans.into_iter().enumerate() {
+        // “Do it in Chrome” with no menu item has no inverse, setup or form to open.
+        // Don't let this empty guess take Return away from a real alternative.
+        if plan.pathway == Pathway::AppCommand && plan.steps.is_empty() && plan.clauses.is_empty() {
+            continue;
+        }
+        // Choosing "Center ChatGPT" specifies the operation and target even when
+        // the words being typed ("center the") aren't a complete instruction yet.
+        if plan.pathway == Pathway::Window && plan.missing.is_none() && plan.clauses.is_empty() {
+            if let [Step::Window { op, app }] = plan.steps.as_slice() {
+                plan.ready |= !app.trim().is_empty()
+                    && plan.title == op.title_for(app)
+                    && matches!(
+                        op.action(),
+                        Some(
+                            WindowAction::Tile(_)
+                                | WindowAction::NextDisplay
+                                | WindowAction::PreviousDisplay
+                        )
+                    );
+            }
+        }
+        qualify(&mut plan);
+        if index > 0 && !plan.ready { continue; }
         let key = format!("jev:{}:{}", plan.pathway.key(), plan.title);
         if out.len() < READINGS && !out.iter().any(|r| r.key == key) {
             out.push(JevRow {
@@ -83,6 +147,8 @@ pub struct IntentLauncher {
     catalog: Option<(u64, Arc<Catalog>)>,
     shown_for: String,
     shown: HashMap<String, Arc<Plan>>,
+    shown_context: Option<u64>,
+    context_revision: u64,
     /// The first reading the list last showed.
     shown_top: Option<Arc<Plan>>,
 }
@@ -102,6 +168,8 @@ impl IntentLauncher {
             catalog: None,
             shown_for: String::new(),
             shown: HashMap::new(),
+            shown_context: None,
+            context_revision: 0,
             shown_top: None,
         }
     }
@@ -128,7 +196,7 @@ impl IntentLauncher {
 
     /// A failure that means Jev can't be reached at all turns it off for the session.
     pub fn failed(&mut self, error: &JevError) {
-        if matches!(error, JevError::MissingKey | JevError::Refused(_)) {
+        if !matches!(error, JevError::Refused("local request")) && matches!(error, JevError::MissingKey | JevError::Refused(_)) {
             self.oracle = OracleSlot::Off("unavailable");
         }
     }
@@ -151,9 +219,10 @@ impl IntentLauncher {
 
     /// The list shows these readings for `text`. Plans shown earlier for the same words stay
     /// runnable: a row Jev just replaced still runs for a moment after.
-    pub fn show(&mut self, text: &str, readings: &[JevRow]) {
-        if self.shown_for != text {
+    pub fn show(&mut self, text: &str, context_key: u64, readings: &[JevRow]) {
+        if self.shown_for != text || self.shown_context != Some(context_key) {
             self.shown_for = text.to_string();
+            self.shown_context = Some(context_key);
             self.shown.clear();
             self.shown_top = None;
         }
@@ -188,22 +257,31 @@ impl IntentLauncher {
     /// A row's key names what it does, so a row still on screen after the words moved on runs
     /// what it says.
     pub fn plan_for_row(&self, key: &str, context_key: u64) -> Option<Arc<Plan>> {
-        self.shown_plan(key).or_else(|| {
-            self.recent
-                .iter()
-                .filter(|(_, screen, _)| *screen == context_key)
-                .flat_map(|(_, _, readings)| readings)
-                .find(|reading| reading.key == key)
-                .map(|reading| reading.plan.clone())
-        })
+        self.shown_context
+            .filter(|shown| *shown == context_key)
+            .and_then(|_| self.shown_plan(key))
+            .or_else(|| {
+                self.recent
+                    .iter()
+                    .filter(|(_, screen, _)| *screen == context_key)
+                    .flat_map(|(_, _, readings)| readings)
+                    .find(|reading| reading.key == key)
+                    .map(|reading| reading.plan.clone())
+            })
     }
 
     pub fn record(&mut self, action: LastAction) {
+        self.context_revision = self.context_revision.wrapping_add(1);
+        self.recent.clear();
         self.last_action = Some(action);
     }
 
     pub fn last_action(&self) -> Option<&LastAction> {
         self.last_action.as_ref()
+    }
+
+    pub fn context_revision(&self) -> u64 {
+        self.context_revision
     }
 
     /// The catalog built for this launcher data revision, if still current.

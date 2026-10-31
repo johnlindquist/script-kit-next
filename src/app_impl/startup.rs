@@ -525,7 +525,6 @@ impl ScriptListApp {
             file_search_place_pick: None,
             file_search_open_with_target: None,
             file_search_last_undo: None,
-            file_search_undo_generation: 0,
             file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
             file_search_gen: 0,
             #[cfg(any(test, feature = "owned-ui-evaluation"))]
@@ -889,6 +888,10 @@ impl ScriptListApp {
                 if let Some(intent) = global_key_intent {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if matches!(this.current_view, AppView::CreateAiPresetView { .. }) {
+                                this.handle_create_ai_preset_key("enter", window, cx);
+                                cx.stop_propagation(); return;
+                            }
                             if this.handle_main_window_global_key_intent(intent, cx) {
                                 cx.stop_propagation();
                             }
@@ -1147,6 +1150,8 @@ impl ScriptListApp {
                                 cx.stop_propagation();
                                 return;
                             }
+
+                            if this.cycle_launcher_tab(has_shift,cx) { cx.stop_propagation(); return; }
 
                             // Tab on ScriptList opens the cwd picker — the
                             // chip-as-button affordance. Fires only when

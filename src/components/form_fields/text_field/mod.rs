@@ -21,6 +21,10 @@ pub struct FormTextField {
     /// Selection anchor (CHAR INDEX). None = no selection.
     pub selection_anchor: Option<usize>,
     input_revision: u64,
+    show_submit_issue: bool,
+    pub(crate) required_hint: Option<&'static str>,
+    host_issue: Option<SharedString>,
+    viewport: super::editable_text::FieldViewport,
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
     /// Whether to mask the text (for password fields)
@@ -46,9 +50,101 @@ impl FormTextField {
             cursor_position: char_len(&initial_value),
             selection_anchor: None,
             input_revision: 0,
+            show_submit_issue: false,
+            required_hint: None,
+            host_issue: None,
+            viewport: Default::default(),
             focus_handle: cx.focus_handle(),
             is_password,
             state,
+        }
+    }
+
+    /// A prompt can own the domain value and validation while this widget owns the
+    /// actual editable text, selection, hit testing and field chrome.
+    pub(crate) fn apply_bound_edit(
+        editor: &Entity<Self>,
+        event: &KeyDownEvent,
+        cx: &mut App,
+    ) -> Option<String> {
+        let key = event.keystroke.key.to_ascii_lowercase();
+        let mods = event.keystroke.modifiers;
+        if mods.control || mods.function || (mods.alt && event.keystroke.key_char.is_none()) {
+            return None;
+        }
+        let handled = if mods.platform {
+            !mods.alt && !mods.shift && matches!(key.as_str(), "a" | "c" | "x" | "v")
+        } else {
+            matches!(
+                key.as_str(),
+                "left"
+                    | "arrowleft"
+                    | "right"
+                    | "arrowright"
+                    | "home"
+                    | "end"
+                    | "backspace"
+                    | "delete"
+            ) || event
+                .keystroke
+                .key_char
+                .as_deref()
+                .is_some_and(|s| s.chars().any(|c| !c.is_control()))
+        };
+        handled.then(|| {
+            editor.update(cx, |field, cx| {
+                field.handle_key_event(event, cx);
+                field.value.clone()
+            })
+        })
+    }
+
+    pub(crate) fn sync_host(
+        &mut self,
+        value: &str,
+        issue: Option<SharedString>,
+        colors: FormFieldColors,
+        cx: &mut Context<Self>,
+    ) {
+        if self.value != value || self.host_issue != issue || self.colors != colors {
+            if self.value != value {
+                self.set_value(value.to_string());
+            }
+            self.host_issue = issue;
+            self.colors = colors;
+            cx.notify();
+        }
+    }
+
+    fn submit_hint(&self) -> Option<&'static str> {
+        if self.value.trim().is_empty() && self.required_hint.is_some() {
+            return self.required_hint;
+        }
+        let kind = self.field.field_type.as_deref();
+        if super::field_value_is_valid_for_submit(kind, &self.value) {
+            return None;
+        }
+        Some(if kind.is_some_and(|ty| ty.eq_ignore_ascii_case("email")) {
+            "Enter an email address, like name@example.com."
+        } else {
+            "Enter a number."
+        })
+    }
+
+    pub(crate) fn reveal_submit_issue(&mut self, cx: &mut Context<Self>) -> bool {
+        let rejected = self.submit_hint().is_some();
+        if self.show_submit_issue != rejected {
+            self.show_submit_issue = rejected;
+            cx.notify();
+        }
+        rejected
+    }
+
+    pub(crate) fn visible_submit_hint(&self) -> Option<&'static str> {
+        if self.show_submit_issue {
+            self.submit_hint()
+        } else {
+            None
         }
     }
 
@@ -172,6 +268,9 @@ impl FormTextField {
                 return true;
             }
         }
+        // A collapsed selection (e.g. ⌘A on an empty field) must not expand
+        // over the next character when an edit advances the caret.
+        self.clear_selection();
         false
     }
 
@@ -325,7 +424,8 @@ impl FormTextField {
     fn paste(&mut self, cx: &mut Context<Self>) {
         if let Some(item) = cx.read_from_clipboard() {
             if let Some(text) = item.text() {
-                if self.allows_text_insertion_for_field_type(&text) {
+                let text: String = text.chars().filter(|c| !c.is_control()).collect();
+                if !text.is_empty() && self.allows_text_insertion_for_field_type(&text) {
                     self.insert_text_at_cursor(&text);
                 }
             }
@@ -337,6 +437,8 @@ impl FormTextField {
         let key = event.keystroke.key.as_str();
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
+        let mods = event.keystroke.modifiers;
+        if mods.control || mods.function || (mods.alt && event.keystroke.key_char.is_none()) { return; }
 
         // Select all
         if cmd && !shift && key.eq_ignore_ascii_case("a") {
@@ -395,9 +497,8 @@ impl FormTextField {
         // Printable character input (ignore when cmd/ctrl held)
         if !cmd {
             if let Some(ref key_char) = event.keystroke.key_char {
-                let s = key_char.to_string();
+                let s: String = key_char.chars().filter(|c| !c.is_control()).collect();
                 if !s.is_empty()
-                    && !s.chars().all(|c| c.is_control())
                     && self.allows_text_insertion_for_field_type(&s)
                 {
                     self.insert_text_at_cursor(&s);

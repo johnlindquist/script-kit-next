@@ -112,6 +112,7 @@ impl ScriptListApp {
         }
 
         let mut new_text = self.gpui_input_state.read(cx).value().to_string();
+        if self.one_window_host.cursor_voice.dictated_input.as_ref().is_some_and(|s|s!=&new_text){self.one_window_host.cursor_voice.dictated_input=None;}
         // A finished `@` token becomes a chip; the sentence keeps every chip's token after the
         // words the input shows.
         let caret = self.gpui_input_state.read(cx).cursor();
@@ -239,6 +240,16 @@ impl ScriptListApp {
         }
 
         self.pending_filter_sync = false;
+
+        // While editing a hosted field, these are document edits, not launcher queries.
+        // Commit them before a click, Tab or Return can change which field owns the input.
+        if matches!(self.one_window_hosted_view(), Some(crate::one_window::views::HostedView::Form(_))) {
+            self.filter_coalescer.reset();
+            self.filter_text = new_text.clone();
+            self.one_window_text(&new_text, cx);
+            cx.notify();
+            return;
+        }
 
         if matches!(&self.current_view, AppView::CurrentAppCommandsView { .. }) {
             let previous_filter = self.filter_text.clone();

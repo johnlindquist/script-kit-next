@@ -270,6 +270,8 @@ pub struct DictationTranscriptResolution {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` when a dictation capture session is currently active.
+pub fn current_capture_generation() -> Option<u64> { SESSION.lock().as_ref().map(|s| s.session_generation) }
+
 pub fn is_dictation_recording() -> bool {
     SESSION.lock().is_some()
 }

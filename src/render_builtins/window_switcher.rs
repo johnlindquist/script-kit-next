@@ -68,6 +68,21 @@ impl WindowSwitcherEmptyState {
 }
 
 impl ScriptListApp {
+    pub(crate) fn filtered_switcher_windows(
+        &self,
+        filter: &str,
+    ) -> impl Iterator<Item = (usize, &crate::window_control::WindowInfo)> {
+        let needle = filter.to_lowercase();
+        self.cached_windows
+            .iter()
+            .enumerate()
+            .filter(move |(_, window)| {
+                needle.is_empty()
+                    || window.title.to_lowercase().contains(&needle)
+                    || window.app.to_lowercase().contains(&needle)
+            })
+    }
+
     /// Render window switcher view with 50/50 split layout
     /// P0 FIX: Data comes from self.cached_windows, view passes only state
     fn render_window_switcher(
@@ -142,19 +157,7 @@ impl ScriptListApp {
         let _box_shadows = self.create_box_shadows();
 
         // P0 FIX: Filter windows from self.cached_windows instead of taking ownership
-        let filtered_windows: Vec<_> = if filter.is_empty() {
-            self.cached_windows.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.cached_windows
-                .iter()
-                .enumerate()
-                .filter(|(_, w)| {
-                    w.title.to_lowercase().contains(&filter_lower)
-                        || w.app.to_lowercase().contains(&filter_lower)
-                })
-                .collect()
-        };
+        let filtered_windows: Vec<_> = self.filtered_switcher_windows(&filter).collect();
         let filtered_len = filtered_windows.len();
 
         // Key handler for window switcher

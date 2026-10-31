@@ -595,9 +595,11 @@ fn show_main_window_helper(
     // Spawning defers to the next event-loop tick where no AppCell borrow is held.
     // Platform calls that trigger delegate callbacks run OUTSIDE cx.update();
     // GPUI-only state changes (focus, selection, resize) run INSIDE cx.update().
+    let show_generation=script_kit_gpui::main_window_visibility_generation();
     cx.spawn({
         let app_entity = app_entity.clone();
         async move |cx: &mut gpui::AsyncApp| {
+            if !script_kit_gpui::is_main_window_visible() || script_kit_gpui::main_window_visibility_generation()!=show_generation {return;}
             logging::bench_log("window_show_native_start");
 
             // Platform calls — trigger macOS delegate callbacks.

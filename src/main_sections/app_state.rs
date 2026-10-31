@@ -1599,8 +1599,7 @@ pub(crate) struct ScriptListApp {
     file_search_open_with_target: Option<String>,
     /// Takes back File Search's latest file change (rename, move, copy, trash) from ⌘Z while
     /// File Search is open; the line's ⌘Z covers the main menu.
-    file_search_last_undo: Option<(u64, crate::one_window::ledger_view::LedgerRun)>,
-    file_search_undo_generation: u64,
+    file_search_last_undo: Option<u64>,
     // Active sort mode for directory-browse file search views (session-local)
     file_search_sort_mode: crate::actions::FileSearchSortMode,
     // Generation counter for ignoring stale search results

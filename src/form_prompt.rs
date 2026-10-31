@@ -10,6 +10,7 @@ use crate::{form_parser, logging, protocol};
 pub enum FormPromptOutputMode {
     ObjectByName,
     ArrayByOrder,
+    Preset,
 }
 
 /// Enum to hold different types of form field entities.
@@ -34,11 +35,11 @@ pub struct FormPromptState {
     /// Currently focused field index (for Tab navigation).
     pub focused_index: usize,
     focus_revision: u64,
+    scroll: gpui::ScrollHandle,
     /// Focus handle for this form.
     pub focus_handle: FocusHandle,
     /// Output contract for SDK resolution.
     pub output_mode: FormPromptOutputMode,
-    pub(crate) validation_error: Option<String>,
 }
 
 impl FormPromptState {
@@ -70,6 +71,7 @@ impl FormPromptState {
     }
 
     fn set_focused_index(&mut self, index: usize) {
+        self.scroll.scroll_to_item(index);
         if self.focused_index != index {
             assert!(
                 self.focus_revision < u64::MAX,
@@ -111,12 +113,31 @@ impl FormPromptState {
             .get(self.focused_index)
             .map(|(_, entity)| Self::field_value(entity, cx))
     }
-    pub fn validated_submit_value(&mut self, cx: &mut Context<Self>) -> Option<String> {
-        self.validation_error = self.submit_validation_message(cx);
-        cx.notify();
-        self.validation_error
-            .is_none()
-            .then(|| self.collect_values(cx))
+
+    pub fn validated_submit_value(
+        &mut self,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let mut first = None;
+        for (index, (_, field)) in self.fields.iter().enumerate() {
+            if let FormFieldEntity::TextField(entity) = field {
+                if entity.update(cx, |field, cx| field.reveal_submit_issue(cx)) {
+                    first.get_or_insert(index);
+                }
+            }
+        }
+        if let Some(index) = first {
+            if let Some(window) = window {
+                self.focus_field_at(index, window, cx);
+            } else {
+                // The semantic submit path has no window. Render applies this focus.
+                self.set_focused_index(index);
+                cx.notify();
+            }
+            return None;
+        }
+        Some(self.collect_values(cx))
     }
 
     fn build_values_json(values: impl IntoIterator<Item = (String, String)>) -> String {
@@ -134,7 +155,25 @@ impl FormPromptState {
     ) -> Vec<(protocol::Field, FormFieldEntity)> {
         let fields: Vec<(protocol::Field, FormFieldEntity)> = parsed_fields
             .into_iter()
-            .map(|field| {
+            .enumerate()
+            .map(|(index, mut field)| {
+                if field
+                    .label
+                    .as_deref()
+                    .is_none_or(|label| label.trim().is_empty())
+                {
+                    let words = field
+                        .name
+                        .split(['_', '-'])
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let mut chars = words.chars();
+                    field.label = Some(match chars.next() {
+                        Some(c) => format!("{}{}", c.to_uppercase(), chars.as_str()),
+                        None => format!("Field {}", index + 1),
+                    });
+                }
                 let field_type = field
                     .field_type
                     .clone()
@@ -185,9 +224,9 @@ impl FormPromptState {
             colors,
             focused_index: 0,
             focus_revision: 0,
+            scroll: gpui::ScrollHandle::new(),
             focus_handle: cx.focus_handle(),
             output_mode,
-            validation_error: None,
         }
     }
 
@@ -236,14 +275,19 @@ impl FormPromptState {
         match self.output_mode {
             FormPromptOutputMode::ObjectByName => "form",
             FormPromptOutputMode::ArrayByOrder => "fields",
+            FormPromptOutputMode::Preset => "preset",
         }
     }
 
     pub fn semantic_prefix(&self) -> &'static str {
-        match self.output_mode {
-            FormPromptOutputMode::ObjectByName => "form",
-            FormPromptOutputMode::ArrayByOrder => "fields",
-        }
+        self.prompt_type()
+    }
+
+    pub(crate) fn named_values(&self, cx: &App) -> Vec<(String, String)> {
+        self.fields
+            .iter()
+            .map(|(f, e)| (f.name.clone(), Self::field_value(e, cx)))
+            .collect()
     }
 
     fn field_value(entity: &FormFieldEntity, cx: &App) -> String {
@@ -263,7 +307,7 @@ impl FormPromptState {
     /// Get all field values using the SDK contract for this prompt source.
     pub fn collect_values(&self, cx: &App) -> String {
         match self.output_mode {
-            FormPromptOutputMode::ObjectByName => {
+            FormPromptOutputMode::ObjectByName | FormPromptOutputMode::Preset => {
                 let values = self.fields.iter().map(|(field_def, entity)| {
                     (field_def.name.clone(), Self::field_value(entity, cx))
                 });
@@ -280,39 +324,10 @@ impl FormPromptState {
         }
     }
 
-    pub fn submit_validation_errors(&self, cx: &App) -> Vec<String> {
-        let mut invalid_fields = Vec::new();
-
-        for (field_definition, field_entity) in &self.fields {
-            let value = Self::field_value(field_entity, cx);
-            if field_value_is_valid_for_submit(field_definition.field_type.as_deref(), &value) {
-                continue;
-            }
-
-            let field_type = field_definition
-                .field_type
-                .as_deref()
-                .unwrap_or("text")
-                .to_string();
-            invalid_fields.push(format!("{} ({})", field_definition.name, field_type));
-        }
-
-        invalid_fields
-    }
-
-    pub fn submit_validation_message(&self, cx: &App) -> Option<String> {
-        let invalid_fields = self.submit_validation_errors(cx);
-        if invalid_fields.is_empty() {
-            return None;
-        }
-
-        Some(if invalid_fields.len() == 1 {
-            format!("Fix invalid field before submitting: {}", invalid_fields[0])
-        } else {
-            format!(
-                "Fix invalid fields before submitting: {}",
-                invalid_fields.join(", ")
-            )
+    pub(crate) fn visible_validation_message(&self, cx: &App) -> Option<&'static str> {
+        self.fields.iter().find_map(|(_, entity)| match entity {
+            FormFieldEntity::TextField(field) => field.read(cx).visible_submit_hint(),
+            _ => None,
         })
     }
 
@@ -346,7 +361,12 @@ impl FormPromptState {
         })
     }
 
-    fn focus_field_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn focus_field_at(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.fields.is_empty() {
             return;
         }
@@ -439,56 +459,6 @@ impl FormPromptState {
     }
 }
 
-#[inline]
-fn is_valid_email_submit_value(value: &str) -> bool {
-    if value.is_empty() {
-        return true;
-    }
-
-    if value
-        .chars()
-        .any(|ch| ch.is_control() || ch.is_whitespace())
-    {
-        return false;
-    }
-
-    let mut parts = value.split('@');
-    let local = parts.next().unwrap_or_default();
-    let domain = parts.next().unwrap_or_default();
-
-    if local.is_empty() || domain.is_empty() || parts.next().is_some() {
-        return false;
-    }
-
-    if domain.starts_with('.') || domain.ends_with('.') {
-        return false;
-    }
-
-    domain.contains('.')
-}
-
-#[inline]
-fn is_valid_number_submit_value(value: &str) -> bool {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return true;
-    }
-    trimmed.parse::<f64>().is_ok()
-}
-
-#[inline]
-fn field_value_is_valid_for_submit(field_type: Option<&str>, value: &str) -> bool {
-    match field_type {
-        Some(field_type) if field_type.eq_ignore_ascii_case("email") => {
-            is_valid_email_submit_value(value)
-        }
-        Some(field_type) if field_type.eq_ignore_ascii_case("number") => {
-            is_valid_number_submit_value(value)
-        }
-        _ => true,
-    }
-}
-
 impl Render for FormPromptState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         tracing::info!(
@@ -498,8 +468,6 @@ impl Render for FormPromptState {
             "prompt_surface_rendered"
         );
 
-        let colors = self.colors;
-
         // Ensure the currently selected field is the keyboard focus target.
         if let Some(focus_handle) = self.current_focus_handle(cx) {
             if !focus_handle.is_focused(window) {
@@ -508,17 +476,17 @@ impl Render for FormPromptState {
         }
 
         // Build the form fields container
-        let mut container = div().flex().flex_col().gap(px(16.)).w_full();
-        if let Some(error) = &self.validation_error {
-            container = container.child(
-                div()
-                    .id("form-validation-error")
-                    .text_sm()
-                    .text_color(gpui::rgb(colors.error))
-                    .child(error.clone()),
-            );
-        }
-
+        use gpui_component::scroll::ScrollableElement;
+        let metrics = crate::components::FormFieldMetrics::from_colors(self.colors);
+        let mut container = div()
+            .id("form-fields-scroll")
+            .flex()
+            .flex_col()
+            .gap(px(metrics.field_stack_gap_px))
+            .size_full()
+            .min_h(px(0.))
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll);
         for (index, (_field_def, entity)) in self.fields.iter().enumerate() {
             let focus_slot_click = cx.listener(
                 move |this: &mut Self,
@@ -531,6 +499,7 @@ impl Render for FormPromptState {
             let slot = div()
                 .id(ElementId::Name(format!("form-field-slot-{index}").into()))
                 .w_full()
+                .flex_none()
                 .on_click(focus_slot_click);
             container = match entity {
                 FormFieldEntity::TextField(e) => container.child(slot.child(e.clone())),
@@ -544,12 +513,25 @@ impl Render for FormPromptState {
             container = container.child(
                 div()
                     .p(px(16.))
-                    .text_color(colors.label)
+                    .text_color(self.colors.label)
                     .child("No form fields found in HTML"),
             );
         }
 
+        // Root binds Tab before raw key handlers run. Keep traversal inside this form
+        // and update the same field index used by editing, validation and automation.
         container
+            .vertical_scrollbar(&self.scroll)
+            .on_action(cx.listener(|this, _: &gpui_component::Tab, window, cx| {
+                this.focus_next(window, cx);
+                cx.stop_propagation();
+            }))
+            .on_action(
+                cx.listener(|this, _: &gpui_component::TabPrev, window, cx| {
+                    this.focus_previous(window, cx);
+                    cx.stop_propagation();
+                }),
+            )
     }
 }
 
@@ -602,6 +584,78 @@ mod tests {
             })
         );
     }
+}
+
+#[cfg(test)]
+#[gpui::test]
+fn long_form_reveals_the_keyboard_field_and_returns_to_the_invalid_one(
+    cx: &mut gpui::TestAppContext,
+) {
+    let window = cx.add_window(|_, cx| {
+        let html = format!("<input name='email' type='email' value='invalid'>{}<input name='enabled' type='checkbox'>",
+            (0..18).map(|i| format!("<input name='item_{i}'>")).collect::<String>());
+        FormPromptState::new("long".into(), html, FormFieldColors::default(), cx)
+    });
+    cx.simulate_window_resize(window.into(), gpui::size(px(480.), px(280.)));
+    cx.run_until_parked();
+    window
+        .update(cx, |form, win, cx| form.focus_previous(win, cx))
+        .unwrap();
+    cx.run_until_parked();
+    window
+        .update(cx, |form, win, cx| {
+            assert_eq!(form.focused_index, form.fields.len() - 1);
+            assert!(form.current_focus_handle(cx).unwrap().is_focused(win));
+            assert!(
+                form.scroll.offset().y < px(0.),
+                "Tab must reveal the checkbox offscreen"
+            );
+            let rect = form.scroll.bounds_for_item(form.focused_index).unwrap();
+            assert!(
+                rect.bottom() + form.scroll.offset().y <= form.scroll.bounds().bottom() + px(1.)
+            );
+            assert!(form.validated_submit_value(Some(win), cx).is_none());
+        })
+        .unwrap();
+    cx.run_until_parked();
+    window
+        .update(cx, |form, win, cx| {
+            assert_eq!(form.focused_index, 0);
+            assert!(form.current_focus_handle(cx).unwrap().is_focused(win));
+            assert!(
+                form.scroll.bounds_for_item(0).unwrap().top() + form.scroll.offset().y
+                    >= form.scroll.bounds().top() - px(1.)
+            );
+        })
+        .unwrap();
+}
+
+#[cfg(test)]
+#[gpui::test]
+fn rejected_form_focuses_first_invalid_field_and_only_shows_current_issues(
+    cx: &mut gpui::TestAppContext,
+) {
+    use gpui::AppContext as _;
+    let colors = FormFieldColors::from_theme(&crate::theme::Theme::default());
+    let form = cx.new(|cx| FormPromptState::new("reject".into(),
+        "<input name='email' type='email' value='invalid'><input name='count' type='number' value='no'><textarea name='notes'>draft</textarea>".into(), colors, cx));
+    form.update(cx, |form, cx| {
+        form.set_focused_index(2);
+        assert!(form.visible_validation_message(cx).is_none());
+        assert!(form.validated_submit_value(None, cx).is_none());
+        assert_eq!(form.focused_index, 0);
+        form.set_input("reader@example.org".into(), cx);
+        assert_eq!(form.visible_validation_message(cx), Some("Enter a number."));
+        assert!(form.validated_submit_value(None, cx).is_none());
+        assert_eq!(form.focused_index, 1);
+        form.set_input("12".into(), cx);
+        assert!(form.visible_validation_message(cx).is_none());
+        let result = form.validated_submit_value(None, cx).expect("valid draft");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&result).unwrap(),
+            serde_json::json!({"email":"reader@example.org","count":"12","notes":"draft"})
+        );
+    });
 }
 
 #[cfg(test)]

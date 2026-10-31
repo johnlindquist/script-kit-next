@@ -332,6 +332,7 @@ interface Config {
   terminalFontSize?: number;
   uiScale?: number;
   builtIns?: BuiltInConfig;
+  jevIntentEnabled?: boolean;
   clipboardHistoryMaxTextLength?: number;
   clipboardHistorySecretRejection?: ClipboardHistorySecretRejectionConfig;
   processLimits?: ProcessLimits;
@@ -423,6 +424,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
     appLauncher: true,
     windowSwitcher: true
   },
+  jevIntentEnabled: false,
   clipboardHistoryMaxTextLength: 100000,
   processLimits: {
     maxMemoryMb: undefined,
@@ -574,6 +576,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "boolean",
     default: true,
     description: "Enable window switcher built-in feature"
+  },
+  {
+    key: "jevIntentEnabled",
+    type: "boolean",
+    default: false,
+    description: "Send launcher words, app names and command/menu choices to TypeSafe for remote readings"
   },
   {
     key: "clipboardHistoryMaxTextLength",
@@ -2140,7 +2148,7 @@ async function cmdValidate(): Promise<void> {
     const knownTopLevel = [
       'hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize',
       'terminalFontSize', 'uiScale', 'builtIns', 'processLimits',
-      'clipboardHistoryMaxTextLength', 'clipboardHistorySecretRejection',
+      'jevIntentEnabled', 'clipboardHistoryMaxTextLength', 'clipboardHistorySecretRejection',
       'suggested', 'notesHotkey', 'notesHotkeyEnabled', 'notesFolder',
       'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
       'dictationHotkey', 'dictationHotkeyEnabled',

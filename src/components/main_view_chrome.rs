@@ -662,6 +662,7 @@ pub(crate) fn render_prompt_search_input(
 }
 
 pub(crate) struct MainViewHeaderChrome {
+    tab_band: Option<(AnyElement, f32)>,
     context: Option<AnyElement>,
     input: Option<AnyElement>,
     padding_x: f32,
@@ -680,6 +681,7 @@ impl MainViewHeaderChrome {
         let metrics = main_view_header_metrics(def, Some(def.search.height));
         let text = crate::theme::get_theme_snapshot().theme.colors.text.primary;
         Self {
+            tab_band: None,
             context: Some(context),
             input: Some(input),
             padding_x: metrics.padding_x,
@@ -694,11 +696,18 @@ impl MainViewHeaderChrome {
         }
     }
 
+    /// The launcher keeps the same total header/scroll inset, but puts the input first and
+    /// joins the 38 pt subject band directly to the first section underneath it.
+    pub(crate) fn tabbed(def:MainMenuThemeDef, band:AnyElement,input:AnyElement)->Self {
+        Self { tab_band:Some((band, main_view_header_metrics(def,Some(def.search.height)).header_height)),input:Some(input), ..Self::hidden() }
+    }
+
     /// Intentional context-only anatomy for surfaces whose editable control
     /// lives in the main body (for example Day Page and root-owned prompts).
     pub(crate) fn context_only(def: MainMenuThemeDef, context: AnyElement) -> Self {
         let metrics = main_view_header_metrics(def, None);
         Self {
+            tab_band: None,
             context: Some(context),
             input: None,
             padding_x: metrics.padding_x,
@@ -714,6 +723,7 @@ impl MainViewHeaderChrome {
     #[allow(dead_code)] // Binary-only Permissions renderer consumes this constructor.
     pub(crate) fn hidden() -> Self {
         Self {
+            tab_band: None,
             context: None,
             input: None,
             padding_x: 0.0,
@@ -1035,6 +1045,11 @@ pub(crate) fn render_main_view_header_with_context_outset(
     chrome: MainViewHeaderChrome,
     context_edge_outset_x: f32,
 ) -> AnyElement {
+    if let Some((band,height))=chrome.tab_band {
+        return div().id(MAIN_VIEW_HEADER_ID).debug_selector(||MAIN_VIEW_HEADER_ID.to_string()).w_full().h(px(height)).flex_none().flex().flex_col()
+            .child(div().w_full().flex_1().flex().items_center().children(chrome.input))
+            .child(div().w_full().h(px(crate::components::subject_tab_bar::HEIGHT)).flex_none().child(band)).into_any_element();
+    }
     let mut header = div()
         .id(MAIN_VIEW_HEADER_ID)
         .debug_selector(|| MAIN_VIEW_HEADER_ID.to_string())

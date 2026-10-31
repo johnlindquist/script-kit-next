@@ -1,0 +1,28 @@
+[
+  {
+    "name": "request",
+    "type": "remind me to call mom tomorrow at 5pm",
+    "waitMs": 1100
+  },
+  {
+    "name": "reminder",
+    "key": "cmd-1",
+    "waitMs": 450
+  },
+  {
+    "name": "first",
+    "key": "tab"
+  },
+  {
+    "name": "choose-date",
+    "click": "list-row:form-field:when"
+  },
+  {
+    "name": "monday",
+    "type": "Monday"
+  },
+  {
+    "name": "back-to-task",
+    "key": "shift-tab"
+  }
+]

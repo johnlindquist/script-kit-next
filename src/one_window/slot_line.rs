@@ -222,7 +222,7 @@ impl SlotLineView {
     }
 }
 
-fn render_hint(
+pub(crate) fn render_hint(
     theme: &crate::theme::Theme,
     def: MainMenuThemeDef,
     key: &str,
@@ -248,7 +248,7 @@ fn render_hint(
 }
 
 /// The window's own state, not the line's: a Lucide pin and what it means, at the right end.
-fn render_pinned(theme: &crate::theme::Theme, def: MainMenuThemeDef) -> AnyElement {
+pub(crate) fn render_pinned(theme: &crate::theme::Theme, def: MainMenuThemeDef) -> AnyElement {
     use gpui_component::IconNamed;
     let tokens = def.slot_line;
     div()
@@ -413,7 +413,7 @@ fn chip_title(max_px: f32, title: &str) -> gpui::Div {
 
 /// The subject's icon: the front app's own icon for `app:<bundle id>`, else the app's icon for a
 /// name the one-window spec uses.
-fn render_slot_icon(name: &str, size: f32, color: u32) -> AnyElement {
+pub(crate) fn render_slot_icon(name: &str, size: f32, color: u32) -> AnyElement {
     if let Some(bundle) = name.strip_prefix(APP_ICON_PREFIX) {
         let drawn = size + 2.0;
         if let Some(image) = scaled_app_icon(bundle, (drawn * 2.0).ceil() as u32) {

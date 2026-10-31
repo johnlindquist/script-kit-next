@@ -319,6 +319,11 @@ def main():
         label = enter_label(m)
         line = slot_words(m)
         now = {"header": fh and fh.get("text"), "enter": label, "view": view_name(m)}
+        if "input" in (expected.get(name) or {}):
+            now["input"] = text
+        if "lineTitle" in (expected.get(name) or {}):
+            capture = json.load(open(os.path.join(d, m["_file"][:-5] + ".capture.json")))
+            now["lineTitle"] = ((capture["state"].get("oneWindow") or {}).get("line") or {}).get("title")
         shown[name] = now
         for k, want in (expected.get(name) or {}).items():
             if now.get(k) != want:

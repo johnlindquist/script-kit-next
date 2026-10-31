@@ -9,12 +9,13 @@ use super::runtime::{Evaluator, RootOwner};
 use crate::prompt_completion::{reviewed_sdk_message, PromptCompletionBinding};
 use crate::protocol::{
     AutomationTargetIdentitySnapshot, AutomationWindowTarget, Message, SdkCompletionChannel,
-    SdkPromptCommand,
+    SdkPromptCommand, SdkPromptFixtureId,
 };
 
 const BACKPRESSURE_ID: &str = "owned-sdk-channel-capacity";
 
 pub(super) struct SdkPromptControl {
+    fixture: SdkPromptFixtureId,
     binding: PromptCompletionBinding,
     receiver: Option<Receiver<Message>>,
     capacity_held: bool,
@@ -28,7 +29,7 @@ impl Drop for SdkPromptControl {
 }
 
 impl SdkPromptControl {
-    fn new(id: String, channel: SdkCompletionChannel) -> Result<Self> {
+    fn new(fixture: SdkPromptFixtureId, id: String, channel: SdkCompletionChannel) -> Result<Self> {
         let (sender, receiver) = mpsc::sync_channel(1);
         let capacity_held = channel == SdkCompletionChannel::Full;
         if capacity_held {
@@ -44,6 +45,7 @@ impl SdkPromptControl {
             Some(receiver)
         };
         Ok(Self {
+            fixture,
             binding: PromptCompletionBinding::sdk(id, Some(sender)),
             receiver,
             capacity_held,
@@ -92,10 +94,6 @@ impl Evaluator {
         expected: &AutomationTargetIdentitySnapshot,
         command: SdkPromptCommand,
     ) -> Result<Value> {
-        ensure!(
-            self.bootstrap.fixture_ids.contains("sdk.arg-roundtrip.v1"),
-            "sdk_fixture_outside_launch_subset"
-        );
         self.validate_expected(target, expected)?;
         let mounted = self.resolve(target)?.clone();
         ensure!(
@@ -117,14 +115,19 @@ impl Evaluator {
                     !self.sdk_prompt_controls.contains_key(&key),
                     "sdk_prompt_already_bound"
                 );
+                ensure!(self.bootstrap.fixture_ids.contains(fixture_id.as_str()), "sdk_fixture_outside_launch_subset");
                 let (id, message) = reviewed_sdk_message(fixture_id, message)?;
-                let control = SdkPromptControl::new(id.clone(), channel)?;
+                let control = SdkPromptControl::new(fixture_id, id.clone(), channel)?;
                 mounted.handle.update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
                     entity.update(cx, |app, cx| -> Result<()> {
                         app.handle_stdin_protocol_message(message, window, cx);
-                        ensure!(matches!(&app.current_view, crate::AppView::ArgPrompt { id: current, .. } if current == &id),
-                            "sdk_production_prompt_not_mounted");
-                        // Arg's production submit owner reads this binding at the
+                        let mounted_id = match (fixture_id, &app.current_view) {
+                            (SdkPromptFixtureId::ArgRoundtrip, crate::AppView::ArgPrompt { id, .. }) |
+                            (SdkPromptFixtureId::FormCorrection, crate::AppView::FormPrompt { id, .. }) => Some(id),
+                            _ => None,
+                        };
+                        ensure!(mounted_id == Some(&id), "sdk_production_prompt_not_mounted");
+                        // Both production submit owners read this binding at the
                         // event boundary; it has no captured leaf callback. Install
                         // before returning to the event loop, never borrow RPCs.
                         if let Some(previous) = app.prompt_completion.replace(control.binding.clone()) {
@@ -165,7 +168,7 @@ impl Evaluator {
             .get(&key)
             .context("sdk_prompt_not_bound")?;
         Ok(
-            json!({"operation":"sdkPrompt","ok":true,"fixtureId":"sdk.arg-roundtrip.v1",
+            json!({"operation":"sdkPrompt","ok":true,"fixtureId":control.fixture.as_str(),
             "completion":control.binding.observation(),"capacityHeld":control.capacity_held,
             "forwarded":control.forwarded,"messages":messages}),
         )

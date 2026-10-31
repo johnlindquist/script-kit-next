@@ -1,0 +1,43 @@
+[
+  {
+    "name": "typed",
+    "type": "keep "
+  },
+  {
+    "name": "listening",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin"
+    }
+  },
+  {
+    "name": "insert",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorFinal",
+      "words": "these words"
+    },
+    "waitMs": 350
+  },
+  {
+    "name": "again",
+    "waitMs": 420,
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorBegin"
+    }
+  },
+  {
+    "name": "redirect",
+    "click": "dictation-toggle-kit"
+  },
+  {
+    "name": "kit-draft",
+    "control": {
+      "family": "oneWindow",
+      "operation": "cursorFinal",
+      "words": "open slack"
+    },
+    "waitMs": 350
+  }
+]

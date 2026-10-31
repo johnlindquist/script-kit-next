@@ -1,0 +1,62 @@
+{
+ "webcam-live": {
+  "header": null,
+  "enter": "↵ Capture Photo",
+  "view": null
+ },
+ "webcam-actions-live": {
+  "header": "Or pick one",
+  "enter": "↵ Capture Photo",
+  "view": null
+ },
+ "webcam-filter-countdown": {
+  "header": "Or pick one",
+  "enter": "↵ Capture in 3 Seconds",
+  "view": null
+ },
+ "webcam-countdown-3": {
+  "header": null,
+  "enter": "↵ Capture Now",
+  "view": null
+ },
+ "webcam-countdown-2": {
+  "header": null,
+  "enter": "↵ Capture Now",
+  "view": null
+ },
+ "webcam-review": {
+  "header": null,
+  "enter": "↵ Copy Image",
+  "view": null
+ },
+ "webcam-actions-review": {
+  "header": "Or pick one",
+  "enter": "↵ Copy Image",
+  "view": null
+ },
+ "webcam-actions-review-closed": {
+  "header": null,
+  "enter": "↵ Copy Image",
+  "view": null
+ },
+ "webcam-retake": {
+  "header": null,
+  "enter": "↵ Capture Photo",
+  "view": null
+ },
+ "webcam-capture-now": {
+  "header": null,
+  "enter": "↵ Copy Image",
+  "view": null
+ },
+ "webcam-copy-path": {
+  "header": null,
+  "enter": "↵ Copy Image",
+  "view": null
+ },
+ "webcam-copy-image": {
+  "header": null,
+  "enter": "↵ Copy Image",
+  "view": null
+ }
+}

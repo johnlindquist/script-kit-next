@@ -31,6 +31,7 @@ mod select;
 mod template;
 #[cfg(target_os = "macos")]
 pub mod webcam;
+pub mod webcam_session;
 #[cfg(not(target_os = "macos"))]
 mod webcam_stub;
 

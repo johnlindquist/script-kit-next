@@ -77,6 +77,8 @@ pub struct NamingPrompt {
     pub target_directory: PathBuf,
     pub extension: String,
     pub friendly_name: String,
+    pub(super) editor: Option<Entity<crate::components::FormTextField>>,
+    pub(super) attempted: bool,
     pub friendly_name_trimmed: String,
     pub filename_stem: String,
     pub filename: String,
@@ -104,6 +106,8 @@ impl NamingPrompt {
             target_directory: config.target_directory,
             extension: config.extension,
             friendly_name: String::new(),
+            editor: None,
+            attempted: false,
             friendly_name_trimmed: String::new(),
             filename_stem: String::new(),
             filename: String::new(),
@@ -117,6 +121,10 @@ impl NamingPrompt {
 
         prompt.refresh_derived_state();
         prompt
+    }
+
+    pub(crate) fn visible_issue(&self) -> Option<&NamingValidationError> {
+        self.validation_error.as_ref().filter(|_| self.attempted || !self.friendly_name.is_empty())
     }
 
     fn refresh_derived_state(&mut self) {
@@ -158,6 +166,7 @@ impl NamingPrompt {
     }
 
     pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        self.attempted = true;
         self.refresh_derived_state();
 
         if self.validation_error.is_some() {

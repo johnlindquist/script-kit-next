@@ -1,6 +1,6 @@
 # Computer Use
 
-Computer-use helpers give scripts and agents safe visual awareness of macOS windows — listing and capturing exact native windows — **without** granting them input control.
+Computer-use helpers give scripts and agents safe visual awareness of macOS windows — listing and capturing exact native windows — **without** granting them input control. To fill (but never submit) a native Save sheet, see [Fill a Save sheet filename](desktop-filename.md). That separate `desktop/*` interface requires its own grant.
 
 ## Safety Model
 

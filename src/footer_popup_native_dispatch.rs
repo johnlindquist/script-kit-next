@@ -241,6 +241,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Cwd => sel!(cwdFooterAction:),
         FooterAction::AgentModel => sel!(agentModelFooterAction:),
         FooterAction::Today => sel!(todayFooterAction:),
+        FooterAction::UndoLast => sel!(undoLastFooterAction:),
     }
 }
 
@@ -321,6 +322,7 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             sel!(todayFooterAction:),
             footer_today_action as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(sel!(undoLastFooterAction:), footer_undo_last_action as extern "C" fn(&Object, Sel, id));
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
@@ -429,6 +431,11 @@ extern "C" fn footer_agent_model_action(
     sender: id,
 ) {
     send_footer_action_from_sender(sender, FooterAction::AgentModel);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_undo_last_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, sender: id) {
+    send_footer_action_from_sender(sender, FooterAction::UndoLast);
 }
 
 #[cfg(target_os = "macos")]

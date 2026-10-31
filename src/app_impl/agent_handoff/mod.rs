@@ -92,43 +92,20 @@ impl ScriptListApp {
             );
             return true;
         }
-        // accept_spine_projection_row handles rich subsearch interception
-        // (@file:, @clipboard:, etc.) before applying the row's action. If it
-        // succeeds, the Spine consumed Enter. Otherwise (e.g. Noop placeholder,
-        // no selection), fall through to plan submission.
+        // An active @source: lookup owns Return, even when it has no match.
+        // Only an explicit chat action may submit those unresolved words.
         if self.accept_spine_projection_row(window, ctx) {
             return true;
         }
-        if self.try_submit_spine_prompt_plan_from_enter(ctx) {
+        if let Some((source, _)) = self.active_spine_context_subsearch() {
+            tracing::info!(
+                target: "script_kit::spine",
+                event = "spine_subsearch_enter_consumed_without_attach",
+                context_type = source.prefix(),
+            );
             return true;
         }
-        // Structural guard: while a `@source:` subsearch segment is active,
-        // Enter must never fall through to the launcher's default row
-        // execution (opening the note / running the script / pasting the
-        // clipboard entry) — that destroys the prompt being built. Consume
-        // the Enter even when no row attached.
-        if let Some(projection) = inputs.spine_projection.as_ref() {
-            if let crate::spine::SpineSegmentKind::ContextMention {
-                context_type,
-                sub_query,
-            } = &projection.active_segment_kind
-            {
-                if crate::spine::catalog_subsearch::parse_context_subsearch(
-                    context_type,
-                    sub_query.as_deref(),
-                )
-                .is_some()
-                {
-                    tracing::info!(
-                        target: "script_kit::spine",
-                        event = "spine_subsearch_enter_consumed_without_attach",
-                        context_type = %context_type,
-                    );
-                    return true;
-                }
-            }
-        }
-        false
+        self.try_submit_spine_prompt_plan_from_enter(ctx)
     }
 
     pub(crate) fn try_submit_spine_prompt_plan_from_enter(
@@ -3741,20 +3718,7 @@ impl ScriptListApp {
                     .get(p.current_input)
                     .and_then(|v| non_empty(v.clone()))
             }
-            AppView::CreateAiPresetView {
-                name,
-                system_prompt,
-                model,
-                active_field,
-            } => {
-                // Return whichever field is active
-                match active_field {
-                    0 => non_empty(name.clone()),
-                    1 => non_empty(system_prompt.clone()),
-                    2 => non_empty(model.clone()),
-                    _ => non_empty(name.clone()),
-                }
-            }
+            AppView::CreateAiPresetView { entity } => entity.read(cx).focused_value(cx).and_then(non_empty),
 
             // --- Views with no meaningful user-editable text ---
             // DivPrompt: script-rendered HTML, no user input

@@ -260,6 +260,8 @@ impl MainMenuContentDigest {
             BuiltInFeature::Dictation => self.text("Dictation"),
             BuiltInFeature::DictationToAiHarness => self.text("DictationToAiHarness"),
             BuiltInFeature::DictationToFrontmostApp => self.text("DictationToFrontmostApp"),
+            BuiltInFeature::UseDictationInKit => self.text("UseDictationInKit"),
+            BuiltInFeature::ReviewDictationMarkdown => self.text("ReviewDictationMarkdown"),
             BuiltInFeature::DictationToNotes => self.text("DictationToNotes"),
             BuiltInFeature::DictationHistory => self.text("DictationHistory"),
             BuiltInFeature::Settings => self.text("Settings"),

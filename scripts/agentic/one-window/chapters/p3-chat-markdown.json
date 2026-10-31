@@ -1,0 +1,35 @@
+[
+  {
+    "name": "open",
+    "key": "cmd-enter",
+    "waitMs": 350
+  },
+  {
+    "name": "ask",
+    "type": "Show the fixture schedule",
+    "waitMs": 300
+  },
+  {
+    "name": "waiting",
+    "key": "enter",
+    "waitMs": 450
+  },
+  {
+    "name": "writing",
+    "waitMs": 1900
+  },
+  {
+    "name": "ready",
+    "waitMs": 3400
+  },
+  {
+    "name": "down",
+    "key": "down",
+    "waitMs": 180
+  },
+  {
+    "name": "lower-action",
+    "key": "down",
+    "waitMs": 180
+  }
+]

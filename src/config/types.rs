@@ -1936,6 +1936,9 @@ impl BrainRemoteConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Opt in to sending launcher sentences and command/menu choices to TypeSafe.
+    #[serde(default, rename = "jevIntentEnabled")]
+    pub jev_intent_enabled: bool,
     #[serde(default = "default_main_hotkey")]
     pub hotkey: HotkeyConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2172,6 +2175,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            jev_intent_enabled: false,
             hotkey: default_main_hotkey(),
             bun_path: None,           // Will use system PATH if not specified
             editor: None,             // Will use $EDITOR or fallback to "code"

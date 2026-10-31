@@ -1,0 +1,11 @@
+[
+  {"name":"compound","type":"open slack and put it on the right half","waitMs":1400},
+  {"name":"recall","type":"when is sarah's birthday","waitMs":1400},
+  {"name":"recall-search","key":"enter","waitMs":420},
+  {"name":"quit-reading","type":"quit slack","waitMs":1400},
+  {"name":"quit-hold","key":"enter","waitMs":220},
+  {"name":"quit-cancel","key":"cmd-z","waitMs":320},
+  {"name":"offline-unavailable","type":"add to today's note: blue kite and tell Mo the bell rang","waitMs":1400},
+  {"name":"offline-no-effect","key":"enter","waitMs":300},
+  {"name":"offline-notes","type":"add to today's note: apples then add to today's note: pears","waitMs":1400}
+]

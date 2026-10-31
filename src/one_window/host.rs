@@ -31,12 +31,17 @@ pub(crate) struct OneWindowHost {
     now: Ms,
     /// The one pending `Tick`; a timer for any other time is stale.
     wake_at: Option<Ms>,
+    published_subject_page: Option<String>,
+    pub(crate) tab_hints: bool,
+    pub(crate) tab_modifier_generation: u64,
     /// The fixed height the main list's window is at or was last asked to take; cleared while a
     /// prompt sizes the window its own way.
     pub(super) height: Option<f32>,
     pub(super) window: Option<gpui::AnyWindowHandle>,
     /// Words the reducer put in the input; their echo from the input isn't typing.
     echo: Option<String>,
+    /// Invalidates a pending, read-only Save-sheet preview when the user moves on.
+    pub(super) fill_preview: u64,
     jev_asked: u64,
     jev_pending: Option<(u64, String)>,
     /// A row that ran and opened something; its title is what finished when that ends.
@@ -46,6 +51,7 @@ pub(crate) struct OneWindowHost {
     pub(super) staged_from: Option<super::staging::StagedFrom>,
     pub(crate) work: super::work::WorkHost,
     pub(crate) learns: super::learns::LearnsHost,
+    pub(crate) cursor_voice: crate::CursorHost,
     pub(super) ledger: super::ledger_view::LedgerHost,
     /// The form, answer or note open in place of the list.
     pub(super) view: Option<super::views::HostedView>,
@@ -57,7 +63,8 @@ pub(crate) struct OneWindowHost {
     /// the list, so they go when a view opens and come back when it closes.
     pub(super) covered: bool,
     /// A note asked for while the window was hidden, opened once it's shown.
-    pub(super) note_waiting: Option<crate::notes::NoteTarget>,
+    pub(crate) note_open_revision:u64,
+    pub(crate) note_waiting: Option<crate::notes::NoteTarget>,
     /// Scrolls a long view's rows so the highlighted one stays in sight.
     pub(super) view_scroll: gpui::ScrollHandle,
     /// The row it last scrolled to, so the wheel can scroll freely until the highlight moves.
@@ -187,9 +194,11 @@ pub(crate) fn pick_across_sources(sources: &[&str], budget: usize) -> Vec<usize>
 fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
     readings
         .iter()
-        .map(|reading| Row {
-            needs: super::work::needs_of(&reading.plan),
-            ..Row::new(reading.key.clone(), reading.plan.title.clone())
+        .map(|reading| {
+            let row = Row::new(reading.key.clone(), reading.plan.title.clone());
+            if crate::intent::launcher::unavailable(&reading.plan).is_some() {
+                row.with_enter_label("Unavailable")
+            } else { row }
         })
         .collect()
 }
@@ -271,12 +280,16 @@ impl ScriptListApp {
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
+        let action_page=self.one_window.page_for_action();
         let mut works = Vec::new();
         let mut first = true;
         self.one_window_load_lessons(cx);
         let now = self.one_window_now(cx);
         self.one_window_host.acting_on = self.one_window.staged().map(|s| s.subject.clone());
         while let Some(event) = queue.pop_front() {
+            if matches!(event, Event::Text(_) | Event::Dismissed | Event::Summon | Event::View(_) | Event::Stage(_) | Event::Key(_)) {
+                self.one_window_host.fill_preview = self.one_window_host.fill_preview.wrapping_add(1);
+            }
             let typed = matches!(event, Event::Text(_));
             let outcome = self.one_window.handle(now, event);
             if std::mem::take(&mut first) {
@@ -348,7 +361,7 @@ impl ScriptListApp {
             handled.ran = true;
             let said = self.one_window_host.ledger.said;
             let title = row.title.clone();
-            if let Err(error) = self.one_window_run(row, cx) {
+            if let Err(error) = if row.key.starts_with("subject/") { self.run_subject_action(&row,action_page.clone(),cx) } else { self.one_window_run(row, cx) } {
                 tracing::warn!(
                     target: "script_kit::one_window",
                     event = "run_failed",
@@ -452,7 +465,7 @@ impl ScriptListApp {
         }
     }
 
-    fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn one_window_show_selection(&mut self, cx: &mut Context<Self>) {
         if self.one_window_view_covers_list() || self.one_window_shows_every_result() {
             return;
         }
@@ -487,7 +500,8 @@ impl ScriptListApp {
         }
         self.settle_intent_oracle_slot();
         let mut turn = vec![Event::Text(text.to_string())];
-        if self.intent_launcher.is_off() && !text.trim().is_empty() {
+        if self.intent_launcher.is_off() && !text.trim().is_empty()
+            && self.intent_tab_browser().and_then(|app| crate::intent::engine::named_tab_plan(text,app)).is_none() {
             turn.push(Event::JevDown {
                 text: text.to_string(),
             });
@@ -502,7 +516,11 @@ impl ScriptListApp {
         self.one_window_host.echo = Some(text.clone());
         self.filter_text = text.clone();
         self.pending_filter_sync = true;
-        self.queue_filter_compute(text, cx);
+        if matches!(self.one_window_hosted_view(), Some(super::views::HostedView::Form(_))) {
+            self.filter_coalescer.reset();
+        } else {
+            self.queue_filter_compute(text, cx);
+        }
     }
 
     fn one_window_wake_at(&mut self, at: Ms, cx: &mut Context<Self>) {
@@ -525,7 +543,7 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn one_window_republish(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+    pub(super) fn one_window_republish(&mut self, reason: &'static str, cx: &mut Context<Self>) {
         if self.one_window_owns(&self.computed_filter_text) {
             self.commit_main_menu_results_refresh(reason, None, cx, |_, _| true);
         }
@@ -543,6 +561,7 @@ impl ScriptListApp {
         for row in self.one_window.staged().iter().flat_map(|s| &s.rows) {
             row.key.hash(&mut hasher);
         }
+        self.one_window.subject_page().map(|p|p.id).hash(&mut hasher);
         self.one_window_own_token().hash(&mut hasher);
         self.one_window_ledger_token(&mut hasher);
         hasher.finish()
@@ -659,12 +678,9 @@ impl ScriptListApp {
         let mut names: Vec<(Row, &SearchResult)> = Vec::new();
         let mut fallbacks: Vec<(u8, Row, &SearchResult)> = Vec::new();
         let mut results = HashMap::new();
-        match self.one_window_capture_row(text) {
-            Some((row, result)) => {
-                results.insert(row.key.clone(), result);
-                rows.push(row);
-            }
-            None => super::work::steps_row(text, &mut rows, &mut results),
+        if let Some((row, result)) = self.one_window_capture_row(text) {
+            results.insert(row.key.clone(), result);
+            rows.push(row);
         }
         let mut keys: std::collections::HashSet<String> = results.keys().cloned().collect();
         for item in grouped {
@@ -822,6 +838,7 @@ impl ScriptListApp {
                 IntentMatch {
                     subtitle: super::work::needs_subtitle(&row, self.one_window.work())
                         .or_else(|| plan.as_deref().map(jev_row_subtitle))
+                        .or_else(|| row.sub.clone())
                         .unwrap_or_default(),
                     title: row.title,
                     verb: plan.as_deref().map_or("Run", crate::intent::plan_verb),
@@ -850,6 +867,13 @@ impl ScriptListApp {
             self.one_window_show_selection(cx);
         }
         self.one_window_follow_own_selection(cx);
+        // Re-anchoring the old first suggestion would scroll the entire new subject panel
+        // out of sight, leaving Return bound to an invisible action on first show.
+        let page=self.has_launcher_tabs().then(||self.one_window.subject_page()).flatten().map(|p|p.id);
+        if page!=self.one_window_host.published_subject_page && page.is_some() && self.filter_text.is_empty() && self.one_window.list().sel==0 {
+            self.main_list_state.scroll_to(gpui::ListOffset{item_ix:0,offset_in_item:gpui::px(0.)});
+        }
+        self.one_window_host.published_subject_page=page;
     }
 
     // ------------------------------------------------------------------ Jev
@@ -863,8 +887,20 @@ impl ScriptListApp {
         if !self.one_window_owns(&text) || self.one_window.list().jev.is_down_for(&text) {
             return;
         }
+        if let Some(plan) = self.intent_tab_browser().and_then(|app| crate::intent::engine::named_tab_plan(&text,app)) {
+            let readings=crate::intent::readings(plan);
+            self.one_window_host.jev_pending=None;
+            self.intent_launcher.show(&text,self.intent_screen_key(),&readings);
+            queue.push_back(Event::Jev { rows: jev_rows(&readings), text });
+            return;
+        }
         if self.intent_launcher.is_off() {
             queue.push_back(Event::JevDown { text });
+            return;
+        }
+        if self.main_services.is_production() && (crate::intent::sensitive_words(&text) || self.one_window.list().names.iter().any(|r| !r.fallback && r.title.eq_ignore_ascii_case(text.trim()))) {
+            self.one_window_cancel_jev();
+            queue.push_back(Event::Jev { rows: vec![], text });
             return;
         }
         if !crate::intent::wants_reading(&text) {
@@ -876,7 +912,8 @@ impl ScriptListApp {
         }
         let screen = self.intent_screen_key();
         if let Some(readings) = self.intent_launcher.recalled(&text, screen) {
-            self.intent_launcher.show(&text, &readings);
+            self.one_window_host.jev_pending = None;
+            self.intent_launcher.show(&text, screen, &readings);
             queue.push_back(Event::Jev {
                 rows: jev_rows(&readings),
                 text,
@@ -886,7 +923,12 @@ impl ScriptListApp {
         self.one_window_send_jev(text, screen, cx);
     }
 
-    fn one_window_send_jev(&mut self, text: String, screen: u64, cx: &mut Context<Self>) {
+    pub(super) fn one_window_send_jev(
+        &mut self,
+        text: String,
+        screen: u64,
+        cx: &mut Context<Self>,
+    ) {
         self.one_window_host.jev_asked += 1;
         let id = self.one_window_host.jev_asked;
         self.one_window_host.jev_pending = Some((id, text.clone()));
@@ -896,6 +938,10 @@ impl ScriptListApp {
             let _ = this.update(cx, |app, cx| app.one_window_jev_timed_out(id, cx));
         })
         .detach();
+    }
+
+    pub(super) fn one_window_cancel_jev(&mut self) {
+        self.one_window_host.jev_pending = None;
     }
 
     /// Jev answered the request `id` for `text`.
@@ -911,22 +957,33 @@ impl ScriptListApp {
             .one_window_host
             .jev_pending
             .as_ref()
-            .is_some_and(|(pending, _)| *pending == id);
-        if current {
-            self.one_window_host.jev_pending = None;
+            .is_some_and(|(pending, words)| *pending == id && words == &text);
+        // Identical words can belong to a later request or a different screen. Neither
+        // a successful late answer nor a timeout may replace that newer interpretation.
+        if !current {
+            return;
+        }
+        self.one_window_host.jev_pending = None;
+        if screen != self.intent_screen_key() {
+            self.one_window_talk_unread(&text, cx);
+            self.one_window_handle(Event::JevDown { text }, cx);
+            self.one_window_republish("jev_context_changed", cx);
+            return;
         }
         let event = match result {
             Ok(plan) => {
                 let readings = crate::intent::readings(plan);
                 self.intent_launcher.remember(&text, screen, &readings);
                 if self.one_window.list().text == text {
-                    self.intent_launcher.show(&text, &readings);
+                    self.intent_launcher.show(&text, screen, &readings);
                 }
                 self.one_window_talk_reading(&text, &readings, cx);
                 tracing::info!(
                     target: "script_kit::intent",
                     event = "jev_answered",
                     rows = readings.len(),
+                    provider_ms = readings.first().map(|r| r.plan.timing.ms),
+                    input_tokens = readings.first().map(|r| r.plan.timing.input_tokens),
                 );
                 Event::Jev {
                     rows: jev_rows(&readings),
@@ -934,11 +991,9 @@ impl ScriptListApp {
                 }
             }
             Err(error) => {
+                self.one_window_talk_unread(&text, cx);
                 tracing::info!(target: "script_kit::intent", event = "jev_failed", error = %error);
                 self.intent_launcher.failed(&error);
-                if !current {
-                    return;
-                }
                 Event::JevDown { text }
             }
         };
@@ -955,6 +1010,7 @@ impl ScriptListApp {
             return;
         };
         tracing::info!(target: "script_kit::intent", event = "jev_timed_out");
+        self.one_window_talk_unread(&text, cx);
         self.one_window_handle(Event::JevDown { text }, cx);
         self.one_window_republish("jev_timeout", cx);
     }
@@ -965,12 +1021,11 @@ impl ScriptListApp {
     /// launcher row the list shows for it.
     fn one_window_run(&mut self, row: Row, cx: &mut Context<Self>) -> anyhow::Result<()> {
         tracing::info!(target: "script_kit::one_window", event = "run", key = %row.key);
-        if row
+        if let Some(query) = row
             .key
-            .starts_with(sk_one_window::contract::ALL_RESULTS_KEY)
+            .strip_prefix(sk_one_window::contract::ALL_RESULTS_KEY)
         {
-            self.one_window_open_all_results(cx);
-            return Ok(());
+            return self.one_window_open_all_results(query, cx);
         }
         if self.one_window_route_work(&row, cx) {
             return Ok(());
@@ -1081,6 +1136,7 @@ impl ScriptListApp {
     pub(crate) fn one_window_automation_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
         let list = self.one_window.list();
         let now = self.one_window_peek_now(cx);
+        let cursor_voice=self.cursor_voice_state();
         let marks = {
             let input = self.gpui_input_state.read(cx);
             let value = input.value();
@@ -1100,11 +1156,13 @@ impl ScriptListApp {
         serde_json::json!({
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
+            "cursorDictation":cursor_voice,
             "marks": marks,
             "inputWords": self.gpui_input_state.read(cx).value().to_string(),
             "context": self.one_window.context(),
             "chipAt": self.one_window.chip_at(),
             "agentOwns": self.one_window.agent_owns(),
+            "subjectTabs": self.subject_tab_elements(),
             "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
             "enterArmed": self.one_window_enter_arming(),
@@ -1166,7 +1224,9 @@ fn run_failure_words(title: &str, error: &anyhow::Error) -> String {
 
 /// What one of Jev's rows says under its title.
 fn jev_row_subtitle(plan: &Plan) -> String {
-    if plan.ready {
+    if let Some(why) = crate::intent::launcher::unavailable(plan) {
+        format!("Can't do this yet · needs {why}")
+    } else if plan.ready {
         crate::intent::plan_subtitle(plan)
     } else {
         match plan.missing.as_deref() {

@@ -12,7 +12,7 @@ use serde_json::Value;
 use super::catalog::{Catalog, Command, CommandKind, WindowOp};
 use super::context::{describe, LastAction, LastStep, MenuCommand, ScreenContext};
 use super::jev::{Answer, Answers, Criteria, JevError, Oracle, Probabilities, Question, Questions};
-use super::spans::{span_candidates, split_clauses, tokenize, Span, Word, SPAN_LIMIT};
+use super::spans::{span_candidates, split_clauses_for_apps, tokenize, Span, Word, MAX_CLAUSES, SPAN_LIMIT};
 use super::words::{read_words, WordRead};
 
 pub const NONE: &str = "none";
@@ -28,8 +28,8 @@ const STRONG_TARGET: f64 = 0.9;
 /// Answers this close are noise; the words the user said, then the kind order, break the tie.
 const NEAR_TIE: f64 = 0.03;
 const ALTERNATIVE_FLOOR: f64 = 0.05;
-/// One slot is kept for "none".
-const MAX_LISTED: usize = super::jev::JEV_MAX_CHOICES - 1;
+/// Per-source retrieval budget, leaving ample room for an explicit abstention choice.
+pub(super) const CANDIDATE_LIMIT: usize = 48;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -250,6 +250,8 @@ pub enum Step {
         op: WindowOp,
         app: String,
     },
+    InspectFilename { app: String, pid: u32, window_id: u32, title: String, filename: String },
+    FocusTab { app: String, query: String },
     OpenUrl {
         url: String,
         /// The default browser when none.
@@ -503,43 +505,86 @@ fn listed<'a>(items: impl IntoIterator<Item = (&'a str, Option<&'a str>)>) -> Cr
     criteria
 }
 
-fn request_words(request: &str) -> HashSet<String> {
-    request
-        .to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| w.len() > 1)
-        .map(str::to_string)
-        .collect()
+/// Uses the launcher's matcher, retaining separate budgets for commands, scripts, apps
+/// and menus so a busy source cannot crowd out another. Only selected items are cloned.
+struct CandidateSearch {
+    sentence: String,
+    words: Vec<(String, crate::scripts::NucleoCtx)>,
 }
 
-/// Keeps a list under Jev's cap, preferring items that share a word with the request.
-fn cap_by_relevance(items: Vec<Command>, request: &str) -> Vec<Command> {
-    if items.len() <= MAX_LISTED {
-        return items;
+impl CandidateSearch {
+    fn new(request: &str) -> Self {
+        let sentence = format!(" {} ", request.to_lowercase());
+        let mut seen = HashSet::new();
+        let words = request
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|word| word.len() > 1)
+            .map(str::to_lowercase)
+            .filter(|word| {
+                ![
+                    "the", "my", "me", "please", "a", "an", "to", "and", "it", "this", "that",
+                ]
+                .contains(&word.as_str())
+            })
+            .filter(|word| seen.insert(word.clone()))
+            .map(|word| {
+                let matcher = crate::scripts::NucleoCtx::new(&word);
+                (word, matcher)
+            })
+            .collect();
+        Self { sentence, words }
     }
-    let words = request_words(request);
-    let overlap = |command: &Command| {
-        let name = request_words(&command.name);
-        let description = request_words(&command.description);
-        2 * name.intersection(&words).count() + description.intersection(&words).count()
-    };
-    let mut ranked: Vec<(usize, usize)> = items
-        .iter()
-        .enumerate()
-        .map(|(i, command)| (i, overlap(command)))
-        .collect();
-    ranked.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-    let keep: HashSet<usize> = ranked
-        .into_iter()
-        .take(MAX_LISTED)
-        .map(|(i, _)| i)
-        .collect();
-    items
-        .into_iter()
-        .enumerate()
-        .filter(|(i, _)| keep.contains(i))
-        .map(|(_, command)| command)
-        .collect()
+
+    fn score(&mut self, name: &str, description: &str) -> u64 {
+        let name_lower = name.to_lowercase();
+        let exact = self.sentence.match_indices(&name_lower).any(|(at, _)| {
+            let end = at + name_lower.len();
+            !name_lower.is_empty()
+                && self.sentence[..at]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| !c.is_alphanumeric())
+                && self.sentence[end..]
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !c.is_alphanumeric())
+        });
+        let mut score = if exact { 1_000_000 } else { 0 };
+        for (word, matcher) in &mut self.words {
+            if name_lower
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|part| part == word.as_str())
+            {
+                score += 10_000;
+            } else if let Some(fuzzy) = matcher.compact_score(name, word) {
+                score += 1_000 + u64::from(fuzzy).min(999);
+            }
+            if !description.is_empty() && matcher.score(description).is_some() {
+                score += 100;
+            }
+        }
+        score
+    }
+
+    fn select<'a, T: Clone + 'a>(
+        &mut self,
+        items: impl Iterator<Item = &'a T>,
+        fields: impl Fn(&T) -> (&str, &str),
+    ) -> Vec<T> {
+        let mut best: Vec<(u64, usize, &T)> = Vec::with_capacity(CANDIDATE_LIMIT + 1);
+        for (index, item) in items.enumerate() {
+            let (name, description) = fields(item);
+            let score = self.score(name, description);
+            let at = best.partition_point(|(other, _, _)| *other >= score);
+            if at < CANDIDATE_LIMIT {
+                best.insert(at, (score, index, item));
+                best.truncate(CANDIDATE_LIMIT);
+            }
+        }
+        // Stable catalog order keeps duplicate-label qualifiers and equal-score choices steady.
+        best.sort_unstable_by_key(|(_, index, _)| *index);
+        best.into_iter().map(|(_, _, item)| item.clone()).collect()
+    }
 }
 
 pub fn build_questions(
@@ -550,24 +595,19 @@ pub fn build_questions(
 ) -> Built {
     let words = tokenize(request);
     let spans = span_candidates(request, &words, SPAN_LIMIT);
-    let of_kinds = |kinds: &[CommandKind]| -> Vec<Command> {
-        catalog
-            .commands
-            .iter()
-            .filter(|c| kinds.contains(&c.kind))
-            .cloned()
-            .collect()
+    let mut search = CandidateSearch::new(request);
+    let of_kind = |kind| {
+        catalog.commands.iter().filter(move |c| {
+            c.kind == kind || (kind == CommandKind::Script && c.kind == CommandKind::Scriptlet)
+        })
     };
     let builtin = Labeled::build(
-        cap_by_relevance(of_kinds(&[CommandKind::Builtin]), request),
+        search.select(of_kind(CommandKind::Builtin), |c| (&c.name, &c.description)),
         |c| c.name.clone(),
         |c| c.id.clone(),
     );
     let script = Labeled::build(
-        cap_by_relevance(
-            of_kinds(&[CommandKind::Script, CommandKind::Scriptlet]),
-            request,
-        ),
+        search.select(of_kind(CommandKind::Script), |c| (&c.name, &c.description)),
         |c| c.name.clone(),
         |c| {
             c.plugin.clone().unwrap_or_else(|| match c.kind {
@@ -577,12 +617,12 @@ pub fn build_questions(
         },
     );
     let app = Labeled::build(
-        cap_by_relevance(of_kinds(&[CommandKind::App]), request),
+        search.select(of_kind(CommandKind::App), |c| (&c.name, &c.description)),
         |c| c.name.clone(),
         |c| c.id.clone(),
     );
     let menu = Labeled::build(
-        ctx.menus.iter().take(MAX_LISTED).cloned().collect(),
+        search.select(ctx.menus.iter(), |m| (&m.label, &m.menu)),
         MenuCommand::question_label,
         |m| m.shortcut.clone().unwrap_or_else(|| "menu".into()),
     );
@@ -600,7 +640,7 @@ pub fn build_questions(
         }
     }
     let text_tool = Labeled::build(
-        catalog.text_tools.clone(),
+        search.select(catalog.text_tools.iter(), |c| (&c.name, &c.description)),
         |c| c.name.clone(),
         |c| c.id.clone(),
     );
@@ -1330,6 +1370,81 @@ fn opens_web_address(
     open
 }
 
+/// A named existing tab is neither an app launch nor a menu command. Resolve only explicit
+/// focus/switch requests against a known browser; never send the browser's tab inventory to Jev.
+pub fn named_tab_plan(request: &str, browser: &str) -> Option<Plan> {
+    static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)^(?:focus(?: on)?|switch to|go to)\s+(?:the\s+)?(.+?)\s+tab[.!]?$")
+            .expect("fixed tab grammar")
+    });
+    let app = crate::browser_tabs::named_tab_browser(browser)?;
+    let cap = NAMED.captures(request.trim())?;
+    let query = cap
+        .get(1)?
+        .as_str()
+        .trim()
+        .trim_matches(['“', '”', '"'])
+        .trim();
+    if query.is_empty()
+        || query.len() > 256
+        || query.chars().any(char::is_control)
+        || matches!(
+            query.to_lowercase().as_str(),
+            "next"
+                | "previous"
+                | "last"
+                | "current"
+                | "new"
+                | "another"
+                | "the"
+                | "first"
+                | "second"
+                | "third"
+        )
+    {
+        return None;
+    }
+    if query
+        .split_whitespace()
+        .any(|w| w.eq_ignore_ascii_case("then"))
+    {
+        return None;
+    }
+    use super::words::{WordKind, WordSource};
+    let mark = |kind, said: &str| WordRead {
+        kind,
+        value: said.to_owned(),
+        sub: "From your words".into(),
+        said: Some(said.to_owned()),
+        source: WordSource::Words,
+        probability: None,
+        dim: false,
+    };
+    let verb = request.split_whitespace().next()?;
+    let words = vec![mark(WordKind::Action, verb), mark(WordKind::Target, query)];
+    let mut reading = Reading::new(
+        Pathway::AppCommand,
+        1.0,
+        format!("Focus “{query}” tab in {app}"),
+    );
+    reading.steps.push(Step::FocusTab {
+        app: app.into(),
+        query: query.into(),
+    });
+    Some(Plan {
+        reading,
+        request: request.into(),
+        complete: 1.,
+        reuse: 0.,
+        ready: true,
+        alternatives: vec![],
+        slots: Default::default(),
+        words,
+        clauses: vec![],
+        timing: Default::default(),
+    })
+}
+
 pub fn reading_for(
     pathway: Pathway,
     probability: f64,
@@ -1737,7 +1852,9 @@ pub fn compose_plan(
     } else {
         readings.remove(0)
     };
-    let complete = noul_answer(answers, "complete").unwrap_or(1.0);
+    let complete = noul_answer(answers, "complete")
+        .filter(|p| p.is_finite() && (0.0..=1.0).contains(p))
+        .unwrap_or(0.0);
     let reuse = score_answer(answers, "reuse").unwrap_or(0.0);
     let ready = top.pathway != Pathway::None
         && top.missing.is_none()
@@ -1854,6 +1971,7 @@ pub fn understand(
     oracle: &dyn Oracle,
     opts: &EngineOptions,
 ) -> Result<Plan, JevError> {
+    if let Some(plan) = super::filename::read(request, ctx, oracle) { return plan; }
     let built = build_questions(request, ctx, catalog, opts);
     let result = oracle.ask(&built.state, &built.questions)?;
     let mut plan = compose_plan(request, ctx, catalog, &built, &result.answers);
@@ -1868,6 +1986,7 @@ pub fn understand(
     if is_clause {
         return Ok(plan);
     }
+    let apps: Vec<&str> = ctx.open_windows.iter().map(|w| w.app.as_str()).chain(catalog.commands.iter().filter(|c| c.kind == CommandKind::App).map(|c| c.name.as_str())).collect();
     let compound = noul_answer(&result.answers, "compound").unwrap_or(0.0);
     if plan.pathway == Pathway::Automate && plan.missing.as_deref() == Some(STEPS_NEXT) {
         let mut source = plan
@@ -1882,12 +2001,12 @@ pub fn understand(
         if let Some(shortcut) = &plan.slots.shortcut {
             source = source.replacen(shortcut.as_str(), "", 1);
         }
-        let clauses = split_clauses(source.trim());
+        let clauses = split_clauses_for_apps(source.trim(), &apps);
         if !clauses.is_empty() {
             decompose(&mut plan, &clauses, "New script: ", ctx, catalog, oracle);
         }
     } else if compound >= 0.5 && plan.pathway.is_instant() {
-        let clauses = split_clauses(request);
+        let clauses = split_clauses_for_apps(request, &apps);
         if clauses.len() >= 2 {
             decompose(&mut plan, &clauses, "", ctx, catalog, oracle);
         }
@@ -1905,6 +2024,14 @@ fn decompose(
     catalog: &Catalog,
     oracle: &dyn Oracle,
 ) {
+    // A first-round alternative is not an alternative interpretation of all clauses.
+    plan.alternatives.clear();
+    if clauses.len() > MAX_CLAUSES {
+        plan.reading.steps.clear();
+        plan.reading.missing = Some(format!("at most {MAX_CLAUSES} separate steps"));
+        plan.ready = false;
+        return;
+    }
     let started = Instant::now();
     let opts = EngineOptions {
         exclude: vec![Pathway::Automate, Pathway::None],

@@ -10,6 +10,7 @@ impl ScriptListApp {
             | AppView::MiniPrompt { id, .. }
             | AppView::MicroPrompt { id, .. } => (id.as_str(), None, 0),
             AppView::DivPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
+            AppView::CreateAiPresetView { entity } => ("preset", Some(entity.entity_id()), 0),
             AppView::FormPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::TermPrompt { id, entity } => (id.as_str(), Some(entity.entity_id()), 0),
             AppView::EditorPrompt { id, entity, .. } => (id.as_str(), Some(entity.entity_id()), 0),
@@ -157,17 +158,6 @@ impl ScriptListApp {
                 selected_index.hash(&mut token);
             }
             AppView::PermissionsWizardView { selected_index } => selected_index.hash(&mut token),
-            AppView::CreateAiPresetView {
-                name,
-                system_prompt,
-                model,
-                active_field,
-            } => {
-                name.hash(&mut token);
-                system_prompt.hash(&mut token);
-                model.hash(&mut token);
-                active_field.hash(&mut token);
-            }
             AppView::NotesBrowseView { search } => {
                 search.generation.hash(&mut token);
                 format!("{:?}", search.selected_id).hash(&mut token);

@@ -449,6 +449,9 @@ fn handle_connection(
         let Some(scopes) = auth_scopes else {
             return send_response(&mut stream, 401, "Unauthorized", "Invalid or missing token");
         };
+        runtime_context.desktop_principal = headers.get("authorization")
+            .and_then(|header| header.strip_prefix("Bearer "))
+            .map(|token| format!("mcp:{}", hash_token(token)));
         token_scopes = scopes;
     }
     runtime_context.token_scopes = token_scopes;

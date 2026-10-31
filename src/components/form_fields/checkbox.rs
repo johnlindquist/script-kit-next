@@ -152,11 +152,7 @@ impl Render for FormCheckbox {
         // Add checkmark when checked
         if checked {
             checkbox_box = checkbox_box.child(
-                div()
-                    .text_size(px(colors.label_font_size))
-                    .text_color(colors.checkbox_mark)
-                    .font_weight(FontWeight::BOLD)
-                    .child("✓"),
+                svg().path("icons/check.svg").size(px(metrics.label_font_size)).text_color(rgb(colors.border_focused)),
             );
         }
 

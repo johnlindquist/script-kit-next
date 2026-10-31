@@ -1,0 +1,14 @@
+{
+  "first": {
+    "input": "call mom"
+  },
+  "choose-date": {
+    "input": "tomorrow at 5pm"
+  },
+  "monday": {
+    "input": "Monday"
+  },
+  "back-to-task": {
+    "input": "call mom"
+  }
+}

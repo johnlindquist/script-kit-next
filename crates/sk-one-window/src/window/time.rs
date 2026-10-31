@@ -77,6 +77,25 @@ impl OneWindow {
             self.dismiss.as_ref().map(|d| d.at),
             self.list.reading_wake(now),
             self.slot_ages_at(now),
+            // Ages in the visible tab bar, including the copy expiry boundary.
+            self.tabs_visible()
+                .then(|| {
+                    self.subject_pages()
+                        .iter()
+                        .filter(|p| p.source.subject.kind != SubjectKind::Thing)
+                        .map(|p| {
+                            let age = p.age(now);
+                            let unit = match age {
+                                0..60_000 => 1000,
+                                60_000..3_600_000 => 60_000,
+                                3_600_000..86_400_000 => 3_600_000,
+                                _ => 86_400_000,
+                            };
+                            now + unit - age % unit
+                        })
+                        .min()
+                })
+                .flatten(),
         ]
         .into_iter()
         .flatten()

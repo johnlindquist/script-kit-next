@@ -200,6 +200,7 @@ impl EnvPrompt {
 
     /// Submit the entered value
     pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
+        self.reveal_secret = false;
         let text = self.input.text();
         if let Some(validation_error) = env_submit_validation_error(text) {
             self.validation_error = Some(validation_error.to_string());
@@ -260,13 +261,22 @@ impl EnvPrompt {
             return;
         }
 
+        self.reveal_secret = false;
         self.input.set_text(text);
         self.validation_error = None;
         cx.notify();
     }
 
-    pub(super) fn toggle_secret_reveal(&mut self, cx: &mut Context<Self>) {
-        if !self.secret {
+    pub(crate) fn can_toggle_visibility(&self) -> bool { self.secret && !self.input.text().is_empty() }
+    pub(crate) fn visibility_id(&self) -> &'static str {
+        if self.reveal_secret { "env:hide-secret" } else { "env:show-secret" }
+    }
+    pub(crate) fn visibility_label(&self) -> &'static str {
+        if self.reveal_secret { "Hide secret value" } else { "Show secret value for 5 seconds" }
+    }
+
+    pub(crate) fn toggle_secret_reveal(&mut self, cx: &mut Context<Self>) {
+        if !self.can_toggle_visibility() {
             return;
         }
 
@@ -299,6 +309,7 @@ impl EnvPrompt {
 
     /// Cancel - submit None
     pub(super) fn submit_cancel(&mut self) {
+        self.reveal_secret = false;
         self.validation_error = None;
         (self.on_submit)(self.id.clone(), None);
     }

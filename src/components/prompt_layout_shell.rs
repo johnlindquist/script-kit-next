@@ -241,19 +241,10 @@ pub(crate) fn prompt_text_palette(theme: &crate::theme::Theme) -> PromptTextPale
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
     PromptTextPalette {
         primary: rgb(chrome.text_primary_hex),
-        label: rgba(chrome.text_muted_rgba),
-        help: rgba(chrome.text_hint_rgba),
+        label: rgba(chrome.text_strong_rgba),
+        help: rgba(chrome.text_muted_rgba),
         placeholder: rgba(chrome.placeholder_text_rgba),
     }
-}
-
-/// State of a form field within a create-flow prompt.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum PromptFieldState {
-    Default,
-    Active,
-    Error,
-    ReadOnly,
 }
 
 /// Pre-computed colors for a form field based on its state.
@@ -264,44 +255,10 @@ pub(crate) struct PromptFieldStyle {
     pub value: Rgba,
 }
 
-/// Compute field colors from the theme, field state, and whether the value is empty.
-///
-/// All color/opacity decisions route through [`AppChromeColors`] so prompt
-/// fields stay consistent with the rest of the app chrome.
-pub(crate) fn prompt_field_style(
-    theme: &crate::theme::Theme,
-    state: PromptFieldState,
-    empty: bool,
-) -> PromptFieldStyle {
+/// Informational output is quieter than a field. Editable controls belong to form_fields.
+pub(crate) fn prompt_preview_style(theme: &crate::theme::Theme) -> PromptFieldStyle {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
-    let value = if empty {
-        rgba(chrome.placeholder_text_rgba)
-    } else {
-        rgb(chrome.text_primary_hex)
-    };
-
-    match state {
-        PromptFieldState::Default => PromptFieldStyle {
-            background: rgba(chrome.input_surface_rgba),
-            border: rgba(chrome.badge_border_rgba),
-            value,
-        },
-        PromptFieldState::Active => PromptFieldStyle {
-            background: rgba(chrome.selection_rgba),
-            border: rgb(chrome.accent_hex),
-            value,
-        },
-        PromptFieldState::Error => PromptFieldStyle {
-            background: rgba(chrome.input_surface_rgba),
-            border: rgb(theme.colors.ui.error),
-            value,
-        },
-        PromptFieldState::ReadOnly => PromptFieldStyle {
-            background: rgba(chrome.selection_rgba),
-            border: rgba(chrome.badge_border_rgba),
-            value: rgb(chrome.text_primary_hex),
-        },
-    }
+    PromptFieldStyle { background: rgba(chrome.whisper_surface_rgba), border: rgba(chrome.whisper_border_rgba), value: rgb(chrome.text_primary_hex) }
 }
 
 /// Single-line text field card using the shared prompt surface.

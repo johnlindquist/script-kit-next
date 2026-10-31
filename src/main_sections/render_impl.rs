@@ -668,13 +668,8 @@ impl Render for ScriptListApp {
             } => self
                 .render_search_ai_presets(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::CreateAiPresetView {
-                name,
-                system_prompt,
-                model,
-                active_field,
-            } => self
-                .render_create_ai_preset(name, system_prompt, model, active_field, cx)
+            AppView::CreateAiPresetView { entity } => self
+                .render_create_ai_preset(entity, cx)
                 .into_any_element(),
             AppView::SettingsView {
                 filter,
@@ -942,7 +937,9 @@ impl Render for ScriptListApp {
             .size_full()
             .relative()
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if !event.keystroke.modifiers.platform { crate::hotkeys::commit_main_gesture_typing(); }
                 let key = event.keystroke.key.as_str();
+                if crate::ui_foundation::is_key_escape(key) && this.cancel_cursor(cx) {cx.stop_propagation();return;}
 
                 // The internal brain-memory preview is a sessionless DivPrompt:
                 // Enter/Escape close it back to the launcher list here instead

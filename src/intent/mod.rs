@@ -8,6 +8,7 @@ pub mod catalog;
 pub mod context;
 pub mod engine;
 pub mod fixture_oracle;
+pub mod filename;
 pub mod jev;
 pub mod launcher;
 pub mod present;
@@ -15,6 +16,8 @@ pub mod script;
 pub mod spans;
 pub mod words;
 
+#[cfg(test)]
+mod holdout_tests;
 #[cfg(test)]
 mod replay_tests;
 #[cfg(test)]
@@ -31,6 +34,14 @@ pub use launcher::{readings, IntentLauncher, JevRow, OracleSlot, READINGS};
 pub use present::{plan_subtitle, plan_verb};
 pub use script::{normalize_shortcut, plan_to_script, DraftScript, ScriptOptions};
 pub use words::{WordKind, WordRead, WordSource};
+
+/// A second line of defense, not a guarantee of secret detection. Local-only mode
+/// blocks *all* remote readings, including partial voice transcripts.
+pub fn sensitive_words(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    ["password", "passphrase", "api key", "api_key", "private key", "access token", "recovery phrase"].iter().any(|label| lower.contains(label))
+        || crate::clipboard_history::matches_secret_content(text)
+}
 
 /// Whether a line is worth asking Jev about. Launcher syntax (captures, sigils, filters)
 /// already says exactly what to do.

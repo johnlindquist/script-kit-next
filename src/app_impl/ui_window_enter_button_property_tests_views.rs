@@ -37,7 +37,7 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
             copy(cx, LINK);
             let staged = paste(&app, cx);
             wait(cx, 20);
-            let (slot, rows, drawn, kind) = app.update(cx, |app, _| {
+            let (slot, rows, drawn, kind) = app.update(cx, |app, cx| {
                 let now = app.one_window_clock();
                 let list = app.one_window.list();
                 let rows: Vec<String> = list
@@ -51,7 +51,7 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
                         .map(|chip| chip.title)
                         .unwrap_or_default(),
                     rows,
-                    app.one_window_view_element().is_some(),
+                    app.one_window_view_element(cx).is_some(),
                     app.one_window.staged().map(|s| s.subject.kind),
                 )
             });

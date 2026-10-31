@@ -18,7 +18,8 @@ Script Kit is one window that you tell what should happen. Every other section o
   "Jev · ⌘1–3". Launcher syntax already says what to do and skips Jev (`intent::wants_reading`). A reading
   that needs a service the user hasn't connected is a "Needs <service>" row whose ↵ opens the connect view
   in place; the sentence runs once the service connects.
-- **The input never moves.** Above it is always the 34 pt line (`sk_one_window::slot`): a staged subject,
+- **Launcher subject tabs (T2).** On the main menu the input is first. A 38 pt browser-style tab strip under it opens directly into one shaded action panel. Selection, approved recent copy and front window lead newest-first; last run is separate. On an empty input Tab/Shift-Tab cycle, ⌘V selects the copy, ↑ walks runs, Space stages, and Esc unwinds. Once typing, Tab keeps its existing text owner. Status/Stop/Undo share the Today footer position while the tabs show. `window/subject_tabs.rs` in `sk-one-window` owns the rules; `main.subject-tabs` is the hidden evaluation fixture.
+- **The input never moves while typing.** Outside the tabbed launcher shell, above it is the 34 pt line (`sk_one_window::slot`): a staged subject,
   a waiting hold, the last thing that ran, or what "this" means. Every list starts with a 28 pt header.
   Rows are 44 pt; the focused one gets a soft fill (primary text at 0x20) and a 24 pt icon tile that
   turns yellow (`#FBBF24`); there is no accent bar or row keycap. ↵ and ⌘K live in the floating glass capsule, and ↵'s label never flips back
@@ -32,8 +33,7 @@ Script Kit is one window that you tell what should happen. Every other section o
 - **Everything opens in place.** Forms (assembled from Jev's reading by `sk_one_window::form`), answers,
   steps, the connect view, notes, the model's chat, agents, the voice view and SDK prompts are views under
   the same input, and Esc goes back one step with that step's words. ⌘K stages the highlighted thing in
-  the line and lists its actions; ↑ on an empty input stages the last run; pasting into an empty input
-  stages the clipboard.
+  the line and lists its actions; on the launcher ↑ and paste select subjects without staging them.
 - **One height.** While the window shows it keeps one height (480 pt; the configured standard height
   in full mode): the list, every view under the input, and whatever results arrive later fill it, and
   short lists leave glass below them. Typing, filtering and async data never resize the window

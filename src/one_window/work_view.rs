@@ -37,13 +37,12 @@ impl ScriptListApp {
         let crumb = self.one_window.views().crumb();
         let mut rows: Vec<AnyElement> = vec![self.one_window_header(0, &crumb, colors, head_h)];
         match top.as_str() {
-            chat::VIEW => self.one_window_chat_rows(&mut rows, colors, head_h),
+            chat::VIEW => self.one_window_chat_rows(&mut rows, colors, head_h, cx),
             steps::VIEW => self.one_window_steps_rows(&mut rows, colors),
             connect::VIEW => self.one_window_connect_rows(&mut rows, colors, head_h),
             past_chats::VIEW => self.one_window_past_chat_rows(&mut rows, colors, head_h),
             _ => self.one_window_agent_rows(&mut rows, colors),
         }
-        let _ = cx;
         Some(
             div()
                 .id("one-window-work-view")
@@ -117,18 +116,15 @@ impl ScriptListApp {
 
     /// One turn of the chat: yours on the user-message surface with what went with it, the
     /// model's tagged as its own, and a tool it ran as a row with how it went.
-    fn one_window_turn(&self, ix: usize, who: Who, text: &str, sub: Option<&str>) -> AnyElement {
-        if who == Who::Tool {
-            let colors = ListItemColors::from_theme(&self.theme);
-            return self.one_window_row(
-                format!("chat:tool:{ix}"),
-                text.to_string(),
-                sub.map(str::to_string),
-                "terminal",
-                false,
-                colors,
-            );
-        }
+    fn one_window_turn(
+        &self,
+        ix: usize,
+        who: Who,
+        text: &str,
+        sub: Option<&str>,
+        markdown: Option<AnyElement>,
+        complete: bool,
+    ) -> AnyElement {
         let def = self.current_main_menu_theme.def();
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let colors = &self.theme.colors;
@@ -142,9 +138,25 @@ impl ScriptListApp {
             .gap(px(def.slot_line.gap_px))
             .text_size(px(def.search.font_size * 0.8))
             .text_color(rgb(colors.text.primary))
-            .child(text.to_string());
+            .min_w(px(0.));
         match who {
+            Who::Tool => turn
+                .debug_selector(move || format!("chat:tool:{ix}"))
+                .flex_row()
+                .items_center()
+                .text_size(px(def.slot_line.title_font_size))
+                .when_some(sub, |d, sub| {
+                    d.child(
+                        div()
+                            .flex_none()
+                            .text_color(rgba(chrome.text_muted_rgba))
+                            .child(sub.split(" · ").next().unwrap_or(sub).to_owned()),
+                    )
+                })
+                .child(div().truncate().child(text.to_owned()))
+                .into_any_element(),
             Who::You => turn
+                .child(text.to_owned())
                 .px(px(def.slot_line.gap_px * 2.0))
                 .py(px(def.slot_line.gap_px))
                 .rounded(px(def.slot_line.gap_px * 2.0))
@@ -158,22 +170,27 @@ impl ScriptListApp {
                     )
                 })
                 .into_any_element(),
-            Who::Model | Who::Tool => turn
-                .child(
-                    div()
-                        .text_size(px(def.slot_line.label_font_size))
-                        .text_color(rgb(colors.text.muted))
-                        .child(chat::WRITTEN_BY.to_uppercase()),
-                )
+            Who::Model => turn
+                .debug_selector(move || format!("chat-turn:{ix}"))
+                .when_some(markdown, |d, md| d.child(md))
+                .when(complete, |d| {
+                    d.child(
+                        div()
+                            .text_size(px(def.slot_line.label_font_size))
+                            .text_color(rgb(colors.text.muted))
+                            .child(chat::WRITTEN_BY.to_uppercase()),
+                    )
+                })
                 .into_any_element(),
         }
     }
 
     fn one_window_chat_rows(
-        &self,
+        &mut self,
         rows: &mut Vec<AnyElement>,
         colors: ListItemColors,
         head_h: f32,
+        cx: &mut Context<Self>,
     ) {
         let Some(c) = self.one_window.chat() else {
             return;
@@ -200,8 +217,59 @@ impl ScriptListApp {
             }
             return;
         }
-        for (ix, t) in c.turns.iter().enumerate() {
-            rows.push(self.one_window_turn(ix, t.who, &t.text, t.sub.as_deref()));
+        let owner = self
+            .one_window_host
+            .work
+            .chat
+            .as_ref()
+            .map(|m| m.thread.entity_id());
+        let (head, next) = c.rows();
+        let cache = &mut self.one_window_host.work.presentation;
+        let states = cache.reconcile(owner, c, cx);
+        cache.reveal_choice(head, c.sel);
+        let transcript_scroll = cache.transcript.clone();
+        let choice_scroll = cache.choices.clone();
+        let mut answers = states.iter();
+        let prompt = crate::theme::PromptColors::from_theme(&self.theme);
+        let style = crate::components::conversation_style::production_conversation_style();
+        let pending = c.asks.is_some() || c.sign_in.is_some();
+        let transcript = div()
+            .id("chat-history")
+            .debug_selector(|| "chat-history".into())
+            .min_h(px(0.))
+            .when(c.activity_label().is_none(), |d| d.flex_1())
+            .overflow_y_scroll()
+            .track_scroll(&transcript_scroll)
+            .children(c.turns.iter().enumerate().map(|(ix, turn)| {
+                let markdown = if turn.who == Who::Model {
+                    answers.next().map(|state| {
+                        crate::components::conversation_text::conversation_markdown_view(
+                            state,
+                            &self.theme,
+                            &prompt,
+                            rgb(prompt.text_primary),
+                            &style,
+                            format!("one-window/chat/{ix}").into(),
+                            gpui_component::text::MarkdownLinkLabelPolicy::CompactLongBareHttp,
+                        )
+                        .into_any_element()
+                    })
+                } else {
+                    None
+                };
+                self.one_window_turn(
+                    ix,
+                    turn.who,
+                    &turn.text,
+                    turn.sub.as_deref(),
+                    markdown,
+                    ix + 1 != c.turns.len() || c.phase != ChatPhase::Writing,
+                )
+            }))
+            .into_any_element();
+        let mut history = Some(transcript);
+        if !pending && !c.turns.is_empty() {
+            rows.extend(history.take());
         }
         if let Some(asks) = c.asks.as_ref() {
             rows.push(
@@ -212,31 +280,71 @@ impl ScriptListApp {
                 "The model needs you to sign in to {provider} before it can answer"
             )));
         }
-        let (head, next) = c.rows();
-        match head {
-            Some(head) => {
-                rows.push(self.one_window_header(1, head, colors, head_h));
-                for (i, row) in next.iter().enumerate() {
-                    rows.push(self.one_window_row(
-                        format!("chat-next:{}", row.key),
-                        row.title.clone(),
-                        row.sub.clone(),
-                        row.icon.as_deref().unwrap_or("sparkles"),
-                        i == c.sel,
-                        colors,
-                    ));
-                }
-            }
-            None => match &c.phase {
+        if let Some(head) = head {
+            rows.push(self.one_window_header(1, head, colors, head_h));
+            let height = crate::list_item::effective_list_item_height_for_theme(
+                self.current_main_menu_theme,
+            );
+            // Reserve two ordinary action rows; a decision gets three so Allow and Reject
+            // are visible together. More choices scroll without covering the answer or footer.
+            let visible = next.len().min(if pending { 3 } else { 2 });
+            rows.push(
+                div()
+                    .id("chat-choices")
+                    .debug_selector(|| "chat-choices".into())
+                    .h(px(height * visible as f32))
+                    .flex_none()
+                    .overflow_y_scroll()
+                    .track_scroll(&choice_scroll)
+                    .children(next.iter().enumerate().map(|(i, row)| {
+                        self.one_window_row(
+                            format!("chat-next:{}", row.key),
+                            row.title.clone(),
+                            row.sub.clone(),
+                            row.icon.as_deref().unwrap_or("sparkles"),
+                            i == c.sel,
+                            colors,
+                        )
+                    }))
+                    .into_any_element(),
+            );
+        } else if let Some(status) = c.activity_label() {
+            use gpui_component::Sizable as _;
+            let def = self.current_main_menu_theme.def();
+            rows.push(
+                div()
+                    .debug_selector(|| "chat-status".into())
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(def.slot_line.gap_px))
+                    .px(px(def.shell.header_padding_x + def.search.text_inset_x))
+                    .h(px(head_h))
+                    .text_size(px(def.slot_line.title_font_size))
+                    .text_color(rgba(
+                        crate::theme::AppChromeColors::from_theme(&self.theme).text_muted_rgba,
+                    ))
+                    .child(gpui_component::spinner::Spinner::new().small())
+                    .child(status)
+                    .into_any_element(),
+            );
+        } else {
+            match &c.phase {
                 ChatPhase::Idle if !c.with.is_empty() => {
                     rows.push(self.one_window_note("Say what to ask about it"))
                 }
                 ChatPhase::Idle => rows.push(self.one_window_note("Say what to ask the model")),
-                ChatPhase::Writing => rows.push(self.one_window_note("The model is writing…")),
-                ChatPhase::Ranking => rows.push(self.one_window_note("Jev is reading the draft…")),
-                ChatPhase::Ready => {}
+                ChatPhase::EndedEmpty { stopped } => rows.push(self.one_window_note(if *stopped {
+                    "Reply stopped."
+                } else {
+                    "The model returned no text."
+                })),
                 ChatPhase::Failed(message) => rows.push(self.one_window_note(message.clone())),
-            },
+                _ => {}
+            }
+        }
+        if pending {
+            rows.extend(history);
         }
     }
 
@@ -360,13 +468,23 @@ impl ScriptListApp {
             colors,
         ));
         if let Some(reply) = self.one_window_agent_reply(&task.id) {
-            rows.push(self.one_window_turn(0, Who::Model, reply, None));
+            let parsed = crate::prompts::markdown::render_markdown(
+                reply,
+                &crate::theme::PromptColors::from_theme(&self.theme),
+            );
+            rows.push(self.one_window_turn(
+                0,
+                Who::Model,
+                reply,
+                None,
+                Some(parsed.into_any_element()),
+                true,
+            ));
         }
         rows.push(self.one_window_note("Esc keeps it working in the strip · ⌘J brings it back"));
     }
 
-    /// The list or view with the strip of agents floating above the capsules. The strip never
-    /// takes room from the list, so a task starting never moves a row.
+    /// Keep the agent rows above the capsules and clip the scrolling list at their top edge.
     pub(crate) fn with_one_window_strip(&self, content: AnyElement) -> AnyElement {
         let tasks = self.one_window.work().strip().tasks();
         if tasks.is_empty() || !self.one_window_owns_list() {
@@ -386,10 +504,8 @@ impl ScriptListApp {
         let strip = div()
             .id(STRIP_ID)
             .debug_selector(|| STRIP_ID.to_string())
-            .absolute()
-            .left_0()
-            .right_0()
-            .bottom(px(crate::footer_popup::main_window_footer_reservation_height()))
+            .relative()
+            .flex_none()
             .bg(rgba(chrome.popup_surface_rgba))
             .flex()
             .flex_col()
@@ -451,12 +567,34 @@ impl ScriptListApp {
                             .bg(rgb(accent)),
                     )
             }));
+        let footer = px(crate::footer_popup::main_window_footer_reservation_height());
         div()
-            .relative()
+            .flex()
+            .flex_col()
             .w_full()
             .h_full()
             .min_h(px(0.))
-            .child(content)
+            .pb(footer)
+            .child(
+                div()
+                    .debug_selector(|| "one-window-strip-list-clip".into())
+                    .relative()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    // The list and hosted views already reserve a footer inside their
+                    // viewport. Keep that inset below the clip so the last row can
+                    // scroll all the way to the strip and still receive pointer input.
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .right_0()
+                            .bottom(-footer)
+                            .child(content),
+                    ),
+            )
             .child(strip)
             .into_any_element()
     }
@@ -520,6 +658,14 @@ impl ScriptListApp {
             }
         } else if let Some(c) = self.one_window.chat() {
             let acting = c.acting.is_some();
+            if let Some(status) = c.activity_label() {
+                out.push(crate::protocol::ElementInfo {
+                    role: Some("status".into()),
+                    selectable: Some(false),
+                    selected: None,
+                    ..product("chat-status".into(), 0, status, false)
+                });
+            }
             if !acting {
                 for (i, t) in c.turns.iter().enumerate() {
                     let id = match t.who {
