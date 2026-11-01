@@ -8,7 +8,9 @@ import { managedStorageRoot, trustedManagedRootLink } from "../../agentic/manage
 
 export interface AllocationObservation {
   present: boolean; complete: boolean; logicalBytes: number; allocatedBytes: number;
-  entries: number; linksNotFollowed: number; errors: string[]; priorAllocatedBytes?: number;
+  entries: number; linksNotFollowed: number; errors: string[];
+  /** A higher allocated-byte lower bound already observed during this scan. */
+  priorAllocatedBytes?: number;
 }
 export function allocation(path: string, excluded: readonly string[] = [], seen = new Set<string>()): AllocationObservation {
   return scanAllocation(path, excluded, seen);
@@ -51,17 +53,20 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       }
     }
   };
-  const account = (stat: Stats) => {
-    result.entries++;
+  const addBlocks = (total: number, stat: Stats): number => {
+    const bytes = Number(stat.blocks) * 512;
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(total + bytes)) throw new Error("inventory_invalid_allocation");
+    return total + bytes;
+  };
+  const accountUnique = (stat: Stats) => {
     const identity = `${stat.dev}:${stat.ino}`;
     if (!seen.has(identity)) {
       seen.add(identity); added.push(identity);
-      const bytes = Number(stat.blocks) * 512;
-      if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(result.allocatedBytes + bytes)) throw new Error("inventory_invalid_allocation");
-      result.allocatedBytes += bytes;
+      result.allocatedBytes = addBlocks(result.allocatedBytes, stat);
       if (!stat.isDirectory()) result.logicalBytes += Number(stat.size);
     }
   };
+  const account = (stat: Stats) => { result.entries++; accountUnique(stat); };
   // Only the authoritative managed walk knows the exact compiler deps scope.
   const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false, expected?: Stats): boolean => {
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
@@ -79,7 +84,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       throw error;
     }
     if (expected && (stat.dev !== expected.dev || stat.ino !== expected.ino || (stat.mode & 0o170000) !== (expected.mode & 0o170000)
-      || (!expected.isDirectory() && Number(stat.blocks) < Number(expected.blocks)))) throw new Error("inventory_probe_identity");
+      || stat.blocks !== expected.blocks || (!expected.isDirectory() && stat.size !== expected.size))) throw new Error("inventory_probe_identity");
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
@@ -121,6 +126,9 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
             charge(); sameDirectory();
             const next = join(current, row.name), pinned = lstatSync(next);
             if (pinned.dev !== device) throw new Error("inventory_unexpected_mount");
+            // This stat already proves allocated bytes, even if reconciliation
+            // later refuses. Charge its inode once; count the entry on its walk.
+            accountUnique(pinned);
             if (pinned.isFile() !== row.isFile() || pinned.isDirectory() !== row.isDirectory() || pinned.isSymbolicLink() !== row.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
             witnessed.set(row.name, { entry: row, stat: pinned });
             if (row.name !== preferred) continue;
@@ -147,7 +155,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
             if (!probed) throw new Error("inventory_probe_duplicate");
             charge();
             const now = lstatSync(join(current, entry.name));
-            if (!now.isDirectory() || now.dev !== first.dev || now.ino !== first.ino) throw new Error("inventory_probe_identity");
+            if (!now.isDirectory() || now.dev !== first.dev || now.ino !== first.ino || now.blocks !== first.blocks) throw new Error("inventory_probe_identity");
             continue;
           }
           // We have no inode witness for that name. Do not accept a replacement (even a link).

@@ -281,7 +281,13 @@ test("a probed sibling cannot be replaced by a cheaper namesake after moving int
   beforeStat(path => { if (!lost && path === gone) { lost = true; fs.rmdirSync(gone); } });
   observedVolume(2 * GiB);
   const admit = () => requireBuildAdmission(root, { reserveBytes: GiB - limit });
-  expect(["resource_observation_incomplete", "resource_budget_exceeded"]).toContain(refusal(admit).code);
+  const denied = refusal(admit);
+  // Real budget breaches take precedence, but the failed identity proof is retained too.
+  expect(denied.code).toBe("resource_budget_exceeded");
+  expect(denied.observation.complete).toBe(false);
+  expect(denied.observation.failureCodes).toContain("resource_observation_incomplete");
+  expect(denied.observation.failureCodes).toContain("resource_budget_exceeded");
+  expect(denied.observation.targetAgentAllocatedBytes + denied.observation.reserveBytes).toBeGreaterThan(GiB);
   expect(lost && moved).toBe(true);
   expect(refusal(admit).code).toBe("resource_budget_exceeded");
 });
