@@ -47,30 +47,26 @@ function protectedOutputRoot(child: string): boolean {
   return ["shared", "artifacts", "runtime", ".locks"].includes(parts[0]!) && parts.length <= 2;
 }
 
-function scanAllocation(path: string, excluded: readonly string[], seen: Set<string>, expectedDevice?: number, protectOutputs = false): AllocationObservation {
+type DirectoryWitness = [path: string, dev: number, ino: number, ctime: number, mtime: number, nlink: number, size: number, blocks: number];
+function directoryWitness(path: string, stat: Stats): DirectoryWitness {
+  return [path, stat.dev, stat.ino, stat.ctimeMs, stat.mtimeMs, stat.nlink, stat.size, stat.blocks];
+}
+function listedTypeMatches(entry: Dirent, stat: Stats): boolean {
+  return entry.isFile() === stat.isFile() && entry.isDirectory() === stat.isDirectory() && entry.isSymbolicLink() === stat.isSymbolicLink();
+}
+
+function scanAllocation(path: string, excluded: readonly string[], seen: Set<string> | Map<string, number>, expectedDevice?: number, protectOutputs = false): AllocationObservation {
   const result: AllocationObservation = { present: false, complete: true, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [] };
   const started = performance.now();
   let device = expectedDevice, work = 0, priorAllocatedBytes = 0;
   const added: string[] = []; // Undo only identities this walk inserted after a directory checkpoint.
   // Start-of-enumeration witnesses for retained directories, in parent-first order.
   // A lost entry can have moved behind an earlier iterator in the same managed tree.
-  const directories: Array<[string, number, number, number, number, number, number]> = [];
+  const directories: DirectoryWitness[] = [];
   const checkTime = () => { if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit"); };
   const charge = () => { if (++work > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit"); checkTime(); };
-  const verifyReplayFrontier = (replaying: string): void => {
-    for (const [dir, dev, ino, ctime, mtime, links, size] of directories) {
-      charge();
-      const now = lstatSync(dir);
-      if (!now.isDirectory() || !Number.isSafeInteger(dev) || !Number.isSafeInteger(ino) || ino <= 0
-        || !Number.isFinite(ctime) || !Number.isFinite(mtime) || now.dev !== dev || now.ino !== ino
-        || now.ctimeMs !== ctime || now.mtimeMs !== mtime || now.nlink !== links || now.size !== size) {
-        const kind = now.isDirectory() && now.dev === dev && now.ino === ino ? "membership" : "identity";
-        const changed = [now.ctimeMs !== ctime && "ctime", now.mtimeMs !== mtime && "mtime",
-          now.nlink !== links && "links", now.size !== size && "size"].filter(Boolean).join("+") || "witness";
-        throw new Error(`inventory_unstable_replay_scope:${kind}:at=${inventoryScope(path, dir)}:replay=${inventoryScope(path, replaying)}:${changed}`);
-      }
-    }
-  };
+  const scopeFault = (kind: string, dir: string, replaying: string, detail: string) =>
+    new Error(`inventory_unstable_replay_scope:${kind}:at=${inventoryScope(path, dir)}:replay=${inventoryScope(path, replaying)}:${detail}`);
   const addBlocks = (total: number, stat: Stats): number => {
     const bytes = Number(stat.blocks) * 512;
     if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(total + bytes)) throw new Error("inventory_invalid_allocation");
@@ -79,14 +75,84 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
   const accountUnique = (stat: Stats) => {
     const identity = `${stat.dev}:${stat.ino}`;
     if (!seen.has(identity)) {
-      seen.add(identity); added.push(identity);
+      if (seen instanceof Map) seen.set(identity, stat.blocks); else seen.add(identity);
+      added.push(identity);
       result.allocatedBytes = addBlocks(result.allocatedBytes, stat);
       if (!stat.isDirectory()) result.logicalBytes += Number(stat.size);
     }
   };
   const account = (stat: Stats) => { result.entries++; accountUnique(stat); };
+  // Preserve even a transient, larger observation of an inode already charged
+  // through another hardlink. A confirmation-only namesake with unknown identity
+  // proves its own blocks, not coexistence with the entry it may have replaced.
+  const retainMeasured = (stat: Stats, baseForNew: number): number | undefined => {
+    if (!(seen instanceof Map)) throw new Error("inventory_missing_allocation_witness");
+    const paid = seen.get(`${stat.dev}:${stat.ino}`);
+    priorAllocatedBytes = Math.max(priorAllocatedBytes, addBlocks(paid === undefined ? baseForNew : result.allocatedBytes - paid * 512, stat));
+    return paid;
+  };
+  // The extra listing is a comparison, not another tree walk. It cannot add a
+  // previously unseen name, forgive a missing name, or substitute cheaper bytes.
+  const confirmMembers = (dir: string, parent: Stats, members: Map<string, Stats>) => {
+    const fault = (kind: string, detail: string) => scopeFault(kind, dir, dir, detail);
+    const checkParent = () => {
+      charge();
+      const now = lstatSync(dir);
+      if (!now.isDirectory() || now.dev !== parent.dev || now.ino !== parent.ino) throw fault("identity", "confirmation-parent");
+      if (now.blocks !== parent.blocks) retainMeasured(now, 0);
+      if (now.ctimeMs !== parent.ctimeMs || now.mtimeMs !== parent.mtimeMs || now.nlink !== parent.nlink
+        || now.size !== parent.size || now.blocks !== parent.blocks) throw fault("membership", "confirmation-churn");
+    };
+    checkParent();
+    charge();
+    const listing = opendirSync(dir);
+    try {
+      let entry: Dirent | null;
+      while ((entry = listing.readSync()) !== null) {
+        charge();
+        const pinned = members.get(entry.name);
+        if (!pinned || !(pinned.isFile() || pinned.isDirectory()) || !listedTypeMatches(entry, pinned)) throw fault("membership", "unseen-name-or-type");
+        checkParent();
+        charge();
+        const now = lstatSync(join(dir, entry.name));
+        if (now.dev !== device) throw new Error("inventory_unexpected_mount");
+        const paid = retainMeasured(now, 0);
+        if (!Number.isSafeInteger(pinned.ino) || pinned.ino <= 0 || now.dev !== pinned.dev || now.ino !== pinned.ino
+          || now.mode !== pinned.mode || now.size !== pinned.size || now.blocks !== pinned.blocks || paid !== now.blocks
+          || now.ctimeMs !== pinned.ctimeMs || now.mtimeMs !== pinned.mtimeMs || now.nlink !== pinned.nlink) throw fault("entry", "changed-witness");
+        members.delete(entry.name);
+      }
+      if (members.size) throw fault("membership", "missing-name");
+    } finally { listing.closeSync(); }
+    checkParent();
+  };
+  let confirmedFrontier: { rows: DirectoryWitness[]; replaying: string } | undefined;
+  const verifyReplayFrontier = (frontier: DirectoryWitness[], replaying: string, deps?: { path: string; members: Map<string, Stats> }): void => {
+    for (const [i, [dir, dev, ino, ctime, mtime, links, size, blocks]] of frontier.entries()) {
+      charge();
+      const now = lstatSync(dir);
+      if (!now.isDirectory() || !Number.isSafeInteger(dev) || !Number.isSafeInteger(ino) || ino <= 0 || now.dev !== dev || now.ino !== ino) throw scopeFault("identity", dir, replaying, "witness");
+      if (now.blocks !== blocks) {
+        if (seen instanceof Map) retainMeasured(now, 0);
+        throw scopeFault("membership", dir, replaying, "blocks");
+      }
+      if (![ctime, mtime, now.ctimeMs, now.mtimeMs].every(Number.isFinite)) throw scopeFault("membership", dir, replaying, "invalid-stamp");
+      if (now.ctimeMs === ctime && now.mtimeMs === mtime && now.nlink === links && now.size === size) continue;
+      if (!deps || dir !== deps.path || confirmedFrontier || !(seen instanceof Map) || seen.get(`${dev}:${ino}`) !== blocks) {
+        const changed = [now.ctimeMs !== ctime && "ctime", now.mtimeMs !== mtime && "mtime",
+          now.nlink !== links && "links", now.size !== size && "size"].filter(Boolean).join("+");
+        throw scopeFault("membership", dir, replaying, changed);
+      }
+      confirmMembers(dir, now, deps.members);
+      frontier[i] = directoryWitness(dir, now);
+      // Recheck even the ancestors we passed before reopening deps. Keep these
+      // exact witnesses through the remaining walk, without relaxing another stamp.
+      confirmedFrontier = { rows: frontier.slice(), replaying };
+      return verifyReplayFrontier(confirmedFrontier.rows, replaying);
+    }
+  };
   // Only the authoritative managed walk knows the exact compiler deps scope.
-  const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false, expected?: Stats): boolean => {
+  const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false, expected?: Stats, members?: Map<string, Stats>): boolean => {
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
     charge();
     if (depth > 256) throw new Error("inventory_depth_limit");
@@ -106,6 +172,11 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
+    if (members && listed) {
+      retainMeasured(stat, result.allocatedBytes);
+      if (members.has(listed.name) || !listedTypeMatches(listed, stat)) throw new Error("inventory_unstable_replay_scope:entry");
+      members.set(listed.name, stat);
+    }
     if (compilerDirectory && !stat.isDirectory()) throw new Error("inventory_directory_changed");
     if (stat.isSymbolicLink()) {
       account(stat);
@@ -124,7 +195,8 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     };
     let vanished: string | undefined, confirmAbsentDirectory = false;
     for (;;) {
-      directories.push([current, stat.dev, stat.ino, stat.ctimeMs, stat.mtimeMs, stat.nlink, stat.size]);
+      directories.push(directoryWitness(current, stat));
+      const replay = compilerDeps && vanished !== undefined ? { path: current, members: new Map<string, Stats>() } : undefined;
       account(stat);
       // Descend the known compiler route first. Probe only a verified real parent,
       // never a compound speculative path. Remember every name the probe exposed:
@@ -147,7 +219,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
             // This stat already proves allocated bytes, even if reconciliation
             // later refuses. Charge its inode once; count the entry on its walk.
             accountUnique(pinned);
-            if (pinned.isFile() !== row.isFile() || pinned.isDirectory() !== row.isDirectory() || pinned.isSymbolicLink() !== row.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
+            if (!listedTypeMatches(row, pinned)) throw new Error("inventory_probe_type_changed");
             witnessed.set(row.name, { entry: row, stat: pinned });
             if (row.name !== preferred) continue;
             if (!row.isDirectory()) throw new Error(row.isSymbolicLink() ? "inventory_output_symlink" : "inventory_output_not_directory");
@@ -178,7 +250,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           }
           // We have no inode witness for that name. Do not accept a replacement (even a link).
           if (entry.name === vanished) throw new Error("inventory_unstable_directory:reappeared");
-          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory(), probed?.stat)) break;
+          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory(), probed?.stat, replay?.members)) break;
         }
         if (witnessed?.size) throw new Error("inventory_probe_missing");
         if (!entry && vanished !== undefined) {
@@ -188,9 +260,8 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
             catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
           }
           // Both the replayed subtree and already-enumerated destinations must
-          // still have their witnessed memberships. This rereads metadata, not
-          // directory listings, and consumes the original scan's work/deadline.
-          verifyReplayFrontier(current);
+          // still have their witnessed memberships, within this scan's budget.
+          verifyReplayFrontier(directories, current, replay);
         }
         try { sameDirectory(); } catch (error) {
           // Only a first, empty enumeration reached EOF without unresolved child work.
@@ -211,8 +282,10 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       stat = sameDirectory(); // Revalidate after rollback and re-account the directory's own blocks.
     }
   };
-  try { visit(path, "", 0); }
-  catch (error) { result.complete = false; result.errors.push(String(error)); }
+  try {
+    visit(path, "", 0);
+    if (confirmedFrontier) { verifyReplayFrontier(confirmedFrontier.rows, confirmedFrontier.replaying); checkTime(); }
+  } catch (error) { result.complete = false; result.errors.push(String(error)); }
   if (priorAllocatedBytes > result.allocatedBytes) result.priorAllocatedBytes = priorAllocatedBytes;
   return result;
 }
@@ -227,7 +300,7 @@ function targetAgentAllocation(root: string): AllocationObservation {
     const path = storage === root ? join(root, "target-agent") : storage;
     const linked = existsSync(join(root, "target-agent")) && lstatSync(join(root, "target-agent")).isSymbolicLink();
     const expectedDevice = linked ? Number(lstatSync(storage).dev) : Number(stat.dev);
-    const observation = scanAllocation(path, [], new Set(), expectedDevice, true);
+    const observation = scanAllocation(path, [], new Map(), expectedDevice, true);
     if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed");
     return observation;
   } catch (error) {

@@ -335,6 +335,150 @@ test("a new sibling arriving after compiler deps replay EOF invalidates that obs
   expect(fs.existsSync(join(deps, "arrived-after-eof"))).toBe(true);
 });
 
+// Open #1 loses a real directory. After the replay takes its start stamp,
+// Cargo-like output arrives in time for open #2 to actually enumerate it.
+// Open #3 must prove that exact enumeration, not budget whatever it finds.
+function changedDepsReplay(hooks: {
+  duringReplayStat?: (path: string) => void;
+  afterReplay?: (deps: string, output: string) => void;
+  atConfirmation?: (deps: string) => void;
+  afterConfirmation?: (deps: string) => void;
+} = {}) {
+  const root = fixture(), deps = join(root, compilerDeps), gone = join(deps, "rmeta-work");
+  fs.mkdirSync(gone, { recursive: true });
+  const seed = file(deps, "libseed.rmeta"), output = join(deps, "new-output.rmeta");
+  file(deps, "retained/nested/payload"); fs.linkSync(seed, join(deps, "alias"));
+  const other = file(root, "target-agent/shared/seed"); fs.linkSync(other, join(deps, "cross-tree-alias"));
+  let opens = 0, visits = 0;
+  beforeStat(path => {
+    if (opens === 2) hooks.duringReplayStat?.(path);
+    if (path !== gone) return;
+    if (++visits === 1) fs.rmdirSync(gone);
+    else if (visits === 2) hooks.afterReplay?.(deps, output);
+  });
+  const open = fs.opendirSync.bind(fs);
+  const spy = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    if (String(path) === deps) {
+      if (++opens === 2) {
+        fs.writeFileSync(output, Buffer.alloc(32 * 1024, 97));
+        fs.utimesSync(deps, 100, 100); // Make the changed stamp unambiguous even on a coarse FS.
+      } else if (opens === 3) hooks.atConfirmation?.(deps);
+    } else if (String(path) === dirname(deps) && opens === 3) hooks.afterConfirmation?.(deps);
+    return open(path);
+  }) as typeof fs.opendirSync);
+  restore.push(() => spy.mockRestore());
+  observedVolume(2 * GiB);
+  return { root, deps, output, opens: () => opens };
+}
+
+test("changed deps replay stamp is confirmed against the actually measured new output, directories and hardlinks", () => {
+  const f = changedDepsReplay();
+  const recovered = requireBuildAdmission(f.root);
+  expect(f.opens()).toBe(3);
+  expect(recovered).toMatchObject({ complete: true, withinLimits: true });
+  expect(recovered.targetAgentAllocatedBytes).toBe(allocation(join(f.root, "target-agent")).allocatedBytes);
+  expect(recovered).toEqual(requireBuildAdmission(f.root));
+});
+
+for (const fault of ["missing", "cheaper namesake", "link", "late sibling"] as const) test(`changed deps stamp cannot reconcile a ${fault} after replay EOF`, () => {
+  const f = changedDepsReplay({ afterReplay(deps, output) {
+    if (fault === "late sibling") { file(deps, "unmeasured"); return; }
+    const moved = join(deps, "retained/nested/still-budgeted");
+    fs.renameSync(output, moved);
+    if (fault === "cheaper namesake") fs.writeFileSync(output, "");
+    if (fault === "link") fs.symlinkSync(moved, output);
+  } });
+  const denied = refusal(() => requireBuildAdmission(f.root));
+  expect(f.opens()).toBe(3);
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors!.join(" ")).toContain("inventory_unstable_replay_scope:");
+});
+
+for (const fault of ["churn", "retained descendant", "ancestor", "EIO", "timeout"] as const) test(`deps witness confirmation fails closed on ${fault}`, () => {
+  let now = 0;
+  const clock = spyOn(performance, "now").mockImplementation(() => now); restore.push(() => clock.mockRestore());
+  const f = changedDepsReplay({ atConfirmation(deps) {
+    if (fault === "EIO") throw Object.assign(new Error("EIO"), { code: "EIO" });
+    if (fault === "timeout") { now = Number(process.env.SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS ?? 8_000) + 1; return; }
+    const dir = fault === "ancestor" ? dirname(deps) : fault === "retained descendant" ? join(deps, "retained/nested") : deps;
+    if (fault !== "churn") file(dir, "unmeasured");
+    fs.utimesSync(dir, 200, 200);
+  } });
+  const denied = refusal(() => requireBuildAdmission(f.root));
+  expect(f.opens()).toBe(3);
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors!.join(" ")).toContain(fault === "EIO" ? "EIO" : fault === "timeout" ? "inventory_time_limit" : "inventory_unstable_replay_scope:membership");
+});
+
+test("a new deps sibling during the remaining managed walk cannot reuse the confirmed frontier", () => {
+  let changed = false;
+  const f = changedDepsReplay({ afterConfirmation(deps) {
+    changed = true; file(deps, "unmeasured"); fs.utimesSync(deps, 300, 300);
+  } });
+  const denied = refusal(() => requireBuildAdmission(f.root));
+  expect(changed).toBe(true);
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors!.join(" ")).toContain("inventory_unstable_replay_scope:membership");
+});
+
+test("the confirming listing spends the replay's remaining entry budget", () => {
+  const root = fixture(), deps = join(root, compilerDeps), gone = join(deps, "rmeta-work");
+  fs.mkdirSync(gone, { recursive: true });
+  // A virtual wide directory avoids creating 70,000 files. Neither listing
+  // exhausts the cap by itself, including each confirmation row's parent check.
+  const pinned = fs.lstatSync(file(root, "seed")), lstat = fs.lstatSync, open = fs.opendirSync;
+  let phase = 0, reads = 0, closes = 0;
+  const clock = spyOn(performance, "now").mockReturnValue(0);
+  const stat = spyOn(fs, "lstatSync").mockImplementation(((path: fs.PathLike, ...args: unknown[]) => {
+    if (String(path).startsWith(deps + "/link-")) return pinned;
+    if (String(path) === gone && phase === 1) fs.rmdirSync(gone);
+    return Reflect.apply(lstat, fs, [path, ...args]);
+  }) as typeof fs.lstatSync);
+  const dirs = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    if (String(path) !== deps || ++phase === 1) return open(path);
+    reads = 0;
+    if (phase === 2) fs.utimesSync(deps, 100, 100);
+    return { readSync: () => ++reads > 70_000 ? null : { name: `link-${reads}`, isDirectory: () => false, isFile: () => true, isSymbolicLink: () => false },
+      closeSync: () => { closes++; } } as fs.Dir;
+  }) as typeof fs.opendirSync);
+  restore.push(() => clock.mockRestore(), () => stat.mockRestore(), () => dirs.mockRestore());
+  const denied = refusal(() => requireBuildAdmission(root));
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors!.join(" ")).toContain("inventory_entry_limit");
+  expect(phase).toBe(3); expect(closes).toBe(2);
+  expect(reads).toBeGreaterThan(0); expect(reads).toBeLessThan(70_000);
+});
+
+for (const bigger of ["before", "after"] as const) test(`over-budget bytes measured ${bigger} confirmation are retained on refusal`, () => {
+  const f = changedDepsReplay({ afterReplay(_deps, output) {
+    fs.writeFileSync(output, Buffer.alloc(bigger === "after" ? 512 * 1024 : 0, 97));
+  } });
+  const reserveBytes = GiB - (bigger === "after" ? 256 * 1024 : 32 * 1024);
+  const denied = refusal(() => requireBuildAdmission(f.root, { reserveBytes }));
+  expect(f.opens()).toBe(3);
+  expect(denied.code).toBe("resource_budget_exceeded");
+  expect(denied.observation.complete).toBe(false);
+  expect(denied.observation.failureCodes).toContain("resource_observation_incomplete");
+  expect(denied.observation.targetAgentAllocatedBytes + reserveBytes).toBeGreaterThan(GiB);
+});
+
+test("the replay cannot forget a larger hardlink observation that shrank before confirmation", () => {
+  const aliases = new Set<string>();
+  const f = changedDepsReplay({ duringReplayStat(path) {
+    if (path.endsWith("/alias") || path.endsWith("/libseed.rmeta")) {
+      aliases.add(path);
+      if (aliases.size === 2) fs.writeFileSync(path, Buffer.alloc(512 * 1024, 97));
+    }
+  }, afterReplay(deps) { fs.writeFileSync(join(deps, "libseed.rmeta"), Buffer.alloc(8192, 97)); } });
+  const limit = 256 * 1024;
+  const denied = refusal(() => requireBuildAdmission(f.root, { reserveBytes: GiB - limit }));
+  expect(aliases.size).toBe(2); expect(f.opens()).toBe(3);
+  expect(denied.code).toBe("resource_budget_exceeded");
+  expect(denied.observation.complete).toBe(false);
+  expect(denied.observation.targetAgentAllocatedBytes).toBeGreaterThan(limit);
+  expect(allocation(join(f.root, "target-agent")).allocatedBytes).toBeLessThan(limit);
+});
+
 for (const kind of ["deps root", "nested directory", "dangling symlink", "second disappearance"] as const) test(`compiler directory replay refuses ${kind}`, () => {
   const root = fixture(), deps = join(root, compilerDeps);
   const target = kind === "deps root" ? deps : join(deps, kind === "nested directory" ? "sub/child" : "sub");
