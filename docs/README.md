@@ -4,6 +4,7 @@ Script Kit GPUI is one window you tell what should happen: a launcher, scripting
 
 ## Start Here
 
+- [Changelog](../CHANGELOG.md) — dated updates, screenshots, and links to the behavior guides.
 - [Getting Started](./guides/getting-started.md) — build the app, create your first script, and learn the core workflow.
 - [Feature Tour](./guides/feature-tour.md) — a guided map of the built-ins and AI features people usually miss.
 - [Main Menu Input](./guides/main-menu-input.md) — saying what should happen, the keys, and the symbol grammar: context mentions, commands, capture, and filters.

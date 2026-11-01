@@ -703,6 +703,8 @@ bash scripts/install-goose-sidecar-into-bundle.sh
 bash scripts/verify-macos-bundle.sh
 ```
 
+[October changelog with screenshots](CHANGELOG.md)
+
 ## Features
 
 ### Built-in Capabilities

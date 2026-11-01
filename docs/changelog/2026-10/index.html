@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f5ee"><title>Script Kit changelog · October 2026</title>
+<meta name="description" content="October in Script Kit: subject tabs, cursor dictation and recovery, better forms, and scoped handoffs to local agents.">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="photoswipe.css">
+</head><body id="top">
+<a class="skip" href="#launcher">Skip to changes</a>
+<div class="wrap">
+<header class="mast"><span class="wordmark"><b aria-hidden="true">›_</b> Script Kit</span><span class="mast-rule"></span><span class="micro">Development changelog</span></header>
+<main>
+<section class="hero" aria-labelledby="title">
+<div class="hero-copy"><p class="issue"><span></span> October 15–31, 2026</p><h1 id="title">Start with what’s <em>in front of you.</em></h1><p class="lede">A selection, a copied link, the field you’re typing in. This month’s changes make it easier to tell Kit which one you mean.</p></div>
+<figure class="cover"><div class="cover-frame"><img src="img/subjects.webp" width="1500" height="1000" alt="Script Kit’s Selected text tab shows a TypeError and offers Explain this error, Add selection to today’s note, and Read the full selection."></div><figcaption><span class="tag">Fig. 01</span> A selected error and the actions that belong to it. <span class="zoom-note">Select image to enlarge ↗</span></figcaption></figure>
+</section>
+<nav class="index" aria-label="In this issue"><span class="micro">In this issue</span><a href="#launcher"><span>01</span> Launcher</a><a href="#voice"><span>02</span> Dictation</a><a href="#forms"><span>03</span> Forms</a><a href="#agents"><span>04</span> Agents</a><a href="#also">Also in October ↓</a></nav>
+<section class="chapter" id="launcher" aria-labelledby="launcher-title">
+<div class="rail"><span>01 / 04</span> Launcher</div><div class="body"><h2 id="launcher-title">Pick the subject before the action.</h2>
+<p>The tabs below the input can hold selected text, a recent copy, the front window and the last run. Each has its own action list. Switching tabs doesn’t run anything: you can read the full selection before deciding what to do with it.</p>
+<dl class="keylist"><div><dt><kbd>Tab</kbd> <kbd>⇧ Tab</kbd></dt><dd>Cycle subjects while the input is empty.</dd></div><div><dt><kbd>⌘ V</kbd> <kbd>↑</kbd></dt><dd>Select the copy, or walk back through past runs.</dd></div><div><dt><kbd>Space</kbd></dt><dd>Attach the chosen subject, then type what to do with it.</dd></div></dl>
+<p><strong>Looking for an open browser tab instead?</strong> Start typing its title. A matching tab can appear from the first character, even when commands and notes also match. Search includes Safari as well as supported Chromium browsers; it searches tab metadata, not page contents.</p>
+<aside class="aside"><b>Local unless you choose otherwise</b><p>Name search doesn’t need a model. Optional Jev readings send your words and candidate actions to TypeSafe. They require opt-in and a credential; an unavailable integration won’t send or connect just because a sentence asks it to.</p></aside>
+</div></section>
+<section class="chapter" id="voice" aria-labelledby="voice-title">
+<div class="rail"><span>02 / 04</span> Dictation</div><div class="body"><h2 id="voice-title">Let go to finish. Not to send.</h2>
+<p>Hold the main shortcut (default <kbd>⌘ ;</kbd>) and speak. Kit remembers the field you started in. If it’s still safe to write there, releasing inserts the transcript. Saying “send this email” dictates those words; it doesn’t send the email.</p>
+<figure><div class="plate voice"><img src="img/recovery.webp" width="1500" height="1000" loading="lazy" alt="Script Kit’s status line offers Restore in Kit after a recording was cancelled."></div><figcaption><span class="tag">Fig. 02</span> Cancel before delivery. Restore opens a draft, not a second paste.</figcaption></figure>
+<ul class="bullets"><li><strong>Change destination:</strong> press <kbd>⇧ Esc</kbd> while listening to switch to editable Kit input. Plain <kbd>Esc</kbd> cancels before dispatch.</li><li><strong>Get a take back:</strong> with recording recovery enabled, cancelled takes stay private on-device for 24 hours. Open <b>Recently Cancelled Dictations</b>; if only audio survived, transcribe it before editing.</li><li><strong>Spell what’s on screen:</strong> visible Accessibility text can supply spelling and capitalization in the original window. Window OCR is a separate opt-in that requires Screen Recording permission.</li></ul>
+<p class="tip"><span>Another way in</span> Tap the main shortcut twice for Today. Hold the second press to dictate into the note. For a clean chat, use ⌘↵ in the empty launcher.</p>
+</div></section>
+<section class="chapter" id="forms" aria-labelledby="forms-title">
+<div class="rail"><span>03 / 04</span> Forms</div><div class="body"><h2 id="forms-title">Your next keystroke fixes the error.</h2>
+<p>Suppose a script asks for an email and a few lines of notes. If the address is invalid, Submit puts the caret back in Email and shows an example there. The notes stay put. Correct the address and the warning clears without a second submission.</p>
+<div class="pair"><figure><div class="plate fields"><img src="img/invalid.webp" width="1500" height="1000" loading="lazy" alt="Email has focus around the word invalid, with a warning beneath it; Notes still contains First line."></div><figcaption><span class="tag">03a</span> Invalid address: nothing was sent.</figcaption></figure><figure><div class="plate fields"><img src="img/corrected.webp" width="1500" height="1000" loading="lazy" alt="The corrected email stays focused and the warning has disappeared, with the note preserved."></div><figcaption><span class="tag">03b</span> A valid address clears the warning.</figcaption></figure></div>
+<p>Return in a multiline field inserts a newline. <kbd>⌘ ↵</kbd> and the Submit button deliver the same values once; Esc cancels. SDK forms return values by name and <code>fields()</code> keeps them in order.</p>
+</div></section>
+<section class="chapter" id="agents" aria-labelledby="agents-title">
+<div class="rail"><span>04 / 04</span> Agents</div><div class="body"><h2 id="agents-title">Share a passage with one agent.</h2>
+<p>Select some text, choose <b>Share selection with a named agent…</b>, then pick a registered local Herdr terminal. Kit freezes the passage and gives you eight seconds to stop the share. A reply waits in Agent Handoffs as editable Markdown; it doesn’t take focus, run a command or paste into your work.</p>
+<figure><div class="plate handoff"><img src="img/recipient.webp" width="1500" height="1000" loading="lazy" alt="The recipient chooser asks who should receive the 46-character selection and identifies the workshop agent and its terminal t1."></div><figcaption><span class="tag">Fig. 04</span> Choose a named recipient, not whichever agent is active.</figcaption></figure>
+<p><strong>From an existing agent conversation:</strong> an operator can grant permission to save a quiet Markdown note or run one reviewed revision of a personal command. A notes grant isn’t clipboard access; a changed command needs a new review. These grants limit Kit’s API, not what an unrestricted shell can do.</p>
+</div></section>
+<section class="also" id="also" aria-labelledby="also-title"><p class="issue"><span></span> The rest of the update</p><h2 id="also-title">Also in October</h2><dl class="digest">
+<div><dt>Files &amp; exports</dt><dd>File actions avoid overwriting an existing name. On a supported native Save or Export sheet, the optional filename helper lets you preview a quoted name, fill the field and leave Save untouched. It needs Accessibility permission; it is not a general desktop controller.</dd></div>
+<div><dt>Notes &amp; clipboard</dt><dd>Notes and Today share a Markdown editor. Follow a note link, check word counts or copy the text as Markdown, HTML or plain text. Clipboard history distinguishes links, colors and file paths so their actions fit what you copied.</dd></div>
+<div><dt>Chat &amp; capture</dt><dd>Chat can use configured MCP servers and ask before making changes. A deliberate window handoff can include the app, title, selection and a screenshot; opening a clean chat does not attach the highlighted result.</dd></div>
+<div><dt>Windows &amp; webcam</dt><dd>Move windows in fourths or sixths, step their size up or down, or restore a previous arrangement. The webcam prompt has a countdown and a review step before you keep the photo.</dd></div>
+<div><dt>Under the hood</dt><dd>The one-window interface now runs on the newer GPUI and gpui-kit components. Dictation uses Metal with a CPU fallback; transcription models are downloaded separately.</dd></div>
+</dl><p class="colophon">Screenshots show Script Kit’s renderer with sample text, not a personal desktop. Native permissions, microphone capture and delivery into another app depend on the Mac and application involved.</p></section>
+</main><footer><span class="wordmark small"><b aria-hidden="true">›_</b> Script Kit</span><span>October 2026</span><a href="#top">Back to top ↑</a></footer>
+</div><script src="photoswipe.umd.min.js"></script><script src="zoom.js"></script></body></html>
