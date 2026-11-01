@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { OwnedEvaluationClient } from '../devtools/lib/owned-evaluation';
 import { readArtifactReference } from '../devtools/design';
 import { claimOutput, validateOutputTarget, beginManagedTask, finalizeManagedTask, emptyOwnedCleanup } from './artifact-lifecycle';
-import { DriverLifecycleError } from '../devtools/driver';
+import { DriverCommandRefused, DriverLifecycleError } from '../devtools/driver';
 import { paintNodes } from './one-window-frames';
 
 const [refPath, destination] = process.argv.slice(2);
@@ -55,10 +55,21 @@ try {
   const ready=(await state()).oneWindow;assert.equal(ready.enter.label,'Add to note');assert.ok(!ready.enterArmed);
   const selected=(await client.query(target,'elements')).elements.find((e:any)=>e.role==='row'&&e.selected);
   assert.equal(selected.text,'Add selection to today’s note');
-  await client.act(target,{type:'select',semanticId:selected.semanticId,submit:true});
+  // Ages tick in the real panel. Re-inspect only after a proven pre-dispatch refusal;
+  // a changed selection, source generation, view, theme or an uncertain submit is terminal.
+  const baseline=(await state()).targetIdentity;
+  for(let attempt=0;;attempt++){
+    const now=await state(), bound=now.targetIdentity;
+    for(const k of ['windowId','windowGeneration','appViewVariant','targetGeneration','surfaceGeneration','dataGeneration','themeRevision']) assert.equal(bound[k],baseline[k],k);
+    assert.equal(now.oneWindow.enter.label,'Add to note');assert.ok(!now.oneWindow.enterArmed);
+    const row=(await client.query(target,'elements')).elements.find((e:any)=>e.role==='row'&&e.selected);
+    assert.equal(row?.semanticId,selected.semanticId);
+    try {await client.act(target,{type:'select',semanticId:selected.semanticId,submit:true},bound); receipts.presentationRefusals=attempt;break;}
+    catch(err){if(attempt>=3 || !(err instanceof DriverCommandRefused) || err.code!=='stale_target_identity')throw err;}
+  }
   await Bun.sleep(650);receipts.saveStatus=(await state()).dayPage?.saveStatus;
   const days=join(session,'notes/brain/days');const saved=readdirSync(days).filter(f=>f.endsWith('.md')).map(f=>readFileSync(join(days,f),'utf8')).find(s=>s.includes('TypeError: Cannot read properties of undefined'));
-  assert.ok(saved,'the selected text must be in the saved day page');receipts.savedNote=saved;await frame('saved-note');
+  assert.ok(saved,'the selected text must be in the saved day page');assert.equal(saved.split('TypeError: Cannot read properties of undefined').length-1,1,'submit must not be replayed');receipts.savedNote=saved;await frame('saved-note');
 } finally {
   const closed=finalizeManagedTask(task,await client.close()).cleanup;receipts.closed=closed.closed;
   if(closed.closed&&session.startsWith(out+'/'))rmSync(session,{recursive:true,force:true});

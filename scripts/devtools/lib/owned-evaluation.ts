@@ -672,6 +672,15 @@ export class OwnedEvaluationClient {
     if (Object.keys(before).some(key => (key !== "frameGeneration" || coordinateAction) &&
         before[key as keyof AutomationTargetSnapshot] !== receipt.before[key as keyof AutomationTargetSnapshot]))
       throw new EvaluationContractError("action_expectation_rebound");
+    // A single semantic selection validates its bound target immediately before the
+    // selection callback. A presentation tick during delivery can reject that callback
+    // even though the outer batch observed a state change. Expose the known pre-effect
+    // refusal; never rebind/retry here, nor classify arbitrary action failures as stale.
+    const entry = result.results?.[0];
+    if (action.type === "select" && result.type === "batchResult" && result.success === false && result.results?.length === 1 &&
+        entry?.command === "selectBySemanticId" && entry.success === false && entry.value == null &&
+        entry.error?.code === "selection_not_found" && entry.error.message === "stale_target_identity")
+      throw new DriverCommandRefused("stale_target_identity", result.requestId);
     if (result.type === "batchResult" && (result.success !== true || result.results?.length !== 1 || result.results[0]?.success !== true))
       throw new EvaluationContractError("single_action_batch_not_completed");
     if (!receipt.dispatchCompleted) throw new EvaluationContractError("completed_action_receipt_required");
