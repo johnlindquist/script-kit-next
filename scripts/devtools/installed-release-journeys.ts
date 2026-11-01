@@ -385,7 +385,12 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       // A directly opened wizard resets the list only AFTER the hide transition.
       await observe(state, (s) => s.promptType === 'none', 'startup-wizard-did-not-dismiss');
     }
-    if (!(await state()).windowVisible) await external({ type: 'show' });
+    if (!(await state()).windowVisible) {
+      await identity();
+      const ack = await request({ type: 'show' }, 'windowVisibilityAck');
+      requireProof(ack.windowVisible === true, 'show-not-acknowledged');
+      await observe(state, s=>s.windowVisible === true && s.promptType === 'none','launcher-not-visible-after-show');
+    }
     await waitView('none');
     requireProof((await identity()).visible === true, 'launcher-not-visible');
     await batch({ type: 'setInput', text: 'permissions' });

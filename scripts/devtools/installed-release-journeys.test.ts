@@ -108,6 +108,7 @@ async function exercise(
   );
   let windowQueries = 0,
     view = 'permissionsWizard',
+    visible = true,
     input = '',
     selected = '',
     invalid = false,
@@ -127,7 +128,7 @@ async function exercise(
             ? 'noDevices'
             : 'ready';
     return {
-      windowVisible: true,
+      windowVisible: visible,
       promptType: view,
       inputValue: input,
       visibleChoiceCount: input === 'permissions' ? 2 : 80,
@@ -240,12 +241,16 @@ async function exercise(
               {
                 id: 'main',
                 kind: 'main',
-                visible: true,
+                visible,
                 pid: appPid,
                 generation: generation + (fault === 'generation' && windowQueries > 1 ? 1 : 0),
               },
             ],
           };
+          break;
+        case 'show':
+          visible=true;
+          res={type:'windowVisibilityAck',windowVisible:true};
           break;
         case 'getState':
           res = { type: 'stateResult', ...state() };
@@ -273,7 +278,7 @@ async function exercise(
           break;
         }
         case 'simulateKey': {
-          if (c.key === 'escape') view = 'none';
+          if (c.key === 'escape') { visible = view === 'permissionsWizard' && !input ? false : visible; view = 'none'; }
           else if (c.key === 's' && view === 'dayPage') {
             if (fault !== 'disk') writeFileSync(day, input);
           } else if (c.key === 'enter' && view === 'form') {
