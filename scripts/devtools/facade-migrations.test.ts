@@ -8,6 +8,7 @@ import {
   POPUP_WINDOW_OWNER,
   REQUIRED_FACADE_SOURCE_PATHS,
   REQUIRED_POPUP_CONSUMERS,
+  RETIRED_POPUP_HOSTS,
   SHARED_COMPONENTS_MODULE,
   stripFacadeMigrationRustTrivia,
   attachFacadeMigrationScope,
@@ -22,15 +23,16 @@ function passingSources(): FacadeMigrationSource[] {
   return [
     {
       path: SHARED_COMPONENTS_MODULE,
-      content: "pub mod conversation_style;\npub mod inline_popup_window;\n",
+      content: "pub mod conversation_style;\npub mod staged_actions;\n",
     },
     { path: CONVERSATION_STYLE_FACADE, content: undefined },
     { path: CONVERSATION_STYLE_OWNER, content: "pub struct ConversationStyle;" },
     { path: POPUP_WINDOW_FACADE, content: undefined },
-    { path: POPUP_WINDOW_OWNER, content: "pub struct InlinePopupWindow;" },
+    ...RETIRED_POPUP_HOSTS.map(path => ({path, content: undefined})),
+    { path: POPUP_WINDOW_OWNER, content: "pub struct StagedActionRow;" },
     {
       path: POPUP_AUTOMATION_POLICY,
-      content: "pub(crate) fn agent_chat_popup_policy() {}",
+      content: "pub(crate) fn main_window_target_policy() {}",
     },
     {
       path: conversationConsumer,
@@ -38,7 +40,7 @@ function passingSources(): FacadeMigrationSource[] {
     },
     ...REQUIRED_POPUP_CONSUMERS.map((path) => ({
       path,
-      content: "use crate::components::inline_popup_window::InlinePopupWindow;",
+      content: "use crate::components::staged_actions::StagedActionRow;",
     })),
   ];
 }
@@ -58,7 +60,7 @@ function replaceSource(
 }
 
 describe("GOV-002 complete facade-migration scope", () => {
-  test("requires both retired facades and preserves narrow popup automation", () => {
+  test("requires both retired facades and binds in-place actions to the main targeting policy", () => {
     const ledger = auditFacadeMigrationScope(passingSources(), persistedTokens);
 
     expect(ledger.disposition).toBe("REMOVED");
@@ -103,7 +105,7 @@ describe("GOV-002 complete facade-migration scope", () => {
 
   test.each([
     [CONVERSATION_STYLE_OWNER, "conversation_style"],
-    [POPUP_WINDOW_OWNER, "inline_popup_window"],
+    [POPUP_WINDOW_OWNER, "staged_actions"],
   ])("rejects deleting canonical owner %s", (path) => {
     const ledger = auditFacadeMigrationScope(
       replaceSource(passingSources(), path, undefined),
@@ -137,7 +139,7 @@ describe("GOV-002 complete facade-migration scope", () => {
         replaceSource(
           passingSources(),
           path,
-          `use super::${legacyModule}::OldFacade;\nuse crate::components::inline_popup_window::InlinePopupWindow;`,
+          `use super::${legacyModule}::OldFacade;\nuse crate::components::staged_actions::StagedActionRow;`,
         ),
         persistedTokens,
       );
@@ -152,7 +154,7 @@ describe("GOV-002 complete facade-migration scope", () => {
       replaceSource(
         passingSources(),
         path,
-        "mod popup_window;\nuse crate::components::inline_popup_window::InlinePopupWindow;",
+        "mod popup_window;\nuse crate::components::staged_actions::StagedActionRow;",
       ),
       persistedTokens,
     );
@@ -165,7 +167,7 @@ describe("GOV-002 complete facade-migration scope", () => {
       replaceSource(
         passingSources(),
         path,
-        "use super::{other, popup_window::OldPopup};\nuse crate::components::inline_popup_window::InlinePopupWindow;",
+        "use super::{other, popup_window::OldPopup};\nuse crate::components::staged_actions::StagedActionRow;",
       ),
       persistedTokens,
     );
@@ -194,7 +196,7 @@ describe("GOV-002 complete facade-migration scope", () => {
       persistedTokens,
     );
     expect(ledger.failures).toContain(
-      "canonical-module-not-registered:inline_popup_window",
+      "canonical-module-not-registered:staged_actions",
     );
   });
 
@@ -258,7 +260,7 @@ describe("GOV-002 complete facade-migration scope", () => {
       'let documented = "super::popup_window::OldFacade";',
       'let raw = r#"mod popup_window;"#;',
       "let quote = '\\\"';",
-      "use crate::components::inline_popup_window::InlinePopupWindow;",
+      "use crate::components::staged_actions::StagedActionRow;",
     ].join("\n");
     const ledger = auditFacadeMigrationScope(
       replaceSource(passingSources(), path, source),
@@ -301,7 +303,7 @@ describe("GOV-002 complete facade-migration scope", () => {
         "use script_kit_gpui::components::conversation_style::ConversationStyle;",
       ),
       popupPath,
-      "use crate::components::{inline_popup_window::InlinePopupWindow, other};",
+      "use crate::components::{staged_actions::StagedActionRow, other};",
     );
     expect(auditFacadeMigrationScope(sources, persistedTokens).failures).toEqual([]);
   });

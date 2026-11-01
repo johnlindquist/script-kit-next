@@ -13,6 +13,7 @@ import { dirname, resolve } from "node:path";
 import {
   attachFacadeMigrationScope,
   POPUP_WINDOW_FACADE,
+  RETIRED_POPUP_HOSTS,
   REQUIRED_FACADE_SOURCE_PATHS,
 } from "./facade-migrations.ts";
 
@@ -24,7 +25,7 @@ export const PERSISTED_CONVERSATION_CONTRACT =
   "design/mockups/generated/tokens.json";
 
 const requiredProductionConsumers = [
-  "src/ai/agent_chat/ui/components/transcript.rs",
+  "src/one_window/work_view.rs",
   "src/prompts/chat/render_turns.rs",
   "src/design_contract/bundle_agent_chat.rs",
   "src/components/conversation_text.rs",
@@ -178,6 +179,7 @@ export function collectConversationMigrationSources(
   const retiredFacades = new Set([
     REMOVED_CONVERSATION_FACADE,
     POPUP_WINDOW_FACADE,
+    ...RETIRED_POPUP_HOSTS,
   ]);
   const sources: RustMigrationSource[] = [];
   for (const path of CANONICAL_MIGRATION_SOURCE_PATHS) {

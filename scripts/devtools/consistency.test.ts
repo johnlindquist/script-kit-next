@@ -69,6 +69,7 @@ import {
   POPUP_WINDOW_FACADE,
   POPUP_WINDOW_OWNER,
   REQUIRED_POPUP_CONSUMERS,
+  RETIRED_POPUP_HOSTS,
   SHARED_COMPONENTS_MODULE,
 } from "./facade-migrations.ts";
 import { createArtifactFixture, type ArtifactFixture } from "../agentic/build-artifact-fixture.ts";
@@ -115,23 +116,24 @@ function passingFacadeLedger(): Record<string, unknown> {
   const sources = [
     {
       path: SHARED_COMPONENTS_MODULE,
-      content: "pub mod conversation_style;\npub mod inline_popup_window;\n",
+      content: "pub mod conversation_style;\npub mod staged_actions;\n",
     },
     { path: CONVERSATION_STYLE_FACADE, content: undefined },
     { path: CONVERSATION_STYLE_OWNER, content: "pub struct ConversationStyle;" },
     { path: POPUP_WINDOW_FACADE, content: undefined },
-    { path: POPUP_WINDOW_OWNER, content: "pub struct InlinePopupWindow;" },
+    ...RETIRED_POPUP_HOSTS.map(path => ({path, content: undefined})),
+    { path: POPUP_WINDOW_OWNER, content: "pub struct StagedActionRow;" },
     {
       path: POPUP_AUTOMATION_POLICY,
-      content: "pub(crate) fn agent_chat_popup_policy() {}",
+      content: "pub(crate) fn main_window_target_policy() {}",
     },
     {
-      path: "src/ai/agent_chat/ui/components/transcript.rs",
+      path: "src/one_window/work_view.rs",
       content: "use crate::components::conversation_style::ConversationStyle;",
     },
     ...REQUIRED_POPUP_CONSUMERS.map((path) => ({
       path,
-      content: "use crate::components::inline_popup_window::InlinePopupWindow;",
+      content: "use crate::components::staged_actions::StagedActionRow;",
     })),
   ];
   const scope = auditFacadeMigrationScope(sources, [

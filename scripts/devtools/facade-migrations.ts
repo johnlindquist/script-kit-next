@@ -15,14 +15,17 @@ export const CONVERSATION_STYLE_FACADE =
 export const CONVERSATION_STYLE_OWNER =
   "src/components/conversation_style.rs";
 export const POPUP_WINDOW_FACADE = "src/ai/agent_chat/ui/popup_window.rs";
-export const POPUP_WINDOW_OWNER = "src/components/inline_popup_window.rs";
+// Operation and target policy now live in the main window. Preserve the historical
+// receipt field names, but bind them to the current implementation.
+export const RETIRED_POPUP_HOSTS = ["src/components/inline_popup_window.rs", "src/ai/agent_chat/ui/popup_automation.rs"] as const;
+export const POPUP_WINDOW_OWNER = "src/components/staged_actions.rs";
 export const POPUP_AUTOMATION_POLICY =
-  "src/ai/agent_chat/ui/popup_automation.rs";
+  "src/prompt_handler/mod.rs";
 export const SHARED_COMPONENTS_MODULE = "src/components/mod.rs";
 
 export const REQUIRED_POPUP_CONSUMERS = [
-  "src/ai/agent_chat/ui/view.rs",
-  "src/menu_syntax/object_selector.rs",
+  "src/one_window/view_staging.rs",
+  "src/main_sections/day_page_render.rs",
 ] as const;
 
 export const REQUIRED_FACADE_MIGRATIONS = [
@@ -36,7 +39,7 @@ export const REQUIRED_FACADE_MIGRATIONS = [
     id: "popup-window",
     removedFacadePath: POPUP_WINDOW_FACADE,
     canonicalOwnerPath: POPUP_WINDOW_OWNER,
-    canonicalModule: "inline_popup_window",
+    canonicalModule: "staged_actions",
   },
 ] as const;
 
@@ -53,6 +56,7 @@ export const REQUIRED_FACADE_SOURCE_PATHS = [
   POPUP_WINDOW_OWNER,
   POPUP_AUTOMATION_POLICY,
   ...REQUIRED_POPUP_CONSUMERS,
+  ...RETIRED_POPUP_HOSTS,
 ] as const;
 
 export interface FacadeMigrationSource {
@@ -242,9 +246,9 @@ function digestFacadeMigrationSource(
 }
 
 /**
- * Fail closed on either removed facade. Popup policy intentionally remains:
- * deleting popup_automation.rs would remove Agent Chat-specific policy rather
- * than completing the shared-window migration.
+ * Fail closed on either removed facade and on a resurrected popup host.
+ * The prompt handler, not a detached chat window, resolves automation targets
+ * for in-place actions.
  */
 export function auditFacadeMigrationScope(
   sources: readonly FacadeMigrationSource[],
@@ -361,6 +365,9 @@ export function auditFacadeMigrationScope(
     } satisfies FacadeMigrationFinding;
   });
 
+  for (const retired of RETIRED_POPUP_HOSTS) {
+    if (!sourceByPath.has(retired) || sourceByPath.get(retired) !== undefined) failures.push(`retired-host-not-absent:${retired}`);
+  }
   const popupAutomationPolicyPreserved =
     sourceByPath.get(POPUP_AUTOMATION_POLICY) !== undefined;
   if (!popupAutomationPolicyPreserved) {
@@ -380,15 +387,15 @@ export function auditFacadeMigrationScope(
     persistedTokenPaths.filter((path) => path.includes("conversation_style::")),
   );
   const popupPersistedTokenPaths = sortedUnique(
-    persistedTokenPaths.filter((path) => path.includes("inline_popup_window::")),
+    persistedTokenPaths.filter((path) => path.includes("staged_actions::")),
   );
   if (conversationPersistedTokenPaths.length === 0) {
     failures.push("missing-conversation-persisted-token-paths");
   }
   for (const path of persistedTokenPaths) {
     if (
-      /(?:^|::)(?:style_contract|popup_window)::/.test(path) ||
-      /(?:^|\/)(?:style_contract|popup_window)\.rs(?:$|[:#])/.test(path)
+      /(?:^|::)(?:style_contract|popup_window|inline_popup_window)::/.test(path) ||
+      /(?:^|\/)(?:style_contract|popup_window|inline_popup_window)\.rs(?:$|[:#])/.test(path)
     ) {
       failures.push(`legacy-persisted-token-path:${path}`);
     }
@@ -525,7 +532,7 @@ export function validateCompleteFacadeMigrationScope(value: unknown): string[] {
       }
       if (
         (digest.path === CONVERSATION_STYLE_FACADE ||
-          digest.path === POPUP_WINDOW_FACADE) &&
+          digest.path === POPUP_WINDOW_FACADE || RETIRED_POPUP_HOSTS.some(path => path === digest.path)) &&
         digest.state !== "ABSENT"
       ) {
         failures.push("retired-facade-source-digest-is-present:" + digest.path);
@@ -577,7 +584,7 @@ export function validateCompleteFacadeMigrationScope(value: unknown): string[] {
     !Array.isArray(scope.popupPersistedTokenPaths) ||
     scope.popupPersistedTokenPaths.some(
       (path) =>
-        typeof path !== "string" || !path.includes("inline_popup_window::"),
+        typeof path !== "string" || !path.includes("staged_actions::"),
     )
   ) {
     failures.push("invalid-popup-persisted-token-evidence");

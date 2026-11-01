@@ -67,7 +67,7 @@ describe("real conversation-style compatibility facade migration", () => {
       ledger.facadeMigrations.facades.find(
         (facade) => facade.id === "popup-window",
       )?.canonicalConsumerPaths,
-    ).toContain("src/menu_syntax/object_selector.rs");
+    ).toContain("src/main_sections/day_page_render.rs");
     expect(
       ledger.facadeMigrations.facades.every(
         (facade) =>
@@ -86,7 +86,7 @@ describe("real conversation-style compatibility facade migration", () => {
     expect(ledger.provesRuntimeBehavior).toBe(false);
     expect(Object.values(ledger.assertions).every(Boolean)).toBe(true);
     expect(ledger.sourceCorpus.canonicalProductionConsumers).toContain(
-      "src/ai/agent_chat/ui/components/transcript.rs",
+      "src/one_window/work_view.rs",
     );
     expect(ledger.sourceCorpus.canonicalProductionConsumers).toContain(
       "src/prompts/chat/render_turns.rs",
@@ -123,12 +123,11 @@ describe("real conversation-style compatibility facade migration", () => {
   test("local alias usage must resolve to the canonical imported module", () => {
     const mutated = clonedSources();
     const transcript = mutated.find((entry) =>
-      entry.path === "src/ai/agent_chat/ui/components/transcript.rs"
+      entry.path === "src/one_window/work_view.rs"
     )!;
-    transcript.source = transcript.source.replace(
-      "self as style_contract,",
-      "self as migrated_contract,",
-    );
+    // The current chat paints in the main window and needs no local alias. An
+    // unbound use is still a regression even when the production spelling changes.
+    transcript.source += "\nfn bad_alias() { style_contract::production_conversation_style(); }";
     const ledger = inspectConversationFacadeMigration(mutated, bundle);
     expect(ledger.pass).toBe(false);
     expect(ledger.sourceCorpus.unboundLocalAliases).toEqual([transcript.path]);

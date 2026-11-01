@@ -994,9 +994,9 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
                 "scripts/devtools/facade-migrations.ts",
               ) ||
               !productionSources.includes("src/components/conversation_style.rs") ||
-              !productionSources.includes("src/components/inline_popup_window.rs") ||
+              !productionSources.includes("src/components/staged_actions.rs") ||
               !productionSources.includes(
-                "src/ai/agent_chat/ui/popup_automation.rs",
+                "src/prompt_handler/mod.rs",
               ) ||
               !suiteFiles.includes("scripts/devtools/facade-ledger.test.ts") ||
               !suiteFiles.includes(

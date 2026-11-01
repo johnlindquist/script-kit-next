@@ -181,10 +181,10 @@ describe("catalog-bound offline consistency task proofs", () => {
       "src/design_contract/bundle_agent_chat.rs",
     );
     expect(migration.productionSources).toContain(
-      "src/components/inline_popup_window.rs",
+      "src/components/staged_actions.rs",
     );
     expect(migration.productionSources).toContain(
-      "src/ai/agent_chat/ui/popup_automation.rs",
+      "src/prompt_handler/mod.rs",
     );
     expect(migration.testRun.suiteFiles).toEqual([
       "scripts/devtools/facade-ledger.test.ts",
@@ -193,7 +193,7 @@ describe("catalog-bound offline consistency task proofs", () => {
     expect(migration.sourceFingerprints["src/components/conversation_style.rs"])
       .toMatch(/^[a-f0-9]{64}$/);
     expect(
-      migration.sourceFingerprints["src/components/inline_popup_window.rs"],
+      migration.sourceFingerprints["src/components/staged_actions.rs"],
     ).toMatch(/^[a-f0-9]{64}$/);
     expect(
       prepareValidatedReceipt(
@@ -487,12 +487,12 @@ describe("catalog-bound offline consistency task proofs", () => {
     }
   });
 
-  test("a one-facade GOV-002 proof cannot omit the popup owner or behavior suite", () => {
+  test("a one-facade GOV-002 proof cannot omit the in-place actions owner or behavior suite", () => {
     const complete = observedProof("GOV-002");
     const missingOwner = {
       ...complete,
       productionSources: complete.productionSources.filter(
-        (path) => path !== "src/components/inline_popup_window.rs",
+        (path) => path !== "src/components/staged_actions.rs",
       ),
     };
     expect(

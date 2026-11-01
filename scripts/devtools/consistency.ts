@@ -148,7 +148,8 @@ export const FAMILY_IDS = [
 ] as const;
 
 /** Current generated GOV-005 lifecycle inventory; never force obsolete conflicts back into the exporter. */
-export const AUTHORIZED_CONFLICT_COUNT = 29;
+// The eight Confirm window conflicts retired with that surface in 91e38f78f.
+export const AUTHORIZED_CONFLICT_COUNT = 21;
 
 const ARCHIVED_DIRECTORY_NAMES = new Set([
   "attempts",
