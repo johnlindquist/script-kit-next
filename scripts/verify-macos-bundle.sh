@@ -70,6 +70,12 @@ if [[ "${actual_bundle_executable}" != "script-kit-gpui" ]]; then
   exit 1
 fi
 
+# TCC reads the assembled Info.plist, not the copy of Info.plist.ext in Resources.
+if ! microphone_purpose="$(/usr/bin/plutil -extract NSMicrophoneUsageDescription raw -expect string -o - "${INFO_PLIST}" 2>/dev/null)" || [[ ! "${microphone_purpose}" =~ [^[:space:]] ]]; then
+  echo "bundle_verify missing_microphone_purpose" >&2
+  exit 1
+fi
+
 app_sha256="$(shasum -a 256 "${EXPECTED_BIN}" | awk '{print $1}')"
 goose_sha256="$(shasum -a 256 "${EXPECTED_GOOSE_BIN}" | awk '{print $1}')"
 

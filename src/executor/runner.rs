@@ -148,6 +148,21 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Resolve Bun before constructing the command. Unlike other runtimes, a missing
+/// or invalid Bun pin must never fall through to an unrestricted PATH lookup.
+pub(crate) fn runtime_command(cmd: &str) -> Result<String, String> {
+    if cmd == "bun" {
+        return crate::config::configured_bun()
+            .map_err(|error| error.to_string())?
+            .into_os_string()
+            .into_string()
+            .map_err(|_| "Invalid encoding in Bun path".to_string());
+    }
+    Ok(find_executable(cmd)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| cmd.to_string()))
+}
+
 /// Get the SDK path - SDK extraction is now handled by setup::ensure_kit_setup() at startup
 /// This function just returns the expected path since setup has already done the work
 ///
@@ -846,9 +861,7 @@ pub fn spawn_unattended_script(
     let start = Instant::now();
     let runner =
         |cmd: &str, args: &[&str], _script_path: &str| -> Result<UnattendedChild, String> {
-            let executable = find_executable(cmd)
-                .map(|p| p.to_string_lossy().into_owned())
-                .unwrap_or_else(|| cmd.to_string());
+            let executable = runtime_command(cmd)?;
             let mut command = Command::new(&executable);
             apply_script_environment(&mut command, &env);
             command
@@ -910,10 +923,7 @@ pub fn spawn_script_with_extra_env(
 ) -> Result<ScriptSession, String> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)
         .map_err(|error| error.to_string())?;
-    // Try to find the executable in common locations
-    let executable = find_executable(cmd)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| cmd.to_string());
+    let executable = runtime_command(cmd)?;
 
     debug!(executable = %executable, args = ?args, "Spawning script process");
     info!(

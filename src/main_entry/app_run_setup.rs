@@ -12,6 +12,13 @@
     // Load config early so we can use it for hotkey registration AND clipboard history settings
     // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
     let loaded_config = config::load_config();
+    let bun_available = match config::resolve_bun(loaded_config.bun_path.as_deref()) {
+        Ok(_) => true,
+        Err(error) => {
+            logging::log("APP", &format!("Bun unavailable: {error}"));
+            false
+        }
+    };
     // The notes folder is fixed for the run; the binary and the library each keep a copy.
     crate::notes::folder::use_configured_notes_folder(loaded_config.notes_folder.as_deref());
     script_kit_gpui::notes::folder::use_configured_notes_folder(
@@ -317,8 +324,6 @@ app.run(move |cx: &mut App| {
         let app_entity_holder: Arc<Mutex<Option<Entity<ScriptListApp>>>> = Arc::new(Mutex::new(None));
         let app_entity_for_closure = app_entity_holder.clone();
 
-        // Capture bun_available for use in window creation
-        let bun_available = setup_result.bun_available;
         let config_for_tray_actions = config_for_app.clone();
 
         // Root is required for gpui_component's InputState focus tracking

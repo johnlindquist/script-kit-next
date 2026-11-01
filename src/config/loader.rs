@@ -328,7 +328,7 @@ static CONFIG_PREFERENCE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mute
 /// Build a Bun command that imports a module by URL and writes its default export as JSON to stdout.
 ///
 /// Uses `pathToFileURL` so paths with special characters are handled safely.
-fn build_bun_extract_command(module_path: &Path) -> Result<Command, serde_json::Error> {
+fn build_bun_extract_command(bun: &Path, module_path: &Path) -> Result<Command, serde_json::Error> {
     let module_path_json = serde_json::to_string(&module_path.to_string_lossy().into_owned())?;
     let script = format!(
         r#"const {{ pathToFileURL }} = await import("node:url");
@@ -336,9 +336,49 @@ const moduleUrl = pathToFileURL({module_path_json}).href;
 const loaded = await import(moduleUrl);
 process.stdout.write(JSON.stringify(loaded?.default ?? {{}}));"#
     );
-    let mut command = Command::new("bun");
+    let mut command = Command::new(bun);
     command.arg("--eval").arg(script);
     Ok(command)
+}
+
+fn static_bun_pin(path: &Path) -> std::io::Result<Option<String>> {
+    use std::io::{Error, ErrorKind};
+    if !path.is_absolute() {
+        return Err(Error::other("relative config.ts path"));
+    }
+    let metadata = match fs::metadata(path) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        other => other?,
+    };
+    if !metadata.is_file() || metadata.len() > 1_048_576 {
+        return Err(Error::other(
+            "unsupported config.ts for static Bun discovery",
+        ));
+    }
+    super::editor::bootstrap_bun_pin(&fs::read_to_string(path)?).map_err(Error::other)
+}
+
+/// For read-only/config tooling: don't execute config.ts as an incidental effect
+/// of discovering Bun. Only an unambiguous static pin may choose this program.
+pub(crate) fn passive_bun() -> Option<PathBuf> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery).ok()?;
+    passive_bun_at(&config_ts_path())
+}
+
+fn passive_bun_at(path: &Path) -> Option<PathBuf> {
+    let pin = static_bun_pin(path).ok()?;
+    super::resolve_bun(pin.as_deref()).ok()
+}
+
+fn config_evaluator_bun(config_path: &Path) -> std::io::Result<PathBuf> {
+    let pin = static_bun_pin(config_path).ok().flatten();
+    if let Some(bun) = pin
+        .as_deref()
+        .and_then(|path| super::resolve_bun(Some(path)).ok())
+    {
+        return Ok(bun);
+    }
+    super::resolve_bun(None)
 }
 
 fn parse_optional_field<T>(
@@ -898,9 +938,20 @@ pub fn load_config() -> Config {
         );
     }
 
+    // The config itself is executable TypeScript. A literal bun_path can bootstrap
+    // a custom-only installation; computed pins need an independently discoverable
+    // Bun to evaluate the config first. A broken pin must not discard other settings.
+    let bun = match config_evaluator_bun(&config_path) {
+        Ok(bun) => bun,
+        Err(error) => {
+            warn!(%error, "No Bun available to evaluate config.ts");
+            return Config::default();
+        }
+    };
+
     // Fast path: import config.ts directly with one Bun process.
     let direct_start = std::time::Instant::now();
-    let mut direct_command = match build_bun_extract_command(&config_path) {
+    let mut direct_command = match build_bun_extract_command(&bun, &config_path) {
         Ok(command) => command,
         Err(error) => {
             warn!(
@@ -964,7 +1015,7 @@ pub fn load_config() -> Config {
         }
     };
 
-    let build_output = Command::new("bun")
+    let build_output = Command::new(&bun)
         .arg("build")
         .arg("--target=bun")
         .arg(config_path.to_string_lossy().to_string())
@@ -993,7 +1044,7 @@ pub fn load_config() -> Config {
         Ok(_) => {}
     }
 
-    let mut fallback_command = match build_bun_extract_command(tmp_js.path()) {
+    let mut fallback_command = match build_bun_extract_command(&bun, tmp_js.path()) {
         Ok(command) => command,
         Err(error) => {
             warn!(
@@ -1465,10 +1516,52 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn cold_config_bootstrap_and_execution_use_the_same_custom_binary() {
+        use std::os::unix::fs::PermissionsExt;
+        let fixture = tempfile::tempdir().unwrap();
+        let binary = fixture.path().join("my custom bun");
+        let config_ts = fixture.path().join("config.ts");
+        std::fs::write(
+            &binary,
+            "#!/bin/sh\n[ \"$1\" = --eval ] || exit 77\nprintf '%s' '{\"fixture\":true}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let pin = serde_json::to_string(&binary).unwrap();
+        std::fs::write(
+            &config_ts,
+            format!("export default {{ hotkey: makeHotkey(), bun_path: {pin} }};"),
+        )
+        .unwrap();
+        // The uncalled makeHotkey() would throw if a passive lookup evaluated this file.
+        let evaluator = super::config_evaluator_bun(&config_ts).unwrap();
+        assert_eq!(super::passive_bun_at(&config_ts), Some(evaluator.clone()));
+        assert_eq!(
+            evaluator,
+            crate::config::resolve_bun(binary.to_str()).unwrap()
+        );
+        let output = build_bun_extract_command(&evaluator, &config_ts)
+            .unwrap()
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, br#"{"fixture":true}"#);
+        std::fs::write(
+            &config_ts,
+            "throw Error('must not run'); export default { bun_path: compute() };",
+        )
+        .unwrap();
+        assert_eq!(super::passive_bun_at(&config_ts), None);
+    }
+
     #[test]
     fn test_build_bun_extract_command_uses_eval_with_json_escaped_path() {
         let module_path = Path::new("/tmp/config-with-'quote'.js");
-        let command = build_bun_extract_command(module_path).expect("should build command");
+        let bun = Path::new("/absolute/custom bun");
+        let command = build_bun_extract_command(bun, module_path).expect("should build command");
+        assert_eq!(command.get_program(), bun.as_os_str());
 
         let args: Vec<String> = command
             .get_args()

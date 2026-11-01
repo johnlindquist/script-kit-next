@@ -85,6 +85,9 @@ impl ScriptListApp {
 
     pub(crate) fn update_config(&mut self, cx: &mut Context<Self>) {
         self.config = config::load_config();
+        if !crate::runtime_policy::is_owned_evaluation() {
+            self.bun_missing = config::resolve_bun(self.config.bun_path.as_deref()).is_err();
+        }
         clipboard_history::set_max_text_content_len(
             self.config.get_clipboard_history_max_text_length(),
         );

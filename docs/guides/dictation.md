@@ -17,6 +17,8 @@ Readiness requires a downloaded transcription model, macOS microphone permission
 - `parakeet-tdt-0.6b-v3` (default, 740 MB) — auto-detects its supported languages
 - `whisper-medium` (583 MB) — supports an explicit `language` hint
 
+On a fresh Mac, open **Dictation Setup**, choose the model download and wait for verification. Select **Request microphone access** and answer the macOS prompt; merely opening setup does not request access. If previously denied, enable the installed copy of Script Kit in **System Settings → Privacy & Security → Microphone**. If permission can't be verified, Kit won't report the microphone ready. Choose **Test microphone** to check actual sound, then dictate a short phrase into a disposable text field and verify it arrives exactly once. The model/device checklist alone does not test the microphone, shortcut, target identity or paste.
+
 Both models run on the Mac's GPU through Metal. If the GPU can't load the model or a GPU pass fails, transcription continues on the CPU. Downloads resume if interrupted, and each file is checked against its published SHA-256 before it is used. Models live in `~/.scriptkit/models/`.
 
 To check which processor is in use, read the passive dictation state (`getState`): its `engine` object reports `backend`, `device`, `gpu`, `cpuFallbackReason`, the last load time and the last transcription time. It appears after the first transcription.

@@ -1179,11 +1179,8 @@ pub fn automation_state() -> serde_json::Value {
         crate::dictation::microphone_permission_status()
     };
     let devices_result = if !crate::runtime_policy::is_owned_evaluation()
-        && matches!(
-            permission,
-            crate::dictation::DictationMicrophonePermissionStatus::Granted
-                | crate::dictation::DictationMicrophonePermissionStatus::Unknown
-        ) {
+        && permission == crate::dictation::DictationMicrophonePermissionStatus::Granted
+    {
         crate::dictation::list_input_devices().map_err(|error| error.to_string())
     } else {
         Ok(Vec::new())

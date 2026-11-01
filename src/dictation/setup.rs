@@ -65,11 +65,7 @@ fn build_microphone_status(
     devices: Result<Vec<DictationDeviceInfo>, String>,
     selected_device_id: Option<&str>,
 ) -> DictationMicrophoneStatus {
-    if matches!(
-        permission,
-        DictationMicrophonePermissionStatus::Denied
-            | DictationMicrophonePermissionStatus::NotDetermined
-    ) {
+    if permission != DictationMicrophonePermissionStatus::Granted {
         return DictationMicrophoneStatus::PermissionNeeded(permission);
     }
 
@@ -398,6 +394,28 @@ mod tests {
                 DictationMicrophonePermissionStatus::Denied
             )
         );
+    }
+
+    #[test]
+    fn unknown_permission_and_first_request_never_claim_recording_readiness() {
+        for permission in [
+            DictationMicrophonePermissionStatus::Unknown,
+            DictationMicrophonePermissionStatus::NotDetermined,
+        ] {
+            let state = build_dictation_setup_state(
+                DictationModelStatus::Available,
+                permission,
+                Ok(vec![device("fixture", "Fixture input", true)]),
+                None,
+                None,
+                true,
+            );
+            assert!(!state.ready);
+            assert_eq!(
+                state.microphone_status,
+                DictationMicrophoneStatus::PermissionNeeded(permission)
+            );
+        }
     }
 
     #[test]

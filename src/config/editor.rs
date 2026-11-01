@@ -375,7 +375,13 @@ use std::io::Write;
 /// Writes content to a temp .ts file and runs `bun build` on it.
 /// Returns Ok(()) if valid, Err with details if invalid.
 pub fn validate_typescript(content: &str, bun_path: Option<&str>) -> Result<(), String> {
-    let bun = bun_path.unwrap_or("bun");
+    let bun = super::resolve_bun(bun_path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            error.to_string()
+        } else {
+            format!("Failed to run bun: {error}")
+        }
+    })?;
 
     let tmp = tempfile::Builder::new()
         .suffix(".ts")
@@ -511,6 +517,66 @@ pub(crate) fn parse_static_config(content: &str) -> Result<serde_json::Value, St
     let object =
         find_object_in_export(export, content).ok_or("config export must be a literal object")?;
     decode_static_config_value(object, content, 0)
+}
+
+/// Inspect only an unambiguous top-level literal pin before evaluating config.ts.
+/// Other values may be expressions. A spread/computed key can redefine the pin;
+/// leave those configs to normal Bun evaluation rather than guessing a target.
+pub(super) fn bootstrap_bun_pin(content: &str) -> Result<Option<String>, &'static str> {
+    let tree = parse_typescript(content).map_err(|_| "invalid TypeScript")?;
+    let root = tree.root_node();
+    if root.has_error() {
+        return Err("invalid TypeScript");
+    }
+    let mut cursor = root.walk();
+    let mut exports = root.named_children(&mut cursor).filter(|n| {
+        n.kind() == "export_statement"
+            && (0..n.child_count())
+                .filter_map(|i| n.child(i as u32))
+                .any(|child| child.kind() == "default")
+    });
+    let export = exports.next().ok_or("no literal default export")?;
+    if exports.next().is_some() {
+        return Err("ambiguous default export");
+    }
+    let object = find_object_in_export(export, content).ok_or("nonliteral default export")?;
+    let mut pin = None;
+    let mut cursor = object.walk();
+    for child in object.named_children(&mut cursor) {
+        if child.kind() == "comment" {
+            continue;
+        }
+        if child.kind() != "pair" {
+            return Err("nonliteral object member");
+        }
+        let key = child.child_by_field_name("key").ok_or("missing key")?;
+        let text = key
+            .utf8_text(content.as_bytes())
+            .map_err(|_| "invalid key or value")?;
+        let key = match key.kind() {
+            "property_identifier" if !text.contains('\\') => text.to_owned(),
+            "string" => decode_static_config_string(text).map_err(|_| "nonliteral key")?,
+            _ => return Err("nonliteral key"),
+        };
+        if key == "bun_path" {
+            if pin.is_some() {
+                return Err("duplicate bun_path");
+            }
+            let value = child.child_by_field_name("value").ok_or("missing value")?;
+            if value.kind() != "string" {
+                return Err("nonliteral bun_path");
+            }
+            pin = Some(
+                decode_static_config_string(
+                    value
+                        .utf8_text(content.as_bytes())
+                        .map_err(|_| "invalid key or value")?,
+                )
+                .map_err(|_| "nonliteral bun_path")?,
+            );
+        }
+    }
+    Ok(pin)
 }
 
 fn decode_static_config_string(text: &str) -> Result<String, String> {

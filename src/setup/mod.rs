@@ -158,8 +158,6 @@ pub struct SetupResult {
     pub is_fresh_install: bool,
     /// Path to ~/.scriptkit (or SK_PATH override, or fallback if home dir couldn't be resolved)
     pub kit_path: PathBuf,
-    /// Whether bun looks discoverable on this machine
-    pub bun_available: bool,
     /// Any warnings encountered during setup
     pub warnings: Vec<String>,
 }
@@ -183,6 +181,17 @@ pub fn get_kit_path() -> PathBuf {
         Some(home) => home.join(".scriptkit"),
         None => std::env::temp_dir().join("script-kit"),
     }
+}
+
+/// Resolve Bun for tools without executing config.ts or consulting a login shell.
+pub fn resolve_bun() -> Option<PathBuf> {
+    if matches!(
+        std::env::var(SK_PATH_ENV),
+        Err(std::env::VarError::NotUnicode(_))
+    ) {
+        return None;
+    }
+    crate::config::passive_bun()
 }
 
 /// Container for all Script Kit plugins under the active workspace.
@@ -215,241 +224,106 @@ pub fn themes_dir() -> PathBuf {
 /// Returns true if migration was performed, false if not needed
 #[instrument(level = "info", name = "migrate_from_kenv")]
 pub fn migrate_from_kenv() -> bool {
-    let home = match dirs::home_dir() {
-        Some(h) => h,
-        None => return false,
-    };
+    if crate::runtime_policy::is_owned_evaluation()
+        || matches!(
+            std::env::var(SK_PATH_ENV),
+            Err(std::env::VarError::NotUnicode(_))
+        )
+    {
+        return false;
+    }
+    dirs::home_dir().is_some_and(|home| migrate_from_kenv_in(&home, &get_kit_path()))
+}
 
-    let old_kenv = home.join(".kenv");
+fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
     let new_scriptkit = home.join(".scriptkit");
-
-    // Only migrate if old path exists and new path doesn't
-    if !old_kenv.exists() || new_scriptkit.exists() {
+    // An alternate kit has no authority to inspect, move or remove the default workspace.
+    if !home.is_absolute() || kit_path != new_scriptkit {
+        return false;
+    }
+    let old_kenv = home.join(".kenv");
+    // Claim only a pristine destination. Never traverse an indirect legacy root.
+    if !fs::symlink_metadata(&old_kenv).is_ok_and(|m| m.is_dir())
+        || !matches!(fs::symlink_metadata(&new_scriptkit), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
         return false;
     }
 
-    info!(
-        old_path = %old_kenv.display(),
-        new_path = %new_scriptkit.display(),
-        "Migrating from ~/.kenv to ~/.scriptkit"
-    );
-
-    let mut failures = Vec::<String>::new();
-
-    // Create the new plugin structure.
-    let main_scripts = new_scriptkit.join("plugins").join("main").join("scripts");
-    let main_scriptlets = new_scriptkit
-        .join("plugins")
-        .join("main")
-        .join("scriptlets");
-
-    if let Err(e) = fs::create_dir_all(&main_scripts) {
-        warn!(error = %e, "Failed to create main/scripts directory");
-        return false;
-    }
-
-    if let Err(e) = fs::create_dir_all(&main_scriptlets) {
-        warn!(error = %e, "Failed to create main/scriptlets directory");
-        return false;
-    }
-
-    // Move scripts from ~/.kenv/scripts to ~/.scriptkit/plugins/main/scripts
-    let old_scripts = old_kenv.join("scripts");
-    if old_scripts.exists() && old_scripts.is_dir() {
-        match fs::read_dir(&old_scripts) {
-            Ok(entries) => {
-                for entry in entries {
-                    match entry {
-                        Ok(entry) => {
-                            let old_path = entry.path();
-                            let file_name = old_path.file_name().unwrap_or_default();
-                            let new_path = main_scripts.join(file_name);
-
-                            if let Err(e) = fs::rename(&old_path, &new_path) {
-                                let err_msg = format!(
-                                    "Failed to move script from {} to {}: {}",
-                                    old_path.display(),
-                                    new_path.display(),
-                                    e
-                                );
-                                warn!("{}", err_msg);
-                                failures.push(err_msg);
-                            }
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to read script entry: {}", e);
-                            warn!("{}", err_msg);
-                            failures.push(err_msg);
-                        }
-                    }
+    // Decide on the entire migration before the first mutation. A mixed v1 kit
+    // (.git, subkits, other files, links, special files) stays intact for manual
+    // import. Never silently consume only the part we happen to understand.
+    let plan = (|| -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
+        let mut moves = Vec::new();
+        for entry in fs::read_dir(&old_kenv)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let kind = entry.file_type()?;
+            let target = match name.to_str() {
+                Some("scripts" | "scriptlets") if kind.is_dir() => {
+                    new_scriptkit.join("plugins/main").join(&name)
                 }
-            }
-            Err(e) => {
-                let err_msg = format!(
-                    "Failed to read scripts directory ({}): {}",
-                    old_scripts.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
-            }
-        }
-    }
-
-    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/plugins/main/scriptlets
-    let old_scriptlets = old_kenv.join("scriptlets");
-    if old_scriptlets.exists() && old_scriptlets.is_dir() {
-        match fs::read_dir(&old_scriptlets) {
-            Ok(entries) => {
-                for entry in entries {
-                    match entry {
-                        Ok(entry) => {
-                            let old_path = entry.path();
-                            let file_name = old_path.file_name().unwrap_or_default();
-                            let new_path = main_scriptlets.join(file_name);
-
-                            if let Err(e) = fs::rename(&old_path, &new_path) {
-                                let err_msg = format!(
-                                    "Failed to move scriptlet from {} to {}: {}",
-                                    old_path.display(),
-                                    new_path.display(),
-                                    e
-                                );
-                                warn!("{}", err_msg);
-                                failures.push(err_msg);
-                            }
-                        }
-                        Err(e) => {
-                            let err_msg = format!("Failed to read scriptlet entry: {}", e);
-                            warn!("{}", err_msg);
-                            failures.push(err_msg);
-                        }
-                    }
+                Some("logs" | "cache" | "db" | "sdk") if kind.is_dir() => new_scriptkit.join(&name),
+                Some(
+                    "config.ts"
+                    | "theme.json"
+                    | "tsconfig.json"
+                    | "package.json"
+                    | "settings.json"
+                    | ".gitignore"
+                    | "frecency.json"
+                    | "store.json"
+                    | "server.json"
+                    | "agent-token"
+                    | "notes.db"
+                    | "ai-chats.db"
+                    | "clipboard-history.db",
+                ) if kind.is_file() => new_scriptkit.join(&name),
+                _ => {
+                    return Err(std::io::Error::other(
+                        "unrecognized or indirect legacy entry",
+                    ))
                 }
-            }
-            Err(e) => {
-                let err_msg = format!(
-                    "Failed to read scriptlets directory ({}): {}",
-                    old_scriptlets.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
+            };
+            moves.push((entry.path(), target));
+        }
+        for (i, entry) in walkdir::WalkDir::new(&old_kenv)
+            .follow_links(false)
+            .into_iter()
+            .enumerate()
+        {
+            let kind = entry?.file_type();
+            if i >= 16_384 || (!kind.is_file() && !kind.is_dir()) {
+                return Err(std::io::Error::other("large or indirect legacy tree"));
             }
         }
-    }
-
-    // Move user config files into ~/.scriptkit/
-    if let Err(e) = fs::create_dir_all(&new_scriptkit) {
-        warn!(
-            error = %e,
-            path = %new_scriptkit.display(),
-            "Failed to create ~/.scriptkit during migration"
-        );
+        Ok(moves)
+    })();
+    let Ok(plan) = plan else {
+        warn!("Legacy workspace left intact; import its scripts manually");
+        return false;
+    };
+    if let Err(error) = fs::create_dir(&new_scriptkit)
+        .and_then(|_| fs::create_dir_all(new_scriptkit.join("plugins/main")))
+    {
+        warn!(%error, "Couldn't prepare a new kit for migration");
         return false;
     }
-
-    let kit_files = [
-        "config.ts",
-        "theme.json",
-        "tsconfig.json",
-        "package.json",
-        "settings.json",
-    ];
-    for file in kit_files {
-        let old_path = old_kenv.join(file);
-        let new_path = new_scriptkit.join(file);
-        if old_path.exists() && !new_path.exists() {
-            if let Err(e) = fs::rename(&old_path, &new_path) {
-                let err_msg = format!(
-                    "Failed to move kit-owned config file from {} to {}: {}",
-                    old_path.display(),
-                    new_path.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
-            }
+    for (source, destination) in plan {
+        if !matches!(fs::symlink_metadata(&destination), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        {
+            warn!("Migration stopped at an occupied destination; both workspaces retained");
+            return false;
+        }
+        // Rename the actual entry, not the contents of a possibly redirected directory.
+        if let Err(error) = fs::rename(source, destination) {
+            warn!(%error, "Migration stopped; both workspaces retained");
+            return false;
         }
     }
-
-    // Root-owned workspace files remain at ~/.scriptkit/
-    let root_files = [".gitignore"];
-    for file in root_files {
-        let old_path = old_kenv.join(file);
-        let new_path = new_scriptkit.join(file);
-        if old_path.exists() && !new_path.exists() {
-            if let Err(e) = fs::rename(&old_path, &new_path) {
-                let err_msg = format!(
-                    "Failed to move root-owned workspace file from {} to {}: {}",
-                    old_path.display(),
-                    new_path.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
-            }
-        }
-    }
-
-    // Move data directories to new root
-    let data_dirs = ["logs", "cache", "db", "sdk"];
-    for dir in data_dirs {
-        let old_path = old_kenv.join(dir);
-        let new_path = new_scriptkit.join(dir);
-        if old_path.exists() && old_path.is_dir() && !new_path.exists() {
-            if let Err(e) = fs::rename(&old_path, &new_path) {
-                let err_msg = format!(
-                    "Failed to move data directory {} from {} to {}: {}",
-                    dir,
-                    old_path.display(),
-                    new_path.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
-            }
-        }
-    }
-
-    // Move data files to new root
-    let data_files = [
-        "frecency.json",
-        "store.json",
-        "server.json",
-        "agent-token",
-        "notes.db",
-        "ai-chats.db",
-        "clipboard-history.db",
-    ];
-    for file in data_files {
-        let old_path = old_kenv.join(file);
-        let new_path = new_scriptkit.join(file);
-        if old_path.exists() && !new_path.exists() {
-            if let Err(e) = fs::rename(&old_path, &new_path) {
-                let err_msg = format!(
-                    "Failed to move data file {} from {} to {}: {}",
-                    file,
-                    old_path.display(),
-                    new_path.display(),
-                    e
-                );
-                warn!("{}", err_msg);
-                failures.push(err_msg);
-            }
-        }
-    }
-
-    // Remove the old ~/.kenv directory (should be mostly empty now)
-    if failures.is_empty() {
-        if let Err(e) = fs::remove_dir_all(&old_kenv) {
-            warn!(error = %e, "Failed to remove old ~/.kenv directory, may have remaining files");
-        }
-    } else {
-        tracing::error!(
-            failures = ?failures,
-            "Migration encountered failures. Preserving old ~/.kenv directory to prevent data loss."
-        );
+    // Non-recursive removal is also safe if new files arrived since preflight.
+    if let Err(error) = fs::remove_dir(&old_kenv) {
+        warn!(%error, "Leaving the remaining legacy workspace in place");
+        return false;
     }
 
     // Create symlink for backwards compatibility (Unix only)
@@ -532,7 +406,6 @@ pub fn ensure_kit_setup() -> SetupResult {
         return SetupResult {
             is_fresh_install,
             kit_path: kit_dir,
-            bun_available: false,
             warnings,
         };
     }
@@ -1025,14 +898,6 @@ temp/
         ".gitignore",
     );
 
-    // Dependency check: bun (no process spawn; just path checks)
-    let bun_available = bun_is_discoverable();
-    if !bun_available {
-        warnings.push(
-            "bun not found (PATH/common install locations). Config/scripts may not run until bun is installed.".to_string(),
-        );
-    }
-
     // Optional "getting started" content only on truly fresh installs
     if is_fresh_install {
         create_sample_files(&kit_dir, &mut warnings);
@@ -1041,7 +906,6 @@ temp/
     info!(
         kit_path = %kit_dir.display(),
         is_fresh_install,
-        bun_available,
         warning_count = warnings.len(),
         "Kit setup complete"
     );
@@ -1049,7 +913,6 @@ temp/
     SetupResult {
         is_fresh_install,
         kit_path: kit_dir,
-        bun_available,
         warnings,
     }
 }
@@ -1490,37 +1353,6 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
             warnings.push(format!("Failed to serialize tsconfig.json: {}", e));
             warn!(error = %e, "Failed to serialize tsconfig.json");
         }
-    }
-}
-/// Fast check: looks for bun in common locations and PATH without spawning a process.
-fn bun_is_discoverable() -> bool {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // Common install locations
-    if let Some(home) = dirs::home_dir() {
-        candidates.push(home.join(".bun").join("bin").join(bun_exe_name()));
-    }
-    candidates.push(PathBuf::from("/opt/homebrew/bin").join(bun_exe_name()));
-    candidates.push(PathBuf::from("/usr/local/bin").join(bun_exe_name()));
-    candidates.push(PathBuf::from("/usr/bin").join(bun_exe_name()));
-
-    // PATH scan
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            candidates.push(dir.join(bun_exe_name()));
-        }
-    }
-
-    candidates.into_iter().any(|p| p.exists())
-}
-fn bun_exe_name() -> &'static str {
-    #[cfg(windows)]
-    {
-        "bun.exe"
-    }
-    #[cfg(not(windows))]
-    {
-        "bun"
     }
 }
 // --- merged from part_005.rs ---

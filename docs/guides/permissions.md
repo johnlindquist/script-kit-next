@@ -54,6 +54,12 @@ While a password field is focused, macOS hides typing from every app ("Secure In
 - **Test microphone.** It records three seconds and says whether sound comes through, is very quiet, or is silent. A muted or wrong input then shows up before you dictate.
 - **A closed-lid warning.** This appears when the built-in microphone is selected and the laptop lid is closed.
 
+### Checking a release on a clean Mac
+
+Use a fresh test account or test Mac and the actual downloaded release, not a dev build. Don’t reset an everyday account’s privacy grants. Record the release tag, archive SHA-256, macOS version and Mac model. Open the installed app from Finder; check the first model download, the system’s microphone grant or denial, and **Test microphone** with a real input. Then try the physical shortcut in a disposable field, with Accessibility granted, and verify one transcript lands in the original field once. Keep recordings and transcript text out of the report. An upgrade is a separate check: note the old and new versions and verify existing settings and scripts survive.
+
+The build’s first-run and permission fixtures exercise seeded files and simulated states. A packaged usage description or signed entitlement makes a macOS prompt possible; it does not prove the OS showed it, a device recorded audio, or the paste reached its target.
+
 ## For agents
 
 `getState` includes a `permissions` object that is read live:

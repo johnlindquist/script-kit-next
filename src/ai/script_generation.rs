@@ -536,7 +536,13 @@ fn verify_generated_script_with_bun_build(
     ];
     let started = Instant::now();
 
-    let mut child = match Command::new("bun")
+    let bun = match crate::config::configured_bun() {
+        Ok(path) => path,
+        Err(error) => {
+            return GeneratedScriptVerificationReceipt::blocked(error.to_string(), "bun_build")
+        }
+    };
+    let mut child = match Command::new(bun)
         .arg("build")
         .arg(script_path)
         .arg("--target=bun")

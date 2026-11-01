@@ -162,18 +162,68 @@ mod tests {
     }
 
     #[test]
-    fn test_bun_is_discoverable() {
-        // This test just verifies the function doesn't panic
-        let _ = bun_is_discoverable();
+    fn alternate_kit_migration_does_not_touch_the_legacy_home() {
+        let home = tempfile::tempdir().unwrap();
+        let legacy = home.path().join(".kenv");
+        let script = legacy.join("scripts/demo.ts");
+        fs::create_dir_all(script.parent().unwrap()).unwrap();
+        fs::write(&script, "fixture").unwrap();
+        assert!(!migrate_from_kenv_in(
+            home.path(),
+            &home.path().join("other-kit")
+        ));
+        assert!(script.is_file());
+        assert!(!home.path().join(".scriptkit").exists());
     }
 
     #[test]
-    fn test_bun_exe_name() {
-        let name = bun_exe_name();
-        #[cfg(windows)]
-        assert_eq!(name, "bun.exe");
-        #[cfg(not(windows))]
-        assert_eq!(name, "bun");
+    fn default_kit_migration_keeps_unmapped_files_and_links_only_an_empty_legacy_root() {
+        for has_extra in [true, false] {
+            let home = tempfile::tempdir().unwrap();
+            let legacy = home.path().join(".kenv");
+            let kit = home.path().join(".scriptkit");
+            fs::create_dir_all(legacy.join("scripts")).unwrap();
+            fs::write(legacy.join("scripts/demo.ts"), "fixture").unwrap();
+            if has_extra {
+                fs::write(legacy.join("keep.txt"), "mine").unwrap();
+                fs::create_dir_all(legacy.join("kenvs/team")).unwrap();
+                fs::create_dir(legacy.join(".git")).unwrap();
+                assert!(!migrate_from_kenv_in(home.path(), &kit));
+                assert!(!kit.exists());
+                assert_eq!(fs::read_to_string(legacy.join("keep.txt")).unwrap(), "mine");
+                assert!(legacy.join("scripts/demo.ts").is_file());
+                assert!(legacy.join("kenvs/team").is_dir());
+                assert!(legacy.join(".git").is_dir());
+            } else {
+                assert!(migrate_from_kenv_in(home.path(), &kit));
+                assert_eq!(
+                    fs::read_to_string(kit.join("plugins/main/scripts/demo.ts")).unwrap(),
+                    "fixture"
+                );
+                #[cfg(unix)]
+                assert!(legacy.is_symlink());
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_migration_refuses_an_indirect_script_before_moving_anything() {
+        #[cfg(unix)]
+        {
+            let home = tempfile::tempdir().unwrap();
+            let legacy = home.path().join(".kenv");
+            let kit = home.path().join(".scriptkit");
+            fs::create_dir_all(legacy.join("scripts")).unwrap();
+            fs::write(legacy.join("config.ts"), "fixture").unwrap();
+            let target = home.path().join("outside.ts");
+            fs::write(&target, "untouched").unwrap();
+            std::os::unix::fs::symlink(&target, legacy.join("scripts/indirect.ts")).unwrap();
+            assert!(!migrate_from_kenv_in(home.path(), &kit));
+            assert!(!kit.exists());
+            assert!(legacy.join("config.ts").is_file());
+            assert!(legacy.join("scripts/indirect.ts").is_symlink());
+            assert_eq!(fs::read_to_string(target).unwrap(), "untouched");
+        }
     }
 
     #[test]

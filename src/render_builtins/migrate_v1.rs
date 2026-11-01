@@ -241,7 +241,7 @@ impl ScriptListApp {
             let output = cx
                 .background_executor()
                 .spawn(async move {
-                    std::process::Command::new("bun")
+                    std::process::Command::new(crate::config::configured_bun()?)
                         .arg(&engine)
                         .arg("scan")
                         .arg(&v1_dir)
@@ -386,7 +386,10 @@ impl ScriptListApp {
 
         let (tx, rx) = async_channel::unbounded::<MigrateProgressEvent>();
         std::thread::spawn(move || {
-            let mut command = std::process::Command::new("bun");
+            let Ok(bun) = crate::config::configured_bun() else {
+                return;
+            };
+            let mut command = std::process::Command::new(bun);
             command
                 .arg(engine)
                 .arg("port")

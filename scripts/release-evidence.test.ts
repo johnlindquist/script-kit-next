@@ -3388,6 +3388,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
     executable?: string;
     expectedAppSha?: string;
     expectedSidecarSha?: string;
+    microphonePurpose?: string;
   }) {
     const fixture = makeFixture();
     mkdirSync(join(fixture.appPath, "Contents/Resources/assets"), { recursive: true });
@@ -3397,6 +3398,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
   <key>CFBundleIdentifier</key><string>${options.identifier ?? "com.scriptkit.app"}</string>
   <key>CFBundleShortVersionString</key><string>${options.version ?? sourceVersion}</string>
   <key>CFBundleExecutable</key><string>${options.executable ?? "script-kit-gpui"}</string>
+  ${options.microphonePurpose ?? "<key>NSMicrophoneUsageDescription</key><string>Record local dictation</string>"}
 </dict></plist>`);
 
     const result = Bun.spawnSync({
@@ -3439,6 +3441,7 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
   <key>CFBundleIdentifier</key><string>com.scriptkit.app</string>
   <key>CFBundleShortVersionString</key><string>0.1.17</string>
   <key>CFBundleExecutable</key><string>script-kit-gpui</string>
+  <key>NSMicrophoneUsageDescription</key><string>Record local dictation</string>
 </dict></plist>`);
 
     const assetPaths = [
@@ -3534,6 +3537,12 @@ describeMacOS("packaged macOS metadata and executable identity", () => {
     });
     return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` };
   }
+
+  test.each(["", "<key>NSMicrophoneUsageDescription</key><string>  </string>", "<key>NSMicrophoneUsageDescription</key><true/>"])("rejects a missing or invalid packaged microphone purpose: %s", (microphonePurpose) => {
+    const result = inspectBundle({ microphonePurpose });
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain("missing_microphone_purpose");
+  });
 
   test("rejects another application's bundle identifier", () => {
     const result = inspectBundle({ identifier: "com.invalid.other" });

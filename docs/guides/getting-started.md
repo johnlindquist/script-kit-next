@@ -2,7 +2,28 @@
 
 Script Kit GPUI is one window you tell what should happen: run TypeScript scripts, search built-in utilities, say a sentence and let it do the steps, chat with agents, dictate text, and expose desktop context over MCP — all under one input that never moves.
 
-## Prerequisites
+## Start with the Mac app
+
+Download the macOS archive from [Releases](https://github.com/johnlindquist/script-kit-next/releases), extract it, move **Script Kit.app** to Applications, and open it from Finder. Rust and a source checkout are only for building the app yourself. To write scripts, the one folder to know is `~/.scriptkit/plugins/main/scripts/`; press **⌘;** and search for your script by name. The built-ins are included; there is no scripts-only installer or first-run plugin chooser.
+
+### If Kit can't find Bun
+
+Kit needs [Bun](https://bun.sh) to run TypeScript scripts. Opening an app from Finder does not run your shell startup files. Kit checks common user and Homebrew install locations, absolute PATH entries outside the working directory, and direct Bun installations in mise and asdf (including their data-directory overrides when available to the app). It does not run either manager or let a project-local shim pick the binary.
+
+If there is more than one managed binary, or yours lives elsewhere, set a literal absolute path to the **actual executable** in your existing `~/.scriptkit/config.ts` (or the `config.ts` under your chosen `SK_PATH`), keeping the rest of your config:
+
+```ts
+// Inside export default { ... }
+bun_path: "/Users/you/.local/share/mise/installs/bun/1.3.14/bin/bun",
+```
+
+For asdf, a typical path is `~/.asdf/installs/bun/<version>/bin/bun`. Substitute your full home path and installed version; don't use `~`, a `shims` path, or `./bun`. A computed `bun_path` requires another discoverable Bun to evaluate `config.ts` on cold start. Relaunch from Finder and run a simple script to confirm. If a pinned version is removed, update the pin; script execution will not silently switch binaries.
+
+### Upgrading from a v1 kit
+
+Automatic migration runs only for the default home and a recognized legacy layout. If `~/.kenv` also contains a Git repository, subkits, links, or other unrecognized content, Kit leaves that workspace in place. Keep your old files and use **Migrate v1 Scripts** to review what to bring across. Choosing another `SK_PATH` does not migrate the default home.
+
+## Prerequisites for building from source
 
 - **macOS** (Linux/Windows support planned)
 - **Rust** (use the version pinned in [rust-toolchain.toml](../../rust-toolchain.toml)) — https://rustup.rs

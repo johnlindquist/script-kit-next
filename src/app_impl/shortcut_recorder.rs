@@ -1,9 +1,7 @@
 use super::*;
 
 fn shortcut_config_script_path(script_name: &str) -> anyhow::Result<std::path::PathBuf> {
-    let home_dir = std::env::var("HOME").unwrap_or_default();
-    let sdk_path = std::path::PathBuf::from(home_dir)
-        .join(".scriptkit")
+    let sdk_path = crate::setup::get_kit_path()
         .join("sdk")
         .join(script_name);
 
@@ -11,24 +9,16 @@ fn shortcut_config_script_path(script_name: &str) -> anyhow::Result<std::path::P
         return Ok(sdk_path);
     }
 
-    let dev_path = std::env::current_dir()?.join("scripts").join(script_name);
-    if dev_path.exists() {
-        return Ok(dev_path);
+    #[cfg(debug_assertions)]
+    {
+        let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts").join(script_name);
+        if dev_path.is_file() { return Ok(dev_path); }
     }
 
     Err(anyhow::anyhow!(
         "Could not find {} in .scriptkit/sdk or repo scripts/",
         script_name
     ))
-}
-
-fn shortcut_config_bun_path() -> String {
-    crate::config::load_config()
-        .bun_path
-        .as_ref()
-        .filter(|path| std::path::Path::new(path.as_str()).exists())
-        .cloned()
-        .unwrap_or_else(|| "bun".to_string())
 }
 
 impl ScriptListApp {
@@ -43,7 +33,7 @@ impl ScriptListApp {
     ) -> anyhow::Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
         let script_path = shortcut_config_script_path("update-config-shortcut.ts")?;
-        let output = std::process::Command::new(shortcut_config_bun_path())
+        let output = std::process::Command::new(crate::config::configured_bun()?)
             .arg(script_path)
             .arg(command_id)
             .arg(key)
@@ -69,7 +59,7 @@ impl ScriptListApp {
     pub(crate) fn remove_config_command_shortcut(&self, command_id: &str) -> anyhow::Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
         let script_path = shortcut_config_script_path("remove-config-shortcut.ts")?;
-        let output = std::process::Command::new(shortcut_config_bun_path())
+        let output = std::process::Command::new(crate::config::configured_bun()?)
             .arg(script_path)
             .arg(command_id)
             .output()?;

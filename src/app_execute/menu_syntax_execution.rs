@@ -348,9 +348,7 @@ fn spawn_capture_handler_detached(
         ));
     };
 
-    let executable = executor::runner::find_executable(cmd)
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| cmd.to_string());
+    let executable = executor::runner::runtime_command(cmd)?;
 
     let mut command = std::process::Command::new(&executable);
     command.env_clear();

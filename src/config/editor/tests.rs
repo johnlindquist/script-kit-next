@@ -3,6 +3,24 @@
 use super::*;
 
 #[test]
+fn cold_bun_bootstrap_accepts_only_an_unambiguous_literal_pin() {
+    assert_eq!(bootstrap_bun_pin("import a from 'a'; export default { theme: theme(), 'bun_path': '/path with space/bun' } satisfies Config;").unwrap().as_deref(), Some("/path with space/bun"));
+    for source in [
+        "export default { // bun_path: '/wrong'\n }",
+        "export default { nested: { bun_path: '/wrong' } }",
+    ] {
+        assert_eq!(bootstrap_bun_pin(source), Ok(None));
+    }
+    for source in [
+        "export default { bun_path: '/wrong', ...rest }",
+        "export default { bun_path: '/one', bun_path: '/two' }",
+        "export default { bun_path: compute() }",
+    ] {
+        assert!(bootstrap_bun_pin(source).is_err(), "{source}");
+    }
+}
+
+#[test]
 fn prepared_property_replaces_only_the_selected_preference() {
     let input =
         "export default { theme: { presetId: 'nord' }, ai: { enabled: true } } satisfies Config;";

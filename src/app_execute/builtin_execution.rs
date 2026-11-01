@@ -7024,15 +7024,10 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let config = crate::config::load_config();
         let selected_device_id = prefs.dictation.selected_device_id.as_deref();
-        let devices = match permission {
-            crate::dictation::DictationMicrophonePermissionStatus::Granted
-            | crate::dictation::DictationMicrophonePermissionStatus::Unknown => {
-                crate::dictation::list_input_devices().map_err(|error| error.to_string())
-            }
-            crate::dictation::DictationMicrophonePermissionStatus::Denied
-            | crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => {
-                Ok(Vec::new())
-            }
+        let devices = if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
+            crate::dictation::list_input_devices().map_err(|error| error.to_string())
+        } else {
+            Ok(Vec::new())
         };
         let model_id =
             crate::dictation::DictationModelId::from_preference(prefs.dictation.model.as_deref());
@@ -7504,9 +7499,19 @@ impl ScriptListApp {
                     self.notice_failed(refusal.to_string(), cx);
                     return;
                 }
-                crate::dictation::request_microphone_permission_nonblocking(|status| {
-                    tracing::info!(category = "DICTATION", status = ?status, "Microphone permission prompt resolved from setup prompt");
+                let (granted_tx, granted_rx) = async_channel::bounded(1);
+                crate::dictation::request_microphone_permission_nonblocking(move |status| {
+                    let _ = granted_tx.try_send(status);
                 });
+                cx.spawn(async move |this, cx| {
+                    if granted_rx.recv().await.is_ok() {
+                        let _ = this.update(cx, |this, cx| {
+                            if matches!(&this.current_view, AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_SETUP_PROMPT_ID) {
+                                this.open_dictation_setup_prompt(cx);
+                            }
+                        });
+                    }
+                }).detach();
                 self.one_window_notice(
                     crate::line_notice::INFO,
                     "Choose Allow when macOS asks for microphone access".to_string(),
@@ -7556,15 +7561,10 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let config = crate::config::load_config();
         let selected_device_id = prefs.dictation.selected_device_id.as_deref();
-        let devices = match permission {
-            crate::dictation::DictationMicrophonePermissionStatus::Granted
-            | crate::dictation::DictationMicrophonePermissionStatus::Unknown => {
-                crate::dictation::list_input_devices().map_err(|error| error.to_string())
-            }
-            crate::dictation::DictationMicrophonePermissionStatus::Denied
-            | crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => {
-                Ok(Vec::new())
-            }
+        let devices = if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
+            crate::dictation::list_input_devices().map_err(|error| error.to_string())
+        } else {
+            Ok(Vec::new())
         };
         let device_count = devices.as_ref().map(|devices| devices.len()).unwrap_or(0);
         // Real model status, not a hardcoded Available: the builtin start path
@@ -7631,9 +7631,14 @@ impl ScriptListApp {
                     if let Ok(status) = permission_rx.recv().await {
                         let _ = this.update(cx, |this, cx| {
                             if matches!(status, crate::dictation::DictationMicrophonePermissionStatus::Granted) {
-                                this.one_window_notice(crate::line_notice::INFO, "Microphone ready — start dictation again".to_string(), cx);
-                            } else {
+                                this.one_window_notice(crate::line_notice::INFO, "Microphone access granted — start dictation again".to_string(), cx);
+                            } else if status == crate::dictation::DictationMicrophonePermissionStatus::Denied {
                                 this.one_window_notice(crate::line_notice::INFO, "Microphone access denied — enable it in System Settings → Privacy & Security → Microphone".to_string(), cx);
+                            } else {
+                                this.notice_failed("Couldn't verify microphone access", cx);
+                            }
+                            if matches!(&this.current_view, AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_SETUP_PROMPT_ID) {
+                                this.open_dictation_setup_prompt(cx);
                             }
                         });
                     }
@@ -7664,11 +7669,11 @@ impl ScriptListApp {
                 self.notice_failed(format!("Could not list microphones: {error}"), cx);
                 self.open_dictation_setup_prompt(cx);
             }
-            crate::dictation::DictationMicrophoneStatus::Ready { .. }
-            | crate::dictation::DictationMicrophoneStatus::PermissionNeeded(
-                crate::dictation::DictationMicrophonePermissionStatus::Granted
-                | crate::dictation::DictationMicrophonePermissionStatus::Unknown,
-            ) => {
+            crate::dictation::DictationMicrophoneStatus::PermissionNeeded(_) => {
+                self.notice_failed("Couldn't verify microphone access", cx);
+                self.open_dictation_setup_prompt(cx);
+            }
+            crate::dictation::DictationMicrophoneStatus::Ready { .. } => {
                 // Mic is fine, so the only way to be un-ready here is a
                 // missing/in-flight model — route to the download prompt.
                 self.open_dictation_model_prompt(cx);

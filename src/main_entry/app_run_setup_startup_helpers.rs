@@ -53,12 +53,6 @@ fn prepare_startup_environment() -> setup::SetupResult {
     for warning in &setup_result.warnings {
         logging::log("APP", &format!("Setup warning: {}", warning));
     }
-    if !setup_result.bun_available {
-        logging::log(
-            "APP",
-            "Warning: bun not found in PATH or common locations. Scripts may not run.",
-        );
-    }
 
     // Clean up orphans from previous crashes. The sweep scans per-instance
     // registry files and skips any whose owning instance is still alive, so

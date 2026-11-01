@@ -11,6 +11,9 @@
 //! - `types` - Configuration struct definitions (Config, HotkeyConfig, etc.)
 //! - `loader` - File system loading and parsing
 
+mod bun;
+pub use bun::configured_bun;
+pub(crate) use bun::resolve_bun;
 pub mod command_ids;
 pub mod defaults;
 pub mod editor;
@@ -45,12 +48,12 @@ pub use types::{
 };
 
 // Re-export loader
-pub(crate) use loader::with_user_preference_write_lock;
 #[allow(unused_imports)]
 pub use loader::{
     current_config_fingerprint_receipt, load_config, load_user_preferences,
     save_animation_preferences, save_user_preferences, ConfigFingerprintReceipt,
 };
+pub(crate) use loader::{passive_bun, with_user_preference_write_lock};
 
 // Re-export editor types for safe config writes (public API for other modules)
 #[allow(unused_imports)]

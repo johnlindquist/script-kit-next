@@ -717,9 +717,7 @@ pub fn execute_typescript(
     let temp_file = create_secure_temp_script(content, ".ts", TempScriptMode::InterpreterFed)?;
 
     // Find bun
-    let bun_path = find_executable("bun")
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "bun".to_string());
+    let bun_path = crate::config::configured_bun().map_err(|error| error.to_string())?;
 
     // Check if we should use SDK preload
     let sdk_path = find_sdk_path();
