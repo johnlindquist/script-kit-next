@@ -6,6 +6,10 @@ vendor
 assets
 kit-init
 scripts/kit-sdk.ts
+scripts/kit-sdk-config.ts
+scripts/config-cli.ts
+scripts/config-document.ts
+scripts/config-schema.ts
 scripts/mcp-cli.ts
 scripts/agent-bridge-cli.ts
 skills/script-kit/SKILL.md

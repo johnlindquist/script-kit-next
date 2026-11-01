@@ -1,5 +1,9 @@
 # Script Kit changelog
 
+## 0.1.20 · Reliability
+
+[Release notes and installation checks](docs/releases/v0.1.20.md). Browser and window targets are revalidated, settings edits are revision-checked, and upgrades preserve mixed legacy workspaces.
+
 ## October 15–31, 2026 · One window, clearer targets
 
 **[Read the illustrated changelog](https://merry-flint-85wx.here.now/)** · [Offline edition](docs/changelog/2026-10/index.html) · [Try the sample desktops](https://proud-unity-7aj4.here.now/)

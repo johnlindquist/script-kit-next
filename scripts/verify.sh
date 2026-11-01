@@ -88,6 +88,16 @@ require_clean_source_identity() {
   # release-evidence gate parses this same bounded array before publishing.
   local -a required_source_owners=(
     .github/workflows/release.yml
+    .bun-version
+    scripts/config-cli.ts
+    scripts/config-cli.test.ts
+    scripts/config-document.ts
+    scripts/config-schema.ts
+    scripts/config-installed.test.ts
+    scripts/kit-sdk-config.ts
+    scripts/devtools/focus-named-tab.test.ts
+    src/browser_tabs/snapshot.js
+    src/installation_check.rs
     scripts/verify.sh
     scripts/verify-macos-bundle.sh
     scripts/verify-release-version.sh
