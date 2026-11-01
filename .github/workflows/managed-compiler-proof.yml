@@ -1,0 +1,67 @@
+name: Cold managed compiler proof
+
+on:
+  push:
+    branches: [qa/managed-compiler-proof]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cold-managed-compiler-proof
+  cancel-in-progress: false
+
+jobs:
+  cold-proof:
+    name: Exercise the release compiler guard on a fresh Mac
+    runs-on: macos-15
+    timeout-minutes: 80
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CMAKE_BUILD_PARALLEL_LEVEL: "1"
+      RUST_TEST_THREADS: "2"
+      CARGO_INCREMENTAL: "0"
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      SCRIPT_KIT_REQUIRE_CLEAN_SOURCE: "1"
+      SCRIPT_KIT_NONINTERACTIVE: "1"
+      SCRIPT_KIT_AGENT_TIMEOUT_MS: "3600000"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install root-pinned Rust toolchain
+        run: bash scripts/install-root-rust-toolchain.sh
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Check source identity and the cold managed pool
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test ! -e target-agent && test ! -L target-agent
+      - name: Exercise the release unit and compiler contracts
+        run: |
+          set -euo pipefail
+          check() {
+            jq -e --argjson tests "$2" '
+              .status == "succeeded" and .exitCode == 0 and
+              .passedTests == $tests and .failedTests == 0 and
+              .cleanup.closed and (.cleanup.survivors == []) and
+              .resources.monitoring.complete and .resources.monitoring.workerClosed and
+              .resources.refusal == null
+            ' "$1" > /dev/null
+          }
+          bash scripts/agentic/agent-cargo.sh test --locked --lib theme::alpha::alpha_byte_tests:: > "$RUNNER_TEMP/unit.json"
+          check "$RUNNER_TEMP/unit.json" 6
+          bash scripts/agentic/agent-cargo.sh test --locked --doc --package script-kit-gpui theme::alpha:: > "$RUNNER_TEMP/doc.json"
+          check "$RUNNER_TEMP/doc.json" 3
+      - name: Record the observed result, including refusals
+        if: always()
+        run: |
+          for p in "$RUNNER_TEMP/unit.json" "$RUNNER_TEMP/doc.json"; do
+            if test -s "$p"; then
+              jq -c '{status,exitCode,passedTests,failedTests,closed:.cleanup.closed,samples:.resources.monitoring.sampleCount,workerClosed:.resources.monitoring.workerClosed,errors:.resources.refusal.errors}' "$p"
+            fi
+          done

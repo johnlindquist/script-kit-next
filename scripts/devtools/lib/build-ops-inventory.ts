@@ -24,6 +24,22 @@ const compilerRoute = new Map([
   ["pools/agent-debug/debug", "deps"],
 ]);
 
+// Keep diagnostics useful on a hosted runner without logging user-chosen path names.
+function inventoryScope(root: string, dir: string): string {
+  if (dir === root) return "root";
+  const child = dir.slice(root.length + 1);
+  if (child === "pools") return "pools";
+  if (child === "pools/agent-debug") return "pool";
+  const profile = /^pools\/agent-debug\/(debug|release)(?:\/(.*))?$/.exec(child);
+  if (!profile) return "retained";
+  const tail = profile[2];
+  if (!tail) return "profile";
+  if (tail === "deps") return "deps";
+  if (tail.startsWith("deps/")) return "deps-child";
+  if (tail === ".fingerprint" || tail.startsWith(".fingerprint/")) return "fingerprint";
+  return "profile-other";
+}
+
 function protectedOutputRoot(child: string): boolean {
   if (!child) return true;
   const parts = child.split("/");
@@ -41,15 +57,17 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
   const directories: Array<[string, number, number, number, number, number, number]> = [];
   const checkTime = () => { if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit"); };
   const charge = () => { if (++work > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit"); checkTime(); };
-  const verifyReplayFrontier = (): void => {
+  const verifyReplayFrontier = (replaying: string): void => {
     for (const [dir, dev, ino, ctime, mtime, links, size] of directories) {
       charge();
       const now = lstatSync(dir);
       if (!now.isDirectory() || !Number.isSafeInteger(dev) || !Number.isSafeInteger(ino) || ino <= 0
         || !Number.isFinite(ctime) || !Number.isFinite(mtime) || now.dev !== dev || now.ino !== ino
         || now.ctimeMs !== ctime || now.mtimeMs !== mtime || now.nlink !== links || now.size !== size) {
-        throw new Error(now.isDirectory() && now.dev === dev && now.ino === ino
-          ? "inventory_unstable_replay_scope:membership" : "inventory_unstable_replay_scope:identity");
+        const kind = now.isDirectory() && now.dev === dev && now.ino === ino ? "membership" : "identity";
+        const changed = [now.ctimeMs !== ctime && "ctime", now.mtimeMs !== mtime && "mtime",
+          now.nlink !== links && "links", now.size !== size && "size"].filter(Boolean).join("+") || "witness";
+        throw new Error(`inventory_unstable_replay_scope:${kind}:at=${inventoryScope(path, dir)}:replay=${inventoryScope(path, replaying)}:${changed}`);
       }
     }
   };
@@ -172,7 +190,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           // Both the replayed subtree and already-enumerated destinations must
           // still have their witnessed memberships. This rereads metadata, not
           // directory listings, and consumes the original scan's work/deadline.
-          verifyReplayFrontier();
+          verifyReplayFrontier(current);
         }
         try { sameDirectory(); } catch (error) {
           // Only a first, empty enumeration reached EOF without unresolved child work.

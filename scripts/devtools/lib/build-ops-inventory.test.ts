@@ -327,7 +327,10 @@ test("a new sibling arriving after compiler deps replay EOF invalidates that obs
     }
   });
   observedVolume(2 * GiB);
-  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_observation_incomplete");
+  const denied = refusal(() => requireBuildAdmission(root));
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors?.join(" ")).toContain("membership:at=deps:replay=deps:");
+  expect(denied.observation.errors?.join(" ")).not.toContain(deps);
   expect(calls).toBe(2);
   expect(fs.existsSync(join(deps, "arrived-after-eof"))).toBe(true);
 });
