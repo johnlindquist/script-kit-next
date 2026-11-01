@@ -229,6 +229,57 @@ for (const lostKind of ["directory", "file"] as const) test(`a lost compiler ${l
   expect(refusal(admit).code).toBe("resource_budget_exceeded");
 });
 
+test("compiler replay measures concurrent fingerprint outputs and their hardlinks exactly once", () => {
+  const root = fixture(), tree = join(root, "target-agent"), deps = join(root, compilerDeps);
+  const debug = dirname(deps), fingerprint = join(debug, ".fingerprint/crate-hash");
+  file(fingerprint, "invoked.timestamp");
+  const gone = join(deps, "rmeta-work"); fs.mkdirSync(gone, { recursive: true });
+  const seed = file(deps, "libcrate.rmeta");
+  const open = fs.opendirSync.bind(fs);
+  const ordered = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    const dir = open(path);
+    if (String(path) !== debug) return dir;
+    const rows: fs.Dirent[] = []; let e;
+    while ((e = dir.readSync()) !== null) rows.push(e);
+    rows.sort((a,b) => Number(b.name === ".fingerprint") - Number(a.name === ".fingerprint"));
+    return { readSync: () => rows.shift() ?? null, closeSync: () => dir.closeSync() } as fs.Dir;
+  }) as typeof fs.opendirSync);
+  restore.push(() => ordered.mockRestore());
+  observedVolume(2 * GiB);
+  const baseline = requireBuildAdmission(root).targetAgentAllocatedBytes;
+  expect(baseline).toBe(allocation(tree).allocatedBytes);
+  let changed = false;
+  beforeStat(path => {
+    if (changed || path !== gone) return;
+    changed = true; fs.rmdirSync(gone);
+    fs.writeFileSync(join(fingerprint, "lib-crate.json"), Buffer.alloc(128 * 1024, 97));
+    fs.linkSync(seed, join(fingerprint, "alias"));
+    fs.utimesSync(fingerprint, 100, 100);
+  });
+  const recovered = requireBuildAdmission(root);
+  expect(changed).toBe(true);
+  expect(recovered.targetAgentAllocatedBytes).toBeGreaterThan(baseline);
+  expect(recovered.targetAgentAllocatedBytes).toBe(allocation(tree).allocatedBytes);
+});
+
+for (const fault of ["missing", "replacement"] as const) test(`compiler-first parent reconciliation rejects ${fault}`, () => {
+  const root = fixture(), deps = join(root, compilerDeps), payload = file(deps, "output");
+  const open = fs.opendirSync.bind(fs);
+  let parentOpens = 0;
+  const spy = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    if (String(path) === dirname(deps) && ++parentOpens === 2) {
+      fs.renameSync(deps, join(root, "outside"));
+      if (fault === "replacement") fs.mkdirSync(deps);
+    }
+    return open(path);
+  }) as typeof fs.opendirSync);
+  restore.push(() => spy.mockRestore());
+  const denied = refusal(() => requireBuildAdmission(root));
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.errors).toContain(`Error: inventory_probe_${fault === "missing" ? "missing" : "identity"}`);
+  expect(fs.existsSync(payload)).toBe(false);
+});
+
 test("a new sibling arriving after compiler deps replay EOF invalidates that observation", () => {
   const root = fixture(), deps = join(root, compilerDeps), gone = join(deps, "gone");
   fs.mkdirSync(gone, { recursive: true });

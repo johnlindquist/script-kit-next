@@ -17,6 +17,11 @@ export function allocation(path: string, excluded: readonly string[] = [], seen 
 const ALLOCATION_ENTRY_LIMIT = 250_000;
 const ALLOCATION_TIMEOUT_MS = positiveLimit("SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS", 8_000, 1, 300_000);
 
+const compilerRoute = new Map([
+  ["", "pools"], ["pools", "agent-debug"], ["pools/agent-debug", "debug"],
+  ["pools/agent-debug/debug", "deps"],
+]);
+
 function protectedOutputRoot(child: string): boolean {
   if (!child) return true;
   const parts = child.split("/");
@@ -41,7 +46,8 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       if (!now.isDirectory() || !Number.isSafeInteger(dev) || !Number.isSafeInteger(ino) || ino <= 0
         || !Number.isFinite(ctime) || !Number.isFinite(mtime) || now.dev !== dev || now.ino !== ino
         || now.ctimeMs !== ctime || now.mtimeMs !== mtime || now.nlink !== links || now.size !== size) {
-        throw new Error("inventory_unstable_replay_scope");
+        throw new Error(now.isDirectory() && now.dev === dev && now.ino === ino
+          ? "inventory_unstable_replay_scope:membership" : "inventory_unstable_replay_scope:identity");
       }
     }
   };
@@ -57,7 +63,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     }
   };
   // Only the authoritative managed walk knows the exact compiler deps scope.
-  const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false): boolean => {
+  const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false, expected?: Stats): boolean => {
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
     charge();
     if (depth > 256) throw new Error("inventory_depth_limit");
@@ -71,6 +77,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       }
       throw error;
     }
+    if (expected && (!stat.isDirectory() || stat.dev !== expected.dev || stat.ino !== expected.ino)) throw new Error("inventory_probe_identity");
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
@@ -94,18 +101,58 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     for (;;) {
       directories.push([current, stat.dev, stat.ino, stat.ctimeMs, stat.mtimeMs, stat.nlink, stat.size]);
       account(stat);
+      // Descend the known compiler route first. Probe only a verified real parent,
+      // never a compound speculative path. Remember every name the probe exposed:
+      // a fresh enumeration must actually encounter those entries, not infer them.
+      const preferred = protectOutputs ? compilerRoute.get(child) : undefined;
+      const witnessed = preferred && !vanished ? new Map<string, Dirent>() : undefined;
+      let first: Stats | undefined;
+      if (preferred && witnessed) {
+        const probe = opendirSync(current);
+        try {
+          let row: Dirent | null;
+          while ((row = probe.readSync()) !== null) {
+            charge();
+            if (witnessed.has(row.name)) throw new Error("inventory_probe_duplicate");
+            witnessed.set(row.name, row);
+            if (row.name !== preferred) continue;
+            if (!row.isDirectory()) throw new Error(row.isSymbolicLink() ? "inventory_output_symlink" : "inventory_output_not_directory");
+            const next = join(current, preferred);
+            charge(); sameDirectory();
+            first = lstatSync(next);
+            if (!first.isDirectory()) throw new Error(first.isSymbolicLink() ? "inventory_output_symlink" : "inventory_output_not_directory");
+            if (first.dev !== device) throw new Error("inventory_unexpected_mount");
+            if (!visit(next, child ? `${child}/${preferred}` : preferred, depth + 1, row, false, first)) throw new Error("inventory_probe_missing");
+            break;
+          }
+        } finally { probe.closeSync(); }
+        sameDirectory();
+      }
       const directory = opendirSync(current);
       let entry: Dirent | null;
       try {
         while ((entry = directory.readSync()) !== null) {
+          const probed = witnessed?.get(entry.name);
+          if (probed) {
+            if (probed.isDirectory() !== entry.isDirectory() || probed.isFile() !== entry.isFile() || probed.isSymbolicLink() !== entry.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
+            witnessed!.delete(entry.name);
+          }
+          if (first && entry.name === preferred) {
+            if (!probed) throw new Error("inventory_probe_duplicate");
+            charge();
+            const now = lstatSync(join(current, entry.name));
+            if (!now.isDirectory() || now.dev !== first.dev || now.ino !== first.ino) throw new Error("inventory_probe_identity");
+            continue;
+          }
           // We have no inode witness for that name. Do not accept a replacement (even a link).
-          if (entry.name === vanished) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
+          if (entry.name === vanished) throw new Error("inventory_unstable_directory:reappeared");
           if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory())) break;
         }
+        if (witnessed?.size) throw new Error("inventory_probe_missing");
         if (!entry && vanished !== undefined) {
           if (confirmAbsentDirectory) {
             charge();
-            try { lstatSync(join(current, vanished)); throw new Error(`inventory_unstable_directory: ${current}/${vanished}`); }
+            try { lstatSync(join(current, vanished)); throw new Error("inventory_unstable_directory:reappeared"); }
             catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
           }
           // Both the replayed subtree and already-enumerated destinations must
@@ -120,7 +167,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
         }
         checkTime();
         if (!entry) return true; // Only an enumeration that reached EOF can commit.
-        if (vanished !== undefined) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
+        if (vanished !== undefined) throw new Error("inventory_unstable_directory:repeated_loss");
         vanished = entry.name;
         confirmAbsentDirectory = compilerDeps && entry.isDirectory();
       } finally { directory.closeSync(); }
