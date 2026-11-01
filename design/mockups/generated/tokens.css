@@ -3,7 +3,7 @@
  * and re-run the exporter; Rust is the single authority.
  */
 :root {
-  /* bundleHash: sha256:b55f1df36b1e60cb26ed531220de5d10fd41dd203b0e225f3f235223f4535f74 */
+  /* bundleHash: sha256:0cb3756239782f92d69b83afc5799a02d501d558c8e39478d31f4ec547c178d1 */
   --sk-actions-dialog-list-padding-bottom: 6px;
   --sk-actions-dialog-list-padding-top: 0px;
   --sk-actions-dialog-row-height: 36px;
@@ -35,8 +35,8 @@
   --sk-agent-chat-thought-header-opacity: 0.75;
   --sk-agent-chat-tool-header-opacity: 0.75;
   --sk-agent-chat-composer-font-size: 20px;
-  --sk-agent-chat-composer-font-weight: 430;
-  --sk-agent-chat-composer-line-height: 26px;
+  --sk-agent-chat-composer-font-weight: 400;
+  --sk-agent-chat-composer-line-height: 34px;
   --sk-agent-chat-diff-context-opacity: 0.550000011920929;
   --sk-agent-chat-error-hint-opacity: 0.4000000059604645;
   --sk-agent-chat-error-label-opacity: 0.75;
@@ -156,8 +156,8 @@
   --sk-main-menu-row-outer-padding-y: 0px;
   --sk-main-menu-row-radius: 14px;
   --sk-main-menu-search-font-size: 20px;
-  --sk-main-menu-search-font-weight: 430;
-  --sk-main-menu-search-height: 26px;
+  --sk-main-menu-search-font-weight: 400;
+  --sk-main-menu-search-height: 34px;
   --sk-main-menu-search-text-inset-x: 16px;
   --sk-main-menu-first-section-padding-top: 4px;
   --sk-main-menu-section-font-size: 12px;
@@ -168,7 +168,7 @@
   --sk-main-menu-section-padding-top: 12px;
   --sk-main-menu-section-padding-x: 18px;
   --sk-main-menu-content-inset-x: 16px;
-  --sk-main-menu-header-gap: 2px;
+  --sk-main-menu-header-gap: 8px;
   --sk-main-menu-header-padding-x: 2px;
   --sk-main-menu-header-padding-y: 4px;
   --sk-main-menu-description-font-size: 12px;
@@ -201,7 +201,7 @@
   --sk-actions-dialog-bottom-residual-height: 8px;
   --sk-actions-dialog-height: 300px;
   --sk-actions-dialog-popup-tint: rgb(15 15 15 / 0.2980392157);
-  --sk-agent-chat-composer-single-line-height: 26px;
+  --sk-agent-chat-composer-single-line-height: 34px;
   --sk-agent-chat-diff-added-bg: rgb(0 255 0 / 0.0784313725);
   --sk-agent-chat-diff-removed-bg: rgb(239 68 68 / 0.0784313725);
   --sk-agent-chat-error-bg: rgb(239 68 68 / 0.1960784314);
@@ -229,7 +229,7 @@
   --sk-arg-input-font-size: 20px;
   --sk-arg-input-height: 22px;
   --sk-arg-input-line-height: 25px;
-  --sk-arg-window-height: 324px;
+  --sk-arg-window-height: 351px;
   --sk-builtin-main-input-count-font-size: 14px;
   --sk-builtin-main-input-count-font-weight: 400;
   --sk-builtin-main-input-count-line-height: 23px;
