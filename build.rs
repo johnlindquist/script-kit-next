@@ -73,6 +73,9 @@ fn should_track_git_head(
         || override_value == Some("1")
 }
 
+// The standalone provenance tests compile without Cargo build-dependencies. The
+// native compiler is needed only by the build-script entry point, never the test harness.
+#[cfg(not(test))]
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         let source = "src/platform/dictation_spelling.m";
