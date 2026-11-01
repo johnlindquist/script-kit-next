@@ -194,6 +194,8 @@ pub fn resolve_bun() -> Option<PathBuf> {
     crate::config::passive_bun()
 }
 
+mod private_ignores;
+
 /// Container for all Script Kit plugins under the active workspace.
 pub fn plugins_path() -> PathBuf {
     get_kit_path().join("plugins")
@@ -987,12 +989,11 @@ temp/
 "#;
     // This is a user-owned source of exclusions once created. The backup implementation
     // independently allowlists personal files; it does not rely on mutable ignore rules.
-    write_string_if_missing(
-        &gitignore_path,
-        gitignore_content,
-        &mut warnings,
-        ".gitignore",
-    );
+    if let Err(error) = private_ignores::seed(&gitignore_path, gitignore_content) {
+        warnings.push(format!(
+            "Could not protect private files in .gitignore: {error}"
+        ));
+    }
 
     // Optional "getting started" content only on truly fresh installs
     if is_fresh_install {
