@@ -79,7 +79,8 @@ pub(crate) fn mount_main_fixture(
                 now,
                 Event::Subjects(TabsEvent::Open {
                     window: Some(window_source(win, 65_000)),
-                    copy: copy_source("https://github.com/script-kit/app/pull/412", 40_000),
+                    copy: copy_source("https://github.com/script-kit/app/pull/412", 40_000)
+                        .map(Box::new),
                 }),
             );
             let mut selected = selection_source(selection, text);

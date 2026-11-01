@@ -19,11 +19,11 @@ fn open(w: &mut OneWindow, now: Ms) {
         now,
         Event::Subjects(TabsEvent::Open {
             window: Some(source(SubjectKind::Window, "Terminal", 65_000)),
-            copy: Some(source(
+            copy: Some(Box::new(source(
                 SubjectKind::Clipboard,
                 "https://example.org",
                 40_000,
-            )),
+            ))),
         }),
     );
 }

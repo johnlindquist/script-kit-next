@@ -21,7 +21,7 @@ pub enum TabsEvent {
     /// A new opening; passive inputs are snapshots, not a read of the system clipboard.
     Open {
         window: Option<TabSource>,
-        copy: Option<TabSource>,
+        copy: Option<Box<TabSource>>,
     },
     Observe(TabSource),
     /// Explicit paste can reach a copy even when not offered passively.
@@ -292,7 +292,7 @@ impl OneWindow {
                 self.tabs.history = None;
                 self.tabs.previous = std::mem::take(&mut self.tabs.live);
                 self.chose = false;
-                for s in [window, copy].into_iter().flatten() {
+                for s in [window, copy.map(|s| *s)].into_iter().flatten() {
                     self.tabs.put(now, s);
                 }
             }
