@@ -1962,10 +1962,11 @@ describe("fail-closed release evidence", () => {
 
   test("rejects a missing, nonexecutable, or changed goose sidecar", () => {
     const fixture = makeFixture();
+    const archivedMode = statSync(fixture.sidecarPath).mode & 0o7777;
     chmodSync(fixture.sidecarPath, 0o644);
     expect(() => buildReleaseManifest(options(fixture))).toThrow("not executable");
 
-    chmodSync(fixture.sidecarPath, 0o755);
+    chmodSync(fixture.sidecarPath, archivedMode);
     const manifest = buildReleaseManifest(options(fixture));
     json(fixture.manifestPath, manifest);
     writeFileSync(fixture.sidecarPath, "different-sidecar");
