@@ -1,0 +1,66 @@
+/* One-row layouts: additions on top of styles.css. */
+.mix { display: flex; flex-wrap: wrap; gap: 14px 28px; padding: 12px 14px; border: 1px dashed var(--page-line); border-radius: 12px; }
+.mix[data-disabled="true"] { opacity: .45; }
+.seg--variants button { min-width: 132px; }
+
+.win { --in-h: 34px; }
+#q, .mirror { line-height: var(--in-h); }
+
+/* Shared one-row geometry: no line above; rule at 58 pt; list from 61 pt. */
+.win[data-layout="row"] .line { display: none; }
+.win[data-layout="row"] .rule { top: 58px; }
+.win[data-layout="row"] .list { top: 61px; }
+.win[data-layout="row"][data-row="compact"] .inrow { top: 12px; padding-left: 16px; gap: 8px; }
+.win[data-layout="row"][data-row="aligned"] { --in-h: 44px; }
+/* Lined up with rows: the icon sits in the rows' icon column (x 18) and the words start where names do (x 50). */
+.win[data-layout="row"][data-row="aligned"] .inrow { top: 7px; height: 44px; padding: 0 14px 0 18px; gap: 8px; }
+
+.rule__progress { position: absolute; left: 0; top: -1px; height: 2px; width: 0; background: var(--gold); transition: width 100ms linear; }
+
+/* The window behind Script Kit, as the input's leading tile. */
+.ftile {
+  position: relative; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; flex: none;
+  font-size: 15px; color: rgb(var(--fg) / .65); border: 1px dashed rgb(var(--fg) / .28); cursor: pointer;
+  transition: opacity 120ms ease-out;
+}
+.ftile:hover { border-style: solid; color: rgb(var(--fg) / .9); }
+.ftile[data-typing="true"] { opacity: .4; }
+.ftile--key { border-style: solid; border-color: var(--keycap-edge); color: rgb(var(--fg) / .85); }
+.ftile .tilekey { font-size: 13px; line-height: 1; }
+
+/* Ghost sentence in the empty input. */
+.mirror .ghost { opacity: .42; color: rgb(var(--fg)); }
+.mirror .ghost-key { margin-left: 8px; vertical-align: 3px; opacity: .7; color: rgb(var(--fg)); }
+.mirror .ghost-key .kc { color: rgb(var(--fg) / .8); }
+
+/* Status in the first header. */
+.hdr .hicon { font-size: 12px; display: flex; color: rgb(var(--fg) / .6); }
+.hdr .hsub { color: rgb(var(--fg) / .4); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hdr { gap: 6px; }
+.hdr .label { flex: none; }
+.hstatus { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; min-width: 0; color: rgb(var(--fg) / .6); text-transform: none; letter-spacing: 0; transition: opacity 180ms ease-out; }
+.hstatus .icon { font-size: 12px; display: flex; }
+.hstatus .title { color: rgb(var(--fg) / .8); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hstatus .state { color: var(--gold); font-weight: 500; flex: none; }
+.hstatus .hint { display: flex; align-items: center; gap: 4px; font-size: 11px; flex: none; }
+.hstatus[data-kind="hold"] .title { color: rgb(var(--fg)); }
+.hstatus[data-failed="true"] .icon { color: #f87171; }
+.hdr .acc + .hstatus { margin-left: 10px; }
+
+/* Status as the bottom-left capsule. */
+.cap--status { position: relative; overflow: hidden; max-width: 360px; padding: 0 8px 0 10px; gap: 6px; }
+.cap--status .icon { font-size: 14px; display: flex; color: rgb(var(--fg) / .7); }
+.cap--status .title { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cap--status .sub { color: rgb(var(--fg) / .5); flex: none; }
+.cap--status .state { color: var(--gold); font-weight: 500; flex: none; }
+.cap--status .fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgb(251 191 36 / .14); pointer-events: none; }
+.cap--status[data-failed="true"] .icon { color: #f87171; }
+
+/* Gold text needs a darker amber on the light window to stay readable; fills and the caret keep the bright gold. */
+.win[data-theme="light"] .state { color: #a16207; }
+
+/* Key hints inside any status. */
+.cap--status .hint, .status .hint { display: flex; align-items: center; gap: 4px; font-size: 11px; flex: none; color: rgb(var(--fg) / .6); margin-left: 2px; }
+
+/* Inline status at the end of the input row. */
+.status[data-failed="true"] .icon { color: #f87171; }

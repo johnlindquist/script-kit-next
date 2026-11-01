@@ -1,0 +1,90 @@
+/* Switch the subject: tab variations, on top of styles.css, one-row.css and attention.css. */
+
+.ladder--keys li { grid-template-columns: 112px 1fr; }
+.ladder--keys .ladder__key { padding-top: 0; }
+.dot-demo { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); margin: 7px 0 0 4px; }
+
+/* A subject that's new since you last looked. */
+.fresh { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); flex: none; }
+.tkey { display: flex; gap: 2px; margin-left: 2px; }
+.tkey .kc { color: rgb(var(--fg) / .85); }
+[data-stale="true"] .tname, [data-stale="true"] .sname { opacity: .55; }
+
+/* T1 · Underlined tabs: the first header holds the tabs; the selected one names what it is. */
+.hdr--utabs { height: 28px; padding: 0 12px; align-items: stretch; gap: 0; }
+.utab {
+  position: relative; display: flex; align-items: center; gap: 6px; padding: 0 8px; min-width: 0;
+  font-size: 12.5px; color: rgb(var(--fg) / .5); white-space: nowrap; cursor: pointer; font-weight: 450;
+}
+.utab .icon { font-size: 13px; display: flex; }
+.utab:hover { color: rgb(var(--fg) / .85); }
+.utab[aria-selected="true"] { color: rgb(var(--fg)); font-weight: 550; }
+.utab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; border-radius: 2px; background: var(--gold); }
+.utab .udetail { font-weight: 400; color: rgb(var(--fg) / .5); overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.utab[aria-selected="true"] { flex-shrink: 1; }
+.tabnext { display: flex; align-items: center; padding: 0 2px; opacity: .75; }
+
+/* T2 · Tab bar: browser-style tabs under the input; the selected tab opens into a panel. */
+.tabbar { display: none; position: absolute; left: 0; right: 0; top: 59px; height: 38px; padding: 6px 0 0; gap: 0; align-items: stretch; }
+/* The bar's bottom edge runs under every tab except the selected one, which opens into its panel. */
+.tabbar .baredge { width: 8px; flex: none; box-shadow: inset 0 -1px 0 var(--rule); }
+.tabbar .barfill { flex: 1; display: flex; justify-content: flex-end; align-items: center; box-shadow: inset 0 -1px 0 var(--rule); }
+.win[data-variant="T2"] .tabbar { display: flex; }
+.win[data-variant="T2"] .rule { background: transparent; }
+.win[data-variant="T2"] .list { top: 97px; }
+.btab {
+  flex: 0 1 172px; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 10px 10px 0 0;
+  font-size: 12.5px; color: rgb(var(--fg) / .55); white-space: nowrap; cursor: pointer; position: relative;
+}
+.btab .icon { font-size: 13px; display: flex; flex: none; }
+.btab .tname { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.btab .tage { font-size: 11px; color: rgb(var(--fg) / .4); flex: none; font-variant-numeric: tabular-nums; }
+.btab:not([aria-selected="true"]) { box-shadow: inset 0 -1px 0 var(--rule); }
+.btab:hover:not([aria-selected="true"]) { background: rgb(var(--fg) / .03); color: rgb(var(--fg) / .85); }
+.btab[aria-selected="true"] { background: var(--panel); color: rgb(var(--fg)); font-weight: 550; box-shadow: inset 0 1px 0 rgb(var(--fg) / .06), 1px 0 0 rgb(var(--fg) / .04), -1px 0 0 rgb(var(--fg) / .04); }
+.btab[aria-selected="true"] .tage { color: rgb(var(--fg) / .55); font-weight: 400; }
+.btab + .btab:not([aria-selected="true"])::before { content: ""; position: absolute; left: -1px; top: 9px; bottom: 9px; width: 1px; background: rgb(var(--fg) / .08); }
+.btab[aria-selected="true"] + .btab::before { display: none; }
+.tabbar .barkey { display: flex; align-items: center; padding: 0 14px 0 10px; opacity: .75; }
+.win { --panel: rgb(var(--fg) / .055); }
+.panel { background: var(--panel); margin: 0 8px; border-radius: 0 0 14px 14px; padding: 0 0 4px; }
+.panel .row { margin: 0 4px; }
+.panel .hdr { padding-left: 14px; }
+
+/* T3 · Queue: "this" is the input's icon; the others wait at the input's end. */
+.queue { display: flex; align-items: center; gap: 6px; transition: opacity 120ms ease-out; }
+.queue[data-typing="true"] { opacity: 0; pointer-events: none; }
+.qtile { position: relative; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 14px; color: rgb(var(--fg) / .55); box-shadow: inset 0 0 0 1px rgb(var(--fg) / .14); cursor: pointer; }
+.qtile:hover { color: rgb(var(--fg) / .9); }
+.qtile .fresh { position: absolute; top: -1px; right: -1px; box-shadow: 0 0 0 2px var(--bg); }
+.qtile[data-stale="true"] { opacity: .5; }
+.queue .qkey { display: flex; opacity: .75; margin-right: 2px; }
+.qname { font-size: 12px; color: rgb(var(--fg) / .5); white-space: nowrap; margin-right: 4px; }
+
+/* T4 · Sidebar: subjects down the left, what you can do with the selected one on the right. */
+.split { display: flex; min-height: calc(100% - 52px); }
+.side { width: 238px; flex: none; padding: 6px 6px 8px 4px; box-shadow: inset -1px 0 0 var(--rule); display: flex; flex-direction: column; gap: 2px; }
+.stab {
+  height: 48px; border-radius: 12px; padding: 6px 10px; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 8px; row-gap: 0;
+  align-items: center; cursor: pointer;
+}
+.stab .sicon { grid-row: 1 / span 2; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 15px; color: rgb(var(--fg) / .55); }
+.stab .sname { font-size: 13px; line-height: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.stab .sdetail { grid-column: 2 / span 2; font-size: 11.5px; line-height: 15px; color: rgb(var(--fg) / .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stab .sage { grid-row: 1; grid-column: 3; font-size: 11px; color: rgb(var(--fg) / .4); font-variant-numeric: tabular-nums; }
+.stab:hover:not([aria-selected="true"]) { background: var(--hover); }
+.stab[aria-selected="true"] { background: var(--sel); }
+.stab[aria-selected="true"] .sicon { color: rgb(var(--fg)); }
+.side .sidekey { margin-top: auto; padding: 6px 10px 0; font-size: 11px; color: rgb(var(--fg) / .45); display: flex; align-items: center; gap: 6px; }
+.pane { flex: 1; min-width: 0; padding-top: 0; }
+
+/* T5 · Accordion: every subject is a row; the selected one is open with its actions under it. */
+.row--subject .name .ndetail, .row--open .name .ndetail { font-weight: 400; color: rgb(var(--fg) / .5); margin-left: 6px; }
+.row--subject .chev, .row--open .chev { font-size: 14px; color: rgb(var(--fg) / .4); display: flex; }
+.row--open { cursor: default; }
+.row--open:hover { background: transparent; }
+.row--open .name { font-weight: 600; }
+.row--open .tile { color: rgb(var(--fg) / .85); }
+.row--action { margin-left: 30px; }
+.row .rage { font-size: 11.5px; color: rgb(var(--fg) / .4); font-variant-numeric: tabular-nums; flex: none; }
+.acc-gap { height: 4px; }

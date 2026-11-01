@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Switch the subject: tab variations for Script Kit’s main menu</title>
+<meta name="description" content="Interactive variations of a tab-based main menu for Script Kit: press Tab to move between what you selected, what you copied, the window you came from and what you just ran.">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="one-row.css">
+<link rel="stylesheet" href="attention.css">
+<link rel="stylesheet" href="tabs.css">
+</head>
+<body>
+<main class="page">
+  <header class="intro">
+    <p class="eyebrow">Script Kit · main menu</p>
+    <h1>Switch the subject</h1>
+    <p class="lede">When you open Script Kit, the subjects you might mean are tabs: what you selected, what you copied, the window you came from and what you just ran. Press <kbd>⇥</kbd> to move to the next one, and the rows below become what you can do with it. These variations use the same subjects and keys, but put the tabs in different places and draw them in different ways.</p>
+  </header>
+
+  <section class="rulebook" aria-labelledby="keys-title">
+    <h2 id="keys-title">How the tabs behave in every variation</h2>
+    <ol class="ladder ladder--keys">
+      <li><span class="ladder__key"><kbd>⇥</kbd> <kbd>⇧</kbd><kbd>⇥</kbd></span><div><b>Move between subjects.</b> On an empty input, <kbd>⇥</kbd> goes to the next subject and <kbd>⇧</kbd><kbd>⇥</kbd> goes back. Once you type, <kbd>⇥</kbd> keeps its current job of handing your sentence to the agent.</div></li>
+      <li><span class="ladder__key"><kbd>⌘</kbd><kbd>V</kbd> <kbd>↑</kbd></span><div><b>Jump straight to one.</b> <kbd>⌘</kbd><kbd>V</kbd> goes to what you copied. <kbd>↑</kbd> goes to the last run; press it again to step back through earlier runs, like a terminal’s history.</div></li>
+      <li><span class="ladder__key"><kbd>↵</kbd> <kbd>Space</kbd></span><div><b>Act on it.</b> <kbd>↵</kbd> runs the highlighted row on the selected subject. <kbd>Space</kbd> puts the subject in the input, so you can say what to do with it.</div></li>
+      <li><span class="ladder__key"><kbd>Esc</kbd></span><div><b>Go back.</b> <kbd>Esc</kbd> lets go of a subject in the input, clears your words, then returns to the subject the window opened on.</div></li>
+      <li><span class="ladder__key"><span class="dot-demo"></span></span><div><b>It opens on the newest thing you did on purpose.</b> When nothing is newer, it opens on the window you came from. A gold dot marks a subject that’s new since you last looked. Hold <kbd>⌘</kbd> to see each tab’s own key.</div></li>
+    </ol>
+  </section>
+
+  <section class="controls" aria-label="Mockup controls">
+    <div class="control">
+      <span class="control__label" id="variant-label">Variation</span>
+      <div class="seg seg--variants" role="radiogroup" aria-labelledby="variant-label" id="variants"></div>
+    </div>
+    <div class="control">
+      <span class="control__label" id="story-label">Story</span>
+      <div class="seg" role="radiogroup" aria-labelledby="story-label" id="stories"></div>
+    </div>
+    <div class="control">
+      <span class="control__label" id="event-label">Make something happen</span>
+      <div class="seg seg--events" role="group" aria-labelledby="event-label" id="events"></div>
+    </div>
+    <div class="control-row">
+      <div class="control">
+        <span class="control__label" id="order-label">Tab order</span>
+        <div class="seg" role="radiogroup" aria-labelledby="order-label" id="orders">
+          <button data-order="leader">Newest first; old copies drop off</button>
+          <button data-order="fixed">Same place every time</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="clock-label">Clock</span>
+        <div class="seg" role="group" aria-labelledby="clock-label" id="clock">
+          <button data-clock="toggle" id="clock-toggle">Pause</button>
+          <span class="clock__now" id="clock-now"></span>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="theme-label">Appearance</span>
+        <div class="seg" role="radiogroup" aria-labelledby="theme-label" id="themes">
+          <button data-theme="dark">Dark</button>
+          <button data-theme="light">Light</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="stage" id="stage">
+      <div class="scaler" id="scaler">
+        <div class="win" id="win" data-theme="dark">
+          <div class="line" id="line" role="status"></div>
+          <div class="inrow" id="inrow">
+            <div class="lead" id="lead"></div>
+            <div class="field" id="field">
+              <div class="mirror" id="mirror" aria-hidden="true"></div>
+              <input id="q" type="text" autocomplete="off" spellcheck="false" aria-label="Main input (mockup)" aria-controls="list">
+            </div>
+            <div class="trail" id="trail"></div>
+          </div>
+          <div class="rule" id="rule-line"><div class="rule__progress" id="inprogress"></div></div>
+          <div class="tabbar" id="tabbar" role="tablist" aria-label="Subjects"></div>
+          <div class="list" id="list" role="listbox" aria-label="Results"></div>
+          <div class="foot" id="foot"></div>
+        </div>
+      </div>
+      <div class="below">
+        <p class="ink" id="ink" aria-live="polite"></p>
+        <ol class="log" id="log" aria-label="What happened"></ol>
+      </div>
+    </div>
+    <aside class="notes" id="notes" aria-live="polite"></aside>
+  </section>
+
+  <section class="try">
+    <h2>Try it</h2>
+    <ul>
+      <li>Pick <b>Everything at once</b>, click the input and press <kbd>⇥</kbd> a few times. Then switch variations and do it again.</li>
+      <li>Press <kbd>↑</kbd> to jump to the last run, then <kbd>↑</kbd> again to go back through earlier ones. <kbd>Esc</kbd> returns to where the window opened.</li>
+      <li>Switch <b>Tab order</b> to <b>Same place every time</b>. The tabs stop moving as things happen, and an old copy stays as a dim tab instead of dropping off.</li>
+      <li>Use <b>Make something happen</b> to copy, select, switch apps or wait, and watch which tab the window opens on.</li>
+      <li>Type <kbd>explain this</kbd>: the sentence is about the selected tab.</li>
+    </ul>
+    <p class="quiet">Browsers keep some shortcuts for themselves. Click a tab or a row to select it; double-click runs a row.</p>
+  </section>
+
+  <footer class="credits">Mockup only; no app behavior changes here. Icons: <a href="https://lucide.dev">Lucide</a> (ISC).</footer>
+</main>
+<script src="icons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

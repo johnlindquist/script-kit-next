@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What comes first: Script Kit’s main menu</title>
+<meta name="description" content="How Script Kit could decide between what you selected, what you copied, the window you're in and what you just ran, with interactive mockups of five ways to show it.">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="one-row.css">
+<link rel="stylesheet" href="attention.css">
+</head>
+<body>
+<main class="page">
+  <header class="intro">
+    <p class="eyebrow">Script Kit · main menu</p>
+    <h1>What comes first</h1>
+    <p class="lede">When you open Script Kit, several things could be what you mean: text you selected, something you just copied, the window you came from, and what you just ran (which <kbd>↑</kbd> brings back). Each wants the top. Below is one rule for choosing, and five ways to show the choice. Play the stories, or make things happen yourself, and watch where each one ends up.</p>
+  </header>
+
+  <section class="rulebook" aria-labelledby="rule-title">
+    <h2 id="rule-title">The rule</h2>
+    <ol class="ladder">
+      <li><span class="step">1</span><div><b>Anything that needs you comes first, and isn’t ranked.</b> A run about to go, a question waiting for an answer, a failure you haven’t seen. It takes the status place, and Stop is always there.</div><span class="ladder__key"><kbd>⌘</kbd><kbd>Z</kbd></span></li>
+      <li><span class="step">2</span><div><b>Past and present don’t compete.</b> What you’re pointing at now becomes “this”: the input’s icon and the first rows. What you already did reports in the status place instead. They never fight for the same spot.</div><span class="ladder__key"><kbd>Space</kbd></span></li>
+      <li><span class="step">3</span><div><b>Among the present, the newest thing you did on purpose leads.</b> Selecting text, copying something and switching windows are all moments. The latest one is “this”. The window you came from is the floor: it leads when nothing newer does.</div><span class="ladder__key"><kbd>⇥</kbd></span></li>
+      <li><span class="step">4</span><div><b>News fades, and ignored news steps back.</b> A copy leads for two minutes; a selection while it’s selected. If you opened Script Kit, saw it and did something else, it stops leading. Its key still works.</div><span class="ladder__key"><kbd>⌘</kbd><kbd>V</kbd></span></li>
+      <li><span class="step">5</span><div><b>What you did steps behind you.</b> The last run shows in the status place for two minutes, while <kbd>⌘</kbd><kbd>Z</kbd> can take it back. After that it waits on <kbd>↑</kbd>; press <kbd>↑</kbd> again for earlier runs, like a terminal’s history.</div><span class="ladder__key"><kbd>↑</kbd></span></li>
+    </ol>
+    <p class="quiet">Two small rules keep it calm: only the leader gets rows (anything else still fresh shows just its name and key), and the same text selected and copied counts once.</p>
+  </section>
+
+  <section class="controls" aria-label="Mockup controls">
+    <div class="control">
+      <span class="control__label" id="design-label">Design</span>
+      <div class="seg seg--variants" role="radiogroup" aria-labelledby="design-label" id="designs"></div>
+    </div>
+    <div class="control">
+      <span class="control__label" id="story-label">Story</span>
+      <div class="seg" role="radiogroup" aria-labelledby="story-label" id="stories"></div>
+    </div>
+    <div class="control">
+      <span class="control__label" id="event-label">Make something happen</span>
+      <div class="seg seg--events" role="group" aria-labelledby="event-label" id="events"></div>
+    </div>
+    <div class="control-row">
+      <div class="control">
+        <span class="control__label" id="rule-label">How the leader is chosen</span>
+        <div class="seg" role="radiogroup" aria-labelledby="rule-label" id="rules">
+          <button data-rule="newest">Newest wins, news fades</button>
+          <button data-rule="fixed">Fixed order: selection, copy, window</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="clock-label">Clock</span>
+        <div class="seg" role="group" aria-labelledby="clock-label" id="clock">
+          <button data-clock="toggle" id="clock-toggle">Pause</button>
+          <span class="clock__now" id="clock-now"></span>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="theme-label">Appearance</span>
+        <div class="seg" role="radiogroup" aria-labelledby="theme-label" id="themes">
+          <button data-theme="dark">Dark</button>
+          <button data-theme="light">Light</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="stage" id="stage">
+      <div class="scaler" id="scaler">
+        <div class="win" id="win" data-theme="dark">
+          <div class="line" id="line" role="status"></div>
+          <div class="inrow" id="inrow">
+            <div class="lead" id="lead"></div>
+            <div class="field" id="field">
+              <div class="mirror" id="mirror" aria-hidden="true"></div>
+              <input id="q" type="text" autocomplete="off" spellcheck="false" aria-label="Main input (mockup)" aria-controls="list">
+            </div>
+            <div class="trail" id="trail"></div>
+          </div>
+          <div class="rule" id="rule-line"><div class="rule__progress" id="inprogress"></div></div>
+          <div class="list" id="list" role="listbox" aria-label="Results"></div>
+          <div class="foot" id="foot"></div>
+        </div>
+      </div>
+      <div class="below">
+        <p class="ink" id="ink" aria-live="polite"></p>
+        <ol class="log" id="log" aria-label="What happened"></ol>
+      </div>
+    </div>
+    <aside class="notes" id="notes" aria-live="polite"></aside>
+  </section>
+
+  <section class="try">
+    <h2>Try it</h2>
+    <ul>
+      <li>Pick <b>Everything at once</b>. A run is waiting, you selected an error, you copied a link and you just ran a reminder. Switch designs and see where each one lands.</li>
+      <li>Pick <b>Just copied a link</b>, then press <b>Wait 2 min</b>. The link stops leading and the window takes over. Switch the rule to <b>Fixed order</b> and the old link keeps the top.</li>
+      <li>Press <b>Glance and close</b> to open Script Kit and leave without acting. What you saw steps back next time.</li>
+      <li>On an empty input: <kbd>Space</kbd> acts on “this”, <kbd>⇥</kbd> picks the next one, <kbd>⌘</kbd><kbd>V</kbd> acts on what you copied, <kbd>↑</kbd> brings back the last run and <kbd>↑</kbd> again goes further back. <kbd>Esc</kbd> lets go. Hold <kbd>⌘</kbd> to see every key.</li>
+      <li>Type <kbd>explain this</kbd> or <kbd>summarize the link</kbd>. The underlined word shows what your sentence is about.</li>
+    </ul>
+    <p class="quiet">Browsers keep some shortcuts for themselves. Click a row to select it; double-click runs it.</p>
+  </section>
+
+  <footer class="credits">Mockup only; no app behavior changes here. Icons: <a href="https://lucide.dev">Lucide</a> (ISC).</footer>
+</main>
+<script src="icons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

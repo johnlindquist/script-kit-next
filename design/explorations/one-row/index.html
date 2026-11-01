@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>One row: variations on Script Kit’s main menu</title>
+<meta name="description" content="Interactive variations of a one-row top for Script Kit’s main menu: how the window behind it is offered, and where status lives.">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="one-row.css">
+</head>
+<body>
+<main class="page">
+  <header class="intro">
+    <p class="eyebrow">Script Kit · main menu</p>
+    <h1>One row, a few ways</h1>
+    <p class="lede">Every option puts the input on one row with nothing above it. They differ in two ways: how they show the window behind Script Kit, and where they report what just happened. Pick a preset, or mix the two choices yourself. Switching keeps whatever you typed.</p>
+  </header>
+
+  <section class="controls" aria-label="Mockup controls">
+    <div class="control">
+      <span class="control__label" id="variant-label">Preset</span>
+      <div class="seg seg--variants" role="radiogroup" aria-labelledby="variant-label" id="variants"></div>
+    </div>
+    <div class="mix" id="mix" aria-label="Mix your own">
+      <div class="control">
+        <span class="control__label" id="this-label">The window behind Script Kit</span>
+        <div class="seg" role="radiogroup" aria-labelledby="this-label" id="axis-this">
+          <button data-axis="this" data-value="icon">Icon in the input</button>
+          <button data-axis="this" data-value="rows">Its actions as rows</button>
+          <button data-axis="this" data-value="suggest">A sentence to try</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="status-label">What just happened</span>
+        <div class="seg" role="radiogroup" aria-labelledby="status-label" id="axis-status">
+          <button data-axis="status" data-value="inrow">End of the input</button>
+          <button data-axis="status" data-value="header">First header</button>
+          <button data-axis="status" data-value="foot">Bottom-left capsule</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="row-label">Input row</span>
+        <div class="seg" role="radiogroup" aria-labelledby="row-label" id="axis-row">
+          <button data-axis="row" data-value="aligned">Lined up with rows · 44 pt</button>
+          <button data-axis="row" data-value="compact">Compact · 34 pt</button>
+        </div>
+      </div>
+    </div>
+    <div class="control">
+      <span class="control__label" id="state-label">Jump to</span>
+      <div class="seg" role="group" aria-labelledby="state-label" id="states">
+        <button data-state="fresh">Nothing ran yet</button>
+        <button data-state="ran">Something just ran</button>
+        <button data-state="typing">Typing a sentence</button>
+        <button data-state="staged">Acting on the window</button>
+        <button data-state="hold">Waiting 8 s</button>
+        <button data-state="failed">Something failed</button>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="control">
+        <span class="control__label" id="size-label">Input text</span>
+        <div class="seg" role="radiogroup" aria-labelledby="size-label" id="sizes">
+          <button data-size="20">20 pt</button>
+          <button data-size="18">18 pt</button>
+          <button data-size="16">16 pt</button>
+        </div>
+      </div>
+      <div class="control" id="familiarity-control">
+        <span class="control__label" id="fam-label">How well you know the keys</span>
+        <div class="seg" role="radiogroup" aria-labelledby="fam-label" id="fams">
+          <button data-fam="track">Count my use</button>
+          <button data-fam="new">New</button>
+          <button data-fam="learning">Learning</button>
+          <button data-fam="fluent">Fluent</button>
+        </div>
+      </div>
+      <div class="control">
+        <span class="control__label" id="theme-label">Appearance</span>
+        <div class="seg" role="radiogroup" aria-labelledby="theme-label" id="themes">
+          <button data-theme="dark">Dark</button>
+          <button data-theme="light">Light</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="stage" id="stage">
+      <div class="scaler" id="scaler">
+        <div class="win" id="win" data-theme="dark">
+          <div class="line" id="line" role="status"></div>
+          <div class="inrow" id="inrow">
+            <div class="lead" id="lead"></div>
+            <div class="field" id="field">
+              <div class="mirror" id="mirror" aria-hidden="true"></div>
+              <input id="q" type="text" autocomplete="off" spellcheck="false" aria-label="Main input (mockup)" aria-controls="list">
+            </div>
+            <div class="trail" id="trail"></div>
+          </div>
+          <div class="rule" id="rule"><div class="rule__progress" id="inprogress"></div></div>
+          <div class="list" id="list" role="listbox" aria-label="Results"></div>
+          <div class="foot" id="foot"></div>
+        </div>
+      </div>
+      <div class="below">
+        <p class="ink" id="ink" aria-live="polite"></p>
+        <ol class="log" id="log" aria-label="What the keys did"></ol>
+      </div>
+    </div>
+    <aside class="notes" id="notes" aria-live="polite"></aside>
+  </section>
+
+  <section class="try">
+    <h2>Try it</h2>
+    <ul>
+      <li>Type <kbd>remind me to call mom tomorrow at 5pm</kbd>, press <kbd>↵</kbd>, then <kbd>⌘</kbd><kbd>Z</kbd>. Watch where the presets report the run and its undo.</li>
+      <li>In <b>A sentence to try</b>, press <kbd>Tab</kbd> on the empty input to take the suggestion. Its faint underlines use the same colors as the word marks, so you can see what each phrase does before you type one.</li>
+      <li>Click the icon at the start of the input, or press <kbd>Space</kbd> on an empty input, to act on that window. <kbd>Esc</kbd> lets go.</li>
+      <li>Type <kbd>empty trash</kbd> and press <kbd>↵</kbd> to see a run that waits eight seconds. <kbd>⌘</kbd><kbd>Z</kbd> on an empty input stops it.</li>
+      <li>Hold <kbd>⌘</kbd> to see every key where it works.</li>
+    </ul>
+    <p class="quiet">Browsers keep some shortcuts for themselves. If <kbd>⌘</kbd><kbd>1</kbd> switches tabs, click the row instead. Single-click selects a row; double-click or <kbd>↵</kbd> runs it.</p>
+  </section>
+
+  <section class="reference">
+    <h2>What the app draws now</h2>
+    <figure>
+      <img src="native-today.png" alt="The current Script Kit main menu: a line naming the terminal window behind it, a large Search or ask input with a dashed Ghostty Use chip, uppercase section headers, and four footer capsules." width="1500" height="1000">
+      <figcaption>The native app in an isolated test window with sample data. Preset A recreates it.</figcaption>
+    </figure>
+  </section>
+
+  <footer class="credits">Mockup only; no app behavior changes here. Icons: <a href="https://lucide.dev">Lucide</a> (ISC).</footer>
+</main>
+<script src="icons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
