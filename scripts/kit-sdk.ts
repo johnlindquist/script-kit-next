@@ -9262,41 +9262,42 @@ globalThis.getMenuBar = async function getMenuBar(bundleId?: string): Promise<Me
       ]
     : [];
 
-  const { promise, resolve, reject } = Promise.withResolvers<MenuBarItem[]>();
-  const resolver = (msg: ResponseMessage) => {
-    // Handle MenuBarResult message type
-    if (msg.type === 'menuBarResult') {
-      const resultMsg = msg as MenuBarResultMessage;
-      if (resultMsg.error) {
-        reject(new Error(resultMsg.error));
+  const promise = new Promise<MenuBarItem[]>((resolve, reject) => {
+    const resolver = (msg: ResponseMessage) => {
+      // Handle MenuBarResult message type
+      if (msg.type === 'menuBarResult') {
+        const resultMsg = msg as MenuBarResultMessage;
+        if (resultMsg.error) {
+          reject(new Error(resultMsg.error));
+          return;
+        }
+        resolve(resultMsg.items);
         return;
       }
-      resolve(resultMsg.items);
-      return;
-    }
 
-    // Handle auto-submit (msg will be the auto-submit value directly)
-    if (Array.isArray(msg)) {
-      resolve(msg as MenuBarItem[]);
-      return;
-    }
+      // Handle auto-submit (msg will be the auto-submit value directly)
+      if (Array.isArray(msg)) {
+        resolve(msg as MenuBarItem[]);
+        return;
+      }
 
-    // Fallback to submit message handling (backwards compatibility)
-    const submitMsg = msg as SubmitMessage;
-    const value = submitMsg.value ?? '[]';
-    try {
-      const parsed = JSON.parse(value);
-      resolve(Array.isArray(parsed) ? (parsed as MenuBarItem[]) : []);
-    } catch {
-      resolve([]);
-    }
-  };
+      // Fallback to submit message handling (backwards compatibility)
+      const submitMsg = msg as SubmitMessage;
+      const value = submitMsg.value ?? '[]';
+      try {
+        const parsed = JSON.parse(value);
+        resolve(Array.isArray(parsed) ? (parsed as MenuBarItem[]) : []);
+      } catch {
+        resolve([]);
+      }
+    };
 
-  addPending(id, resolver, {
-    type: 'menuBarResult',
-    requestId: id,
-    items: fixtureItems,
-  } satisfies MenuBarResultMessage);
+    addPending(id, resolver, {
+      type: 'menuBarResult',
+      requestId: id,
+      items: fixtureItems,
+    } satisfies MenuBarResultMessage);
+  });
 
   const message: GetMenuBarMessage = {
     type: 'getMenuBar',

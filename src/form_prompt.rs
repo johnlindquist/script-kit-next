@@ -321,7 +321,10 @@ impl FormPromptState {
         }
     }
 
-    #[cfg(any(test, feature = "owned-ui-evaluation"))]
+    #[allow(
+        dead_code,
+        reason = "used by the binary prompt evaluator and field correction tests"
+    )]
     pub(crate) fn visible_validation_message(&self, cx: &App) -> Option<&'static str> {
         self.fields.iter().find_map(|(_, entity)| match entity {
             FormFieldEntity::TextField(field) => field.read(cx).visible_submit_hint(),

@@ -2,7 +2,7 @@
 //! and explicit editable review use existing one-window controls; a reply cannot take focus.
 use super::ledger_view::LedgerRun;
 use crate::{mcp_protocol::bridge::handoff as mail, AppView, ScriptListApp};
-use gpui::{AppContext as _, Context};
+use gpui::Context;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 pub(super) struct OpenDraft {
