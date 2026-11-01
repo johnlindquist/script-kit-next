@@ -3,11 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const CLI_PATH = new URL("./config-cli.ts", import.meta.url).pathname;
-const TEMPLATE_PATH = new URL(
-  "../kit-init/config-template.ts",
-  import.meta.url,
-).pathname;
+const CLI_PATH = join(import.meta.dir, 'config-cli.ts');
+const TEMPLATE_PATH = join(import.meta.dir, '../kit-init/config-template.ts');
 
 async function runValidateChange(
   change: unknown,
@@ -253,7 +250,7 @@ export default {
 
       expect(result.exitCode).toBe(0);
       const content = readFileSync(configPath, "utf8");
-      expect(content).toContain('"builtin/clipboard-history": { hidden: true }');
+      expect(content).toMatch(/"builtin\/clipboard-history": \{\s+hidden: true \}/);
       expect(content).not.toContain("shortcut");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -322,7 +319,8 @@ describe("config-cli set skips commented examples", () => {
 
       const content = readFileSync(configPath, "utf8");
       // The commented dictation example is untouched...
-      expect(content).toContain('// dictation: { selectedDeviceId: "usb-mic" },');
+      expect(content).toContain('// dictation: {\n');
+      expect(content).toContain('//   selectedDeviceId: "usb-mic",');
       // ...and a real dictation block was inserted with the new value.
       expect(content).toMatch(/^\s*dictation: \{\n\s*saveHistory: false\n\s*\}/m);
 

@@ -2271,6 +2271,9 @@ function validateHotkeyShape(value: unknown, path: string): ValidationMessage[] 
   const hotkey = value as Record<string, unknown>;
   const errors: ValidationMessage[] = [];
 
+  for (const key of Object.keys(hotkey)) {
+    if (key !== 'key' && key !== 'modifiers') errors.push({path: path + '.' + key, code: 'unknownHotkeyKey', message: 'Unknown hotkey property: ' + key});
+  }
   if (!Array.isArray(hotkey.modifiers)) {
     errors.push({
       path: `${path}.modifiers`,

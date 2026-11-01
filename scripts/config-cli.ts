@@ -18,17 +18,16 @@
  * Output is JSON by default for AI parsing.
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
+import { configPath, editLiteral, mutate, readSource, revision, values } from './config-document.ts';
 
 import {
   analyzeCommandConfigPath,
+  isValidCommandId,
   validateCommandConfigFieldValue,
   validateCommandConfigValue,
   validateCommandIdList,
   validateCommandsConfig,
-} from './config-schema';
+} from './config-schema.ts';
 import type {
   CommandId,
   AnimationPreferences,
@@ -799,6 +798,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     description: "Window entry fade (sharp_presence or fixed_frame; retired ids load as sharp_presence)"
   },
   {
+    key: "dictation.startInKit",
+    type: "boolean",
+    default: undefined,
+    description: "Start contextual dictation in the Kit input rather than the captured cursor"
+  },
+  {
     key: "dictation.screenSpelling",
     type: '"off" | "accessibility" | "accessibilityAndOcr"',
     default: DEFAULTS.dictation!.screenSpelling,
@@ -1006,6 +1011,18 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     description: "Per-command shortcuts and visibility overrides"
   },
   {
+    key: "mcp.enabled",
+    type: "boolean",
+    default: true,
+    description: "Enable configured external MCP servers"
+  },
+  {
+    key: "mcp.servers",
+    type: "Record<string, McpServerConfig>",
+    default: {},
+    description: "External server definitions (may launch executables or send credentials)"
+  },
+  {
     key: "promptTargets",
     type: "Record<string, PromptTargetConfig>",
     default: undefined,
@@ -1077,8 +1094,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
 // Utilities
 // =============================================================================
 
-const CONFIG_PATH = process.env.SCRIPT_KIT_CONFIG_PATH
-  || path.join(os.homedir(), '.scriptkit', 'config.ts');
+let CONFIG_PATH: string;
 
 interface Result<T> {
   success: boolean;
@@ -1105,115 +1121,22 @@ function error(message: string): void {
 /**
  * Get a nested value from an object using dot notation
  */
-function getNestedValue(obj: Record<string, unknown>, key: string): unknown {
-  const parts = key.split('.');
-  let current: unknown = obj;
-  
-  for (const part of parts) {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-    if (typeof current !== 'object') {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[part];
-  }
-  
-  return current;
+function pathParts(key: string) {
+  const cmd = analyzeCommandConfigPath(key);
+  return cmd?.kind === 'parsed'
+    ? ['commands', cmd.commandId, ...(cmd.fieldPath?.split('.') ?? [])]
+    : key.split('.');
 }
-
-/**
- * Set a nested value in an object using dot notation
- */
-function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): void {
-  const parts = key.split('.');
-  let current = obj;
-  
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (!(part in current) || typeof current[part] !== 'object' || current[part] === null) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
+function getNestedValue(obj: Record<string, unknown>, key: string) {
+  let value: unknown = obj;
+  for (const part of pathParts(key)) {
+    if (!isRecord(value) || !Object.hasOwn(value, part)) return undefined;
+    value = value[part];
   }
-  
-  const lastPart = parts[parts.length - 1];
-  current[lastPart] = value;
+  return value;
 }
-
-/**
- * Delete a nested value from an object using dot notation
- */
-function deleteNestedValue(obj: Record<string, unknown>, key: string): boolean {
-  const parts = key.split('.');
-  let current = obj;
-  
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (!(part in current) || typeof current[part] !== 'object' || current[part] === null) {
-      return false;
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-  
-  const lastPart = parts[parts.length - 1];
-  if (lastPart in current) {
-    delete current[lastPart];
-    return true;
-  }
-  return false;
-}
-
-/**
- * Load and parse the current config
- */
-async function loadConfig(): Promise<Config | null> {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    return null;
-  }
-  
-  // Use bun to transpile and evaluate the config
-  const tmpJsPath = '/tmp/kit-config-cli.js';
-  
-  try {
-    // Transpile TypeScript to JavaScript
-    const buildResult = Bun.spawnSync(['bun', 'build', '--target=bun', CONFIG_PATH, `--outfile=${tmpJsPath}`]);
-    if (buildResult.exitCode !== 0) {
-      throw new Error(`Failed to transpile config: ${buildResult.stderr.toString()}`);
-    }
-    
-    // Execute and extract default export
-    const jsonResult = Bun.spawnSync(['bun', '-e', `console.log(JSON.stringify(require('${tmpJsPath}').default))`]);
-    if (jsonResult.exitCode !== 0) {
-      throw new Error(`Failed to evaluate config: ${jsonResult.stderr.toString()}`);
-    }
-    
-    const jsonStr = jsonResult.stdout.toString().trim();
-    return JSON.parse(jsonStr) as Config;
-  } catch (e) {
-    throw new Error(`Failed to load config: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/**
- * Read the raw config.ts file content
- */
-function readConfigFile(): string | null {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    return null;
-  }
-  return fs.readFileSync(CONFIG_PATH, 'utf-8');
-}
-
-/**
- * Write the config.ts file content
- */
-function writeConfigFile(content: string): void {
-  const dir = path.dirname(CONFIG_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(CONFIG_PATH, content, 'utf-8');
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**
@@ -1234,500 +1157,162 @@ export default {
 /**
  * Parse a string value to the appropriate type
  */
-function parseValue(value: string, key: string): unknown {
-  // Find the schema entry for this key to determine type
-  const schema = CONFIG_SCHEMA.find(s => s.key === key);
-  if (!schema) {
-    // Try to infer type from value
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    if (value === 'undefined' || value === 'null') return undefined;
-    const num = Number(value);
-    if (!isNaN(num)) return num;
-    // Try to parse as JSON (for arrays)
-    try {
-      return JSON.parse(value);
-    } catch {
-      return value;
-    }
+function parseValue(raw: string, key: string) {
+  const type = CONFIG_SCHEMA.find((s) => s.key === key)?.type ?? '';
+  if (
+    (type.startsWith('string') && !type.startsWith('string[]')) ||
+    type.startsWith('"') ||
+    type === 'KeyCode'
+  )
+    return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
   }
-  
-  const type = schema.type;
-
-  if (type.includes('undefined') && (value === 'undefined' || value === 'null')) {
-    return undefined;
-  }
-  
-  if (type.includes('boolean')) {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    throw new Error(`Invalid boolean value: ${value}. Use 'true' or 'false'.`);
-  }
-  
-  if (type.includes('number')) {
-    if (value === 'undefined' || value === 'null') return undefined;
-    const num = Number(value);
-    if (isNaN(num)) {
-      throw new Error(`Invalid number value: ${value}`);
-    }
-    return num;
-  }
-  
-  if (type.includes('[]')) {
-    // Array type - parse as JSON
-    try {
-      const parsed = JSON.parse(value);
-      if (!Array.isArray(parsed)) {
-        throw new Error(`Expected array, got: ${typeof parsed}`);
-      }
-      return parsed;
-    } catch (e) {
-      throw new Error(`Invalid array value: ${value}. Use JSON format like '["meta", "shift"]'.`);
-    }
-  }
-
-  if (type.includes('HotkeyConfig')) {
-    // Hotkey object - parse as JSON
-    try {
-      const parsed = JSON.parse(value);
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error(`Expected object, got: ${typeof parsed}`);
-      }
-      return parsed;
-    } catch (e) {
-      throw new Error(`Invalid hotkey value: ${value}. Use JSON format like '{"modifiers": ["meta", "ctrl"], "key": "KeyR"}'.`);
-    }
-  }
-
-  // String or other - return as-is
-  return value;
 }
 
-/**
- * Validate a config value against constraints
- */
+// Describes consequences; it does not grant permission or change MCP auth.
+function impact(key: string) {
+  if (/^(bun_path|editor$|mcp(?:\.|$)|promptTargets|claudeCode)/.test(key)) return 'execution-policy';
+  if (
+    /^(jevIntentEnabled|brainRemote|builtIns.clipboardHistory|clipboardHistory|dictation\.(screenSpelling|saveHistory)|suggested.trackUsage)/.test(
+      key,
+    )
+  )
+    return 'privacy';
+  if (/^(commands|.*[Hh]otkey|hiddenCommands)/.test(key)) return 'command-routing';
+  if (key === 'notesFolder') return 'filesystem';
+  if (/^(processLimits|powerSyntax\.cmdEnterAi)/.test(key)) return 'execution-policy';
+  return 'preference';
+}
+
+// Local runtime config remains fully configurable by its owner. A scoped
+// settings tool isn't a grant to launch an executable, move private files,
+// grant remote access, or disable confirmations. Check group ancestors too.
+function manualOnly(key: string): boolean {
+  if (['execution-policy', 'filesystem'].includes(impact(key))) return true;
+  if (/^(?:brainRemote|jevIntentEnabled)(?:\.|$)/.test(key)) return true;
+  if (
+    ['ai', 'powerSyntax', 'dictation.screenSpelling', 'clipboardHistorySecretRejection', 'clipboardHistoryMaxTextLength'].includes(key) ||
+    key.startsWith('clipboardHistorySecretRejection.')
+  )
+    return true;
+  return analyzeCommandConfigPath(key)?.kind === 'parsed' && key.endsWith('.confirmationRequired');
+}
+// A scoped tool may turn collection off, but cannot opt the user back in.
+const disableOnly = new Set(['builtIns.clipboardHistory', 'dictation.saveHistory', 'suggested.trackUsage']);
+function permissionError(key: string, value: unknown): string | undefined {
+  if (disableOnly.has(key) && value !== false) return `Enabling ${key} requires manual opt-in`;
+  if (manualOnly(key)) return `Manual-only setting: ${key}; edit config.ts yourself`;
+  // A whole-group replacement could drop unrelated manual-only settings.
+  if (key !== 'hotkey' && CONFIG_SCHEMA.some((s) => s.key.startsWith(key + '.')))
+    return `Change individual fields of ${key}; replacing the group could discard unreviewed settings`;
+  if (
+    key === 'commands' &&
+    isRecord(value) &&
+    Object.values(value).some((v) => isRecord(v) && Object.hasOwn(v, 'confirmationRequired'))
+  )
+    return 'Command confirmation policy must be edited manually';
+  if (key.startsWith('commands.') && isRecord(value) && Object.hasOwn(value, 'confirmationRequired'))
+    return 'Command confirmation policy must be edited manually';
+}
+function protectedConfirmations(before: Record<string, unknown>, after: Record<string, unknown>) {
+  if (!isRecord(before.commands)) return;
+  for (const [id, entry] of Object.entries(before.commands)) {
+    if (!isRecord(entry) || !Object.hasOwn(entry, 'confirmationRequired')) continue;
+    const updated = isRecord(after.commands) ? after.commands[id] : undefined;
+    if (!isRecord(updated) || updated.confirmationRequired !== entry.confirmationRequired)
+      throw new Error('Cannot remove a command confirmation policy via a parent edit');
+  }
+}
+function validateEndpointMap(key: string, v: unknown): boolean {
+  if (!isRecord(v)) return false;
+  return Object.values(v).every((entry) => {
+    if (!isRecord(entry)) return false;
+    const prompt = key === 'promptTargets';
+    const http = !prompt && entry.transport === 'http';
+    if (!prompt && !http && entry.transport !== 'stdio') return false;
+    if (typeof entry[http ? 'endpoint' : 'command'] !== 'string') return false;
+    const strings = prompt
+      ? ['title', 'description', 'command', 'cwd']
+      : http
+        ? ['transport', 'name', 'description', 'endpoint']
+        : ['transport', 'name', 'description', 'command', 'cwd'];
+    return Object.entries(entry).every(([k, x]) =>
+      strings.includes(k)
+        ? typeof x === 'string'
+        : k === 'enabled' && !prompt
+          ? typeof x === 'boolean'
+          : k === 'args' && !http
+            ? Array.isArray(x) && x.every((a) => typeof a === 'string')
+            : k === (http ? 'headers' : 'env') &&
+              isRecord(x) &&
+              Object.values(x).every((a) => typeof a === 'string'),
+    );
+  });
+}
 function validateValue(key: string, value: unknown): { valid: boolean; error?: string } {
-  // Validate command-ID arrays before falling through to generic handling
-  if (key === "suggested.excludedCommands" || key === "hiddenCommands") {
-    const errors = validateCommandIdList(value, key);
-    return {
-      valid: errors.length === 0,
-      error: errors.length === 0 ? undefined : errors.map((e) => e.message).join("; "),
-    };
+  const invalid = (message: string) => ({ valid: false, error: message });
+  const schema = CONFIG_SCHEMA.find((s) => s.key === key);
+  if (
+    key === 'hotkey' ||
+    schema?.type === 'HotkeyConfig' ||
+    key === 'hotkey.key' ||
+    key === 'hotkey.modifiers'
+  ) {
+    const field = key.startsWith('hotkey.') ? key.replace('hotkey.', 'shortcut.') : 'shortcut';
+    const errors = validateCommandConfigFieldValue(field, value, key);
+    if (errors.length) return invalid(errors.map((e) => e.message).join('; '));
+    return { valid: true };
   }
-
-  const schema = CONFIG_SCHEMA.find(s => s.key === key);
   if (!schema) {
-    return { valid: true }; // Unknown key - allow but warn
-  }
-
-  // Type validation
-  const type = schema.type;
-
-  // Full HotkeyConfig values share the command-shortcut shape validation
-  if (type.includes('HotkeyConfig') && value !== undefined) {
-    const errors = validateCommandConfigFieldValue('shortcut', value, key);
-    if (errors.length > 0) {
-      return { valid: false, error: errors.map((e) => e.message).join('; ') };
-    }
-  }
-
-  if (key === 'dictation.screenSpelling' && !['off','accessibility','accessibilityAndOcr'].includes(String(value))) {
-    return { valid: false, error: 'Choose off, accessibility or accessibilityAndOcr' };
-  }
-
-  if (key === 'hotkey.modifiers') {
-    if (!Array.isArray(value)) {
-      return { valid: false, error: 'hotkey.modifiers must be an array' };
-    }
-    const validMods: KeyModifier[] = ['meta', 'ctrl', 'alt', 'shift'];
-    for (const mod of value) {
-      if (!validMods.includes(mod as KeyModifier)) {
-        return { valid: false, error: `Invalid modifier: ${mod}. Valid modifiers: ${validMods.join(', ')}` };
+    // Allow replacing a documented group only when *every* child has a rule.
+    if (CONFIG_SCHEMA.some((s) => s.key.startsWith(key + '.')) && isRecord(value)) {
+      for (const [child, v] of Object.entries(value)) {
+        if (child.includes('.') || !child) return invalid('Invalid property in ' + key);
+        const check = validateConfigChange({ key: key + '.' + child, value: v }, false);
+        if (!check.valid) return invalid(check.errors.map((e) => e.message).join('; '));
       }
+      return { valid: true };
     }
+    return invalid('Unknown or unsupported config key: ' + key);
   }
-
-  if (key === 'windowManagement.snapMode' && value !== undefined) {
-    const validModes: SnapMode[] = ['off', 'simple', 'expanded', 'precision'];
-    if (!validModes.includes(value as SnapMode)) {
-      return {
-        valid: false,
-        error: `windowManagement.snapMode must be one of: ${validModes.join(', ')}`,
-      };
-    }
+  const type = schema.type.replace(' | undefined', '');
+  let ok: boolean;
+  if (type === 'number') ok = typeof value === 'number' && Number.isFinite(value);
+  else if (type === 'boolean' || type === 'string') ok = typeof value === type;
+  else if (type === 'string[]') ok = Array.isArray(value) && value.every((x) => typeof x === 'string');
+  else if (type === 'number[]') ok = Array.isArray(value) && value.every(Number.isSafeInteger);
+  else if (type.startsWith('"')) ok = type.split(' | ').some((t) => JSON.parse(t) === value);
+  else if (key === 'promptTargets' || key === 'mcp.servers') ok = validateEndpointMap(key, value);
+  else ok = false;
+  if (!ok) return invalid(key + ' must match ' + type);
+  if (typeof value === 'number') {
+    if (
+      /^(processLimits\.|watcher\.|clipboardHistoryMaxTextLength$|suggested\.maxItems$|dictation\.maxDurationSecs$)/.test(
+        key,
+      ) &&
+      (!Number.isSafeInteger(value) || value < 0)
+    )
+      return invalid(key + ' must be a nonnegative integer');
+    if (key === 'watcher.maxNotifyErrors' && value > 0xffffffff) return invalid(key + ' exceeds u32');
+    if (
+      /^(?:effects\.|padding\.|layout\.|dictation\.silenceRms|.*FontSize$|uiScale$)/.test(key) &&
+      !Number.isFinite(Math.fround(value))
+    )
+      return invalid(key + ' exceeds f32');
+    if (key.includes('FontSize') && (value < 8 || value > 72))
+      return invalid('Font size must be between 8 and 72');
+    if (key === 'uiScale' && (value < 0.5 || value > 3))
+      return invalid('uiScale must be between 0.5 and 3.0');
+    if (key.startsWith('padding.') && value < 0) return invalid('Padding cannot be negative');
+    if (key === 'effects.intensity' && (value < 0 || value > 1))
+      return invalid('effects.intensity must be between 0 and 1');
+    if (key === 'dictation.silenceRms' && (value < 0 || value > 0.5))
+      return invalid('dictation.silenceRms must be between 0 and 0.5');
   }
-
-  if (key === 'designs.cmd1Behavior' && value !== undefined) {
-    const validBehaviors: Cmd1Behavior[] = ['picker', 'cycle'];
-    if (!validBehaviors.includes(value as Cmd1Behavior)) {
-      return {
-        valid: false,
-        error: `designs.cmd1Behavior must be one of: ${validBehaviors.join(', ')}`,
-      };
-    }
-  }
-
-  if (key === 'brainRemote.telegramAllowedUserIds' && value !== undefined) {
-    if (!Array.isArray(value)) {
-      return { valid: false, error: 'brainRemote.telegramAllowedUserIds must be an array' };
-    }
-    for (const id of value) {
-      if (typeof id !== 'number' || !Number.isInteger(id)) {
-        return {
-          valid: false,
-          error: `brainRemote.telegramAllowedUserIds entries must be integer Telegram user IDs (got: ${JSON.stringify(id)})`,
-        };
-      }
-    }
-  }
-
-  if (key === 'windowAppearance.vibrancy' && value !== undefined) {
-    const validMaterials: WindowVibrancyMaterial[] = ['default', 'none', 'hud', 'popover', 'sidebar'];
-    if (!validMaterials.includes(value as WindowVibrancyMaterial)) {
-      return {
-        valid: false,
-        error: `windowAppearance.vibrancy must be one of: ${validMaterials.join(', ')}`,
-      };
-    }
-  }
-
-  if (key === 'windowAppearance.animations' && value !== undefined) {
-    const validModes: WindowAnimationMode[] = ['system', 'reduced', 'off'];
-    if (!validModes.includes(value as WindowAnimationMode)) {
-      return {
-        valid: false,
-        error: `windowAppearance.animations must be one of: ${validModes.join(', ')}`,
-      };
-    }
-  }
-
-  if (key === 'powerSyntax.captureSigil' && value !== undefined) {
-    const validSigils: PowerSyntaxCaptureSigil[] = [';', '+', 'both'];
-    if (!validSigils.includes(value as PowerSyntaxCaptureSigil)) {
-      return {
-        valid: false,
-        error: `powerSyntax.captureSigil must be one of: ${validSigils.join(', ')}`,
-      };
-    }
-  }
-
-  if (key === 'powerSyntax.commandSigil' && value !== undefined) {
-    const validSigils: PowerSyntaxCommandSigil[] = ['>', 'disabled'];
-    if (!validSigils.includes(value as PowerSyntaxCommandSigil)) {
-      return {
-        valid: false,
-        error: `powerSyntax.commandSigil must be one of: ${validSigils.join(', ')}`,
-      };
-    }
-  }
-  
-  if (key === 'hotkey.key') {
-    const validKeys = [
-      'KeyA', 'KeyB', 'KeyC', 'KeyD', 'KeyE', 'KeyF', 'KeyG',
-      'KeyH', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyM', 'KeyN',
-      'KeyO', 'KeyP', 'KeyQ', 'KeyR', 'KeyS', 'KeyT', 'KeyU',
-      'KeyV', 'KeyW', 'KeyX', 'KeyY', 'KeyZ',
-      'Digit0', 'Digit1', 'Digit2', 'Digit3', 'Digit4',
-      'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9',
-      'Space', 'Enter', 'Semicolon',
-      'F1', 'F2', 'F3', 'F4', 'F5', 'F6',
-      'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
-    ];
-    if (!validKeys.includes(value as string)) {
-      return { valid: false, error: `Invalid key: ${value}. Valid keys: ${validKeys.join(', ')}` };
-    }
-  }
-  
-  if (type.includes('number') && value !== undefined && value !== null) {
-    if (typeof value !== 'number' || isNaN(value)) {
-      return { valid: false, error: `${key} must be a number` };
-    }
-    // Range validations
-    if (key === 'uiScale' && (value < 0.5 || value > 3.0)) {
-      return { valid: false, error: 'uiScale must be between 0.5 and 3.0' };
-    }
-    if (key.includes('FontSize') && (value < 8 || value > 72)) {
-      return { valid: false, error: 'Font size must be between 8 and 72' };
-    }
-    if (key.includes('padding') && value < 0) {
-      return { valid: false, error: 'Padding cannot be negative' };
-    }
-    if (key === 'effects.intensity' && (value < 0 || value > 1)) {
-      return { valid: false, error: 'effects.intensity must be between 0.0 and 1.0' };
-    }
-    if (key === 'dictation.silenceRms' && (value < 0 || value > 0.5)) {
-      return { valid: false, error: 'dictation.silenceRms must be between 0.0 and 0.5' };
-    }
-    if (key === 'dictation.maxDurationSecs' && value < 0) {
-      return { valid: false, error: 'dictation.maxDurationSecs cannot be negative (0 disables the guard)' };
-    }
-  }
-  
-  if (type === 'boolean' && typeof value !== 'boolean') {
-    return { valid: false, error: `${key} must be a boolean` };
-  }
-  
   return { valid: true };
-}
-
-/**
- * Return a copy of `content` with comment text replaced by spaces.
- *
- * Line (`// ...`) and block comments are blanked while newlines and string
- * literal contents are preserved, so the masked copy has exactly the same
- * length and line structure as the original. Regex matches computed against
- * the masked copy therefore map 1:1 onto the original source, which lets the
- * writers below locate real properties without ever matching the commented
- * example blocks that ship in config-template.ts.
- */
-function maskComments(content: string): string {
-  let result = '';
-  let i = 0;
-  let state: 'code' | 'line' | 'block' | 'string' = 'code';
-  let stringChar = '';
-
-  while (i < content.length) {
-    const char = content[i];
-    const next = content[i + 1];
-
-    if (state === 'code') {
-      if (char === '/' && next === '/') {
-        state = 'line';
-        result += '  ';
-        i += 2;
-        continue;
-      }
-      if (char === '/' && next === '*') {
-        state = 'block';
-        result += '  ';
-        i += 2;
-        continue;
-      }
-      if (char === '"' || char === "'" || char === '`') {
-        state = 'string';
-        stringChar = char;
-      }
-      result += char;
-      i += 1;
-      continue;
-    }
-
-    if (state === 'line') {
-      if (char === '\n') {
-        state = 'code';
-        result += '\n';
-      } else {
-        result += ' ';
-      }
-      i += 1;
-      continue;
-    }
-
-    if (state === 'block') {
-      if (char === '*' && next === '/') {
-        state = 'code';
-        result += '  ';
-        i += 2;
-        continue;
-      }
-      result += char === '\n' ? '\n' : ' ';
-      i += 1;
-      continue;
-    }
-
-    // state === 'string'
-    if (char === '\\') {
-      result += char + (next ?? '');
-      i += 2;
-      continue;
-    }
-    if (char === stringChar) {
-      state = 'code';
-    }
-    result += char;
-    i += 1;
-  }
-
-  return result;
-}
-
-/**
- * Index of the last non-whitespace character in `masked` before `end`,
- * or -1 when there is none. Because comments are blanked in the masked
- * copy, this finds the last real code token (e.g. to decide whether a
- * trailing comma is needed and where to place it).
- */
-function lastCodeCharIndex(masked: string, end: number): number {
-  for (let i = end - 1; i >= 0; i--) {
-    if (!/\s/.test(masked[i])) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-/**
- * Insert `property` as a new top-level entry just before the closing
- * `} satisfies Config` / `} as Config`, placing any needed comma directly
- * after the last real (non-comment) token so trailing comment blocks are
- * left untouched.
- */
-function insertTopLevelProperty(content: string, masked: string, property: string): string {
-  const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
-  const match = masked.match(insertRegex);
-  if (!match || match.index === undefined) {
-    return content;
-  }
-
-  const closeStart = match.index;
-  const lastCode = lastCodeCharIndex(masked, closeStart);
-  const needsComma = lastCode >= 0 && masked[lastCode] !== ',' && masked[lastCode] !== '{';
-
-  let before = content.slice(0, closeStart);
-  if (needsComma) {
-    before = before.slice(0, lastCode + 1) + ',' + before.slice(lastCode + 1);
-  }
-  return `${before}\n  ${property}${content.slice(closeStart)}`;
-}
-
-/**
- * Update a value in config.ts while preserving formatting
- * Uses regex-based replacement for simple cases
- *
- * Keys are located against a comment-masked copy of the source so commented
- * example lines (e.g. `// aiHotkeyEnabled: true,` in config-template.ts) are
- * never matched or edited. A key that exists only in comments is treated as
- * absent and inserted as a real property.
- */
-function updateConfigValue(key: string, value: unknown): void {
-  let content = readConfigFile();
-
-  if (!content) {
-    // Create new config file
-    content = createDefaultConfig();
-  }
-
-  const parts = key.split('.');
-  const valueStr = JSON.stringify(value);
-  const masked = maskComments(content);
-
-  // Strategy: For nested keys, we need to find and update the specific property
-  // This is a simplified approach - for complex cases, consider ts-morph
-
-  if (parts.length === 1) {
-    // Top-level key
-    const keyName = parts[0];
-    // Try to find existing key and replace - use a more flexible pattern
-    // Match the key name followed by colon and value, stopping at comma, newline, or closing brace
-    const existingKeyRegex = new RegExp(`(["']?${keyName}["']?\\s*:\\s*)([^,}\\n]+(?:\\{[^}]*\\})?)`);
-    const match = masked.match(existingKeyRegex);
-
-    if (match && match.index !== undefined) {
-      // Key exists in real code - replace just the value span. Trailing
-      // masked-comment characters are spaces, so trimming them keeps any
-      // inline comment after the value intact.
-      const valueStart = match.index + match[1].length;
-      const valueLength = match[2].replace(/\s+$/, '').length;
-      content = content.slice(0, valueStart) + valueStr + content.slice(valueStart + valueLength);
-    } else {
-      // Key doesn't exist (or only appears in comments) - add it before the
-      // closing } satisfies/as Config
-      content = insertTopLevelProperty(content, masked, `${keyName}: ${valueStr}`);
-    }
-  } else if (parts.length === 2) {
-    // Nested key (e.g., hotkey.key, padding.top)
-    const [parent, child] = parts;
-
-    // Check if parent object exists - use a pattern that captures nested braces properly
-    const parentRegex = new RegExp(`(["']?${parent}["']?\\s*:\\s*)\\{([^}]*)\\}`, 's');
-    const parentMatch = masked.match(parentRegex);
-
-    if (parentMatch && parentMatch.index !== undefined) {
-      // Parent exists - update or add the child property
-      const innerStart = parentMatch.index + parentMatch[1].length + 1; // past the "{"
-      const maskedInner = parentMatch[2];
-      const innerEnd = innerStart + maskedInner.length;
-      const childRegex = new RegExp(`(["']?${child}["']?\\s*:\\s*)([^,}\\n]+)`);
-      const childMatch = maskedInner.match(childRegex);
-
-      if (childMatch && childMatch.index !== undefined) {
-        // Child exists - update it
-        const valueStart = innerStart + childMatch.index + childMatch[1].length;
-        const valueLength = childMatch[2].replace(/\s+$/, '').length;
-        content = content.slice(0, valueStart) + valueStr + content.slice(valueStart + valueLength);
-      } else {
-        // Child doesn't exist - add it at the end of the parent object,
-        // placing any needed comma after the last real (non-comment) token
-        const lastCode = lastCodeCharIndex(maskedInner, maskedInner.length);
-        const needsComma = lastCode >= 0 && maskedInner[lastCode] !== ',';
-        let inner = content.slice(innerStart, innerEnd);
-        if (needsComma) {
-          inner = inner.slice(0, lastCode + 1) + ',' + inner.slice(lastCode + 1);
-        }
-        const newInner = `${inner.trimEnd()}\n    ${child}: ${valueStr}\n  `;
-        content = content.slice(0, innerStart) + newInner + content.slice(innerEnd);
-      }
-    } else {
-      // Parent doesn't exist (or only appears in comments) - create it with
-      // the child
-      content = insertTopLevelProperty(content, masked, `${parent}: {\n    ${child}: ${valueStr}\n  }`);
-    }
-  } else {
-    throw new Error(`Deep nesting (${parts.length} levels) not supported. Max 2 levels.`);
-  }
-
-  writeConfigFile(content);
-}
-
-/**
- * Reset a value to default in config.ts
- */
-function resetConfigValue(key: string): void {
-  const defaultValue = getNestedValue(DEFAULTS as unknown as Record<string, unknown>, key);
-  
-  if (defaultValue === undefined && !CONFIG_SCHEMA.some(s => s.key === key)) {
-    throw new Error(`Unknown config key: ${key}`);
-  }
-  
-  // For optional fields with undefined default, we remove the key
-  if (defaultValue === undefined || defaultValue === '') {
-    // Remove the key from config
-    let content = readConfigFile();
-    if (!content) {
-      return; // Nothing to reset
-    }
-
-    const parts = key.split('.');
-    const regex = parts.length === 1
-      ? new RegExp(`\\s*["']?${parts[0]}["']?\\s*:\\s*[^,}\\n]+,?\\n?`, 'g')
-      : new RegExp(`\\s*["']?${parts[1]}["']?\\s*:\\s*[^,}\\n]+,?`, 'g');
-
-    // Locate removals against the comment-masked source so commented example
-    // lines are never deleted, then splice the spans out of the original.
-    const masked = maskComments(content);
-    const spans: Array<[number, number]> = [];
-    for (const match of masked.matchAll(regex)) {
-      if (match.index === undefined) {
-        continue;
-      }
-      let end = match.index + match[0].length;
-      // Trailing masked-comment characters are spaces; keep them (and the
-      // inline comment they stand for) in the file.
-      while (end > match.index && (masked[end - 1] === ' ' || masked[end - 1] === '\t')) {
-        end -= 1;
-      }
-      spans.push([match.index, end]);
-    }
-    for (const [start, end] of spans.reverse()) {
-      content = content.slice(0, start) + content.slice(end);
-    }
-
-    writeConfigFile(content);
-  } else {
-    // Set to default value
-    updateConfigValue(key, defaultValue);
-  }
 }
 
 function normalizeShortcutKey(key: string): KeyCode {
@@ -1789,7 +1374,7 @@ function normalizeShortcutKey(key: string): KeyCode {
     "`": "Backquote",
   };
 
-  if (aliases[lower]) {
+  if (Object.hasOwn(aliases,lower)) {
     return aliases[lower];
   }
   if (/^f([1-9]|1[0-2])$/i.test(trimmed)) {
@@ -1820,414 +1405,221 @@ function normalizeShortcutKey(key: string): KeyCode {
   throw new Error(`Invalid shortcut key: ${key}`);
 }
 
-function findCommandsPropertyRange(content: string): [number, number] | null {
-  const match = content.match(/(^|\n)([ \t]*)commands\s*:\s*\{/);
-  if (!match || match.index === undefined) {
-    return null;
-  }
-
-  const start = match.index + match[1].length;
-  const openBrace = content.indexOf("{", start);
-  let depth = 0;
-  let inString: string | null = null;
-  let escaped = false;
-
-  for (let i = openBrace; i < content.length; i++) {
-    const char = content[i];
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === "\\") {
-        escaped = true;
-      } else if (char === inString) {
-        inString = null;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === "`") {
-      inString = char;
-      continue;
-    }
-    if (char === "{") {
-      depth += 1;
-    } else if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        let end = i + 1;
-        while (content[end] === " " || content[end] === "\t") end += 1;
-        if (content[end] === ",") end += 1;
-        return [start, end];
-      }
-    }
-  }
-
-  return null;
+function readConfig() {
+  const source = readSource(CONFIG_PATH);
+  return {
+    config: source === null ? null : values(source),
+    revision: revision(source),
+    path: CONFIG_PATH,
+    exists: source !== null,
+  };
 }
-
-function formatCommandConfig(config: CommandConfig): string {
-  const fields: string[] = [];
-  if (config.shortcut) {
-    fields.push(`shortcut: ${JSON.stringify(config.shortcut)}`);
-  }
-  if (config.hidden !== undefined) {
-    fields.push(`hidden: ${JSON.stringify(config.hidden)}`);
-  }
-  if (config.confirmationRequired !== undefined) {
-    fields.push(`confirmationRequired: ${JSON.stringify(config.confirmationRequired)}`);
-  }
-  return `{ ${fields.join(", ")} }`;
-}
-
-function formatCommandsProperty(commands: Record<string, CommandConfig>): string {
-  const entries = Object.entries(commands).sort(([a], [b]) => a.localeCompare(b));
-  if (entries.length === 0) {
-    return "";
-  }
-  const lines = entries.map(
-    ([commandId, commandConfig]) =>
-      `    ${JSON.stringify(commandId)}: ${formatCommandConfig(commandConfig)},`,
+// The SDK and MCP results are tool-visible. Never include configured bot
+// tokens, target environments or server credentials in their get/list output.
+function safeValue(key: string, value: unknown): unknown {
+  if (value === undefined) return value;
+  if (/^(?:brainRemote\.telegramBotToken|mcp\.servers|promptTargets|ai\.profiles)(?:\.|$)/.test(key))
+    return '[redacted]';
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [k, safeValue(key ? key + '.' + k : k, v)]),
   );
-  return `  commands: {\n${lines.join("\n")}\n  },`;
 }
-
-function writeCommandsConfig(commands: Record<string, CommandConfig>): void {
-  let content = readConfigFile() ?? createDefaultConfig();
-  const formatted = formatCommandsProperty(commands);
-  const range = findCommandsPropertyRange(content);
-
-  if (range) {
-    const prefix = content.slice(0, range[0]);
-    const suffix = content.slice(range[1]);
-    content = formatted
-      ? `${prefix}${formatted}${suffix}`
-      : `${prefix}${suffix.replace(/^\n?/, "")}`;
-  } else if (formatted) {
-    const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
-    const match = content.match(insertRegex);
-    if (!match) {
-      throw new Error("Could not find config export object terminator");
-    }
-    const beforeClose = content.slice(0, content.indexOf(match[0]));
-    const needsComma = !beforeClose.trimEnd().endsWith(",") && !beforeClose.trimEnd().endsWith("{");
-    content = content.replace(insertRegex, `${needsComma ? "," : ""}\n${formatted}\n$2 $3 Config`);
-  }
-
-  writeConfigFile(content);
-}
-
-async function getMutableCommandsConfig(): Promise<Record<string, CommandConfig>> {
-  const config = await loadConfig();
-  return { ...(config?.commands ?? {}) };
-}
-
-// =============================================================================
-// Commands
-// =============================================================================
-
-async function cmdGet(key?: string): Promise<void> {
-  try {
-    const config = await loadConfig();
-    
-    if (!config) {
-      success({
-        exists: false,
-        path: CONFIG_PATH,
-        message: "Config file does not exist. Using defaults.",
-        config: DEFAULTS
-      });
-      return;
-    }
-    
-    if (key) {
-      const value = getNestedValue(config as unknown as Record<string, unknown>, key);
-      const defaultValue = getNestedValue(DEFAULTS as unknown as Record<string, unknown>, key);
-      
-      success({
-        key,
-        value: value ?? defaultValue,
-        isDefault: value === undefined,
-        default: defaultValue
-      });
-    } else {
-      // Return full config merged with defaults
-      const merged = { ...DEFAULTS, ...config, dictation: { ...DEFAULTS.dictation, ...config.dictation } };
-      success({
-        path: CONFIG_PATH,
-        config: merged
-      });
-    }
-  } catch (e) {
-    error(e instanceof Error ? e.message : String(e));
-  }
-}
-
-async function cmdSet(key: string, value: string): Promise<void> {
-  if (!key || value === undefined) {
-    error("Usage: bun scripts/config-cli.ts set <key> <value>");
-  }
-  
-  try {
-    // Parse the value
-    const parsedValue = parseValue(value, key);
-    
-    // Validate the value
-    const validation = validateValue(key, parsedValue);
-    if (!validation.valid) {
-      error(validation.error!);
-    }
-    
-    // Update the config file
-    updateConfigValue(key, parsedValue);
-    
-    // Read back to verify
-    const config = await loadConfig();
-    const newValue = config ? getNestedValue(config as unknown as Record<string, unknown>, key) : parsedValue;
-    
-    success({
-      key,
-      value: newValue,
-      message: `Successfully set ${key} to ${JSON.stringify(parsedValue)}`
+function cmdGet(key?: string) {
+  const { config, ...meta } = readConfig();
+  if (!key)
+    return success({
+      ...meta,
+      config: safeValue('', {
+        ...DEFAULTS,
+        ...config,
+        dictation: { ...DEFAULTS.dictation, ...(config?.dictation as object) },
+      }),
     });
-  } catch (e) {
-    error(e instanceof Error ? e.message : String(e));
-  }
-}
-
-async function cmdSetCommandShortcut(args: string[]): Promise<void> {
-  const [commandId, key, cmdStr, ctrlStr, altStr, shiftStr, ...rest] = args;
-  if (!commandId || !key || cmdStr === undefined || ctrlStr === undefined || altStr === undefined || shiftStr === undefined) {
-    error("Usage: bun scripts/config-cli.ts set-command-shortcut <command_id> <key> <cmd> <ctrl> <alt> <shift> [--skip-existing]");
-  }
-
-  const shortcut: HotkeyConfig = {
-    key: normalizeShortcutKey(key),
-    modifiers: [
-      cmdStr === "true" ? "meta" : undefined,
-      ctrlStr === "true" ? "ctrl" : undefined,
-      altStr === "true" ? "alt" : undefined,
-      shiftStr === "true" ? "shift" : undefined,
-    ].filter(Boolean) as KeyModifier[],
-  };
-
-  const validation = validateCommandConfigValue({
-    shortcut,
-  }, `commands.${commandId}`);
-  if (validation.length > 0) {
-    error(validation.map((entry) => entry.message).join("; "));
-  }
-
-  const commands = await getMutableCommandsConfig();
-  const existing = commands[commandId] ?? {};
-  if (rest.includes("--skip-existing") && existing.shortcut) {
-    success({
-      commandId,
-      skipped: true,
-      shortcut: existing.shortcut,
-      message: `Skipped ${commandId}; config.ts already has a shortcut`,
-    });
-    return;
-  }
-
-  commands[commandId] = {
-    ...existing,
-    shortcut,
-  };
-  writeCommandsConfig(commands);
-
+  const current = getNestedValue(config ?? {}, key),
+    def = defaultValue(key);
   success({
-    commandId,
-    shortcut,
-    message: `Successfully set shortcut for ${commandId}`,
+    ...meta,
+    key,
+    value: safeValue(key, current ?? def),
+    isDefault: current === undefined,
+    default: def,
+    impact: impact(key),
+    manualOnly: manualOnly(key),
+    disableOnly: disableOnly.has(key),
   });
 }
-
-async function cmdRemoveCommandShortcut(commandId: string): Promise<void> {
-  if (!commandId) {
-    error("Usage: bun scripts/config-cli.ts remove-command-shortcut <command_id>");
-  }
-
-  const commands = await getMutableCommandsConfig();
-  const existing = commands[commandId];
-  if (!existing || !existing.shortcut) {
-    success({
-      commandId,
-      removed: false,
-      message: `No shortcut configured for ${commandId}`,
-    });
-    return;
-  }
-
-  const next: CommandConfig = { ...existing };
-  delete next.shortcut;
+function defaultValue(key: string) {
+  return CONFIG_SCHEMA.find((s) => s.key === key)?.default ?? getNestedValue(DEFAULTS, key);
+}
+function assertChange(key: string, value: unknown) {
+  const result = validateConfigChange({ key, value });
+  if (!result.valid) throw new Error(result.errors.map((e) => e.message).join('; '));
+}
+function cmdSet(key: string, raw: string, json: boolean, expected?: string) {
+  if (!key || raw === undefined) throw new Error('set requires a key and value');
+  const value = json ? JSON.parse(raw) : parseValue(raw, key);
+  assertChange(key, value);
+  const rev = mutate(CONFIG_PATH, expected, (source) => {
+    const updated = editLiteral(source ?? createDefaultConfig(), pathParts(key), value);
+    const after = values(updated);
+    // Partial hotkey writes must still produce a complete shortcut.
+    const cmd = analyzeCommandConfigPath(key);
+    if (cmd?.kind === 'parsed' && cmd.fieldPath?.startsWith('shortcut.')) {
+      assertChange(
+        'commands.' + cmd.commandId + '.shortcut',
+        getNestedValue(after, 'commands.' + cmd.commandId + '.shortcut'),
+      );
+    }
+    if (key.startsWith('hotkey.')) assertChange('hotkey', after.hotkey);
+    if (key === 'commands' || key.startsWith('commands.'))
+      protectedConfirmations(values(source ?? createDefaultConfig()), after);
+    if (JSON.stringify(getNestedValue(after, key)) !== JSON.stringify(value))
+      throw new Error('Config edit failed verification');
+    return updated;
+  });
+  success({ key, value, revision: rev, impact: impact(key), message: 'Set ' + key });
+}
+function cmdSetCommandShortcut(args: string[], expected?: string) {
+  const [id, key, ...flags] = args;
   if (
-    next.hidden === undefined &&
-    next.confirmationRequired === undefined
-  ) {
-    delete commands[commandId];
-  } else {
-    commands[commandId] = next;
-  }
-
-  writeCommandsConfig(commands);
-
+    !id ||
+    !isValidCommandId(id) ||
+    !key ||
+    ![4, 5].includes(flags.length) ||
+    (flags.length === 5 && flags[4] !== '--skip-existing') ||
+    flags.slice(0, 4).some((f) => f !== 'true' && f !== 'false')
+  )
+    throw new Error('Invalid set-command-shortcut arguments');
+  const shortcut = {
+    key: normalizeShortcutKey(key),
+    modifiers: ['meta', 'ctrl', 'alt', 'shift'].filter((_, i) => flags[i] === 'true'),
+  };
+  assertChange('commands.' + id + '.shortcut', shortcut);
+  let result: unknown = shortcut,
+    skipped = false;
+  const rev = mutate(CONFIG_PATH, expected, (source) => {
+    const before = source ?? createDefaultConfig();
+    const current = getNestedValue(values(before), 'commands.' + id + '.shortcut');
+    if (flags.includes('--skip-existing') && current !== undefined) {
+      skipped = true;
+      result = current;
+      return before;
+    }
+    return editLiteral(before, ['commands', id, 'shortcut'], shortcut);
+  });
   success({
-    commandId,
-    removed: true,
-    message: `Successfully removed shortcut for ${commandId}`,
+    commandId: id,
+    shortcut: result,
+    skipped,
+    revision: rev,
+    message: skipped ? 'Skipped existing shortcut' : 'Set shortcut',
   });
 }
-
-async function cmdList(): Promise<void> {
-  try {
-    const config = await loadConfig();
-    
-    const options = CONFIG_SCHEMA.map(schema => {
-      const currentValue = config 
-        ? getNestedValue(config as unknown as Record<string, unknown>, schema.key)
-        : undefined;
-      const effectiveValue = currentValue ?? schema.default;
-      
+function cmdRemoveCommandShortcut(id: string, expected?: string) {
+  if (!id || !isValidCommandId(id)) throw new Error('Invalid command ID');
+  let removed = false;
+  const rev = mutate(CONFIG_PATH, expected, (source) => {
+    if (source === null) return null;
+    const commands = values(source).commands;
+    if (commands !== undefined && !isRecord(commands)) throw new Error('Expected commands object');
+    const entry = isRecord(commands) ? commands[id] : undefined;
+    if (entry !== undefined && !isRecord(entry)) throw new Error('Expected command object');
+    if (!isRecord(entry) || !Object.hasOwn(entry, 'shortcut')) return source;
+    removed = true;
+    return editLiteral(
+      source,
+      Object.keys(entry).length === 1 ? ['commands', id] : ['commands', id, 'shortcut'],
+      undefined,
+    );
+  });
+  success({
+    commandId: id,
+    removed,
+    revision: rev,
+    message: removed ? 'Removed shortcut' : 'No shortcut configured',
+  });
+}
+function cmdList() {
+  const { config, ...meta } = readConfig();
+  success({
+    ...meta,
+    options: CONFIG_SCHEMA.map((s) => {
+      const current = getNestedValue(config ?? {}, s.key);
       return {
-        key: schema.key,
-        type: schema.type,
-        current: effectiveValue,
-        default: schema.default,
-        isCustom: currentValue !== undefined && currentValue !== schema.default,
-        description: schema.description,
-        example: schema.example
+        ...s,
+        current: safeValue(s.key, current ?? s.default),
+        isCustom: current !== undefined && JSON.stringify(current) !== JSON.stringify(s.default),
+        impact: impact(s.key),
+        manualOnly: manualOnly(s.key),
+        disableOnly: disableOnly.has(s.key),
       };
-    });
-    
-    success({
-      path: CONFIG_PATH,
-      exists: config !== null,
-      options
-    });
+    }),
+  });
+}
+function cmdValidate() {
+  try {
+    const { config, ...meta } = readConfig();
+    const errors = [];
+    for (const [key, value] of Object.entries(config ?? {})) {
+      const result = validateConfigChange({ key, value }, false);
+      for (const e of result.errors) errors.push(e.message);
+    }
+    if (errors.length) {
+      output({ success: false, valid: false, errors });
+      process.exitCode = 1;
+    } else success({ ...meta, valid: true });
   } catch (e) {
-    error(e instanceof Error ? e.message : String(e));
+    output({ success: false, valid: false, errors: [String(e)] });
+    process.exitCode = 1;
   }
 }
-
-async function cmdValidate(): Promise<void> {
-  try {
-    // Check if file exists
-    if (!fs.existsSync(CONFIG_PATH)) {
-      success({
-        valid: true,
-        exists: false,
-        message: "Config file does not exist. Default config will be used."
-      });
-      return;
-    }
-    
-    // Try to load and parse the config
-    const config = await loadConfig();
-    
-    if (!config) {
-      error("Failed to parse config file");
-    }
-    
-    // Validate required fields
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    
-    if (!config.hotkey) {
-      errors.push("Missing required field: hotkey");
-    } else {
-      if (!config.hotkey.modifiers) {
-        errors.push("Missing required field: hotkey.modifiers");
+function cmdReset(key?: string, expected?: string) {
+  if (
+    key !== undefined &&
+    (!key ||
+      (!CONFIG_SCHEMA.some((s) => s.key === key) && analyzeCommandConfigPath(key)?.kind !== 'parsed'))
+  )
+    throw new Error('Unknown or unsupported config key: ' + key);
+  if (key && (manualOnly(key) || disableOnly.has(key))) throw new Error('Manual-only reset: ' + key);
+  const cmd = key ? analyzeCommandConfigPath(key) : null;
+  if (cmd?.kind === 'parsed' && cmd.fieldPath?.startsWith('shortcut.'))
+    throw new Error('Reset the whole shortcut, not one required field');
+  const def = key ? defaultValue(key) : undefined;
+  const rev = mutate(CONFIG_PATH, expected, (source) => {
+    if (source === null) return null;
+    const before = values(source);
+    if (!key) {
+      function canReset(k: string, v: unknown): boolean {
+        if (manualOnly(k) || disableOnly.has(k)) return false;
+        if (k === 'commands' || k === 'hotkey' || CONFIG_SCHEMA.some((s) => s.key === k))
+          return validateConfigChange({ key: k, value: v }).valid;
+        return (
+          CONFIG_SCHEMA.some((s) => s.key.startsWith(k + '.')) &&
+          isRecord(v) &&
+          Object.entries(v).every(([child, x]) => !child.includes('.') && canReset(k + '.' + child, x))
+        );
       }
-      if (!config.hotkey.key) {
-        errors.push("Missing required field: hotkey.key");
-      }
+      if (!Object.entries(before).every(([k, v]) => canReset(k, v)))
+        throw new Error(
+          'Full reset includes manual-only or unsupported settings; edit config.ts yourself',
+        );
+      protectedConfirmations(before, {});
+      return createDefaultConfig();
     }
-    
-    // Validate all present values
-    const configRecord = config as unknown as Record<string, unknown>;
-    for (const schema of CONFIG_SCHEMA) {
-      const value = getNestedValue(configRecord, schema.key);
-      if (value !== undefined) {
-        const validation = validateValue(schema.key, value);
-        if (!validation.valid) {
-          errors.push(validation.error!);
-        }
-      }
-    }
-    
-    // Check for unknown keys
-    const knownTopLevel = [
-      'hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize',
-      'terminalFontSize', 'uiScale', 'builtIns', 'processLimits',
-      'jevIntentEnabled', 'clipboardHistoryMaxTextLength', 'clipboardHistorySecretRejection',
-      'suggested', 'notesHotkey', 'notesHotkeyEnabled', 'notesFolder',
-      'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
-      'dictationHotkey', 'dictationHotkeyEnabled',
-      'inlineAiHotkey', 'inlineAiHotkeyEnabled',
-      'rewriteHotkey', 'rewriteHotkeyEnabled', 'watcher', 'layout',
-      'theme', 'designs', 'dictation', 'ai', 'spineStyles', 'spineCommands',
-      'windowManagement', 'windowAppearance', 'effects', 'commands',
-      'promptTargets', 'unifiedSearch', 'claudeCode', 'mcp',
-      'hiddenCommands', 'brainRemote', 'powerSyntax', 'tray', 'updates',
-    ];
-    for (const key of Object.keys(config)) {
-      if (!knownTopLevel.includes(key)) {
-        warnings.push(`Unknown config key: ${key}`);
-      }
-    }
-    
-    if (errors.length > 0) {
-      output({
-        success: false,
-        valid: false,
-        errors,
-        warnings: warnings.length > 0 ? warnings : undefined
-      });
-      process.exit(1);
-    }
-    
-    success({
-      valid: true,
-      message: "Config is valid",
-      warnings: warnings.length > 0 ? warnings : undefined
-    });
-  } catch (e) {
-    output({
-      success: false,
-      valid: false,
-      errors: [e instanceof Error ? e.message : String(e)]
-    });
-    process.exit(1);
-  }
-}
-
-async function cmdReset(key?: string): Promise<void> {
-  try {
-    if (key) {
-      // Reset specific key
-      resetConfigValue(key);
-      const defaultValue = getNestedValue(DEFAULTS as unknown as Record<string, unknown>, key);
-      
-      success({
-        key,
-        value: defaultValue,
-        message: `Reset ${key} to default value`
-      });
-    } else {
-      // Reset entire config
-      const content = createDefaultConfig();
-      writeConfigFile(content);
-      
-      success({
-        message: "Reset config to defaults",
-        config: {
-          hotkey: DEFAULTS.hotkey
-        }
-      });
-    }
-  } catch (e) {
-    error(e instanceof Error ? e.message : String(e));
-  }
+    // Reset means inherit again, not freeze the CLI's current default. The
+    // main hotkey's two required fields must still form a valid hotkey.
+    const updated = editLiteral(source, pathParts(key), key.startsWith('hotkey.') ? def : undefined);
+    if (key.startsWith('commands.') || key === 'commands')
+      protectedConfirmations(before, values(updated));
+    return updated;
+  });
+  success({
+    key,
+    value: def,
+    revision: rev,
+    message: key ? 'Reset ' + key : 'Reset config to defaults',
+  });
 }
 
 function debugLog(event: string, details: Record<string, unknown> = {}): void {
@@ -2239,7 +1631,12 @@ function debugLog(event: string, details: Record<string, unknown> = {}): void {
   );
 }
 
-function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult {
+function validateConfigChange(change: ConfigChange, scoped = true): ValidateConfigChangeResult {
+  if (!isRecord(change) || typeof change.key !== 'string' || !change.key || !Object.hasOwn(change,'value') || change.value === undefined) {
+    return {valid:false,errors:[{path:'',code:'invalidChange',message:'Expected a key and JSON value'}],warnings:[]};
+  }
+  const denied = scoped ? permissionError(change.key, change.value) : undefined;
+  if (denied) return {valid:false,errors:[{path:change.key,code:'manualOnly',message:denied}],warnings:[]};
   if (change.key === "commands") {
     const result = validateCommandsConfig(change.value);
     debugLog('validate_change_commands_root', {
@@ -2376,7 +1773,9 @@ USAGE:
 
 COMMANDS:
   get [key]           Read a config value (or all values if no key specified)
-  set <key> <value>   Set a config value
+  set <key> <value>   Set a config value (human-friendly syntax)
+  set-json <key> <JSON> [--if-revision <revision>]
+                      Set a typed value, optionally only from a get/list revision
   set-command-shortcut <command_id> <key> <cmd> <ctrl> <alt> <shift>
                       Set a launcher command shortcut in config.ts
   remove-command-shortcut <command_id>
@@ -2442,27 +1841,52 @@ CONFIG FILE:
 // =============================================================================
 
 async function main(): Promise<void> {
+  CONFIG_PATH = configPath();
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     showHelp();
     process.exit(0);
   }
-  
+
   const command = args[0];
-  
+  // Flags are only parsed after required positionals, never out of a JSON value.
+  let expected: string | undefined;
+  if (
+    ['set', 'set-json', 'reset', 'set-command-shortcut', 'remove-command-shortcut'].includes(command) &&
+    args.at(-2) === '--if-revision'
+  ) {
+    expected = args.pop();
+    args.pop();
+    if (!expected || !/^(?:missing|[a-f0-9]{64})$/.test(expected))
+      throw new Error('Expected a valid revision');
+  }
+  const max: Record<string, number> = {
+    get: 2,
+    set: 3,
+    'set-json': 3,
+    reset: 2,
+    'remove-command-shortcut': 2,
+    list: 1,
+    validate: 1,
+    'validate-change': 2,
+  };
+  if (Object.hasOwn(max, command) && args.length > max[command])
+    throw new Error('Unexpected arguments for ' + command);
+
   switch (command) {
     case 'get':
       await cmdGet(args[1]);
       break;
     case 'set':
-      await cmdSet(args[1], args[2]);
+    case 'set-json':
+      await cmdSet(args[1], args[2], command === 'set-json', expected);
       break;
     case 'set-command-shortcut':
-      await cmdSetCommandShortcut(args.slice(1));
+      await cmdSetCommandShortcut(args.slice(1), expected);
       break;
     case 'remove-command-shortcut':
-      await cmdRemoveCommandShortcut(args[1]);
+      await cmdRemoveCommandShortcut(args[1], expected);
       break;
     case 'list':
       await cmdList();
@@ -2471,7 +1895,7 @@ async function main(): Promise<void> {
       await cmdValidate();
       break;
     case 'reset':
-      await cmdReset(args[1]);
+      await cmdReset(args[1], expected);
       break;
     case 'validate-change':
       await cmdValidateChange(args[1]);
@@ -2481,6 +1905,6 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(e => {
+main().catch((e) => {
   error(e instanceof Error ? e.message : String(e));
 });

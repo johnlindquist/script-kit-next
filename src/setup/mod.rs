@@ -204,6 +204,89 @@ pub fn config_ts_path() -> PathBuf {
     get_kit_path().join("config.ts")
 }
 
+const SETTINGS_MODULES: &[(&str, &str)] = &[
+    ("config-cli.ts", include_str!("../../scripts/config-cli.ts")),
+    (
+        "config-document.ts",
+        include_str!("../../scripts/config-document.ts"),
+    ),
+    (
+        "config-schema.ts",
+        include_str!("../../scripts/config-schema.ts"),
+    ),
+    (
+        "kit-sdk-config.ts",
+        include_str!("../../scripts/kit-sdk-config.ts"),
+    ),
+];
+
+/// Run the installed, version-matched settings helper. Never discover code
+/// via the launching application's CWD (including its Bun project files).
+/// In particular, a read-only MCP call must not load config.ts to find Bun.
+pub fn settings_cli_command(configured_bun: Option<&str>) -> Result<std::process::Command, String> {
+    let cli = std::env::var_os("SCRIPT_KIT_CONFIG_CLI_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| get_kit_path().join("sdk/config-cli.ts"));
+    if !cli.is_absolute() || !cli.is_file() {
+        return Err(format!(
+            "Missing or non-absolute settings helper: {}",
+            cli.display()
+        ));
+    }
+    let sdk = cli.parent().ok_or("Invalid settings helper path")?;
+    // An interrupted upgrade (or a stale development override) is not an
+    // invitation to execute a different version's policy or schema.
+    for &(name, source) in SETTINGS_MODULES {
+        if name == "kit-sdk-config.ts" {
+            continue;
+        } // not loaded by the CLI
+        let file = if name == "config-cli.ts" {
+            cli.clone()
+        } else {
+            sdk.join(name)
+        };
+        let matches = fs::symlink_metadata(&file)
+            .is_ok_and(|m| m.is_file() && m.len() == source.len() as u64)
+            && fs::read(&file).is_ok_and(|bytes| bytes == source.as_bytes());
+        if !matches {
+            return Err(format!(
+                "Unverified settings helper {name}; rerun workspace setup"
+            ));
+        }
+    }
+    let config = std::env::var_os("SCRIPT_KIT_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(config_ts_path);
+    if !config.is_absolute() {
+        return Err("Settings require an absolute config path".into());
+    }
+    let bun = match configured_bun.filter(|p| !p.is_empty()) {
+        Some(path) if Path::new(path).is_absolute() && Path::new(path).is_file() => {
+            PathBuf::from(path)
+        }
+        Some(_) => return Err("Configured bun_path must name an absolute executable".into()),
+        None => resolve_bun().ok_or("Bun is unavailable")?,
+    };
+    let mut command = std::process::Command::new(bun);
+    command.env_clear(); // no NODE_OPTIONS, loader hooks, BUN_OPTIONS, DYLD_* or PATH
+    for key in ["HOME", "SCRIPT_KIT_NONINTERACTIVE", "CI"] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    command
+        .current_dir(sdk)
+        .env("SCRIPT_KIT_CONFIG_PATH", config)
+        .arg(if cfg!(windows) {
+            "--config=NUL"
+        } else {
+            "--config=/dev/null"
+        })
+        .args(["--no-install", "--no-env-file"])
+        .arg(cli);
+    Ok(command)
+}
+
 /// User-owned theme override file under the active workspace.
 pub fn theme_json_path() -> PathBuf {
     get_kit_path().join("theme.json")
@@ -498,6 +581,12 @@ pub fn ensure_kit_setup() -> SetupResult {
     // App-managed: SDK (refresh if changed)
     let sdk_path = kit_dir.join("sdk").join("kit-sdk.ts");
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
+
+    // Embedded in the executable, so first run and upgrades do not require
+    // a checkout, node_modules, npm installation, or a writable .app bundle.
+    for &(name, source) in SETTINGS_MODULES {
+        write_string_if_changed(&kit_dir.join("sdk").join(name), source, &mut warnings, name);
+    }
 
     // App-managed: user-facing `scriptkit` command shim (refresh if changed)
     let agent_docs = kit_dir.join("share/external-agent");
@@ -1124,7 +1213,7 @@ fn ensure_plugin_root(
 }
 
 fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
-    if path.exists() {
+    if fs::symlink_metadata(path).is_ok() {
         return;
     }
     if let Some(parent) = path.parent() {
@@ -1138,15 +1227,24 @@ fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<Strin
             return;
         }
     }
-    if let Err(e) = fs::write(path, contents) {
-        warnings.push(format!(
+    // A first run can race another launch or a settings edit. Publish the
+    // complete template only if the user file *still* does not exist.
+    use std::io::Write;
+    let publish = || -> std::io::Result<()> {
+        let mut temp = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new(".")))?;
+        temp.write_all(contents.as_bytes())?;
+        temp.persist_noclobber(path).map_err(|error| error.error)?;
+        Ok(())
+    };
+    match publish() {
+        Ok(()) => info!(path = %path.display(), "Created {}", label),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(e) => warnings.push(format!(
             "Failed to write {} ({}): {}",
             label,
             path.display(),
             e
-        ));
-    } else {
-        info!(path = %path.display(), "Created {}", label);
+        )),
     }
 }
 // --- merged from part_004.rs ---
@@ -1160,10 +1258,11 @@ fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<Strin
 /// The rename is atomic on most filesystems, so readers will either see the
 /// old content or the new content, never a partial write.
 fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
-    if let Ok(existing) = fs::read_to_string(path) {
-        if existing == contents {
-            return;
-        }
+    if fs::symlink_metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() == contents.len() as u64)
+        && fs::read(path).is_ok_and(|existing| existing == contents.as_bytes())
+    {
+        return;
     }
 
     if let Some(parent) = path.parent() {
@@ -1180,28 +1279,35 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
 
     // Atomic write: write to temp file then rename
     // This prevents readers from seeing partial writes during concurrent access
-    let temp_path = path.with_extension("tmp");
-
-    if let Err(e) = fs::write(&temp_path, contents) {
+    use std::io::Write;
+    let mut temp = match tempfile::NamedTempFile::new_in(path.parent().unwrap_or(Path::new("."))) {
+        Ok(temp) => temp,
+        Err(e) => {
+            warnings.push(format!(
+                "Failed to create private temp file for {label}: {e}"
+            ));
+            return;
+        }
+    };
+    if let Err(e) = temp.write_all(contents.as_bytes()) {
         warnings.push(format!(
             "Failed to write temp file for {} ({}): {}",
             label,
-            temp_path.display(),
+            temp.path().display(),
             e
         ));
         return;
     }
 
     // Atomic rename - this is atomic on most filesystems
-    if let Err(e) = fs::rename(&temp_path, path) {
+    if let Err(e) = temp.persist(path) {
         warnings.push(format!(
-            "Failed to rename {} to {}: {}",
-            temp_path.display(),
+            "Failed to publish {} ({}): {}",
+            label,
             path.display(),
             e
         ));
-        // Clean up temp file on failure
-        let _ = fs::remove_file(&temp_path);
+        // NamedTempFile removes the unpublished file on drop.
     } else {
         debug!(path = %path.display(), "Updated {}", label);
     }

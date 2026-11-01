@@ -5,7 +5,9 @@ description: Update Script Kit configuration files — hotkeys, theme, layout, d
 
 # Update Config
 
-Manage files under `~/.scriptkit` that control launcher behavior, hotkeys, dictation, theming, and Tab AI.
+The active workspace is `$SK_PATH`, or `~/.scriptkit` when unset. Use `kit/config_get` for the exact key and revision, then `kit/config_set` with a JSON value and that `expectedRevision`. Reread after a stale revision; never retry a stale proposal blindly. Inspect `impact` and `manualOnly` in `kit/config_list` before proposing changes. A valid value is not permission.
+
+The installed CLI in `$SK_PATH/sdk/config-cli.ts` and adjacent `kit-sdk-config.ts` SDK use the same data-only writer. The writer supports a literal default-exported object (including the stock type import, comments and `satisfies Config`). Executable or ambiguous TypeScript, unreviewed paths and changes that would discard comments are refused. A refusal leaves the file alone: do not bypass it with a script, a regex replacement, or by importing the user's config. Executable paths, MCP server definitions, credentials, permissions and remote access are manual settings, not ordinary agent preferences.
 
 ## Files That Matter
 

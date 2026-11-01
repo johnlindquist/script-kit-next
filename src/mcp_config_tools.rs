@@ -1,8 +1,6 @@
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
-use std::process::Command;
 
 pub const CONFIG_GET_TOOL: &str = "kit/config_get";
 pub const CONFIG_LIST_TOOL: &str = "kit/config_list";
@@ -57,12 +55,15 @@ impl ConfigToolError {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigGetArgs {
+    #[serde(default, deserialize_with = "optional_string")]
     key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigSetArgs {
+    #[serde(default, deserialize_with = "optional_string")]
+    expected_revision: Option<String>,
     key: String,
     value: Value,
 }
@@ -70,6 +71,9 @@ struct ConfigSetArgs {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigResetArgs {
+    #[serde(default, deserialize_with = "optional_string")]
+    expected_revision: Option<String>,
+    #[serde(default, deserialize_with = "optional_string")]
     key: Option<String>,
     #[serde(default)]
     confirm: bool,
@@ -85,6 +89,8 @@ struct ConfigValidateChangeArgs {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigSetCommandShortcutArgs {
+    #[serde(default, deserialize_with = "optional_string")]
+    expected_revision: Option<String>,
     command_id: String,
     key: String,
     #[serde(default)]
@@ -102,6 +108,8 @@ struct ConfigSetCommandShortcutArgs {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConfigRemoveCommandShortcutArgs {
+    #[serde(default, deserialize_with = "optional_string")]
+    expected_revision: Option<String>,
     command_id: String,
     #[serde(default)]
     confirm: bool,
@@ -159,13 +167,14 @@ pub fn get_config_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: CONFIG_SET_TOOL.to_string(),
-            description: "Set a Script Kit config.ts key to a JSON-compatible value.".to_string(),
+            description: "Set a supported literal config key. Use the revision from config_get/list as expectedRevision to refuse stale changes. Review the key's impact before changing execution policy, command routing, or privacy.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
                     "key": { "type": "string" },
-                    "value": {}
+                    "value": {},
+                    "expectedRevision": { "type": "string" }
                 },
                 "required": ["key", "value"]
             }),
@@ -179,6 +188,7 @@ pub fn get_config_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                    "expectedRevision": { "type": "string" },
                     "key": { "type": "string" },
                     "confirm": { "type": "boolean", "default": false }
                 },
@@ -192,6 +202,7 @@ pub fn get_config_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                    "expectedRevision": { "type": "string" },
                     "commandId": { "type": "string" },
                     "key": { "type": "string" },
                     "cmd": { "type": "boolean", "default": false },
@@ -212,6 +223,7 @@ pub fn get_config_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                    "expectedRevision": { "type": "string" },
                     "commandId": { "type": "string" },
                     "confirm": { "type": "boolean", "default": false }
                 },
@@ -274,10 +286,9 @@ fn config_cli_args(
         CONFIG_SET_TOOL => {
             let args: ConfigSetArgs = parse_args(name, arguments)?;
             validate_non_empty("key", &args.key).map_err(|error| ("config_set", error))?;
-            Ok((
-                "config_set",
-                vec!["set".to_string(), args.key, value_to_cli_arg(&args.value)],
-            ))
+            let mut cli_args = vec!["set-json".to_string(), args.key, args.value.to_string()];
+            append_revision(&mut cli_args, args.expected_revision);
+            Ok(("config_set", cli_args))
         }
         CONFIG_RESET_TOOL => {
             let args: ConfigResetArgs = parse_args(name, arguments)?;
@@ -295,6 +306,7 @@ fn config_cli_args(
                 validate_non_empty("key", &key).map_err(|error| ("config_reset", error))?;
                 cli_args.push(key);
             }
+            append_revision(&mut cli_args, args.expected_revision);
             Ok(("config_reset", cli_args))
         }
         CONFIG_SET_COMMAND_SHORTCUT_TOOL => {
@@ -315,6 +327,7 @@ fn config_cli_args(
             if args.skip_existing {
                 cli_args.push("--skip-existing".to_string());
             }
+            append_revision(&mut cli_args, args.expected_revision);
             Ok(("config_set_command_shortcut", cli_args))
         }
         CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL => {
@@ -330,10 +343,9 @@ fn config_cli_args(
                     ),
                 ));
             }
-            Ok((
-                "config_remove_command_shortcut",
-                vec!["remove-command-shortcut".to_string(), args.command_id],
-            ))
+            let mut cli_args = vec!["remove-command-shortcut".to_string(), args.command_id];
+            append_revision(&mut cli_args, args.expected_revision);
+            Ok(("config_remove_command_shortcut", cli_args))
         }
         _ => Err((
             "config_unknown",
@@ -381,10 +393,15 @@ fn validate_non_empty(field: &str, value: &str) -> Result<(), ConfigToolError> {
     }
 }
 
-fn value_to_cli_arg(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        _ => value.to_string(),
+// Omitted means no expectation/key. Explicit null must not silently turn a
+// guarded mutation into an unconditional write or a key reset into reset-all.
+fn optional_string<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    String::deserialize(d).map(Some)
+}
+
+fn append_revision(args: &mut Vec<String>, revision: Option<String>) {
+    if let Some(revision) = revision {
+        args.extend(["--if-revision".into(), revision]);
     }
 }
 
@@ -392,20 +409,21 @@ fn run_config_cli(
     action: &'static str,
     args: Vec<String>,
 ) -> Result<(&'static str, Value), (&'static str, ConfigToolError)> {
-    let cli_path = config_cli_path().map_err(|error| (action, error))?;
-    let output = Command::new("bun")
-        .arg(cli_path)
-        .args(args)
-        .output()
-        .map_err(|error| {
-            (
-                action,
-                ConfigToolError::new(
-                    ConfigToolErrorCode::CliUnavailable,
-                    format!("Failed to run config-cli.ts with bun: {error}"),
-                ),
-            )
-        })?;
+    let mut command = crate::setup::settings_cli_command(None).map_err(|message| {
+        (
+            action,
+            ConfigToolError::new(ConfigToolErrorCode::CliUnavailable, message),
+        )
+    })?;
+    let output = command.args(args).output().map_err(|error| {
+        (
+            action,
+            ConfigToolError::new(
+                ConfigToolErrorCode::CliUnavailable,
+                format!("Failed to run config-cli.ts with bun: {error}"),
+            ),
+        )
+    })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -417,7 +435,7 @@ fn run_config_cli(
                 action,
                 ConfigToolError::new(
                     ConfigToolErrorCode::Internal,
-                    format!("config-cli.ts returned invalid JSON: {error}; stdout={stdout}"),
+                    format!("config-cli.ts returned invalid JSON: {error}"),
                 ),
             )
         })?
@@ -461,41 +479,6 @@ fn run_config_cli(
     Err((
         action,
         ConfigToolError::new(ConfigToolErrorCode::CliFailed, message),
-    ))
-}
-
-fn config_cli_path() -> Result<PathBuf, ConfigToolError> {
-    if let Ok(path) = std::env::var("SCRIPT_KIT_CONFIG_CLI_PATH") {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            return Ok(path);
-        }
-        return Err(ConfigToolError::new(
-            ConfigToolErrorCode::CliUnavailable,
-            format!(
-                "SCRIPT_KIT_CONFIG_CLI_PATH does not exist: {}",
-                path.display()
-            ),
-        ));
-    }
-
-    if let Ok(current_dir) = std::env::current_dir() {
-        let candidate = current_dir.join("scripts").join("config-cli.ts");
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-
-    if let Some(home) = dirs::home_dir() {
-        let candidate = home.join(".scriptkit").join("sdk").join("config-cli.ts");
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(ConfigToolError::new(
-        ConfigToolErrorCode::CliUnavailable,
-        "Could not locate scripts/config-cli.ts or ~/.scriptkit/sdk/config-cli.ts",
     ))
 }
 

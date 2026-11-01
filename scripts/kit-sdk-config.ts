@@ -24,6 +24,9 @@
  */
 
 import { spawn } from 'node:child_process';
+import { accessSync, constants, statSync } from 'node:fs';
+import { homedir, devNull } from 'node:os';
+import { configPath } from './config-document.ts';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,20 +34,7 @@ import { fileURLToPath } from 'node:url';
 // Types — re-exported from the canonical SDK source
 // =============================================================================
 
-import type {
-  BuiltInConfig,
-  ClaudeCodeConfig,
-  CommandConfig,
-  Config,
-  ContentPadding,
-  HotkeyConfig,
-  KeyCode,
-  KeyModifier,
-  LayoutConfig,
-  ProcessLimits,
-  SuggestedConfig,
-  WatcherConfig,
-} from "./kit-sdk";
+import type { Config } from "./kit-sdk";
 
 export type { Config };
 
@@ -59,9 +49,13 @@ export interface ConfigOption {
   isCustom: boolean;
   description: string;
   example?: string;
+  impact: string;
+  manualOnly: boolean;
+  disableOnly: boolean;
 }
 
 export interface GetAllResult {
+  revision: string;
   path: string;
   config: Config;
   exists?: boolean;
@@ -69,6 +63,12 @@ export interface GetAllResult {
 }
 
 export interface GetKeyResult {
+  path: string;
+  exists: boolean;
+  impact: string;
+  manualOnly: boolean;
+  disableOnly: boolean;
+  revision: string;
   key: string;
   value: unknown;
   isDefault: boolean;
@@ -76,12 +76,14 @@ export interface GetKeyResult {
 }
 
 export interface SetResult {
+  revision: string;
   key: string;
   value: unknown;
   message: string;
 }
 
 export interface ListResult {
+  revision: string;
   path: string;
   exists: boolean;
   options: ConfigOption[];
@@ -118,22 +120,29 @@ const CLI_PATH = path.join(__dirname, 'config-cli.ts');
  */
 async function runCLI<T>(args: string[]): Promise<T> {
   return new Promise((resolve, reject) => {
-    const bunPath = process.env.BUN_PATH || 'bun';
-    const proc = spawn(bunPath, [CLI_PATH, ...args], {
+    const exe = process.platform === 'win32' ? 'bun.exe' : 'bun';
+    const candidates = process.versions.bun ? [process.execPath] : process.env.BUN_PATH ? [process.env.BUN_PATH] : [
+      path.join(homedir(), '.bun/bin', exe), '/opt/homebrew/bin/bun', '/usr/local/bin/bun',
+      ...(process.env.PATH ?? '').split(path.delimiter).filter(dir => path.isAbsolute(dir) && dir !== process.cwd()).map(dir => path.join(dir,exe)),
+    ];
+    const bunPath = candidates.find(p => {
+      if (!path.isAbsolute(p)) return false;
+      try { accessSync(p,constants.X_OK); return statSync(p).isFile(); } catch { return false; }
+    });
+    if (!bunPath) throw new Error('No absolute Bun executable available');
+    const proc = spawn(bunPath, [`--config=${devNull}`, '--no-install', '--no-env-file', CLI_PATH, ...args], {
+      cwd: __dirname,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env }
+      env: { HOME: homedir(), SCRIPT_KIT_CONFIG_PATH: configPath(), SCRIPT_KIT_NONINTERACTIVE: process.env.SCRIPT_KIT_NONINTERACTIVE, CI: process.env.CI }
     });
 
     let stdout = '';
-    let stderr = '';
 
     proc.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
+    proc.stderr.resume(); // drain diagnostics without redisclosing raw config text
 
     proc.on('close', (code) => {
       // Parse the JSON output
@@ -146,15 +155,16 @@ async function runCLI<T>(args: string[]): Promise<T> {
           // Check for validate-style response
           if ('valid' in result) {
             resolve(result as unknown as T);
+            return;
           }
           reject(new Error(result.error || 'Unknown CLI error'));
         }
       } catch (parseError) {
         // If we can't parse JSON, report the raw output
         if (code !== 0) {
-          reject(new Error(`CLI failed (exit ${code}): ${stderr || stdout}`));
+          reject(new Error(`Settings CLI failed (exit ${code})`));
         } else {
-          reject(new Error(`Failed to parse CLI output: ${stdout}`));
+          reject(new Error('Settings CLI returned invalid JSON'));
         }
       }
     });
@@ -184,10 +194,10 @@ async function get(key?: string): Promise<GetAllResult | GetKeyResult> {
 /**
  * Set a config value
  */
-async function set(key: string, value: unknown): Promise<SetResult> {
-  // Convert value to string for CLI
-  const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
-  return runCLI<SetResult>(['set', key, valueStr]);
+async function set(key: string, value: unknown, expectedRevision?: string): Promise<SetResult> {
+  const json = JSON.stringify(value);
+  if (json === undefined) throw new Error('Expected a JSON config value');
+  return runCLI<SetResult>(['set-json', key, json, ...(expectedRevision === undefined ? [] : ['--if-revision', expectedRevision])]);
 }
 
 /**
@@ -231,67 +241,18 @@ async function validate(): Promise<ValidateResult> {
 export async function validateChange(change: { key: string; value: unknown }): Promise<
   import('./config-schema').ValidateConfigChangeResult
 > {
-  return new Promise((resolve, reject) => {
-    const bunPath = process.env.BUN_PATH || 'bun';
-    const proc = spawn(
-      bunPath,
-      [CLI_PATH, 'validate-change', JSON.stringify(change)],
-      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env } },
-    );
-
-    let stdout = '';
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.on('close', () => {
-      try {
-        const parsed = JSON.parse(stdout);
-        // CLI wraps valid results as { success: true, data: result }
-        // and invalid results as { success: false, ...result }
-        if (parsed.success === true && parsed.data) {
-          resolve(parsed.data);
-          return;
-        }
-        if ('valid' in parsed) {
-          resolve({
-            valid: parsed.valid,
-            normalizedValue: parsed.normalizedValue,
-            errors: parsed.errors ?? [],
-            warnings: parsed.warnings ?? [],
-          });
-          return;
-        }
-        reject(new Error(parsed.error || `Unexpected validate-change output`));
-      } catch {
-        reject(new Error(`Failed to parse validate-change output: ${stdout}`));
-      }
-    });
-    proc.on('error', (e) => {
-      reject(new Error(`Failed to spawn validate-change: ${e.message}`));
-    });
-  });
+  const {valid, normalizedValue, errors, warnings} = await runCLI<import('./config-schema').ValidateConfigChangeResult>(['validate-change', JSON.stringify(change)]);
+  return {valid, normalizedValue, errors, warnings};
 }
 
-/**
- * Validate a config change then write it if valid.
- * Throws if the change is invalid.
- */
-async function setValidated(key: string, value: unknown): Promise<SetResult> {
-  const validation = await validateChange({ key, value });
-  if (!validation.valid) {
-    throw new Error(
-      validation.errors.map(err => `${err.path}: ${err.message}`).join('\n'),
-    );
-  }
-  return set(key, validation.normalizedValue ?? value);
-}
+// The writer validates the typed value inside the same operation as the edit.
+const setValidated = set;
 
 /**
  * Reset a config value to default (or all values if no key specified)
  */
-async function reset(key?: string): Promise<{ key?: string; value?: unknown; message: string; config?: Config }> {
-  if (key) {
-    return runCLI(['reset', key]);
-  }
-  return runCLI(['reset']);
+async function reset(key?: string, expectedRevision?: string): Promise<{ key?: string; value?: unknown; message: string; config?: Config; revision: string }> {
+  return runCLI(['reset', ...(key === undefined ? [] : [key]), ...(expectedRevision === undefined ? [] : ['--if-revision',expectedRevision])]);
 }
 
 // =============================================================================

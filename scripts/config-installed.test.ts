@@ -1,0 +1,198 @@
+import { describe, expect, it } from 'bun:test';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// No checkout-relative modules or global packages in the child. The Rust MCP
+// fixture exercises the real embedded first-run installer; here we can also
+// exercise contested writes and a malicious config without launching the app.
+function fixture(source: string) {
+  const root = mkdtempSync(join(tmpdir(), 'settings-installed-'));
+  const sk = join(root, 'workspace');
+  const sdk = join(sk, 'sdk');
+  mkdirSync(sdk, { recursive: true });
+  const config = join(sk, 'config.ts');
+  for (const name of ['config-cli.ts', 'config-schema.ts', 'kit-sdk-config.ts', 'config-document.ts']) {
+    const file = join(import.meta.dir, name);
+    if (existsSync(file)) copyFileSync(file, join(sdk, name));
+  }
+  writeFileSync(config, source);
+  const read = () => readFileSync(config, 'utf8');
+  const run = async (...args: string[]) => {
+    const proc = Bun.spawn([process.execPath, join(sdk, 'config-cli.ts'), ...args], {
+      cwd: root,
+      env: { HOME: root, SK_PATH: sk, PATH: '/usr/bin:/bin' },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const [code, out, err] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    if (!out) throw new Error(err);
+    return { code, ...JSON.parse(out) };
+  };
+  return { root, config, sdk, read, run, close: () => rmSync(root, { recursive: true, force: true }) };
+}
+
+const source = `import type { Config } from '@scriptkit/sdk';
+export default {
+  // editorFontSize: 8
+  unrelated: {editorFontSize: 12, note: 'editorFontSize: 13, }'},
+  editorFontSize: 16, // the real leaf
+  dictation: { startInKit: false, },
+} satisfies Config;\n`;
+
+describe('installed settings helper', () => {
+  it('targets SK_PATH and edits only the selected literal; stale proposals cannot clobber human edits', async () => {
+    const f = fixture(source);
+    try {
+      const got = await f.run('get', 'editorFontSize');
+      expect(got.data.value).toBe(16);
+      expect(got.data.revision).toMatch(/^[a-f0-9]{64}$/);
+      expect(
+        (await f.run('set-json', 'editorFontSize', '18', '--if-revision', got.data.revision)).code,
+      ).toBe(0);
+      expect(f.read()).toBe(source.replace('16, //', '18, //'));
+      const before = f.read() + '// saved by me\n';
+      writeFileSync(f.config, before);
+      expect(
+        (await f.run('set-json', 'editorFontSize', '22', '--if-revision', got.data.revision)).error,
+      ).toMatch(/stale/i);
+      expect(f.read()).toBe(before);
+    } finally {
+      f.close();
+    }
+  });
+  it('rejects wrong types, unknown keys and malformed paths before writing', async () => {
+    const f = fixture(source);
+    try {
+      for (const [key, value] of [
+        ['dictation.startInKit', 'yes'],
+        ['editorFontSize', '18'],
+        ['invented.setting', 17],
+        ['__proto__.oops', true],
+        ['editor', 17],
+        ['powerSyntax.enabled', 1],
+        ['dictation.startInKit', null],
+      ] as const) {
+        expect((await f.run('validate-change', JSON.stringify({ key, value }))).code).toBe(1);
+        expect((await f.run('set-json', key, JSON.stringify(value))).code).toBe(1);
+      }
+      expect((await f.run('validate-change', '{"key":"dictation.startInKit","value":true}')).code).toBe(
+        0,
+      );
+      expect(f.read()).toBe(source);
+    } finally {
+      f.close();
+    }
+  });
+  it('scoped tools refuse executable/remote/permission changes; static validation still recognizes manual config', async () => {
+    const original = `export default { hotkey:{modifiers:['meta'],key:'KeyK'}, editor: 'code', commands: { 'builtin/quit': { confirmationRequired: true } } }`;
+    const f = fixture(original);
+    try {
+      expect((await f.run('validate')).code).toBe(0);
+      for (const [key, value] of [
+        ['bun_path', '/tmp/trap'],
+        ['editor', 'trap'],
+        ['claudeCode', { enabled: true }],
+        ['mcp.enabled', true],
+        ['promptTargets', {}],
+        ['brainRemote.enabled', true],
+        ['dictation.saveHistory', true],
+        ['dictation.screenSpelling', 'accessibilityAndOcr'],
+        ['commands.builtin/quit.confirmationRequired', false],
+      ] as const) {
+        expect((await f.run('validate-change', JSON.stringify({ key, value }))).errors[0].code).toBe(
+          'manualOnly',
+        );
+        expect((await f.run('set-json', key, JSON.stringify(value))).code).toBe(1);
+        expect((await f.run('reset', key)).code).toBe(1);
+      }
+      expect((await f.run('reset')).code).toBe(1);
+      expect((await f.run('set-json', 'commands', '{}')).code).toBe(1);
+      expect(f.read()).toBe(original);
+      expect(
+        (await f.run('list')).data.options.find((o: { key: string }) => o.key === 'bun_path'),
+      ).toMatchObject({ impact: 'execution-policy', manualOnly: true });
+    } finally {
+      f.close();
+    }
+  });
+  it('installed SDK preserves JSON types and revisions, even when the caller changes into a hostile Bun project', async () => {
+    const f = fixture(source);
+    try {
+      writeFileSync(join(f.root, 'bunfig.toml'), 'preload = ["./trap.ts"]');
+      writeFileSync(join(f.root, 'trap.ts'), 'throw Error("hostile project was loaded")');
+      const prog = join(f.sdk, 'exercise.ts');
+      writeFileSync(
+        prog,
+        `import {config} from './kit-sdk-config.ts';
+        process.chdir(process.env.HOME!); process.env.NODE_OPTIONS = '--require ./trap.ts';
+        const old = await config.get('editorFontSize');
+        await config.setValidated('editorFontSize',18,old.revision);
+        const type = await config.set('editorFontSize','20').then(()=>false,()=>true);
+        const stale = await config.set('editorFontSize',20,old.revision).then(()=>false,()=>true);
+        console.log(JSON.stringify({type,stale}));`,
+      );
+      const p = Bun.spawnSync([process.execPath, prog], {
+        cwd: f.sdk,
+        env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin' },
+      });
+      expect(p.exitCode).toBe(0);
+      expect(JSON.parse(p.stdout.toString())).toEqual({ type: true, stale: true });
+      expect(f.read()).toBe(source.replace('16, //', '18, //'));
+    } finally {
+      f.close();
+    }
+  });
+  it('refuses dynamic and ambiguous source without running or repairing it', async () => {
+    const f = fixture(source);
+    try {
+      for (const src of [
+        `await Bun.write('executed','yes'); export default { editorFontSize: 16 }`,
+        `export default { ...{}, editorFontSize: 16 }`,
+        `export default { editorFontSize: 12, editorFontSize: 16 }`,
+        `export default { editorFontSize: 16 }; console.log('later')`,
+      ]) {
+        writeFileSync(f.config, src);
+        for (const args of [['get'], ['validate'], ['set', 'editorFontSize', '18'], ['reset']])
+          expect((await f.run(...args)).code).toBe(1);
+        expect(f.read()).toBe(src);
+        expect(existsSync(join(f.root, 'executed'))).toBe(false);
+      }
+    } finally {
+      f.close();
+    }
+  });
+  it('admits at most one writer from the same snapshot, refuses symlink targets', async () => {
+    const f = fixture(source);
+    try {
+      const { revision } = (await f.run('get')).data;
+      const replies = await Promise.all(
+        ['17', '18', '19', '20'].map((v) =>
+          f.run('set-json', 'editorFontSize', v, '--if-revision', revision),
+        ),
+      );
+      expect(replies.filter((r) => r.code === 0)).toHaveLength(1);
+      const other = join(f.root, 'other.ts');
+      writeFileSync(other, source);
+      rmSync(f.config);
+      symlinkSync(other, f.config);
+      expect((await f.run('set', 'editorFontSize', '20')).code).toBe(1);
+      expect(readFileSync(other, 'utf8')).toBe(source);
+    } finally {
+      f.close();
+    }
+  });
+});

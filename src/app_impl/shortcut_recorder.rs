@@ -1,26 +1,5 @@
 use super::*;
 
-fn shortcut_config_script_path(script_name: &str) -> anyhow::Result<std::path::PathBuf> {
-    let sdk_path = crate::setup::get_kit_path()
-        .join("sdk")
-        .join(script_name);
-
-    if sdk_path.exists() {
-        return Ok(sdk_path);
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts").join(script_name);
-        if dev_path.is_file() { return Ok(dev_path); }
-    }
-
-    Err(anyhow::anyhow!(
-        "Could not find {} in .scriptkit/sdk or repo scripts/",
-        script_name
-    ))
-}
-
 impl ScriptListApp {
     pub(crate) fn write_config_command_shortcut(
         &self,
@@ -32,9 +11,9 @@ impl ScriptListApp {
         shift: bool,
     ) -> anyhow::Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
-        let script_path = shortcut_config_script_path("update-config-shortcut.ts")?;
-        let output = std::process::Command::new(crate::config::configured_bun()?)
-            .arg(script_path)
+        let output = crate::setup::settings_cli_command(self.config.bun_path.as_deref())
+            .map_err(anyhow::Error::msg)?
+            .arg("set-command-shortcut")
             .arg(command_id)
             .arg(key)
             .arg(cmd.to_string())
@@ -58,9 +37,9 @@ impl ScriptListApp {
 
     pub(crate) fn remove_config_command_shortcut(&self, command_id: &str) -> anyhow::Result<()> {
         crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
-        let script_path = shortcut_config_script_path("remove-config-shortcut.ts")?;
-        let output = std::process::Command::new(crate::config::configured_bun()?)
-            .arg(script_path)
+        let output = crate::setup::settings_cli_command(self.config.bun_path.as_deref())
+            .map_err(anyhow::Error::msg)?
+            .arg("remove-command-shortcut")
             .arg(command_id)
             .output()?;
 
@@ -108,7 +87,7 @@ impl ScriptListApp {
     ///
     #[allow(dead_code)]
     pub(crate) fn open_config_for_shortcut(&mut self, command_id: &str) {
-        let config_path = shellexpand::tilde("~/.scriptkit/config.ts").to_string();
+        let config_path = crate::setup::config_ts_path().display().to_string();
         let editor = self.config.get_editor();
 
         logging::log(
@@ -230,7 +209,7 @@ export default {
 } satisfies Config;
 "#;
 
-        let mut file = std::fs::File::create(path)?;
+        let mut file = std::fs::File::create_new(path)?;
         file.write_all(template.as_bytes())?;
         logging::log(
             "UI",
