@@ -1110,7 +1110,7 @@ export async function publishSignedBundle(root: string, task: ManagedTask, input
     // Preserve notarization/resource-fork/xattr metadata, then validate the actual copied bundle.
     for (const argv of [["/usr/bin/ditto", "--rsrc", "--extattr", "--acl", bundle, copiedBundle],
       ["/usr/bin/codesign", "--verify", "--deep", "--strict", copiedBundle],
-      ["/usr/bin/xcrun", "stapler", "validate", copiedBundle],
+      ["/bin/bash", join(root, "scripts/release-stapler.sh"), "validate", copiedBundle],
       ["/usr/sbin/spctl", "--assess", "--type", "execute", copiedBundle]]) {
       const preflight = resourceCheck("pre-publication-command");
       const env: Record<string, string> = { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: "C" };

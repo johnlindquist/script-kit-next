@@ -568,11 +568,7 @@ jobs:
             --output-format json > "$RUNNER_TEMP/notarization-result.json"
 
       - name: Staple notarization ticket
-        run: |
-          xcrun stapler staple "target/release/bundle/osx/Script Kit.app"
-
-          # Verify stapling
-          xcrun stapler validate "target/release/bundle/osx/Script Kit.app"
+        run: /bin/bash scripts/release-stapler.sh staple "target/release/bundle/osx/Script Kit.app"
 
       - name: Verify post-staple Gatekeeper acceptance
         run: spctl --assess --verbose=4 --type execute "target/release/bundle/osx/Script Kit.app"
@@ -632,7 +628,7 @@ jobs:
           APP="$TMP_DIR/Script Kit.app"
           bash scripts/verify-macos-bundle.sh "$APP"
           codesign --verify --deep --strict "$APP"
-          xcrun stapler validate "$APP"
+          /bin/bash scripts/release-stapler.sh validate "$APP"
           CHECK="$RUNNER_TEMP/installed-workspace-check.json"
           (cd "$TMP_DIR" && "$APP/Contents/MacOS/script-kit-gpui" --check-installation) >"$CHECK"
           jq -e --arg version "${GITHUB_REF_NAME#v}" '.schemaVersion == 1 and .version == $version and .packaged and .freshWorkspace and .starterScriptsIndexed > 0 and .userEditsPreserved and .settingsTransaction == "verified" and .scratchRemoved' "$CHECK" >/dev/null

@@ -570,7 +570,7 @@ export function buildSigningAttestation(options: {
       "--verify", "--strict", "--verbose=4", target,
     ]);
   }
-  requireSuccessfulSecurityCommand(runCommand, "xcrun", ["stapler", "validate", options.appPath]);
+  requireSuccessfulSecurityCommand(runCommand, "/bin/bash", [resolve(import.meta.dir, "release-stapler.sh"), "validate", options.appPath]);
   requireSuccessfulSecurityCommand(runCommand, "spctl", [
     "--assess", "--verbose=4", "--type", "execute", options.appPath,
   ]);

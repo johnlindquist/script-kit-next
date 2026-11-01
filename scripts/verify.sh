@@ -100,6 +100,7 @@ require_clean_source_identity() {
     src/installation_check.rs
     scripts/verify.sh
     scripts/verify-macos-bundle.sh
+    scripts/release-stapler.sh
     scripts/verify-release-version.sh
     scripts/release-evidence.ts
     scripts/release-evidence.test.ts
