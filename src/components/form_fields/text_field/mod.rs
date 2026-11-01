@@ -438,7 +438,9 @@ impl FormTextField {
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
         let mods = event.keystroke.modifiers;
-        if mods.control || mods.function || (mods.alt && event.keystroke.key_char.is_none()) { return; }
+        if mods.control || mods.function || (mods.alt && event.keystroke.key_char.is_none()) {
+            return;
+        }
 
         // Select all
         if cmd && !shift && key.eq_ignore_ascii_case("a") {
@@ -498,9 +500,7 @@ impl FormTextField {
         if !cmd {
             if let Some(ref key_char) = event.keystroke.key_char {
                 let s: String = key_char.chars().filter(|c| !c.is_control()).collect();
-                if !s.is_empty()
-                    && self.allows_text_insertion_for_field_type(&s)
-                {
+                if !s.is_empty() && self.allows_text_insertion_for_field_type(&s) {
                     self.insert_text_at_cursor(&s);
                     cx.notify();
                 }

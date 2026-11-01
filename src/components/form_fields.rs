@@ -39,9 +39,9 @@ pub use checkbox::FormCheckbox;
 pub use colors::{FormFieldColors, FormFieldMetrics};
 pub(crate) use helpers::{field_value_is_valid_for_submit, form_field_type_allows_candidate_value};
 pub(crate) use shell::{
-    apply_form_field_shell_test_fixture, menu_syntax_form_field_shell_spec,
-    form_issue, labeled_control, render_form_field_shell, resolve_form_field_shell_style, FormFieldShellSpec,
-    FormFieldShellStyle, FormFieldValidation,
+    apply_form_field_shell_test_fixture, form_issue, labeled_control,
+    menu_syntax_form_field_shell_spec, render_form_field_shell, resolve_form_field_shell_style,
+    FormFieldShellSpec, FormFieldShellStyle, FormFieldValidation,
 };
 pub use state::FormFieldState;
 pub use text_area::FormTextArea;

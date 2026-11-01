@@ -115,29 +115,42 @@ impl Evaluator {
                     !self.sdk_prompt_controls.contains_key(&key),
                     "sdk_prompt_already_bound"
                 );
-                ensure!(self.bootstrap.fixture_ids.contains(fixture_id.as_str()), "sdk_fixture_outside_launch_subset");
+                ensure!(
+                    self.bootstrap.fixture_ids.contains(fixture_id.as_str()),
+                    "sdk_fixture_outside_launch_subset"
+                );
                 let (id, message) = reviewed_sdk_message(fixture_id, message)?;
                 let control = SdkPromptControl::new(fixture_id, id.clone(), channel)?;
-                mounted.handle.update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
-                    entity.update(cx, |app, cx| -> Result<()> {
-                        app.handle_stdin_protocol_message(message, window, cx);
-                        let mounted_id = match (fixture_id, &app.current_view) {
-                            (SdkPromptFixtureId::ArgRoundtrip, crate::AppView::ArgPrompt { id, .. }) |
-                            (SdkPromptFixtureId::FormCorrection, crate::AppView::FormPrompt { id, .. }) => Some(id),
-                            _ => None,
-                        };
-                        ensure!(mounted_id == Some(&id), "sdk_production_prompt_not_mounted");
-                        // Both production submit owners read this binding at the
-                        // event boundary; it has no captured leaf callback. Install
-                        // before returning to the event loop, never borrow RPCs.
-                        if let Some(previous) = app.prompt_completion.replace(control.binding.clone()) {
-                            previous.retire();
-                        }
-                        app.mark_main_data_changed();
-                        cx.notify();
-                        Ok(())
-                    })
-                })??;
+                mounted
+                    .handle
+                    .update(&mut **self.cx.app.borrow_mut(), |_, window, cx| {
+                        entity.update(cx, |app, cx| -> Result<()> {
+                            app.handle_stdin_protocol_message(message, window, cx);
+                            let mounted_id = match (fixture_id, &app.current_view) {
+                                (
+                                    SdkPromptFixtureId::ArgRoundtrip,
+                                    crate::AppView::ArgPrompt { id, .. },
+                                )
+                                | (
+                                    SdkPromptFixtureId::FormCorrection,
+                                    crate::AppView::FormPrompt { id, .. },
+                                ) => Some(id),
+                                _ => None,
+                            };
+                            ensure!(mounted_id == Some(&id), "sdk_production_prompt_not_mounted");
+                            // Both production submit owners read this binding at the
+                            // event boundary; it has no captured leaf callback. Install
+                            // before returning to the event loop, never borrow RPCs.
+                            if let Some(previous) =
+                                app.prompt_completion.replace(control.binding.clone())
+                            {
+                                previous.retire();
+                            }
+                            app.mark_main_data_changed();
+                            cx.notify();
+                            Ok(())
+                        })
+                    })??;
                 self.sdk_prompt_controls.insert(key.clone(), control);
             }
             SdkPromptCommand::Drain {} => {

@@ -258,7 +258,11 @@ pub(crate) struct PromptFieldStyle {
 /// Informational output is quieter than a field. Editable controls belong to form_fields.
 pub(crate) fn prompt_preview_style(theme: &crate::theme::Theme) -> PromptFieldStyle {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
-    PromptFieldStyle { background: rgba(chrome.whisper_surface_rgba), border: rgba(chrome.whisper_border_rgba), value: rgb(chrome.text_primary_hex) }
+    PromptFieldStyle {
+        background: rgba(chrome.whisper_surface_rgba),
+        border: rgba(chrome.whisper_border_rgba),
+        value: rgb(chrome.text_primary_hex),
+    }
 }
 
 /// Single-line text field card using the shared prompt surface.

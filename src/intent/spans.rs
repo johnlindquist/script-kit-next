@@ -184,7 +184,9 @@ fn starts_action(text: &str) -> bool {
 
 /// Protect quoted content and ordinary conjunctions. List commands may lend their
 /// verb to targets ("open Gmail and Calendar"); other conjunctions need a new action.
-pub fn split_clauses(text: &str) -> Vec<String> { split_clauses_for_apps(text, &[]) }
+pub fn split_clauses(text: &str) -> Vec<String> {
+    split_clauses_for_apps(text, &[])
+}
 
 pub fn split_clauses_for_apps(text: &str, apps: &[&str]) -> Vec<String> {
     let Some(clause_break) = CLAUSE_BREAK.as_ref() else {
@@ -222,9 +224,12 @@ pub fn split_clauses_for_apps(text: &str, apps: &[&str]) -> Vec<String> {
         quoted.push(quote_start..text.len());
     }
     let verb = text.split_whitespace().next().unwrap_or_default();
-    let list = ["open", "opens", "launch", "launches", "close", "closes", "focus", "focuses", "switch", "switches"]
-        .iter()
-        .any(|candidate| verb.eq_ignore_ascii_case(candidate));
+    let list = [
+        "open", "opens", "launch", "launches", "close", "closes", "focus", "focuses", "switch",
+        "switches",
+    ]
+    .iter()
+    .any(|candidate| verb.eq_ignore_ascii_case(candidate));
     let mut parts = Vec::with_capacity(MAX_CLAUSES + 1);
     let mut start = 0;
     for separator in clause_break.find_iter(text) {
@@ -241,7 +246,14 @@ pub fn split_clauses_for_apps(text: &str, apps: &[&str]) -> Vec<String> {
             .any(|word| word.eq_ignore_ascii_case("then"));
         // “put Chrome on the left and Ghostty on the right” elides the second verb.
         // Only admit a known app followed by a placement, not arbitrary noun phrases.
-        let parallel_window = apps.iter().any(|app| right.get(..app.len()).is_some_and(|s| s.eq_ignore_ascii_case(app)) && right.get(app.len()..).is_some_and(|s| s.starts_with(" on ") || s.starts_with(" to ")));
+        let parallel_window = apps.iter().any(|app| {
+            right
+                .get(..app.len())
+                .is_some_and(|s| s.eq_ignore_ascii_case(app))
+                && right
+                    .get(app.len()..)
+                    .is_some_and(|s| s.starts_with(" on ") || s.starts_with(" to "))
+        });
         if right.is_empty() || !(explicit || list || parallel_window || starts_action(right)) {
             continue;
         }

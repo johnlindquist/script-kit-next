@@ -187,7 +187,12 @@ impl WebcamSession {
         };
         match self.phase {
             WebcamPhase::Live => vec![
-                row(action_id::CAPTURE, "Capture Photo", "Take a photo now", Some("↵")),
+                row(
+                    action_id::CAPTURE,
+                    "Capture Photo",
+                    "Take a photo now",
+                    Some("↵"),
+                ),
                 row(
                     action_id::COUNTDOWN_SHORT,
                     "Capture in 3 Seconds",
@@ -229,8 +234,18 @@ impl WebcamSession {
                     "Copy the full path of the saved photo",
                     Some(COPY_PATH_SHORTCUT),
                 ),
-                row(action_id::REVEAL, "Show in Finder", "Reveal the saved photo", None),
-                row(action_id::OPEN, "Open", "Open the photo in its default app", None),
+                row(
+                    action_id::REVEAL,
+                    "Show in Finder",
+                    "Reveal the saved photo",
+                    None,
+                ),
+                row(
+                    action_id::OPEN,
+                    "Open",
+                    "Open the photo in its default app",
+                    None,
+                ),
                 row(
                     action_id::RETAKE,
                     "Retake",
@@ -380,8 +395,16 @@ mod tests {
         let mut session = WebcamSession::default();
         assert_eq!(session.start_countdown(0), None);
         session.start_countdown(3).unwrap();
-        assert_eq!(session.start_countdown(3), None, "no second countdown over the first");
-        assert_eq!(reviewing().start_countdown(3), None, "a review must be left first");
+        assert_eq!(
+            session.start_countdown(3),
+            None,
+            "no second countdown over the first"
+        );
+        assert_eq!(
+            reviewing().start_countdown(3),
+            None,
+            "a review must be left first"
+        );
     }
 
     #[test]

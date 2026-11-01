@@ -242,7 +242,7 @@ pub fn render_design_item(
                     };
                     (
                         bm.entry.name.clone(),
-                        (!bm.entry.description.is_empty()).then(||bm.entry.description.clone()),
+                        (!bm.entry.description.is_empty()).then(|| bm.entry.description.clone()),
                         None,
                         Some(icon),
                     )

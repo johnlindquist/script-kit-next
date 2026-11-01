@@ -168,7 +168,9 @@ pub fn describe(ctx: &ScreenContext, request: &str) -> Value {
     screen.insert("frontmost_app".into(), json!(ctx.front_app.name));
     // Window identity stays local for execution. Never transmit live titles, URLs,
     // prior actions, selection, clipboard, or stored facts as incidental context.
-    if ctx.id == "live" { return json!({"request":request,"screen":screen}); }
+    if ctx.id == "live" {
+        return json!({"request":request,"screen":screen});
+    }
     screen.insert("window_title".into(), json!(ctx.window_title));
     if let Some(url) = ctx.url.as_deref().filter(|u| !u.is_empty()) {
         screen.insert("url".into(), json!(url));

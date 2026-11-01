@@ -7,8 +7,8 @@
 pub mod catalog;
 pub mod context;
 pub mod engine;
-pub mod fixture_oracle;
 pub mod filename;
+pub mod fixture_oracle;
 pub mod jev;
 pub mod launcher;
 pub mod present;
@@ -39,7 +39,17 @@ pub use words::{WordKind, WordRead, WordSource};
 /// blocks *all* remote readings, including partial voice transcripts.
 pub fn sensitive_words(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
-    ["password", "passphrase", "api key", "api_key", "private key", "access token", "recovery phrase"].iter().any(|label| lower.contains(label))
+    [
+        "password",
+        "passphrase",
+        "api key",
+        "api_key",
+        "private key",
+        "access token",
+        "recovery phrase",
+    ]
+    .iter()
+    .any(|label| lower.contains(label))
         || crate::clipboard_history::matches_secret_content(text)
 }
 

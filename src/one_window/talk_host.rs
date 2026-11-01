@@ -187,7 +187,9 @@ impl ScriptListApp {
         }
         self.settle_intent_oracle_slot();
         let slot = self.intent_launcher.oracle_slot().clone();
-        if matches!(slot, OracleSlot::Off(_)) || (self.main_services.is_production() && crate::intent::sensitive_words(&words)) {
+        if matches!(slot, OracleSlot::Off(_))
+            || (self.main_services.is_production() && crate::intent::sensitive_words(&words))
+        {
             if last {
                 self.one_window_handle(Event::Talk(TalkEvent::Unread { words }), cx);
                 self.one_window_republish_own(cx);

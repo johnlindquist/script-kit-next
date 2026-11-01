@@ -146,7 +146,11 @@ impl ScriptListApp {
             return true;
         }
         if row.key == steps::OFFLINE_UNAVAILABLE {
-            self.one_window_notice(crate::line_notice::INFO, "Can't run these steps offline. Nothing was sent or changed.", cx);
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Can't run these steps offline. Nothing was sent or changed.",
+                cx,
+            );
             return true;
         }
         let event = if row.key == steps::ROW_KEY {
@@ -232,8 +236,12 @@ impl ScriptListApp {
             }
             WorkEffect::ReadSteps { sentence } => {
                 if !steps::offline_supported(&sentence) {
-                    self.one_window_handle(Event::View(sk_one_window::ViewOp::Back),cx);
-                    self.one_window_notice(crate::line_notice::INFO,"Can't run these steps offline. Nothing was changed.",cx);
+                    self.one_window_handle(Event::View(sk_one_window::ViewOp::Back), cx);
+                    self.one_window_notice(
+                        crate::line_notice::INFO,
+                        "Can't run these steps offline. Nothing was changed.",
+                        cx,
+                    );
                     return;
                 }
                 let steps = steps::split(&sentence)
@@ -248,7 +256,13 @@ impl ScriptListApp {
             }
             WorkEffect::RunSteps { steps } => {
                 let supported = steps.iter().all(|(_, s)| steps::offline_note(s).is_some());
-                if !supported { self.one_window_notice(crate::line_notice::FAILED, "Can't run these steps offline. Nothing was sent or changed.", cx); }
+                if !supported {
+                    self.one_window_notice(
+                        crate::line_notice::FAILED,
+                        "Can't run these steps offline. Nothing was sent or changed.",
+                        cx,
+                    );
+                }
                 for (index, text) in steps {
                     let event = if supported && self.one_window_run_step(&text, cx) {
                         WorkEvent::StepDone { index }
@@ -475,7 +489,11 @@ impl ScriptListApp {
                 Status::Error => vec![WorkEvent::ModelFailed {
                     message: "The model couldn't answer".into(),
                 }],
-                Status::Idle if reply.is_empty() && ended.is_some() => vec![WorkEvent::ModelEndedEmpty { stopped: ended == Some(true) }],
+                Status::Idle if reply.is_empty() && ended.is_some() => {
+                    vec![WorkEvent::ModelEndedEmpty {
+                        stopped: ended == Some(true),
+                    }]
+                }
                 _ if reply.is_empty() => Vec::new(),
                 _ if written => vec![
                     WorkEvent::ModelWrote {

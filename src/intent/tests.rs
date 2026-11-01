@@ -1430,16 +1430,29 @@ fn closing_a_named_app_with_no_window_open_waits() {
 
 #[test]
 fn launcher_qualifies_services_and_opens_the_real_brain_search() {
-    let (ctx,catalog)=(screen(),catalog()); let request="search my records";
-    let built=build_questions(request,&ctx,&catalog,&EngineOptions::default());
-    let mut plan=compose_plan(request,&ctx,&catalog,&built,&answers_for_reminder());
-    plan.reading.pathway=Pathway::Recall;plan.alternatives.clear();plan.reading.missing=None;plan.ready=true;
+    let (ctx, catalog) = (screen(), catalog());
+    let request = "search my records";
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let mut plan = compose_plan(request, &ctx, &catalog, &built, &answers_for_reminder());
+    plan.reading.pathway = Pathway::Recall;
+    plan.alternatives.clear();
+    plan.reading.missing = None;
+    plan.ready = true;
     for service in sk_one_window::connect::INTEGRATIONS {
-        plan.reading.steps=vec![Step::Recall{source:service.key.into(),query:Some("practice".into())}];
-        let rows=readings(plan.clone()); assert!(!rows[0].plan.ready && rows[0].plan.missing.is_some());
+        plan.reading.steps = vec![Step::Recall {
+            source: service.key.into(),
+            query: Some("practice".into()),
+        }];
+        let rows = readings(plan.clone());
+        assert!(!rows[0].plan.ready && rows[0].plan.missing.is_some());
     }
-    plan.reading.steps=vec![Step::Recall{source:"brain".into(),query:Some("spring kite".into())}];
-    let rows=readings(plan);assert!(rows[0].plan.ready && !rows[0].plan.typed_is_proposed);assert_eq!(rows[0].plan.typed.as_deref(),Some("brain:spring kite"));
+    plan.reading.steps = vec![Step::Recall {
+        source: "brain".into(),
+        query: Some("spring kite".into()),
+    }];
+    let rows = readings(plan);
+    assert!(rows[0].plan.ready && !rows[0].plan.typed_is_proposed);
+    assert_eq!(rows[0].plan.typed.as_deref(), Some("brain:spring kite"));
     assert!(super::sensitive_words("the wifi password is example"));
     assert!(!super::sensitive_words("open Copper Clock"));
 }
@@ -1532,7 +1545,9 @@ fn only_web_addresses_the_user_typed_are_read_as_pages() {
 fn a_named_tab_request_does_not_launch_an_app_or_guess_a_menu_command() {
     let plan = super::engine::named_tab_plan("Focus on the herdr tab", "Google Chrome").unwrap();
     assert!(plan.ready);
-    assert!(matches!(&plan.steps[..], [Step::FocusTab {app,query}] if app=="Google Chrome" && query=="herdr"));
+    assert!(
+        matches!(&plan.steps[..], [Step::FocusTab {app,query}] if app=="Google Chrome" && query=="herdr")
+    );
     assert!(super::engine::named_tab_plan("Focus on the next tab", "Google Chrome").is_none());
     assert!(super::engine::named_tab_plan("Open a new tab", "Google Chrome").is_none());
     assert!(super::engine::named_tab_plan("Focus on the herdr tab", "Finder").is_none());

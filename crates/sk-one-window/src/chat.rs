@@ -98,7 +98,9 @@ pub enum Phase {
     /// The reply is written; Jev is ranking what to do with it.
     Ranking,
     Ready,
-    EndedEmpty { stopped: bool },
+    EndedEmpty {
+        stopped: bool,
+    },
     /// The model couldn't answer; what the screen says about it.
     Failed(String),
 }

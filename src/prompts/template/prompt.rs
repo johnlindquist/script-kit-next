@@ -392,11 +392,12 @@ impl TemplatePrompt {
 
     pub(super) fn set_value_at(&mut self, index: usize, text: &str, cx: &mut Context<Self>) {
         if let Some(value) = self.values.get_mut(index) {
-            if value == text { return; }
+            if value == text {
+                return;
+            }
             *value = text.to_string();
             if let Some(input) = self.inputs.get(index) {
-                self.validation_errors[index] =
-                    Self::validate_input_value(input, value).err();
+                self.validation_errors[index] = Self::validate_input_value(input, value).err();
             }
             self.advance_input_revision();
             cx.notify();

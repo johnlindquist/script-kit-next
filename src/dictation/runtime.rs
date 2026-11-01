@@ -177,7 +177,7 @@ static TRANSCRIBER: Mutex<Option<CachedTranscriber>> = Mutex::new(None);
 // ---------------------------------------------------------------------------
 
 /// Monotonic counter distinguishing capture sessions for partial results.
-static RETIRED_PARTIAL: AtomicU64=AtomicU64::new(0);
+static RETIRED_PARTIAL: AtomicU64 = AtomicU64::new(0);
 static SESSION_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// `true` while a partial transcription inference is running on its worker
@@ -271,7 +271,9 @@ pub struct DictationTranscriptResolution {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` when a dictation capture session is currently active.
-pub fn current_capture_generation() -> Option<u64> { SESSION.lock().as_ref().map(|s| s.session_generation) }
+pub fn current_capture_generation() -> Option<u64> {
+    SESSION.lock().as_ref().map(|s| s.session_generation)
+}
 
 pub fn is_dictation_recording() -> bool {
     SESSION.lock().is_some()
@@ -977,7 +979,13 @@ pub fn snapshot_live_state() -> Option<crate::dictation::DictationLiveState> {
 /// partials) so the stop/transcribe path can keep the recognized-so-far text
 /// on screen while the final transcription runs, instead of blanking the
 /// overlay.
-pub fn discard_private_partial(generation:u64){let mut partial=PARTIAL_TRANSCRIPT.lock();RETIRED_PARTIAL.fetch_max(generation,Ordering::AcqRel);if partial.as_ref().is_some_and(|(g,_)|*g==generation){*partial=None;}}
+pub fn discard_private_partial(generation: u64) {
+    let mut partial = PARTIAL_TRANSCRIPT.lock();
+    RETIRED_PARTIAL.fetch_max(generation, Ordering::AcqRel);
+    if partial.as_ref().is_some_and(|(g, _)| *g == generation) {
+        *partial = None;
+    }
+}
 
 pub fn last_partial_transcript() -> Option<String> {
     PARTIAL_TRANSCRIPT
@@ -1060,7 +1068,9 @@ fn maybe_begin_partial_transcription(session: &mut DictationSession) {
                     };
                     let mut guard = PARTIAL_TRANSCRIPT.lock();
                     // Only publish for the session the audio came from.
-                    if SESSION_GENERATION.load(Ordering::Acquire) == generation && generation>RETIRED_PARTIAL.load(Ordering::Acquire) {
+                    if SESSION_GENERATION.load(Ordering::Acquire) == generation
+                        && generation > RETIRED_PARTIAL.load(Ordering::Acquire)
+                    {
                         *guard = Some((generation, display));
                     }
                 }
@@ -1634,16 +1644,31 @@ pub(crate) fn reset_cached_transcriber_for_tests() {
 // Start recording
 // ---------------------------------------------------------------------------
 
-fn start_recording(target: DictationTarget) -> Result<()> { start_recording_with_journal(target,None) }
-pub fn start_protected_recording(target: DictationTarget,journal:Option<super::recovery::AudioJournal>)->Result<()> {anyhow::ensure!(!is_dictation_busy(),"Dictation already active");start_recording_with_journal(target,journal)}
-fn start_recording_with_journal(target: DictationTarget,journal:Option<super::recovery::AudioJournal>) -> Result<()> {
+fn start_recording(target: DictationTarget) -> Result<()> {
+    start_recording_with_journal(target, None)
+}
+pub fn start_protected_recording(
+    target: DictationTarget,
+    journal: Option<super::recovery::AudioJournal>,
+) -> Result<()> {
+    anyhow::ensure!(!is_dictation_busy(), "Dictation already active");
+    start_recording_with_journal(target, journal)
+}
+fn start_recording_with_journal(
+    target: DictationTarget,
+    journal: Option<super::recovery::AudioJournal>,
+) -> Result<()> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Device)?;
     let active_device = resolve_preferred_device_info()?;
     let device_id = active_device.as_ref().map(|device| device.id.clone());
     let capture_config = DictationCaptureConfig::default();
 
-    let (event_rx, capture_handle) = if let Some(writer)=journal {super::capture::start_capture_with_journal(capture_config, device_id.as_ref(),Some(writer))}else{start_capture(capture_config, device_id.as_ref())}
-        .context("failed to start audio capture")?;
+    let (event_rx, capture_handle) = if let Some(writer) = journal {
+        super::capture::start_capture_with_journal(capture_config, device_id.as_ref(), Some(writer))
+    } else {
+        start_capture(capture_config, device_id.as_ref())
+    }
+    .context("failed to start audio capture")?;
 
     let prefs = crate::config::load_user_preferences();
     *PARTIAL_TRANSCRIPT.lock() = None;

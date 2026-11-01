@@ -624,11 +624,20 @@ static TAB_COPY: parking_lot::Mutex<Option<(i64, Instant, String)>> = parking_lo
 fn remember_tab_copy(generation: Option<i64>, id: &str) {
     *TAB_COPY.lock() = generation.map(|g| (g, Instant::now(), id.to_owned()));
 }
-pub fn recent_tab_copy() -> Option<(String,u64)> {
-    if STOP_MONITORING.get().is_none_or(|s|s.load(Ordering::Relaxed)) {return None;}
+pub fn recent_tab_copy() -> Option<(String, u64)> {
+    if STOP_MONITORING
+        .get()
+        .is_none_or(|s| s.load(Ordering::Relaxed))
+    {
+        return None;
+    }
     let (g, at, id) = TAB_COPY.lock().clone()?;
     let age = at.elapsed().as_millis() as u64;
-    if age >= sk_one_window::window::subject_tabs::COPY_FRESH_MS || Some(g) != super::change_detection::get_pasteboard_change_count() { return None; }
+    if age >= sk_one_window::window::subject_tabs::COPY_FRESH_MS
+        || Some(g) != super::change_detection::get_pasteboard_change_count()
+    {
+        return None;
+    }
     let body = super::get_entry_content(&id)?;
     (Some(g) == super::change_detection::get_pasteboard_change_count()).then_some((body, age))
 }

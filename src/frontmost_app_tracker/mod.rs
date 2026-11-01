@@ -504,7 +504,10 @@ pub fn start_tracking() {
 ///
 /// Returns `None` if no app has been tracked yet (e.g., Script Kit just launched).
 pub fn observed_window_age_ms() -> u64 {
-    TRACKER_STATE.read().window_seen.map_or(0, |at| at.elapsed().as_millis() as u64)
+    TRACKER_STATE
+        .read()
+        .window_seen
+        .map_or(0, |at| at.elapsed().as_millis() as u64)
 }
 
 pub fn get_last_real_app() -> Option<TrackedApp> {

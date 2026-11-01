@@ -326,11 +326,11 @@ pub trait Oracle: Send + Sync {
 /// The transcript remains verbatim: only the interpretation instructions change.
 pub struct DictatedOracle<'a>(pub &'a dyn Oracle);
 impl Oracle for DictatedOracle<'_> {
-    fn ask(&self,state:&serde_json::Value,questions:&Questions)->Result<JevResult,JevError>{
-        let mut state=state.clone();
-        state["inputSource"]=serde_json::json!("dictation");
+    fn ask(&self, state: &serde_json::Value, questions: &Questions) -> Result<JevResult, JevError> {
+        let mut state = state.clone();
+        state["inputSource"] = serde_json::json!("dictation");
         state["transcriptionGuidance"]=serde_json::json!("This is a final speech transcript. Allow likely homophones, fillers and missing punctuation when interpreting the requested action. Preserve negation, literal text, names and recipients; prefer no match when those are ambiguous.");
-        self.0.ask(&state,questions)
+        self.0.ask(&state, questions)
     }
 }
 
@@ -338,10 +338,23 @@ impl Oracle for DictatedOracle<'_> {
 mod speech_origin_tests {
     use super::*;
     #[test]
-    fn dictated_questions_keep_literal_words_and_attach_provenance_without_changing_typed_requests(){
+    fn dictated_questions_keep_literal_words_and_attach_provenance_without_changing_typed_requests()
+    {
         struct Inspect;
-        impl Oracle for Inspect { fn ask(&self,state:&serde_json::Value,_:&Questions)->Result<JevResult,JevError>{assert_eq!(state["request"],"don't send this to Erin");assert_eq!(state["inputSource"],"dictation");assert!(state["transcriptionGuidance"].as_str().unwrap().contains("negation"));Err(JevError::Refused("fixture"))} }
-        let typed=serde_json::json!({"request":"don't send this to Erin"});let _=DictatedOracle(&Inspect).ask(&typed,&Questions::default());assert!(typed.get("inputSource").is_none());
+        impl Oracle for Inspect {
+            fn ask(&self, state: &serde_json::Value, _: &Questions) -> Result<JevResult, JevError> {
+                assert_eq!(state["request"], "don't send this to Erin");
+                assert_eq!(state["inputSource"], "dictation");
+                assert!(state["transcriptionGuidance"]
+                    .as_str()
+                    .unwrap()
+                    .contains("negation"));
+                Err(JevError::Refused("fixture"))
+            }
+        }
+        let typed = serde_json::json!({"request":"don't send this to Erin"});
+        let _ = DictatedOracle(&Inspect).ask(&typed, &Questions::default());
+        assert!(typed.get("inputSource").is_none());
     }
 }
 
@@ -378,8 +391,7 @@ impl JevConfig {
                 crate::secrets::get_secret("TYPESAFE_API_KEY").filter(|v| !v.trim().is_empty())
             })
             .ok_or(JevError::MissingKey)?;
-        let model = env_nonempty("TYPESAFE_MODEL")
-            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+        let model = env_nonempty("TYPESAFE_MODEL").unwrap_or_else(|| DEFAULT_MODEL.to_string());
         Ok(Self::new(api_key, model))
     }
 }

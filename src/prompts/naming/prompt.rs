@@ -124,7 +124,9 @@ impl NamingPrompt {
     }
 
     pub(crate) fn visible_issue(&self) -> Option<&NamingValidationError> {
-        self.validation_error.as_ref().filter(|_| self.attempted || !self.friendly_name.is_empty())
+        self.validation_error
+            .as_ref()
+            .filter(|_| self.attempted || !self.friendly_name.is_empty())
     }
 
     fn refresh_derived_state(&mut self) {

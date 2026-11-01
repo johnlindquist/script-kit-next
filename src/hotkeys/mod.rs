@@ -3,8 +3,8 @@
 //! and dynamic shortcut registration/unregistration utilities.
 //! This module depends on `config`, `scripts`, `shortcuts`, and `logging`, and is used by app startup/reload flows.
 
-pub mod gesture;
 pub(crate) mod dictation_keys;
+pub mod gesture;
 
 // --- merged from part_000.rs ---
 use crate::{config, logging, scripts, shortcuts};
@@ -1334,8 +1334,13 @@ pub struct MainHotkeyPhysicalEvent {
 }
 
 // Simulated gestures can navigate, but never grant microphone access.
-static MAIN_PRESS_NATIVE: AtomicBool=AtomicBool::new(false);
-fn admitted_gesture(event: GestureEvent)->bool { !matches!(event,GestureEvent::HoldStart|GestureEvent::TodayHoldStart|GestureEvent::HoldEnd) || MAIN_PRESS_NATIVE.load(Ordering::Acquire) }
+static MAIN_PRESS_NATIVE: AtomicBool = AtomicBool::new(false);
+fn admitted_gesture(event: GestureEvent) -> bool {
+    !matches!(
+        event,
+        GestureEvent::HoldStart | GestureEvent::TodayHoldStart | GestureEvent::HoldEnd
+    ) || MAIN_PRESS_NATIVE.load(Ordering::Acquire)
+}
 
 static MAIN_GESTURE_CLASSIFIER: LazyLock<Mutex<GestureClassifier>> =
     LazyLock::new(|| Mutex::new(GestureClassifier::with_defaults()));
@@ -1377,7 +1382,9 @@ pub fn rearm_main_gesture_for_unfocused_window() -> bool {
 }
 
 pub(crate) fn commit_main_gesture_typing() {
-    if let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() { classifier.commit_typing(); }
+    if let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() {
+        classifier.commit_typing();
+    }
 }
 
 /// Advance time-based gesture transitions (`HoldStart`, deferred `Tap`).
@@ -1385,7 +1392,8 @@ pub fn poll_main_gesture_classifier(now: std::time::Instant) -> Option<GestureEv
     MAIN_GESTURE_CLASSIFIER
         .lock()
         .ok()
-        .and_then(|mut classifier| classifier.poll(now)).filter(|e|admitted_gesture(*e))
+        .and_then(|mut classifier| classifier.poll(now))
+        .filter(|e| admitted_gesture(*e))
 }
 
 /// Next poll deadline for hold/double-tap windows.
@@ -1404,17 +1412,31 @@ pub fn process_main_hotkey_physical_event(event: MainHotkeyPhysicalEvent) -> Vec
         MainHotkeyPhase::KeyDown => GestureInput::KeyDown(event.at),
         MainHotkeyPhase::KeyUp => GestureInput::KeyUp(event.at),
     };
-    if event.phase==MainHotkeyPhase::KeyUp && event.native_press!=MAIN_PRESS_NATIVE.load(Ordering::Acquire) {return Vec::new();}
-    let events=classifier.handle_input(input);
-    if events.iter().any(|e|matches!(e,GestureEvent::BeginOutside|GestureEvent::BeginInside|GestureEvent::DoubleTap)) { MAIN_PRESS_NATIVE.store(event.native_press,Ordering::Release); }
-    events.into_iter().filter(|e|admitted_gesture(*e)).collect()
+    if event.phase == MainHotkeyPhase::KeyUp
+        && event.native_press != MAIN_PRESS_NATIVE.load(Ordering::Acquire)
+    {
+        return Vec::new();
+    }
+    let events = classifier.handle_input(input);
+    if events.iter().any(|e| {
+        matches!(
+            e,
+            GestureEvent::BeginOutside | GestureEvent::BeginInside | GestureEvent::DoubleTap
+        )
+    }) {
+        MAIN_PRESS_NATIVE.store(event.native_press, Ordering::Release);
+    }
+    events
+        .into_iter()
+        .filter(|e| admitted_gesture(*e))
+        .collect()
 }
 
 /// Agentic/devtools injection — mirrors the global-hotkey thread delivery path.
 pub fn inject_main_hotkey_phase_for_agentic(phase: MainHotkeyPhase) {
     let correlation_id = format!("hotkey:main:inject:{}", Uuid::new_v4());
     let event = MainHotkeyPhysicalEvent {
-        native_press:false,
+        native_press: false,
         phase,
         correlation_id,
         at: std::time::Instant::now(),
@@ -2014,7 +2036,9 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
         loop {
             if let Ok(event) = receiver.recv() {
-                if dictation_keys::dispatch(event.id,event.state){continue;}
+                if dictation_keys::dispatch(event.id, event.state) {
+                    continue;
+                }
                 // Look up action in unified routing table (fast read lock)
                 let action = {
                     let routes_guard = routes().read();
@@ -2051,7 +2075,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                             HotKeyState::Released => MainHotkeyPhase::KeyUp,
                         };
                         let physical = MainHotkeyPhysicalEvent {
-                            native_press:true,
+                            native_press: true,
                             phase,
                             correlation_id: correlation_id.clone(),
                             at: std::time::Instant::now(),

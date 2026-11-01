@@ -109,7 +109,9 @@ impl OneWindow {
             }
             WorkEvent::ModelWrote { text, done } => self.with_chat(|c| c.wrote(&text, done)),
             WorkEvent::ModelNext(rows) => self.with_chat(|c| c.ranked(rows)),
-            WorkEvent::ModelEndedEmpty { stopped } => self.with_chat(|c| { c.phase = chat::Phase::EndedEmpty { stopped }; }),
+            WorkEvent::ModelEndedEmpty { stopped } => self.with_chat(|c| {
+                c.phase = chat::Phase::EndedEmpty { stopped };
+            }),
             WorkEvent::ModelFailed { message } => self.with_chat(|c| c.failed(&message)),
             WorkEvent::OpenSteps { sentence } => {
                 let open = Steps::open(&sentence);

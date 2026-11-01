@@ -147,7 +147,9 @@ fn every_recorded_request_composes_the_plan_the_prototype_composed() {
         let mut expected = case.expect.clone();
         // The historical prototype offered first-clause alternatives for a compound.
         // Today's contract prohibits running only that prefix; retain all other expectations.
-        if expected.clauses > 1 { expected.alternatives.clear(); }
+        if expected.clauses > 1 {
+            expected.alternatives.clear();
+        }
         if got != expected {
             mismatches.push(format!(
                 "{:?} ({})\n  want {:?}\n  got  {:?}",

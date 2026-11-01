@@ -12,7 +12,9 @@ use serde_json::Value;
 use super::catalog::{Catalog, Command, CommandKind, WindowOp};
 use super::context::{describe, LastAction, LastStep, MenuCommand, ScreenContext};
 use super::jev::{Answer, Answers, Criteria, JevError, Oracle, Probabilities, Question, Questions};
-use super::spans::{span_candidates, split_clauses_for_apps, tokenize, Span, Word, MAX_CLAUSES, SPAN_LIMIT};
+use super::spans::{
+    span_candidates, split_clauses_for_apps, tokenize, Span, Word, MAX_CLAUSES, SPAN_LIMIT,
+};
 use super::words::{read_words, WordRead};
 
 pub const NONE: &str = "none";
@@ -250,8 +252,17 @@ pub enum Step {
         op: WindowOp,
         app: String,
     },
-    InspectFilename { app: String, pid: u32, window_id: u32, title: String, filename: String },
-    FocusTab { app: String, query: String },
+    InspectFilename {
+        app: String,
+        pid: u32,
+        window_id: u32,
+        title: String,
+        filename: String,
+    },
+    FocusTab {
+        app: String,
+        query: String,
+    },
     OpenUrl {
         url: String,
         /// The default browser when none.
@@ -1971,7 +1982,9 @@ pub fn understand(
     oracle: &dyn Oracle,
     opts: &EngineOptions,
 ) -> Result<Plan, JevError> {
-    if let Some(plan) = super::filename::read(request, ctx, oracle) { return plan; }
+    if let Some(plan) = super::filename::read(request, ctx, oracle) {
+        return plan;
+    }
     let built = build_questions(request, ctx, catalog, opts);
     let result = oracle.ask(&built.state, &built.questions)?;
     let mut plan = compose_plan(request, ctx, catalog, &built, &result.answers);
@@ -1986,7 +1999,18 @@ pub fn understand(
     if is_clause {
         return Ok(plan);
     }
-    let apps: Vec<&str> = ctx.open_windows.iter().map(|w| w.app.as_str()).chain(catalog.commands.iter().filter(|c| c.kind == CommandKind::App).map(|c| c.name.as_str())).collect();
+    let apps: Vec<&str> = ctx
+        .open_windows
+        .iter()
+        .map(|w| w.app.as_str())
+        .chain(
+            catalog
+                .commands
+                .iter()
+                .filter(|c| c.kind == CommandKind::App)
+                .map(|c| c.name.as_str()),
+        )
+        .collect();
     let compound = noul_answer(&result.answers, "compound").unwrap_or(0.0);
     if plan.pathway == Pathway::Automate && plan.missing.as_deref() == Some(STEPS_NEXT) {
         let mut source = plan

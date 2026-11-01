@@ -51,7 +51,6 @@ pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
 pub(crate) mod list_scroll_affordance;
 pub(crate) mod main_view_chrome;
-pub(crate) mod subject_tab_bar;
 pub mod minimal_prompt_shell;
 pub(crate) mod navigation_affordance;
 pub(crate) mod non_list_state;
@@ -65,6 +64,7 @@ pub mod section_divider;
 pub mod shortcut_recorder;
 #[allow(dead_code, reason = "the binary's ScriptListApp and Day Page draw it")]
 pub(crate) mod staged_actions;
+pub(crate) mod subject_tab_bar;
 pub mod text_input;
 pub mod unified_list_item;
 #[cfg(test)]
@@ -90,8 +90,8 @@ pub use focusable_prompt_wrapper::{
 };
 #[allow(unused_imports)]
 pub(crate) use form_fields::{
-    apply_form_field_shell_test_fixture, menu_syntax_form_field_shell_spec,
-    labeled_control, render_form_field_shell, resolve_form_field_shell_style, FormFieldShellSpec,
+    apply_form_field_shell_test_fixture, labeled_control, menu_syntax_form_field_shell_spec,
+    render_form_field_shell, resolve_form_field_shell_style, FormFieldShellSpec,
     FormFieldShellStyle, FormFieldValidation,
 };
 #[allow(unused_imports)]
@@ -157,12 +157,11 @@ pub(crate) use prompt_layout_shell::{
 };
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
-    prompt_detail_card, prompt_preview_style, prompt_form_help, prompt_form_intro,
-    prompt_form_section, prompt_scroll_value, prompt_scroll_value_with_id,
+    prompt_detail_card, prompt_form_help, prompt_form_intro, prompt_form_section,
+    prompt_preview_style, prompt_scroll_value, prompt_scroll_value_with_id,
     prompt_single_line_control_metrics, prompt_single_line_control_surface, prompt_surface,
     prompt_text_field, prompt_text_palette, render_inset_prompt_body, PromptBodyInsets,
-    PromptFieldStyle, PromptSingleLineControlMetrics, PromptTextPalette,
-    ResolvedPromptBodyInsets,
+    PromptFieldStyle, PromptSingleLineControlMetrics, PromptTextPalette, ResolvedPromptBodyInsets,
 };
 #[allow(unused_imports)]
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};

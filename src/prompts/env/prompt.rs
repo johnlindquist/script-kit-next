@@ -267,12 +267,22 @@ impl EnvPrompt {
         cx.notify();
     }
 
-    pub(crate) fn can_toggle_visibility(&self) -> bool { self.secret && !self.input.text().is_empty() }
+    pub(crate) fn can_toggle_visibility(&self) -> bool {
+        self.secret && !self.input.text().is_empty()
+    }
     pub(crate) fn visibility_id(&self) -> &'static str {
-        if self.reveal_secret { "env:hide-secret" } else { "env:show-secret" }
+        if self.reveal_secret {
+            "env:hide-secret"
+        } else {
+            "env:show-secret"
+        }
     }
     pub(crate) fn visibility_label(&self) -> &'static str {
-        if self.reveal_secret { "Hide secret value" } else { "Show secret value for 5 seconds" }
+        if self.reveal_secret {
+            "Hide secret value"
+        } else {
+            "Show secret value for 5 seconds"
+        }
     }
 
     pub(crate) fn toggle_secret_reveal(&mut self, cx: &mut Context<Self>) {

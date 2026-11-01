@@ -58,10 +58,14 @@ fn qualify(plan: &mut Plan) {
 }
 
 /// Menu and window interpretations of the same quit share the cancellable hold.
- pub fn quits_application(step: &Step) -> bool {
+pub fn quits_application(step: &Step) -> bool {
     match step {
-        Step::Window {op,..} => op.action() == Some(WindowAction::Quit),
-        Step::Menu {path,..} => path.last().is_some_and(|name| name.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case("quit"))),
+        Step::Window { op, .. } => op.action() == Some(WindowAction::Quit),
+        Step::Menu { path, .. } => path.last().is_some_and(|name| {
+            name.split_whitespace()
+                .next()
+                .is_some_and(|w| w.eq_ignore_ascii_case("quit"))
+        }),
         _ => false,
     }
 }
@@ -70,12 +74,41 @@ pub fn unavailable(plan: &Plan) -> Option<&'static str> {
     let several = plan.steps.len() > 1 && plan.pathway != Pathway::Automate;
     for step in &plan.steps {
         match step {
-            Step::Recall { source, .. } if sk_one_window::connect::integration(source).is_some() => return Some("a service integration that isn't available yet"),
-            Step::Remember { subject: Some(s), .. } if s != "clipboard" => return Some("the words to save to today's note"),
-            Step::Capture { target, handler: None, .. } if !matches!(target.as_str(),"note"|"todo"|"reminder") => return Some("an installed capture command for this destination"),
-            Step::Recall { .. } | Step::Ask { .. } | Step::Delegate { .. } | Step::InspectFilename { .. } | Step::Transform { tool: None, .. } if several => return Some("a separate request for this step"),
-            Step::Capture { target, subject, .. } if several && (subject.is_some() || !matches!(target.as_str(),"note"|"todo"|"reminder")) => return Some("a separate request for this capture"),
-            Step::Remember { subject: Some(_), .. } if several => return Some("a separate request for this memory"),
+            Step::Recall { source, .. }
+                if sk_one_window::connect::integration(source).is_some() =>
+            {
+                return Some("a service integration that isn't available yet")
+            }
+            Step::Remember {
+                subject: Some(s), ..
+            } if s != "clipboard" => return Some("the words to save to today's note"),
+            Step::Capture {
+                target,
+                handler: None,
+                ..
+            } if !matches!(target.as_str(), "note" | "todo" | "reminder") => {
+                return Some("an installed capture command for this destination")
+            }
+            Step::Recall { .. }
+            | Step::Ask { .. }
+            | Step::Delegate { .. }
+            | Step::InspectFilename { .. }
+            | Step::Transform { tool: None, .. }
+                if several =>
+            {
+                return Some("a separate request for this step")
+            }
+            Step::Capture {
+                target, subject, ..
+            } if several
+                && (subject.is_some()
+                    || !matches!(target.as_str(), "note" | "todo" | "reminder")) =>
+            {
+                return Some("a separate request for this capture")
+            }
+            Step::Remember {
+                subject: Some(_), ..
+            } if several => return Some("a separate request for this memory"),
             _ => {}
         }
     }
@@ -127,7 +160,9 @@ pub fn readings(plan: Plan) -> Vec<JevRow> {
             }
         }
         qualify(&mut plan);
-        if index > 0 && !plan.ready { continue; }
+        if index > 0 && !plan.ready {
+            continue;
+        }
         let key = format!("jev:{}:{}", plan.pathway.key(), plan.title);
         if out.len() < READINGS && !out.iter().any(|r| r.key == key) {
             out.push(JevRow {
@@ -196,7 +231,9 @@ impl IntentLauncher {
 
     /// A failure that means Jev can't be reached at all turns it off for the session.
     pub fn failed(&mut self, error: &JevError) {
-        if !matches!(error, JevError::Refused("local request")) && matches!(error, JevError::MissingKey | JevError::Refused(_)) {
+        if !matches!(error, JevError::Refused("local request"))
+            && matches!(error, JevError::MissingKey | JevError::Refused(_))
+        {
             self.oracle = OracleSlot::Off("unavailable");
         }
     }

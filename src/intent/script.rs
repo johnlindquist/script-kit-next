@@ -203,7 +203,9 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
             out.lines.push(line);
         }
         // Native references and approval belong to the live sheet, never a saved script.
-        Step::InspectFilename { .. } => out.lines.push("throw new Error(\"Inspect the current Save sheet in Script Kit first\");".into()),
+        Step::InspectFilename { .. } => out.lines.push(
+            "throw new Error(\"Inspect the current Save sheet in Script Kit first\");".into(),
+        ),
         Step::FocusTab { app, query } => {
             if let Some(program) = crate::browser_tabs::named_tab_program(app, query) {
                 out.lines.push(format!("if ((await exec(\"osascript\", [\"-l\", \"JavaScript\", \"-e\", {}])).stdout.trim() !== \"focused\") throw new Error(\"Couldn't focus the requested browser tab\");", js(&program)));

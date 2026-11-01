@@ -33,8 +33,8 @@ impl OwnView {
             OwnView::Automations => "automations",
             OwnView::Microphones => "microphones",
             OwnView::DictationHistory => "dictation-history",
-            OwnView::Recovery=>"dictation-recovery",
-            OwnView::TakeActions=>"dictation-take-actions",
+            OwnView::Recovery => "dictation-recovery",
+            OwnView::TakeActions => "dictation-take-actions",
             OwnView::Script => "script",
             OwnView::Shortcut => "shortcut",
             OwnView::AllResults => "all-results",
@@ -46,7 +46,8 @@ impl OwnView {
             OwnView::Automations,
             OwnView::Microphones,
             OwnView::DictationHistory,
-            OwnView::Recovery,OwnView::TakeActions,
+            OwnView::Recovery,
+            OwnView::TakeActions,
             OwnView::Script,
             OwnView::Shortcut,
             OwnView::AllResults,
@@ -59,7 +60,11 @@ impl OwnView {
     fn picks(self) -> bool {
         matches!(
             self,
-            OwnView::Automations | OwnView::Microphones | OwnView::DictationHistory | OwnView::Recovery | OwnView::TakeActions
+            OwnView::Automations
+                | OwnView::Microphones
+                | OwnView::DictationHistory
+                | OwnView::Recovery
+                | OwnView::TakeActions
         )
     }
 }
@@ -247,7 +252,22 @@ impl ScriptListApp {
             Some(OwnView::Automations) => {
                 super::automations::said_first(rows, self.one_window.text())
             }
-            Some(OwnView::DictationHistory) if !self.one_window.text().trim().is_empty()=>crate::dictation::search_history(self.one_window.text(),200).into_iter().map(|hit|Row::new(format!("history:{}",hit.entry.id),hit.entry.preview).with_sub(if hit.matched_field==crate::dictation::DictationHistorySearchField::RawTranscript{"Matched original words"}else{"Matched saved dictation"})).collect(),
+            Some(OwnView::DictationHistory) if !self.one_window.text().trim().is_empty() => {
+                crate::dictation::search_history(self.one_window.text(), 200)
+                    .into_iter()
+                    .map(|hit| {
+                        Row::new(format!("history:{}", hit.entry.id), hit.entry.preview).with_sub(
+                            if hit.matched_field
+                                == crate::dictation::DictationHistorySearchField::RawTranscript
+                            {
+                                "Matched original words"
+                            } else {
+                                "Matched saved dictation"
+                            },
+                        )
+                    })
+                    .collect()
+            }
             _ => super::learns::filter_rows(rows, self.one_window.text()),
         }
     }
@@ -477,8 +497,18 @@ impl ScriptListApp {
                 }
                 self.one_window_follow_host_selection(cx);
             }
-            Some(OwnView::Recovery) if matches!(key,Key::Enter|Key::CmdK)=>{if let Some(row)=self.one_window_selected_own_row(){if let Some(id)=row.key.strip_prefix("recover:"){self.open_take_actions(id,cx);}}},
-            Some(OwnView::TakeActions) if key==Key::Enter=>{if let Some(row)=self.one_window_selected_own_row(){self.run_take_action(&row.key,cx);}},
+            Some(OwnView::Recovery) if matches!(key, Key::Enter | Key::CmdK) => {
+                if let Some(row) = self.one_window_selected_own_row() {
+                    if let Some(id) = row.key.strip_prefix("recover:") {
+                        self.open_take_actions(id, cx);
+                    }
+                }
+            }
+            Some(OwnView::TakeActions) if key == Key::Enter => {
+                if let Some(row) = self.one_window_selected_own_row() {
+                    self.run_take_action(&row.key, cx);
+                }
+            }
             Some(OwnView::DictationHistory) => match key {
                 Key::Enter => self.one_window_history_enter(cx),
                 Key::CmdK => self.one_window_history_stage(cx),
@@ -489,7 +519,9 @@ impl ScriptListApp {
                     match view {
                         OwnView::Automations => self.one_window_automation_enter(&row, cx),
                         OwnView::Microphones => self.one_window_microphone_enter(&row, cx),
-                        OwnView::DictationHistory | OwnView::Recovery | OwnView::TakeActions
+                        OwnView::DictationHistory
+                        | OwnView::Recovery
+                        | OwnView::TakeActions
                         | OwnView::Script
                         | OwnView::Shortcut
                         | OwnView::AllResults => {}

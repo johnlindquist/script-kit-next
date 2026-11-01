@@ -10,8 +10,8 @@ use gpui::{
 
 use super::base::DesignContext;
 use super::base::PromptBase;
-use super::SubmitCallback;
 use super::webcam_session::WebcamSession;
+use super::SubmitCallback;
 use crate::camera::CaptureHandle;
 use crate::theme;
 

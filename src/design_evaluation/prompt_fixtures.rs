@@ -625,23 +625,51 @@ impl ScriptListApp {
                 )
             }
             PromptSeed::CreatePreset(seed) => {
-                let fields = [("name", "Name", "text", "Code reviewer", seed.name),
-                    ("systemPrompt", "Instructions", "textarea", "How should the model respond?", seed.system_prompt),
-                    ("model", "Model (optional)", "text", "Use the default model", seed.model)]
-                    .into_iter().map(|(key,label,kind,placeholder,value)| {
-                        let mut field = Field::new(key.into()).with_label(label.into()).with_type(kind.into()).with_placeholder(placeholder.into());
-                        field.value = Some(value); field
-                    }).collect();
+                let fields = [
+                    ("name", "Name", "text", "Code reviewer", seed.name),
+                    (
+                        "systemPrompt",
+                        "Instructions",
+                        "textarea",
+                        "How should the model respond?",
+                        seed.system_prompt,
+                    ),
+                    (
+                        "model",
+                        "Model (optional)",
+                        "text",
+                        "Use the default model",
+                        seed.model,
+                    ),
+                ]
+                .into_iter()
+                .map(|(key, label, kind, placeholder, value)| {
+                    let mut field = Field::new(key.into())
+                        .with_label(label.into())
+                        .with_type(kind.into())
+                        .with_placeholder(placeholder.into());
+                    field.value = Some(value);
+                    field
+                })
+                .collect();
                 let colors = crate::components::FormFieldColors::from_theme(&theme);
                 let entity = cx.new(|cx| {
-                    let mut form = crate::form_prompt::FormPromptState::from_fields(id, fields, colors, cx);
+                    let mut form =
+                        crate::form_prompt::FormPromptState::from_fields(id, fields, colors, cx);
                     form.output_mode = crate::form_prompt::FormPromptOutputMode::Preset;
-                    if let crate::form_prompt::FormFieldEntity::TextField(name) = &form.fields[0].1 {
-                        name.update(cx, |field,_| field.required_hint = Some("Enter a name for this preset."));
+                    if let crate::form_prompt::FormFieldEntity::TextField(name) = &form.fields[0].1
+                    {
+                        name.update(cx, |field, _| {
+                            field.required_hint = Some("Enter a name for this preset.")
+                        });
                     }
-                    form.focused_index = seed.active_field.min(2); form
+                    form.focused_index = seed.active_field.min(2);
+                    form
                 });
-                (AppView::CreateAiPresetView { entity }, FocusTarget::FormPrompt)
+                (
+                    AppView::CreateAiPresetView { entity },
+                    FocusTarget::FormPrompt,
+                )
             }
             PromptSeed::CreationFeedback(seed) => {
                 if let Some(policy) = crate::runtime_policy::owned_evaluation() {
@@ -863,7 +891,8 @@ impl ScriptListApp {
                 observation.selected_index =
                     (!form.fields.is_empty()).then_some(form.focused_index);
                 observation.values = form.field_values(cx);
-                observation.validation_error = form.visible_validation_message(cx).map(str::to_owned);
+                observation.validation_error =
+                    form.visible_validation_message(cx).map(str::to_owned);
             }
             AppView::EditorPrompt { entity, .. } | AppView::ScratchPadView { entity, .. } => {
                 let editor = entity.read(cx);

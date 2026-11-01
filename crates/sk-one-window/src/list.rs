@@ -136,7 +136,8 @@ impl JevSlots {
         if let Some(local) = crate::steps::offline_row(text) {
             fallback.insert(0, local);
         }
-        let mut rows = fallback.into_iter()
+        let mut rows = fallback
+            .into_iter()
             .filter(|row| keep != Some(row.key.as_str()));
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if kept == Some(i) {

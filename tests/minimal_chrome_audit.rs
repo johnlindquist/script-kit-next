@@ -783,8 +783,7 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
         "EnvPrompt layout info should report explicit prompt content, not launcher list regions"
     );
     assert!(
-        render_code.contains("prompt_text_palette(")
-            && !render_code.contains("PromptFooter::new("),
+        render_code.contains("prompt_text_palette(") && !render_code.contains("PromptFooter::new("),
         "EnvPrompt render should keep shared create-flow chrome and avoid PromptFooter"
     );
     eprintln!(
