@@ -1,0 +1,57 @@
+# Verification code is on a QA ref. The app under test comes ONLY from a public release.
+# After publication, push qa/installed-release/vX.Y.Z. For a second, independent
+# update VM add `Installed-Release-Update-From: vA.B.C` to the tip commit message.
+name: Installed release smoke
+on:
+  push:
+    branches: ['qa/installed-release/v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      previous:
+        description: 'Optional earlier published tag for a separate upgrade VM (requires QA ref)'
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  installed:
+    name: Installed release (${{ matrix.mode }})
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ fromJSON((inputs.previous != '' || contains(github.event.head_commit.message, 'Installed-Release-Update-From:')) && '["fresh","update"]' || '["fresh"]') }}
+    steps:
+      - name: Refuse forks, non-QA refs and non-hosted runners
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ runner.environment }}
+        run: |
+          set -eu
+          test "$GITHUB_REPOSITORY" = johnlindquist/script-kit-next
+          test "$ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS/$RUNNER_ARCH" = macOS/ARM64
+          [[ "$GITHUB_REF" =~ ^refs/heads/qa/installed-release/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install and exercise the public signed bundle (disposable Aqua session only)
+        env:
+          INSTALLED_MODE: ${{ matrix.mode }}
+          INSTALLED_PREVIOUS_INPUT: ${{ inputs.previous }}
+          INSTALLED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          SCRIPT_KIT_NONINTERACTIVE: '0'
+        run: bun ./scripts/devtools/installed-release-smoke.ts
+      - name: Preserve redacted receipt only (never app stdout, files, logs or credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-release-${{ matrix.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/installed-release-receipt.json
+          if-no-files-found: error
+          retention-days: 30
