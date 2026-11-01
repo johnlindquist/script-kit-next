@@ -135,6 +135,10 @@ impl Row {
         self.verb.as_deref() == Some("undo") && self.source.as_deref() == Some("last")
     }
 
+    pub fn is_open_tab(&self) -> bool {
+        self.key.starts_with(crate::contract::OPEN_TAB_KEY_PREFIX)
+    }
+
     /// A name strong enough to own Enter.
     pub fn is_strong(&self) -> bool {
         self.learned || self.score >= WEAK_SCORE

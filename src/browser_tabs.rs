@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
@@ -9,7 +10,6 @@ use serde::Deserialize;
 const FIELD_SEPARATOR: char = '\u{1e}';
 const RECORD_SEPARATOR: char = '\u{1f}';
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(3);
-const BROWSER_RUNNING_TIMEOUT: Duration = Duration::from_secs(1);
 const ROOT_BROWSER_TABS_MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE: Duration = Duration::from_secs(15);
 const ROOT_BROWSER_TABS_FAILURE_BACKOFF_MAX: Duration = Duration::from_secs(120);
@@ -107,8 +107,12 @@ impl BrowserTabInfo {
 
 pub(crate) fn browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
     format!(
-        "browser-tab/{}/{}/{}/{}",
-        tab.browser_bundle_id, tab.window_index, tab.tab_index, tab.url
+        "{}{}/{}/{}/{}",
+        sk_one_window::contract::OPEN_TAB_KEY_PREFIX,
+        tab.browser_bundle_id,
+        tab.window_index,
+        tab.tab_index,
+        tab.url
     )
 }
 
@@ -182,7 +186,7 @@ impl Default for RootBrowserTabsSectionOptions {
             max_results: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MAX_RESULTS,
             min_query_chars:
                 crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS,
-            scan_limit: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SCAN_LIMIT,
+            scan_limit: usize::MAX,
             search_urls: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SEARCH_URLS,
             providers: crate::config::BrowserTabProvider::default_root_providers(),
             cache_ttl_ms: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS,
@@ -291,34 +295,26 @@ fn list_open_tabs_for_root_providers(
         };
     }
 
-    let results: Vec<Result<Vec<BrowserTabInfo>>> = SUPPORTED_BROWSERS
-        .par_iter()
-        .filter(|browser| root_supported_browser_provider_is_enabled(browser, providers))
+    let running = running_bundle_ids()?;
+    let results = running_tab_browsers(&running, providers)
+        .into_par_iter()
         .map(|browser| {
-            let _browser_span =
-                tracing::info_span!("list_tabs_for_browser", browser = browser.app_name).entered();
-            match is_browser_running(browser.bundle_id) {
-                Ok(false) => Ok(Vec::new()),
-                Ok(true) => {
-                    let tabs = list_tabs_for_browser(browser);
-                    if let Ok(ref t) = tabs {
-                        tracing::info!(
-                            browser = browser.app_name,
-                            tab_count = t.len(),
-                            "list_tabs_for_browser_completed"
-                        );
-                    }
-                    tabs
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        browser = browser.app_name,
-                        error_bytes = error.to_string().len(),
-                        "check_browser_running_failed"
-                    );
-                    Err(error.context(browser.app_name))
-                }
+            let tabs = list_tabs_for_browser(browser);
+            match &tabs {
+                Ok(rows) => tracing::info!(
+                    browser = browser.app_name,
+                    tab_count = rows.len(),
+                    "list_tabs_for_browser_completed"
+                ),
+                Err(error) => tracing::warn!(
+                    browser = browser.app_name,
+                    // The outer context identifies the failed operation; the inner
+                    // transport error can include private browser output.
+                    operation = %error,
+                    "list_tabs_for_browser_failed"
+                ),
             }
+            tabs
         })
         .collect();
 
@@ -609,19 +605,17 @@ fn search_root_browser_tabs_internal(
     }
 
     let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms);
-    let tabs = tabs
+    let candidates = tabs
         .iter()
         .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
-        .take(options.scan_limit)
-        .cloned()
-        .collect::<Vec<_>>();
+        .take(options.scan_limit);
 
     let fuzzy_mode = match mode {
         RootBrowserTabsLookupMode::CachedOnly => RootBrowserTabsFuzzyMode::Compact,
         RootBrowserTabsLookupMode::RefreshThenCached => RootBrowserTabsFuzzyMode::Permissive,
     };
 
-    root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls, fuzzy_mode)
+    root_fuzzy_search_browser_tabs(candidates, query, options.search_urls, fuzzy_mode)
         .into_iter()
         .take(options.max_results)
         .map(|tab_match| {
@@ -966,16 +960,16 @@ fn store_root_browser_tabs_snapshot_for_test(captured_at: Instant, tabs: Vec<Bro
 }
 
 #[allow(dead_code)]
-fn root_fuzzy_search_browser_tabs(
-    tabs: &[BrowserTabInfo],
+fn root_fuzzy_search_browser_tabs<'a>(
+    tabs: impl IntoIterator<Item = &'a BrowserTabInfo>,
     query: &str,
     search_urls: bool,
     mode: RootBrowserTabsFuzzyMode,
 ) -> Vec<BrowserTabMatch> {
     let query_diagnostic = browser_query_diagnostic(query);
+    let tabs = tabs.into_iter();
     let _span = tracing::info_span!(
         "root_fuzzy_search_browser_tabs",
-        tab_count = tabs.len(),
         query_bytes = query_diagnostic.bytes,
         query_chars = query_diagnostic.chars,
         search_urls,
@@ -985,7 +979,6 @@ fn root_fuzzy_search_browser_tabs(
 
     if query.trim().is_empty() {
         return tabs
-            .iter()
             .cloned()
             .map(|tab| BrowserTabMatch { tab, score: 0 })
             .collect();
@@ -1001,41 +994,30 @@ fn root_fuzzy_search_browser_tabs(
         None
     };
     let mut matches: Vec<BrowserTabMatch> = tabs
-        .iter()
         .filter_map(|tab| {
             let mut score = 0i32;
             let host = host_from_url(&tab.url);
 
-            if query_is_ascii && tab.title.is_ascii() {
-                if let Some(pos) =
-                    crate::scripts::search::find_ignore_ascii_case(&tab.title, &query_lower)
-                {
-                    score += if pos == 0 { 240 } else { 190 };
+            let position = |field: &str| {
+                if query_is_ascii {
+                    crate::scripts::search::find_ignore_ascii_case(field, &query_lower)
+                } else {
+                    field.to_lowercase().find(&query_lower)
                 }
+            };
+            if let Some(pos) = position(&tab.title) {
+                score += if pos == 0 { 240 } else { 190 };
             }
-
-            if query_is_ascii && host.is_ascii() {
-                if let Some(pos) =
-                    crate::scripts::search::find_ignore_ascii_case(host, &query_lower)
-                {
-                    score += if pos == 0 { 180 } else { 135 };
-                }
+            if let Some(pos) = position(host) {
+                score += if pos == 0 { 180 } else { 135 };
             }
-
-            if search_urls && query_is_ascii && tab.url.is_ascii() {
-                if let Some(pos) =
-                    crate::scripts::search::find_ignore_ascii_case(&tab.url, &query_lower)
-                {
+            if search_urls {
+                if let Some(pos) = position(&tab.url) {
                     score += if pos == 0 { 120 } else { 90 };
                 }
             }
-
-            if query_is_ascii && tab.browser_name.is_ascii() {
-                if let Some(pos) =
-                    crate::scripts::search::find_ignore_ascii_case(&tab.browser_name, &query_lower)
-                {
-                    score += if pos == 0 { 80 } else { 55 };
-                }
+            if let Some(pos) = position(&tab.browser_name) {
+                score += if pos == 0 { 80 } else { 55 };
             }
 
             if let Some(ref mut n) = nucleo {
@@ -1130,6 +1112,10 @@ fn browser_tab_provider_for_bundle_id(
         "com.google.Chrome" => Some(crate::config::BrowserTabProvider::Chrome),
         "com.brave.Browser" => Some(crate::config::BrowserTabProvider::Brave),
         "com.microsoft.edgemac" => Some(crate::config::BrowserTabProvider::Edge),
+        "com.apple.Safari" => Some(crate::config::BrowserTabProvider::Safari),
+        "org.chromium.Chromium" => Some(crate::config::BrowserTabProvider::Chromium),
+        "com.vivaldi.Vivaldi" => Some(crate::config::BrowserTabProvider::Vivaldi),
+        "com.operasoftware.Opera" => Some(crate::config::BrowserTabProvider::Opera),
         _ => None,
     }
 }
@@ -1142,24 +1128,36 @@ fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInf
     parse_tab_rows(browser, &output)
 }
 
-fn is_browser_running(bundle_id: &str) -> Result<bool> {
-    let bundle_id = crate::utils::escape_applescript_string(bundle_id);
-    let script = format!(
-        r#"
-tell application "System Events"
-    set matching_processes to every application process whose bundle identifier is "{bundle_id}"
-    return (count of matching_processes) > 0
-end tell
-"#,
-    );
+/// One read-only AppKit snapshot per scan. A slow System Events process (or an
+/// absent browser) must not be able to veto another browser's tab list.
+#[cfg(target_os = "macos")]
+fn running_bundle_ids() -> Result<HashSet<String>> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery)?;
+    Ok(objc::rc::autoreleasepool(|| {
+        let apps = objc2_app_kit::NSWorkspace::sharedWorkspace().runningApplications();
+        (0..apps.len())
+            .filter_map(|i| apps.objectAtIndex(i).bundleIdentifier())
+            .map(|id| id.to_string())
+            .collect()
+    }))
+}
 
-    let output = crate::platform::run_osascript_with_timeout(
-        &script,
-        "browser_tabs_is_running",
-        BROWSER_RUNNING_TIMEOUT,
-    )
-    .with_context(|| format!("browser_tabs_is_running_failed: bundle_id={bundle_id}"))?;
-    Ok(output.trim().eq_ignore_ascii_case("true"))
+#[cfg(not(target_os = "macos"))]
+fn running_bundle_ids() -> Result<HashSet<String>> {
+    bail!("Browser tab discovery requires macOS")
+}
+
+fn running_tab_browsers(
+    running: &HashSet<String>,
+    providers: &[crate::config::BrowserTabProvider],
+) -> Vec<&'static SupportedBrowser> {
+    SUPPORTED_BROWSERS
+        .iter()
+        .filter(|b| {
+            running.contains(b.bundle_id)
+                && root_supported_browser_provider_is_enabled(b, providers)
+        })
+        .collect()
 }
 
 fn supported_browser_for(tab: &BrowserTabInfo) -> Option<&'static SupportedBrowser> {
@@ -1300,7 +1298,7 @@ fn build_list_tabs_jxa(browser: &SupportedBrowser) -> String {
     // returns only the windows on the current Space.
     format!(
         r#"
-var app = Application("{app_name}");
+var app = Application("{bundle_id}");
 if (!app.running()) {{ ""; }}
 else {{
     var FS = "\u001e";
@@ -1322,7 +1320,7 @@ else {{
     rows.join(RS);
 }}
 "#,
-        app_name = browser.app_name,
+        bundle_id = browser.bundle_id,
         title_property = title_property,
     )
 }
@@ -1591,6 +1589,47 @@ mod tests {
         let direct_title =
             root_fuzzy_search_browser_tabs(&tabs, "delta", true, RootBrowserTabsFuzzyMode::Compact);
         assert_eq!(direct_title.len(), 1);
+    }
+
+    #[test]
+    fn universal_search_finds_late_open_tabs_from_the_first_character() {
+        let base = BrowserTabInfo {
+            browser_name: "Google Chrome".into(),
+            browser_bundle_id: "com.google.Chrome".into(),
+            title: "Unrelated".into(),
+            url: "https://example.com".into(),
+            window_index: 1,
+            tab_index: 1,
+        };
+        let mut tabs = vec![base.clone(); 300];
+        let target = BrowserTabInfo {
+            browser_name: "Safari".into(),
+            browser_bundle_id: "com.apple.Safari".into(),
+            title: "📖 Zettelkasten".into(),
+            url: "https://notes.example.org".into(),
+            ..base
+        };
+        tabs.push(target.clone());
+        store_root_browser_tabs_snapshot_for_test(Instant::now(), tabs);
+        let mut config = crate::config::UnifiedSearchConfig::default();
+        let search = |q: &str, config: &crate::config::UnifiedSearchConfig| {
+            search_root_browser_tabs_meta_cached(q, config.browser_tabs_section_options())
+        };
+        for q in ["z", "notes.example.org"] {
+            let hits = search(q, &config);
+            assert_eq!(hits.len(), 1, "{q}");
+            assert_eq!(hits[0].tab, target);
+        }
+        assert!(
+            search("", &config).is_empty(),
+            "the empty launcher stays unchanged"
+        );
+        config.browser_tabs.scan_limit = Some(80);
+        assert!(search("z", &config).is_empty());
+        config.browser_tabs.scan_limit = None;
+        config.browser_tabs.providers = vec![crate::config::BrowserTabProvider::Chrome];
+        assert!(search("z", &config).is_empty());
+        reset_root_browser_tabs_snapshot_for_test();
     }
 
     #[test]
@@ -1867,8 +1906,8 @@ mod tests {
         assert!(chrome_script.contains(r#"win.tabs.title()"#));
         assert!(chrome_script.contains(r#"win.tabs.url()"#));
         // Verify it targets the correct app
-        assert!(safari_script.contains(r#"Application("Safari")"#));
-        assert!(chrome_script.contains(r#"Application("Google Chrome")"#));
+        assert!(safari_script.contains(r#"Application("com.apple.Safari")"#));
+        assert!(chrome_script.contains(r#"Application("com.google.Chrome")"#));
     }
 
     #[test]
@@ -1906,18 +1945,23 @@ mod tests {
     }
 
     #[test]
-    fn is_browser_running_script_uses_bundle_identifier_lookup() {
-        let bundle_id = "com.google.Chrome";
-        let script = format!(
-            r#"
-tell application "System Events"
-    set matching_processes to every application process whose bundle identifier is "{bundle_id}"
-    return (count of matching_processes) > 0
-end tell
-"#,
+    fn tab_scan_queries_only_running_enabled_browsers() {
+        let running = HashSet::from([
+            "com.google.Chrome".to_owned(),
+            "com.apple.Safari.SafariNetworkingService".to_owned(),
+            "com.brave.Browser".to_owned(),
+        ]);
+        let selected = |providers: &[crate::config::BrowserTabProvider]| {
+            running_tab_browsers(&running, providers)
+                .into_iter()
+                .map(|b| b.app_name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(selected(&[]), ["Google Chrome", "Brave Browser"]);
+        assert_eq!(
+            selected(&[crate::config::BrowserTabProvider::Chrome]),
+            ["Google Chrome"]
         );
-
-        assert!(script.contains("bundle identifier is \"com.google.Chrome\""));
-        assert!(script.contains("count of matching_processes"));
+        assert!(selected(&[crate::config::BrowserTabProvider::Arc]).is_empty());
     }
 }

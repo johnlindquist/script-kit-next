@@ -35,6 +35,8 @@ pub const MAX_MATCHES: usize = 3;
 /// Fallbacks ("Search Google", "Search Files") listed after Jev's rows when something matched.
 /// When nothing matched, every fallback the host offers stands where the names would.
 pub const MAX_FALLBACKS_WITH_MATCHES: usize = 3;
+/// Identity prefix for an existing browser tab, not a URL-opening fallback.
+pub const OPEN_TAB_KEY_PREFIX: &str = "browser-tab/";
 /// Key prefix of the row under the names that opens every result for the words.
 pub const ALL_RESULTS_KEY: &str = "all-results:";
 /// A name scoring below this is listed but never owns Enter.

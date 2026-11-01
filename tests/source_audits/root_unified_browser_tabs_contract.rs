@@ -10,7 +10,6 @@ fn root_unified_browser_tabs_config_is_default_enabled_and_bounded() {
     assert!(config_schema.contains("browserTabs?: UnifiedSearchBrowserTabsConfig"));
     assert!(config_schema.contains("export type BrowserTabProvider"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_ENABLED: bool = true"));
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS: usize = 3"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS: u64 = 10_000"));
 }
 

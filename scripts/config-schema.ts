@@ -1563,7 +1563,7 @@ export interface Config extends BaseConfig {
    *   clipboardHistory: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
  *   dictationHistory: { enabled: true, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
    *   browserHistory: { enabled: true, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
-   *   browserTabs: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 80, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true, cacheTtlMs: 10000 }
+   *   browserTabs: { enabled: true, maxResults: 3, minQueryChars: 1, providers: ["arc", "chrome", "brave", "edge", "safari", "chromium", "vivaldi", "opera"], searchUrls: true, cacheTtlMs: 10000 }
    * }
    * @example
    * ```typescript
@@ -1997,18 +1997,18 @@ export interface UnifiedSearchDictationHistoryConfig {
 }
 
 export type BrowserHistoryProvider = "arc" | "chrome" | "brave" | "edge";
-export type BrowserTabProvider = "arc" | "chrome" | "brave" | "edge";
+export type BrowserTabProvider = BrowserHistoryProvider | "safari" | "chromium" | "vivaldi" | "opera";
 
 export interface UnifiedSearchBrowserTabsConfig {
   /** Enable currently open browser tab rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of browser tab rows to append. Clamped to 1-5. */
   maxResults?: number;
-  /** Minimum query length before browser tab rows appear. Clamped to 2-32. */
+  /** Minimum query length before browser tab rows appear. Defaults to 1; clamped to 1-32. */
   minQueryChars?: number;
-  /** Current open-tab metadata rows to scan. Clamped to 10-250. */
+  /** Optional limit on how many open tabs to search. All are searched when omitted; explicit limits are clamped to 10-250. */
   scanLimit?: number;
-  /** Chromium-family providers to query. Safari is intentionally excluded from root search. */
+  /** Running browsers to include. Defaults to every browser supported by Search Browser Tabs. */
   providers?: BrowserTabProvider[];
   /** Match URLs in addition to tab titles/domains/browser names. Page content is never searched. */
   searchUrls?: boolean;

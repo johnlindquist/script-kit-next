@@ -7789,6 +7789,7 @@ dependencies = [
  "notify-rust",
  "nucleo-matcher",
  "objc",
+ "objc2-app-kit 0.3.2",
  "objc_exception",
  "open",
  "parking_lot",

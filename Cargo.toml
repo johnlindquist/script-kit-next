@@ -235,6 +235,7 @@ core-graphics = "0.24"
 cocoa = "0.26"
 core-video = { version = "0.5.2", features = ["metal"] }
 objc = "0.2"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSRunningApplication", "NSWorkspace"] }
 # Catch Obj-C NSExceptions (e.g. NSPasteboard "collection mutated while
 # enumerated") and turn them into recoverable Rust errors instead of aborting
 # the process. See src/platform/accessibility/clipboard.rs::capture.

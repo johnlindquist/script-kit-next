@@ -95,8 +95,27 @@ impl OneWindow {
             }
         }
         for r in real {
-            if !names.iter().any(|n| n.title.eq_ignore_ascii_case(&r.title)) {
+            if !names.iter().any(|n| {
+                n.is_open_tab() == r.is_open_tab() && n.title.eq_ignore_ascii_case(&r.title)
+            }) {
                 names.push(r);
+            }
+        }
+        // A matching open tab is directly selectable in ordinary searches, not
+        // just behind See All. Keep the leading action and an existing highlight.
+        if !empty && self.staged.is_none() {
+            if let Some(tab) = names
+                .iter()
+                .position(Row::is_open_tab)
+                .filter(|&i| i >= MAX_MATCHES)
+            {
+                let focused = self.list.focused().map(|r| &r.key);
+                if let Some(slot) = (1..MAX_MATCHES)
+                    .rev()
+                    .find(|&i| Some(&names[i].key) != focused)
+                {
+                    names.swap(slot, tab);
+                }
             }
         }
         names.truncate(MAX_MATCHES);

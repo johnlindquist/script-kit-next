@@ -191,9 +191,10 @@ pub fn merge(names: Vec<Row>, learned: Vec<Row>) -> Vec<Row> {
     let mut out: Vec<Row> = names
         .into_iter()
         .filter(|n| {
-            !learned
-                .iter()
-                .any(|l| l.title.eq_ignore_ascii_case(&n.title))
+            n.is_open_tab()
+                || !learned
+                    .iter()
+                    .any(|l| l.title.eq_ignore_ascii_case(&n.title))
         })
         .collect();
     for row in learned {

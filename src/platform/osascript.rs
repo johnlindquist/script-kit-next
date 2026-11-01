@@ -247,6 +247,7 @@ pub fn run_jxa_with_timeout(
                 context
             ))),
             Err(_) => {
+                tracing::warn!(context, timeout_ms = timeout.as_millis() as u64, "JXA timed out");
                 anyhow::bail!(
                     "platform_run_jxa_failed: stage=timeout context={} timeout={:?}",
                     context,

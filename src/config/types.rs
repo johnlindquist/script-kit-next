@@ -371,7 +371,9 @@ pub struct UnifiedSearchBrowserTabsConfig {
     pub enabled: bool,
     pub max_results: usize,
     pub min_query_chars: usize,
-    pub scan_limit: usize,
+    /// When omitted every open tab is a candidate; max_results caps display, not discovery.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan_limit: Option<usize>,
     pub search_urls: bool,
     pub providers: Vec<BrowserTabProvider>,
     pub cache_ttl_ms: u64,
@@ -383,7 +385,7 @@ impl Default for UnifiedSearchBrowserTabsConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_ENABLED,
             max_results: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS,
-            scan_limit: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SCAN_LIMIT,
+            scan_limit: None,
             search_urls: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SEARCH_URLS,
             providers: BrowserTabProvider::default_root_providers(),
             cache_ttl_ms: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS,
@@ -431,11 +433,24 @@ pub enum BrowserTabProvider {
     Chrome,
     Brave,
     Edge,
+    Safari,
+    Chromium,
+    Vivaldi,
+    Opera,
 }
 
 impl BrowserTabProvider {
     pub(crate) fn default_root_providers() -> Vec<Self> {
-        vec![Self::Arc, Self::Chrome, Self::Brave, Self::Edge]
+        vec![
+            Self::Arc,
+            Self::Chrome,
+            Self::Brave,
+            Self::Edge,
+            Self::Safari,
+            Self::Chromium,
+            Self::Vivaldi,
+            Self::Opera,
+        ]
     }
 }
 
@@ -634,8 +649,11 @@ impl UnifiedSearchConfig {
         crate::browser_tabs::RootBrowserTabsSectionOptions {
             enabled: self.enabled && self.browser_tabs.enabled,
             max_results: self.browser_tabs.max_results.clamp(1, 5),
-            min_query_chars: self.browser_tabs.min_query_chars.clamp(2, 32),
-            scan_limit: self.browser_tabs.scan_limit.clamp(10, 250),
+            min_query_chars: self.browser_tabs.min_query_chars.clamp(1, 32),
+            scan_limit: self
+                .browser_tabs
+                .scan_limit
+                .map_or(usize::MAX, |n| n.clamp(10, 250)),
             search_urls: self.browser_tabs.search_urls,
             providers: self.browser_tabs.providers.clone(),
             cache_ttl_ms: self.browser_tabs.cache_ttl_ms.clamp(1_000, 60_000),

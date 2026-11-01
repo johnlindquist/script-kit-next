@@ -1022,6 +1022,23 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
     let browser_tabs_domain_intent =
         !root_source_filters.active() && crate::browser_tabs::query_is_bare_domain(filter_text);
+    // A custom section order may put other sources first. Leave room for a
+    // matching open tab without exceeding the configured total or per-source cap.
+    let reserved_tab_rows = if !root_source_filters.active()
+        && advanced_query.is_none()
+        && !root_browser_tab_hits.is_empty()
+        && crate::browser_tabs::root_browser_tabs_query_is_eligible(
+            filter_text,
+            root_browser_tabs_options.clone(),
+        )
+        && root_passive_source_order
+            .contains(&crate::config::UnifiedSearchPassiveSource::BrowserTabs)
+    {
+        passive_budget.limit_for_source(1)
+    } else {
+        0
+    };
+    passive_budget.consume(reserved_tab_rows);
     for source in root_passive_source_order {
         match source {
             crate::config::UnifiedSearchPassiveSource::Todos => {
@@ -1046,6 +1063,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 {
                     continue;
                 }
+                passive_budget.remaining_total += reserved_tab_rows;
                 append_root_browser_tabs_section(
                     &mut grouped,
                     &mut flat_results,

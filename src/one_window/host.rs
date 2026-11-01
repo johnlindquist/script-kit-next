@@ -755,7 +755,12 @@ impl ScriptListApp {
             picked.push(at);
         }
         picked.sort_by_key(|&at| (rank(at), at));
-        for &at in &picked {
+        // The reducer makes the final cut after learned rows arrive. Give it the
+        // best open tab even when the source spread filled every slot without one.
+        let extra_tab = (!picked.iter().any(|&at| names[at].0.is_open_tab()))
+            .then(|| names.iter().position(|(row, _)| row.is_open_tab()))
+            .flatten();
+        for at in picked.iter().copied().chain(extra_tab) {
             let (row, result) = &names[at];
             results.insert(row.key.clone(), (*result).clone());
             rows.push(row.clone());

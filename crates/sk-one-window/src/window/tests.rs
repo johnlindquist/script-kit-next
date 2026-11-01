@@ -307,6 +307,41 @@ fn when_jev_is_down_the_ask_ai_fallback_goes_at_once() {
     assert_eq!(keys, ["fallback-google:book a table"]);
 }
 
+#[test]
+fn delayed_open_tab_is_selectable_without_stealing_enter() {
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text("dash".into()));
+    let before = vec![
+        Row::new("cmd", "Dashboard"),
+        Row::new("file", "Dashboard file"),
+        Row::new("note", "Dashboard note"),
+    ];
+    win.handle(1, Event::Names(before.clone()));
+    win.handle(10, Event::Select(2));
+    let tab = Row::new(
+        format!("{}tab-1", crate::contract::OPEN_TAB_KEY_PREFIX),
+        "Dashboard",
+    );
+    let mut arrived = before;
+    arrived.push(tab.clone());
+    win.handle(200, Event::Names(arrived));
+    assert_eq!(win.list().names.len(), MAX_MATCHES);
+    assert_eq!(win.enter_target(200).id, "note");
+    let list = win.list();
+    let at = list
+        .visible()
+        .iter()
+        .position(|i| list.row(i).is_some_and(|r| r.key == tab.key))
+        .expect("tab in the shortlist even with a same-title command");
+    win.handle(210, Event::Select(at));
+    let out = win.handle(700, Event::Key(Key::Enter));
+    assert!(
+        out.effects
+            .iter()
+            .any(|e| matches!(e, Effect::Run { row, .. } if row.key == tab.key))
+    );
+}
+
 fn dash_names() -> Vec<Row> {
     vec![
         Row::new("file:/dash", "dash").with_score(30),
