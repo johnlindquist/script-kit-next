@@ -203,22 +203,32 @@ proptest! {
         prop_assert!(out.effects.contains(&Effect::EnterIgnored));
     }
 
-    /// In the model's chat what you type owns ↵, and Esc always gives the sentence back.
+    /// A follow-up stays a draft while a turn is active; Esc restores the launcher's sentence.
     #[test]
-    fn the_chat_takes_your_words_and_esc_restores_the_sentence(sentence in 0..WORDS.len(), typed in 1..WORDS.len(), replies in 0u8..3) {
+    fn the_chat_takes_your_words_and_esc_restores_the_sentence(sentence in 0..WORDS.len(), typed in 1..WORDS.len(), replies in 0u8..3, finished in any::<bool>(), ranked in any::<bool>()) {
         let sentence = WORDS[sentence];
         let mut win = OneWindow::default();
         win.handle(0, Event::Text(sentence.into()));
         win.handle(0, Event::Work(WorkEvent::AskModel { sentence: sentence.into() }));
         for r in 0..replies {
-            win.handle(10 + u64::from(r), Event::Work(WorkEvent::ModelWrote { text: format!("reply {r}"), done: r + 1 == replies }));
+            win.handle(10 + u64::from(r), Event::Work(WorkEvent::ModelWrote { text: format!("reply {r}"), done: finished && r + 1 == replies }));
+        }
+        if ranked {
+            win.handle(30, Event::Work(WorkEvent::ModelNext(vec![])));
         }
         win.handle(100, Event::Text(WORDS[typed].into()));
         let t = WORDS[typed].trim();
-        if !t.is_empty() {
+        if !sentence.is_empty() && !(replies > 0 && finished && ranked) {
+            let status = if replies == 0 { "Waiting for the model…" } else if finished { "Finding next steps…" } else { "Writing the reply…" };
+            prop_assert_eq!(win.enter_target(100).label, status);
+            let fx = view_key(&mut win, 1_000, Key::Enter);
+            let sent = fx.iter().any(|e| matches!(e, Effect::Work(WorkEffect::AskModel { .. })));
+            prop_assert!(!sent, "Enter sent a second turn while the first was active");
+            prop_assert_eq!(win.text(), t);
+        } else {
             prop_assert_eq!(win.enter_target(100).label, format!("Ask the model: “{t}”"));
         }
-        let fx = win.handle(200, Event::Key(Key::Escape)).effects;
+        let fx = win.handle(1_100, Event::Key(Key::Escape)).effects;
         prop_assert!(!win.in_view());
         prop_assert_eq!(win.text(), sentence);
         prop_assert!(fx.contains(&Effect::SetInput(sentence.into())) || sentence == WORDS[typed]);
