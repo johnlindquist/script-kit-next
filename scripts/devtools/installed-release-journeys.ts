@@ -1,6 +1,7 @@
 // Runs only through the host's verified installed-app connection. No launch, native
 // input, OS permission requests, network, clipboard, or developer checkout helpers.
 import type { InstalledKit } from './lib/installed-release-host';
+import { SmokeFault } from './lib/installed-release-contract';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -308,11 +309,17 @@ export async function runInstalledJourneys(kit: InstalledKit) {
         'wrong-state-owner',
         'blocked',
       );
+      evidence.lastAppState = {
+        surface: ['none','scriptList','form','dayPage','permissionsWizard'].includes(s.promptType) ? s.promptType : 'other',
+        visible: s.windowVisible === true, visibleChoices: Number.isSafeInteger(s.visibleChoiceCount) ? s.visibleChoiceCount : null,
+        inputLength: typeof s.inputValue === 'string' ? s.inputValue.length : null,
+      };
       return s;
     };
     const elements = async () => {
       const r = await request({ type: 'getElements', target, limit: 100 }, 'elementsResult');
       requireProof(Array.isArray(r.elements) && r.projectionQuality !== 'unsupported', 'missing-elements');
+      evidence.lastProjection = {surface: ['scriptList','form-prompt','dayPage','permissionsWizard'].includes(r.semanticSurface) ? r.semanticSurface : 'other', elementCount:r.elements.length};
       return r;
     };
     const external = async (command: Row) => {
@@ -599,11 +606,12 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     passed.push(stage);
     return { ...base, status: 'pass' as const };
   } catch (error) {
+    if(error instanceof SmokeFault) evidence.transport = ['protocol_response_refused','protocol_response_timeout','installed_instance_changed','unbound_ui_target','unreviewed_command','incomplete_protocol_write','unexpected_protocol_spool'].includes(error.code) ? error.code : 'other_host_refusal';
     // Untrusted transport, SDK and filesystem errors can contain paths, raw values
     // or complete responses. Never include those strings in a published receipt.
     return {
       ...base,
-      status: error instanceof ProofError ? error.status : ('blocked' as const),
+      status: error instanceof ProofError || error instanceof SmokeFault ? error.status : ('blocked' as const),
       stage,
       reason: error instanceof ProofError ? error.code : 'transport-or-owned-file-unavailable',
     };
