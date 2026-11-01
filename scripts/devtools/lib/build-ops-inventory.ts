@@ -29,8 +29,22 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
   const started = performance.now();
   let device = expectedDevice, work = 0, priorAllocatedBytes = 0;
   const added: string[] = []; // Undo only identities this walk inserted after a directory checkpoint.
+  // Start-of-enumeration witnesses for retained directories, in parent-first order.
+  // A lost entry can have moved behind an earlier iterator in the same managed tree.
+  const directories: Array<[string, number, number, number, number, number, number]> = [];
   const checkTime = () => { if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit"); };
   const charge = () => { if (++work > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit"); checkTime(); };
+  const verifyReplayFrontier = (): void => {
+    for (const [dir, dev, ino, ctime, mtime, links, size] of directories) {
+      charge();
+      const now = lstatSync(dir);
+      if (!now.isDirectory() || !Number.isSafeInteger(dev) || !Number.isSafeInteger(ino) || ino <= 0
+        || !Number.isFinite(ctime) || !Number.isFinite(mtime) || now.dev !== dev || now.ino !== ino
+        || now.ctimeMs !== ctime || now.mtimeMs !== mtime || now.nlink !== links || now.size !== size) {
+        throw new Error("inventory_unstable_replay_scope");
+      }
+    }
+  };
   const account = (stat: Stats) => {
     result.entries++;
     const identity = `${stat.dev}:${stat.ino}`;
@@ -70,14 +84,15 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     if (protectOutputs && !child && !stat.isDirectory()) throw new Error("inventory_output_not_directory");
     if (!stat.isDirectory()) { account(stat); return true; }
 
-    const { entries, logicalBytes, allocatedBytes, linksNotFollowed } = result, mark = added.length;
+    const { entries, logicalBytes, allocatedBytes, linksNotFollowed } = result, mark = added.length, dirMark = directories.length;
     const sameDirectory = (): Stats => {
       const now = lstatSync(current);
       if (!now.isDirectory() || now.dev !== stat.dev || now.ino !== stat.ino) throw new Error("inventory_directory_changed");
       return now;
     };
-    let vanished: string | undefined, confirmAbsence = false;
+    let vanished: string | undefined, confirmAbsentDirectory = false;
     for (;;) {
+      directories.push([current, stat.dev, stat.ino, stat.ctimeMs, stat.mtimeMs, stat.nlink, stat.size]);
       account(stat);
       const directory = opendirSync(current);
       let entry: Dirent | null;
@@ -87,19 +102,18 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           if (entry.name === vanished) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
           if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory())) break;
         }
-        if (!entry && confirmAbsence) {
-          charge();
-          try { lstatSync(join(current, vanished!)); throw new Error(`inventory_unstable_directory: ${current}/${vanished}`); }
-          catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        if (!entry && vanished !== undefined) {
+          if (confirmAbsentDirectory) {
+            charge();
+            try { lstatSync(join(current, vanished)); throw new Error(`inventory_unstable_directory: ${current}/${vanished}`); }
+            catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+          }
+          // Both the replayed subtree and already-enumerated destinations must
+          // still have their witnessed memberships. This rereads metadata, not
+          // directory listings, and consumes the original scan's work/deadline.
+          verifyReplayFrontier();
         }
-        try {
-          const after = sameDirectory();
-          // Proving that the lost name is absent does not cover a different
-          // sibling inserted behind the iterator. A changed membership stamp
-          // during the one compiler-directory replay is still incomplete.
-          if (!entry && confirmAbsence && (after.mtimeMs !== stat.mtimeMs || after.ctimeMs !== stat.ctimeMs
-            || after.nlink !== stat.nlink || after.size !== stat.size)) throw new Error("inventory_unstable_compiler_deps");
-        } catch (error) {
+        try { sameDirectory(); } catch (error) {
           // Only a first, empty enumeration reached EOF without unresolved child work.
           if (compilerDirectory && !entry && !vanished && result.entries === entries + 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return false;
           throw error;
@@ -108,11 +122,12 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
         if (!entry) return true; // Only an enumeration that reached EOF can commit.
         if (vanished !== undefined) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
         vanished = entry.name;
-        confirmAbsence = compilerDeps && entry.isDirectory();
+        confirmAbsentDirectory = compilerDeps && entry.isDirectory();
       } finally { directory.closeSync(); }
       priorAllocatedBytes = Math.max(priorAllocatedBytes, result.allocatedBytes);
       Object.assign(result, { entries, logicalBytes, allocatedBytes, linksNotFollowed });
       while (added.length > mark) seen.delete(added.pop()!);
+      directories.length = dirMark;
       charge(); // Rolled-back visits and this reopen still cost work against the original deadline.
       stat = sameDirectory(); // Revalidate after rollback and re-account the directory's own blocks.
     }

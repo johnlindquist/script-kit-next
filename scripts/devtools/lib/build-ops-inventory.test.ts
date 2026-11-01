@@ -200,6 +200,35 @@ for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "b
   expect(moved).toBe(true);
 });
 
+for (const lostKind of ["directory", "file"] as const) test(`a lost compiler ${lostKind} cannot conceal a move into a previously measured part of the managed tree`, () => {
+  const root = fixture(), tree = join(root, "target-agent"), prior = join(tree, "already-measured");
+  const gone = join(root, compilerDeps, "arbitrary-name");
+  fs.mkdirSync(prior, { recursive: true }); fs.mkdirSync(lostKind === "directory" ? gone : dirname(gone), { recursive: true });
+  fs.writeFileSync(lostKind === "directory" ? join(gone, "data") : gone, Buffer.alloc(512 * 1024, 97));
+  const limit = allocation(tree).allocatedBytes - 128 * 1024;
+  const open = fs.opendirSync.bind(fs);
+  // Both are real entries on disk. Force one permitted traversal order instead
+  // of relying on APFS/ext4 ordering to visit the destination before deps.
+  const ordered = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    const dir = open(path);
+    if (String(path) !== tree) return dir;
+    const rows: fs.Dirent[] = []; let e;
+    while ((e = dir.readSync()) !== null) rows.push(e);
+    rows.sort((a, b) => Number(b.name === "already-measured") - Number(a.name === "already-measured"));
+    return { readSync: () => rows.shift() ?? null, closeSync: () => dir.closeSync() } as fs.Dir;
+  }) as typeof fs.opendirSync);
+  restore.push(() => ordered.mockRestore());
+  let moved = false;
+  beforeStat(path => {
+    if (!moved && path === gone) { moved = true; fs.renameSync(gone, join(prior, "still-budgeted")); }
+  });
+  observedVolume(2 * GiB);
+  const admit = () => requireBuildAdmission(root, { reserveBytes: GiB - limit });
+  expect(["resource_observation_incomplete", "resource_budget_exceeded"]).toContain(refusal(admit).code);
+  expect(moved).toBe(true);
+  expect(refusal(admit).code).toBe("resource_budget_exceeded");
+});
+
 test("a new sibling arriving after compiler deps replay EOF invalidates that observation", () => {
   const root = fixture(), deps = join(root, compilerDeps), gone = join(deps, "gone");
   fs.mkdirSync(gone, { recursive: true });
