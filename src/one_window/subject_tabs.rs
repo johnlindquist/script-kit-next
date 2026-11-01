@@ -347,46 +347,33 @@ impl ScriptListApp {
                 self.one_window_notice(crate::line_notice::INFO, "Opened the copied link", cx);
             }
             "left" | "right" => {
+                anyhow::ensure!(
+                    self.main_services.is_production(),
+                    "Desktop access is disabled in this session"
+                );
                 crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
-                let subject = source.subject.clone();
-                let left = id == "left";
+                let op = crate::intent::native_window_ops()
+                    .into_iter()
+                    .find(|op| {
+                        op.action()
+                            .and_then(crate::intent::WindowAction::sdk_position)
+                            == Some(id)
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("Unknown window arrangement"))?;
+                let target = self.target_for_window_subject(&source.subject);
+                let app = source.label.clone();
+                if !crate::platform::accessibility::permissions::has_accessibility_permission() {
+                    self.ask_for_accessibility(
+                        &[crate::intent::Step::Window { op, app, target }],
+                        cx,
+                    );
+                    return Ok(());
+                }
                 cx.spawn(async move |this, cx| {
                     let result = cx
                         .background_executor()
                         .spawn(async move {
-                            use crate::window_control::{list_windows, tile_window, TilePosition};
-                            let app = crate::frontmost_app_tracker::refresh_front_window_title()
-                                .ok_or_else(|| anyhow::anyhow!("No front window"))?;
-                            anyhow::ensure!(
-                                crate::ui_window::front_window_subject(&app) == subject,
-                                "The window changed"
-                            );
-                            let title = app
-                                .window_title
-                                .as_deref()
-                                .filter(|t| !t.is_empty())
-                                .ok_or_else(|| anyhow::anyhow!("The window has no title"))?;
-                            let mut windows = list_windows()?.into_iter().filter(|w| {
-                                w.pid == app.pid
-                                    && w.bundle_id.as_ref() == Some(&app.bundle_id)
-                                    && w.title == title
-                                    && !w.is_minimized
-                            });
-                            let w = windows
-                                .next()
-                                .ok_or_else(|| anyhow::anyhow!("Window not found"))?;
-                            anyhow::ensure!(
-                                windows.next().is_none(),
-                                "More than one window has that title"
-                            );
-                            tile_window(
-                                w.id,
-                                if left {
-                                    TilePosition::LeftHalf
-                                } else {
-                                    TilePosition::RightHalf
-                                },
-                            )
+                            crate::intent_live::run_window_step(&op, &app, target.as_ref())
                         })
                         .await;
                     let _ = this.update(cx, |app, cx| match result {

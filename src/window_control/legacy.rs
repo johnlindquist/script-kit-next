@@ -104,6 +104,29 @@ pub fn execute_legacy_window_action(
 /// Compile a legacy action into an immutable plan.
 pub fn compile_legacy_window_action(action: LegacyWindowAction) -> Result<WindowMutationPlan> {
     let observation = resolve_observation(action.window_id())?;
+    compile_for_observation(action, observation)
+}
+
+/// A deferred window command already has its recipient. Never refresh or resolve a legacy
+/// numeric ID here: both preflight and bounds readback must use this exact generation/nonce.
+pub(crate) fn execute_observed_action(
+    handle: super::WindowHandle,
+    action: impl FnOnce(u32) -> LegacyWindowAction,
+) -> Result<()> {
+    let obs = super::registry::resolve_handle(handle)?;
+    anyhow::ensure!(
+        handle.native_window_id.is_some()
+            && obs.native_id_confidence == super::NativeIdConfidence::UniquePublicCorrelation,
+        "window identity is not unique"
+    );
+    let plan = compile_for_observation(action(obs.legacy_id), obs)?;
+    super::transaction::execute_plan(&plan)?.into_legacy_result()
+}
+
+fn compile_for_observation(
+    action: LegacyWindowAction,
+    observation: WindowObservation,
+) -> Result<WindowMutationPlan> {
     if !observation.capabilities.actionable {
         bail!(
             "window is not actionable: {}",
@@ -260,6 +283,41 @@ mod tests {
                  "closeSupported":false}
             ]}"#,
         )
+    }
+
+    #[test]
+    fn observed_action_moves_only_its_document_and_verifies_bounds() {
+        use super::super::test_support::{self, window_state};
+        let _lock = registry::REGISTRY_TEST_LOCK.lock();
+        let _env = EnvGuard::set(
+            r#"{"windows":[
+            {"id":1,"pid":9,"bundleId":"test.editor","app":"Editor","title":"Untitled","nativeWindowId":41},
+            {"id":2,"pid":9,"bundleId":"test.editor","app":"Editor","title":"Untitled","nativeWindowId":42}
+        ]}"#,
+        );
+        registry::reset_registry_for_tests();
+        registry::refresh_from_test_provider().unwrap();
+        let original = registry::resolve_legacy_window_id(2).unwrap();
+        let sibling = window_state(1).unwrap().bounds;
+        test_support::with_state(|s| s.windows.reverse()).unwrap();
+        registry::refresh_from_test_provider().unwrap();
+        let move_left = |window_id| LegacyWindowAction::Move {
+            window_id,
+            x: 20,
+            y: 50,
+        };
+        execute_observed_action(original, move_left).unwrap();
+        let moved = window_state(2).unwrap().bounds;
+        assert_eq!((moved.x, moved.y), (20, 50));
+        assert_eq!(window_state(1).unwrap().bounds, sibling);
+
+        // Replacement at the same CG number, title and PID is still a different AX identity.
+        test_support::with_state(|s| s.windows.iter_mut().find(|w| w.id == 2).unwrap().id = 3)
+            .unwrap();
+        registry::refresh_from_test_provider().unwrap();
+        let writes = test_support::mutation_count().unwrap();
+        assert!(execute_observed_action(original, move_left).is_err());
+        assert_eq!(test_support::mutation_count().unwrap(), writes);
     }
 
     #[test]

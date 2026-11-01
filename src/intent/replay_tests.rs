@@ -76,7 +76,7 @@ fn step_ref(step: &Step) -> String {
         Step::InspectFilename { filename, .. } => format!("inspect-filename:{filename}"),
         Step::FocusTab { app, query } => format!("tab:{app}:{query}"),
         Step::Menu { path, .. } => format!("menu:{}", path.join(" › ")),
-        Step::Window { op, app } => format!("window:{}:{app}", op.label),
+        Step::Window { op, app, .. } => format!("window:{}:{app}", op.label),
         Step::OpenUrl { url, app } => format!("url:{url}:{}", app.as_deref().unwrap_or_default()),
         Step::Capture {
             target, body, when, ..

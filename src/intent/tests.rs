@@ -1067,13 +1067,14 @@ fn saving_what_i_just_did_replays_each_window_move_by_app() {
     let script = plan_to_script(&plan, &ScriptOptions::default());
     assert!(script
         .source
-        .contains("(await getWindows()).find((w) => w.appName === \"Google Chrome\")"));
+        .contains("(await getWindows()).filter((w) => w.appName === \"Google Chrome\")"));
+    assert!(script.source.contains("if (windows.length !== 1) throw"));
     assert!(script
         .source
-        .contains("if (win) await tileWindow(win.windowId, \"left\");"));
+        .contains("await tileWindow(win.windowId, \"left\");"));
     assert!(script
         .source
-        .contains("if (win) await tileWindow(win.windowId, \"right\");"));
+        .contains("await tileWindow(win.windowId, \"right\");"));
 }
 
 /// Deterministic noise keyed by seed, request, and question, so a case replays exactly.
@@ -1338,6 +1339,47 @@ fn window_answers(op: &str, target: &str) -> Answers {
 }
 
 #[test]
+fn move_this_window_pins_the_focused_document_before_delayed_dispatch() {
+    use super::window_target::{ObservedWindow, WindowIdentity};
+    let (mut ctx, catalog) = (screen(), catalog());
+    let app = ctx.front_app.name.clone();
+    ctx.window_snapshot.origin = Some((7, ctx.front_app.bundle_id.clone(), "Inbox".into()));
+    for id in [41, 42] {
+        ctx.window_snapshot.rows.push(ObservedWindow {
+            identity: WindowIdentity {
+                pid: 7,
+                bundle: ctx.front_app.bundle_id.clone(),
+                app: app.clone(),
+                title: "Inbox".into(),
+                native_id: id,
+                generation: 6,
+                nonce: id as u64 + 1,
+            },
+            focused: id == 42,
+            minimized: false,
+        });
+    }
+    let request = "move this window to the left";
+    let built = build_questions(request, &ctx, &catalog, &EngineOptions::default());
+    let answers = window_answers("Tile Left Half", "the front window (Google Chrome)");
+    let plan = compose_plan(request, &ctx, &catalog, &built, &answers);
+    let [Step::Window {
+        target: Some(target),
+        ..
+    }] = plan.steps.as_slice()
+    else {
+        panic!("expected an exact window target")
+    };
+    assert_eq!(target.identity.native_id, 42);
+    assert!(!serde_json::to_string(&plan).unwrap().contains("native_id"));
+    ctx.window_snapshot.rows.reverse();
+    assert!(ctx.window_snapshot.confirms(target));
+    ctx.window_snapshot.rows[0].focused = false;
+    ctx.window_snapshot.rows[1].focused = true;
+    assert!(!ctx.window_snapshot.confirms(target));
+}
+
+#[test]
 fn choosing_a_named_window_placement_finishes_an_incomplete_sentence() {
     let mut ctx = screen();
     ctx.front_app.name = "ChatGPT".into();
@@ -1356,7 +1398,7 @@ fn choosing_a_named_window_placement_finishes_an_incomplete_sentence() {
     assert_eq!(row.plan.title, "Center ChatGPT");
     assert!(row.plan.ready);
     assert!(
-        matches!(row.plan.steps.as_slice(), [Step::Window { op, app }]
+        matches!(row.plan.steps.as_slice(), [Step::Window { op, app, .. }]
         if app == "ChatGPT" && op.label == "Center")
     );
 

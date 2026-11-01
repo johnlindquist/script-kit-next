@@ -251,6 +251,9 @@ pub enum Step {
     Window {
         op: WindowOp,
         app: String,
+        /// Authority is acquired before interpretation, never reconstructed from its label.
+        #[serde(skip)]
+        target: Option<super::window_target::WindowTarget>,
     },
     InspectFilename {
         app: String,
@@ -1058,6 +1061,8 @@ pub fn resolve_last_steps(last: &LastAction, catalog: &Catalog) -> Vec<Step> {
                 .map(|op| Step::Window {
                     op: op.clone(),
                     app: app.clone(),
+                    // LastStep is a recipe, not authority over a live window.
+                    target: None,
                 }),
             LastStep::Command { id } => catalog.command(id).map(|command| Step::Command {
                 command: command.clone(),
@@ -1565,11 +1570,28 @@ pub fn reading_for(
                     }
                 }
             }
+            // A model-selected name is not authority to move a different application. The
+            // words must actually name it ("Chrome" also names "Google Chrome"); conversely,
+            // never substitute the front window when the request explicitly named another app.
+            let named = spoken_app(b, catalog);
+            let says_app = named.is_some_and(|n| n.eq_ignore_ascii_case(app))
+                || app
+                    .split_whitespace()
+                    .last()
+                    .is_some_and(|tail| b.words.iter().any(|w| w.text.eq_ignore_ascii_case(tail)));
+            let target = if named.is_some_and(|n| !n.eq_ignore_ascii_case(app))
+                || (app != front && !says_app)
+            {
+                None
+            } else {
+                ctx.window_snapshot.bind(app, app == front && !says_app)
+            };
             let title = op.title_for(app);
             let mut reading = base(title.clone());
             reading.steps = vec![Step::Window {
                 op: op.clone(),
                 app: app.to_string(),
+                target,
             }];
             reading.typed = Some(title);
             reading
@@ -1962,13 +1984,14 @@ pub fn link_pronouns(clauses: &mut [Plan], ctx: &ScreenContext) {
             continue;
         }
         let spoken = format!(" {} ", clause.request.to_lowercase());
-        let Some(Step::Window { op, app }) = clause.reading.steps.first_mut() else {
+        let Some(Step::Window { op, app, target }) = clause.reading.steps.first_mut() else {
             continue;
         };
         if previous == *app || spoken.contains(&format!(" {} ", app.to_lowercase())) {
             continue;
         }
         *app = previous.clone();
+        *target = ctx.window_snapshot.bind(&previous, false);
         let title = op.title_for(&previous);
         clause.reading.title = title.clone();
         clause.reading.typed = Some(title);

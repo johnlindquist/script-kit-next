@@ -146,7 +146,7 @@ pub fn readings(plan: Plan) -> Vec<JevRow> {
         // Choosing "Center ChatGPT" specifies the operation and target even when
         // the words being typed ("center the") aren't a complete instruction yet.
         if plan.pathway == Pathway::Window && plan.missing.is_none() && plan.clauses.is_empty() {
-            if let [Step::Window { op, app }] = plan.steps.as_slice() {
+            if let [Step::Window { op, app, .. }] = plan.steps.as_slice() {
                 plan.ready |= !app.trim().is_empty()
                     && plan.title == op.title_for(app)
                     && matches!(

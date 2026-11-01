@@ -226,9 +226,11 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
                 js(bundle_id)
             ));
         }
-        Step::Window { op, app } => {
+        Step::Window { op, app, .. } => {
+            // A saved recipe has no authority over yesterday's window. Bind exactly one
+            // current SDK window or stop; never serialize a PID/nonce or pick by order.
             let find = format!(
-                "(await getWindows()).find((w) => w.appName === {})",
+                "await (async () => {{\n  const windows = (await getWindows()).filter((w) => w.appName === {});\n  if (windows.length !== 1) throw new Error(\"Choose one window in Script Kit and try again\");\n  return windows[0]!;\n}})()",
                 js(app)
             );
             let call = match op.action() {
@@ -261,7 +263,7 @@ fn emit_step(step: &Step, parameterize: bool, out: &mut Emitted) {
                 }
                 None => return,
             };
-            out.block(&format!("const win = {find};\nif (win) {call}"));
+            out.block(&format!("const win = {find};\n{call}"));
         }
         Step::Capture {
             target,

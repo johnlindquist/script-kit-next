@@ -66,34 +66,13 @@ impl ScriptListApp {
         }
         // Target the app the user came FROM by pid: once our panel shows, the
         // system-wide focused element can already point at Script Kit itself.
+        self.one_window_host.observed_front = None;
+        self.one_window_host.front_probe = None;
         let source_app = crate::frontmost_app_tracker::get_last_real_app();
         let source_pid = source_app.as_ref().map(|app| app.pid);
         self.begin_subject_tabs(source_app.as_ref().map(|a| crate::one_window::subject_tabs::window_source(front_window_subject(a), crate::frontmost_app_tracker::observed_window_age_ms())),token,cx);
         if let Some(app) = &source_app {
             self.focus_front_window(app, cx);
-            // Tab and same-app window switches change the title without an
-            // activation, so the tracker's cached title may be stale.
-            let shown = app.clone();
-            cx.spawn(async move |this, cx| {
-                let fresh = cx
-                    .background_executor()
-                    .spawn(async { crate::frontmost_app_tracker::refresh_front_window_title() })
-                    .await;
-                let _ = this.update(cx, |view, cx| {
-                    let Some(fresh) = fresh else {
-                        return;
-                    };
-                    if view.shown_selection_hint_token != token
-                        || fresh.pid != shown.pid
-                        || fresh.window_title == shown.window_title
-                    {
-                        return;
-                    }
-                    if view.shown_selection_hint_text.is_none() {view.focus_front_window(&fresh, cx);} else {view.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Observe(crate::one_window::subject_tabs::window_source(front_window_subject(&fresh),crate::frontmost_app_tracker::observed_window_age_ms())),cx);}
-                    cx.notify();
-                });
-            })
-            .detach();
         }
         let source_icon = source_app
             .as_ref()
@@ -177,15 +156,106 @@ impl ScriptListApp {
         self.one_window_handle(sk_one_window::Event::Focused(subject), cx);
     }
 
+    pub(crate) fn observed_front_subject(
+        &self,
+        app: &crate::frontmost_app_tracker::TrackedApp,
+    ) -> sk_one_window::Subject {
+        let mut subject = front_window_subject(app);
+        if let Some((_, target)) = self
+            .one_window_host
+            .observed_front
+            .as_ref()
+            .filter(|(tracked, _)| tracked == app)
+        {
+            let w = &target.identity;
+            subject.row_key = Some(format!(
+                "front-window:{}:{}:{}:{}",
+                w.pid, w.native_id, w.generation, w.nonce
+            ));
+        }
+        subject
+    }
+
+    pub(crate) fn target_for_window_subject(
+        &self,
+        subject: &sk_one_window::Subject,
+    ) -> Option<crate::intent::window_target::WindowTarget> {
+        let (app, target) = self.one_window_host.observed_front.as_ref()?;
+        (self.observed_front_subject(app) == *subject).then(|| target.clone())
+    }
+
     /// The line names `app`'s front window as "this".
     pub(crate) fn focus_front_window(
         &mut self,
         app: &crate::frontmost_app_tracker::TrackedApp,
         cx: &mut Context<Self>,
     ) {
-        let subject=front_window_subject(app);
-        if self.one_window.tabs_enabled() { self.change_subjects(sk_one_window::window::subject_tabs::TabsEvent::Observe(crate::one_window::subject_tabs::window_source(subject.clone(),crate::frontmost_app_tracker::observed_window_age_ms())),cx); }
+        let subject = self.observed_front_subject(app);
+        if self.one_window.tabs_enabled() {
+            self.change_subjects(
+                sk_one_window::window::subject_tabs::TabsEvent::Observe(
+                    crate::one_window::subject_tabs::window_source(
+                        subject.clone(),
+                        crate::frontmost_app_tracker::observed_window_age_ms(),
+                    ),
+                ),
+                cx,
+            );
+        }
         self.focus_slot_line(subject, cx);
+        // Pinned launchers can acquire a different subject without another show. Observe
+        // each new tracked app/title once; a repeated menu notification isn't a new probe.
+        if !self.main_services.is_production()
+            || self.one_window_host.front_probe.as_ref() == Some(app)
+        {
+            return;
+        }
+        // Tab and same-app window switches change the title without an
+        // activation, so the tracker's cached title may be stale.
+        let shown = app.clone();
+        let token = self.shown_selection_hint_token;
+        self.one_window_host.front_probe = Some(shown.clone());
+        cx.spawn(async move |this, cx| {
+            let fresh = cx
+                .background_executor()
+                .spawn(async {
+                    let app = crate::frontmost_app_tracker::refresh_front_window_title()?;
+                    let target = crate::intent_live::observe_front(&app);
+                    Some((app, target))
+                })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                let Some((fresh, target)) = fresh else {
+                    return;
+                };
+                if view.shown_selection_hint_token != token
+                    || view.one_window_host.front_probe.as_ref() != Some(&shown)
+                    || fresh.pid != shown.pid
+                    || fresh.bundle_id != shown.bundle_id
+                    || crate::frontmost_app_tracker::get_last_real_app().as_ref() != Some(&fresh)
+                {
+                    return;
+                }
+                view.one_window_host.front_probe = Some(fresh.clone());
+                view.one_window_host.observed_front = target.map(|t| (fresh.clone(), t));
+                if view.shown_selection_hint_text.is_none() {
+                    view.focus_front_window(&fresh, cx);
+                } else {
+                    let subject = view.observed_front_subject(&fresh);
+                    view.change_subjects(
+                        sk_one_window::window::subject_tabs::TabsEvent::Observe(
+                            crate::one_window::subject_tabs::window_source(
+                                subject,
+                                crate::frontmost_app_tracker::observed_window_age_ms(),
+                            ),
+                        ),
+                        cx,
+                    );
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Header hint chip shown only while the main menu is up AND the passive

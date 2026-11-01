@@ -71,6 +71,9 @@ pub use adjust::{
     WindowEdge,
 };
 pub use display_topology::list_displays;
+// The binary hosts Jev; the library builds the same window-control module for its SDK.
+#[allow(unused_imports)]
+pub(crate) use legacy::{execute_observed_action, LegacyWindowAction};
 // Snapshot APIs remain part of the public library even when the binary does not call them.
 #[allow(unused_imports)]
 pub use display_topology::{display_topology_snapshot, DisplayTopologySnapshot};

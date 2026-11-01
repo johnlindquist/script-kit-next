@@ -89,6 +89,8 @@ pub struct ScreenContext {
     /// Local-only PID and native window number; never put an unpinned title in a desktop step.
     #[serde(skip)]
     pub filename_window: Option<(u32, u32)>,
+    #[serde(skip)]
+    pub window_snapshot: super::window_target::WindowSnapshot,
     #[serde(default)]
     pub window_title: String,
     #[serde(default)]

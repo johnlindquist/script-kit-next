@@ -116,11 +116,10 @@ impl ScriptListApp {
         if let Some(actions) = self.one_window_history_actions(subject) {
             return actions;
         }
-        if let Some(app) = subject
-            .row_key
-            .is_none()
-            .then(|| subject_app(subject))
-            .flatten()
+        if let Some(app) = (subject.row_key.is_none()
+            || self.target_for_window_subject(subject).is_some())
+        .then(|| subject_app(subject))
+        .flatten()
         {
             self.pending_root_unified_actions_subject = None;
             self.pending_root_file_actions_file = None;
@@ -249,15 +248,25 @@ impl ScriptListApp {
         app: String,
         cx: &mut Context<Self>,
     ) {
+        let subject = self
+            .one_window_host
+            .acting_on
+            .as_ref()
+            .or_else(|| self.one_window.staged().map(|s| &s.subject));
+        if subject.and_then(subject_app) != Some(app.as_str()) {
+            self.one_window_notice(crate::line_notice::INFO, "The staged subject changed", cx);
+            return;
+        }
+        let target = subject.and_then(|s| self.target_for_window_subject(s));
         if op.action() != Some(crate::intent::WindowAction::Quit) {
-            self.run_window_op(op, app, cx);
+            self.run_window_op(op, app, target, cx);
             return;
         }
         let title = op.title_for(&app);
         self.one_window_hold(
             "power",
             title,
-            Box::new(move |view, cx| view.run_window_op(op, app, cx)),
+            Box::new(move |view, cx| view.run_window_op(op, app, target, cx)),
             cx,
         );
     }

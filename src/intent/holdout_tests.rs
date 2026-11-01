@@ -86,10 +86,10 @@ fn outcome(plan: &Plan) -> String {
     }
     match plan.steps.as_slice() {
         [Step::Command { command }] => format!("open:{}", command.name),
-        [s @ Step::Window { op, app }] if launcher::quits_application(s) => {
+        [s @ Step::Window { op, app, .. }] if launcher::quits_application(s) => {
             format!("held-quit:{app}")
         }
-        [Step::Window { op, app }] => format!("window:{}:{app}", op.label),
+        [Step::Window { op, app, .. }] => format!("window:{}:{app}", op.label),
         [Step::Menu { path, .. }] => format!("menu:{}", path.join("/")),
         [Step::Capture { target, body, .. }] => format!("capture:{target}:{body}"),
         [Step::Remember { text, .. }] => format!("remember:{text}"),

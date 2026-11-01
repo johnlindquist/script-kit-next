@@ -261,14 +261,14 @@ pub(super) fn publish_staged(staged: Vec<StagedWindow>) -> RegistrySnapshot {
 
     // Previous identity lookups.
     let mut previous_by_provider_key: HashMap<u32, u64> = HashMap::new();
-    let mut previous_by_native: HashMap<(i32, u32), u64> = HashMap::new();
+    let mut previous_by_native = HashMap::new();
     for entry in state.entries.values() {
         let handle = entry.observation.handle;
         if let Some(key) = entry.provider_match_key {
             previous_by_provider_key.insert(key, handle.nonce);
         }
         if let Some(native) = handle.native_window_id {
-            previous_by_native.insert((handle.pid, native.0), handle.nonce);
+            previous_by_native.insert((handle.pid, native.0), handle);
         }
     }
 
@@ -281,7 +281,19 @@ pub(super) fn publish_staged(staged: Vec<StagedWindow>) -> RegistrySnapshot {
         }
         if nonce.is_none() {
             if let Some(native) = row.native_window_id {
-                nonce = previous_by_native.get(&(row.pid, native)).copied();
+                // CG numbers can be reused. A replacement AX object (or fixture identity)
+                // must never inherit the old window's nonce merely by reusing its number.
+                nonce = previous_by_native
+                    .get(&(row.pid, native))
+                    .and_then(|handle| {
+                        let previous = state.entries.get(handle)?;
+                        let continuous = match (&previous.ax_window, &row.ax) {
+                            (Some(old), Some(new)) => ax_refs_equal(old, new),
+                            (None, None) => previous.provider_match_key == row.provider_match_key,
+                            _ => false,
+                        };
+                        continuous.then_some(handle.nonce)
+                    });
             }
         }
         if nonce.is_none() {

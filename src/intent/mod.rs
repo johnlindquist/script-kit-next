@@ -14,6 +14,7 @@ pub mod launcher;
 pub mod present;
 pub mod script;
 pub mod spans;
+pub mod window_target;
 pub mod words;
 
 #[cfg(test)]

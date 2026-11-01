@@ -6,17 +6,13 @@ use super::*;
 
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::Duration;
+use crate::intent::window_target::{WindowScope, WindowTarget};
 
 use super::intent_live as live;
 use crate::intent::{
     self as intent_engine, CommandKind, EngineOptions, JevClient, JevConfig, JevError, LastAction,
     LastStep, Oracle, OracleSlot, Plan, ScriptOptions, Step, WindowAction,
 };
-
-/// Window and menu steps wait for apps opened earlier in the same plan.
-const WINDOW_STEP_ATTEMPTS: u32 = 8;
-const WINDOW_STEP_RETRY: Duration = Duration::from_millis(250);
 
 /// `SCRIPT_KIT_JEV_INTENT=0` keeps Jev from being asked.
 const INTENT_ENV_TOGGLE: &str = "SCRIPT_KIT_JEV_INTENT";
@@ -106,6 +102,20 @@ impl ScriptListApp {
         }
     }
 
+    fn intent_window_scope(&self) -> WindowScope {
+        let page = self.one_window.page_for_action();
+        if let Some(staged) = self.one_window.staged() {
+            let subject = page.as_ref().map_or(&staged.subject, |p| &p.source.subject);
+            WindowScope::Staged(self.target_for_window_subject(subject))
+        } else if let Some(page) =
+            page.filter(|p| p.source.subject.kind == sk_one_window::SubjectKind::Window)
+        {
+            WindowScope::WindowTab(self.target_for_window_subject(&page.source.subject))
+        } else {
+            WindowScope::Screen
+        }
+    }
+
     /// Fingerprints the screen Jev reads against, so a remembered reading is for this screen.
     pub(crate) fn intent_screen_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -113,6 +123,7 @@ impl ScriptListApp {
             live::screen_key().hash(&mut hasher);
         }
         self.one_window.page_for_action().map(|p|p.id).hash(&mut hasher);
+        self.intent_window_scope().hash(&mut hasher);
         self.one_window_host.cursor_voice.dictated_input.as_ref().is_some_and(|s| s==&self.filter_text).hash(&mut hasher);
         self.intent_tab_browser().hash(&mut hasher);
         self.intent_catalog_revision().hash(&mut hasher);
@@ -139,6 +150,7 @@ impl ScriptListApp {
         let slot = self.intent_launcher.oracle_slot().clone();
         let last_action = self.intent_launcher.last_action().cloned();
         let live_screen = self.main_services.is_production();
+        let window_scope = self.intent_window_scope();
         let dictated=self.one_window_host.cursor_voice.dictated_input.as_ref()==Some(&text);
         let request = text.clone();
         cx.spawn(async move |this, cx| {
@@ -157,7 +169,9 @@ impl ScriptListApp {
                         },
                     };
                     let screen = if live_screen {
-                        live::live_screen(last_action)
+                        let mut screen = live::live_screen(last_action);
+                        screen.window_snapshot.scope = window_scope;
+                        screen
                     } else if let Some(world) = &world {
                         intent_engine::ScreenContext {
                             last_action,
@@ -295,8 +309,12 @@ impl ScriptListApp {
         {
             return Err("intent_step_not_combinable");
         }
-        if let Some(action) = last_action_for(plan) {
-            self.intent_launcher.record(action);
+        // A stale window or a refused bounds change isn't something the user just did.
+        let window_action = plan.pathway != intent_engine::Pathway::Automate
+            && plan.steps.iter().any(|step| matches!(step, Step::Window { .. }));
+        let mut record = last_action_for(plan);
+        if !window_action {
+            if let Some(action) = record.take() { self.intent_launcher.record(action); }
         }
         if plan.pathway == intent_engine::Pathway::Automate {
             return self.save_intent_plan_as_script(plan, cx).map(|_| ());
@@ -322,11 +340,19 @@ impl ScriptListApp {
             }
         }
 
+        if window_action && (!self.main_services.is_production()
+            || crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput).is_err()) {
+            return Err("native_effects_forbidden");
+        }
         if plan.steps.iter().any(needs_accessibility)
             && !crate::platform::accessibility::permissions::has_accessibility_permission()
         {
             self.ask_for_accessibility(&plan.steps, cx);
             return Err("intent_needs_accessibility");
+        }
+        if plan.steps.iter().any(needs_window_choice) {
+            self.one_window_notice(crate::line_notice::INFO, "Choose one window and try again", cx);
+            return Err("intent_window_not_identified");
         }
         let mut later = Vec::new();
         for step in &plan.steps {
@@ -359,38 +385,57 @@ impl ScriptListApp {
         {
             self.close_and_reset_window(cx);
         }
-        self.run_desktop_steps(later, cx);
+        self.run_desktop_steps(later, record, cx);
         Ok(())
     }
 
-    /// Carries out a window arrangement on `app`'s front window: the window steps back first so
-    /// the app's own window is the one in front.
+    /// The staged row brings its observation; hiding Script Kit grants no new authority.
     pub(crate) fn run_window_op(
         &mut self,
         op: intent_engine::WindowOp,
         app: String,
+        target: Option<WindowTarget>,
         cx: &mut Context<Self>,
     ) {
-        let step = Step::Window { op, app };
+        if !self.main_services.is_production()
+            || crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)
+                .is_err()
+        {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Desktop access is disabled in this session",
+                cx,
+            );
+            return;
+        }
+        let step = Step::Window { op, app, target };
         if needs_accessibility(&step)
             && !crate::platform::accessibility::permissions::has_accessibility_permission()
         {
             self.ask_for_accessibility(std::slice::from_ref(&step), cx);
             return;
         }
+        if needs_window_choice(&step) {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Choose one window and try again",
+                cx,
+            );
+            return;
+        }
         self.close_and_reset_window(cx);
-        self.run_desktop_steps(vec![step], cx);
+        self.run_desktop_steps(vec![step], None, cx);
     }
 
     /// Menu, window and URL steps drive other apps, off the main thread; a step that fails says
     /// why in the line and brings the window back to show it.
-    fn run_desktop_steps(&mut self, steps: Vec<Step>, cx: &mut Context<Self>) {
+    fn run_desktop_steps(&mut self, steps: Vec<Step>, record: Option<LastAction>, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             let failed = cx
                 .background_executor()
                 .spawn(async move {
                     steps.iter().find_map(|step| {
-                        let error = run_desktop_step_with_retries(step).err()?;
+                        let error = run_desktop_step(step).err()?;
                         tracing::warn!(
                             target: "script_kit::intent",
                             event = "intent_step_failed",
@@ -401,6 +446,9 @@ impl ScriptListApp {
                 })
                 .await;
             let Some(words) = failed else {
+                if let Some(action) = record {
+                    let _ = this.update(cx, |app, _| app.intent_launcher.record(action));
+                }
                 return;
             };
             let _ = this.update(cx, |app, cx| {
@@ -415,7 +463,7 @@ impl ScriptListApp {
 
     /// Menu and window steps drive other apps through Accessibility; without it they can't run,
     /// so the window stays and says how to turn it on.
-    fn ask_for_accessibility(&mut self, steps: &[Step], cx: &mut Context<Self>) {
+    pub(crate) fn ask_for_accessibility(&mut self, steps: &[Step], cx: &mut Context<Self>) {
         let title = match steps.iter().find_map(|step| match step {
             Step::Menu { app, .. } => Some(app.as_str()),
             _ => None,
@@ -634,7 +682,7 @@ fn last_action_for(plan: &Plan) -> Option<LastAction> {
             Step::Command { command } => Some(LastStep::Command {
                 id: command.id.clone(),
             }),
-            Step::Window { op, app } => Some(LastStep::Window {
+            Step::Window { op, app, .. } => Some(LastStep::Window {
                 op_label: op.label.clone(),
                 app: app.clone(),
             }),
@@ -693,6 +741,10 @@ pub(crate) fn append_capture_to_day(
         .map_err(|_| "intent_brain_write_failed")
 }
 
+fn needs_window_choice(step: &Step) -> bool {
+    matches!(step, Step::Window { op, target: None, .. } if op.action() != Some(WindowAction::Quit))
+}
+
 /// Whether a step drives another app through Accessibility. Quitting goes through AppleScript.
 fn needs_accessibility(step: &Step) -> bool {
     match step {
@@ -736,14 +788,14 @@ fn desktop_step_failure(step: &Step, error: &anyhow::Error) -> String {
             }
             format!("Couldn't use “{item}” in {app}: {error}")
         }
-        Step::Window { op, app } => format!("{} didn't work on {app}: {error}", op.label),
+        Step::Window { op, app, .. } => format!("{} didn't work on {app}: {error}", op.label),
         Step::OpenUrl { url, app: Some(app) } => format!("Couldn't open {url} in {app}: {error}"),
         Step::OpenUrl { url, app: None } => format!("Couldn't open {url}: {error}"),
         _ => error.to_string(),
     }
 }
 
-fn run_desktop_step_with_retries(step: &Step) -> anyhow::Result<()> {
+fn run_desktop_step(step: &Step) -> anyhow::Result<()> {
     if let Step::FocusTab { app, query } = step {
         return crate::browser_tabs::focus_named_tab(app, query);
     }
@@ -751,22 +803,10 @@ fn run_desktop_step_with_retries(step: &Step) -> anyhow::Result<()> {
     if let Step::OpenUrl { url, app } = step {
         return live::open_url(url, app.as_deref());
     }
-    let mut last_error = None;
-    let attempts = if matches!(step, Step::Menu { .. }) || intent_engine::launcher::quits_application(step) { 1 } else { WINDOW_STEP_ATTEMPTS };
-    for attempt_no in 0..attempts {
-        let attempt = match step {
-            Step::Window { op, app } => live::run_window_step(op, app),
-            #[cfg(target_os = "macos")]
-            Step::Menu {
-                bundle_id, path, ..
-            } => script_kit_gpui::menu_executor::execute_menu_action(bundle_id, path),
-            _ => anyhow::bail!("unsupported desktop step"),
-        };
-        match attempt {
-            Ok(()) => return Ok(()),
-            Err(error) => last_error = Some(error),
-        }
-        if attempt_no + 1 < attempts { std::thread::sleep(WINDOW_STEP_RETRY); }
+    match step {
+        Step::Window { op, app, target } => live::run_window_step(op, app, target.as_ref()),
+        #[cfg(target_os = "macos")]
+        Step::Menu { bundle_id, path, .. } => script_kit_gpui::menu_executor::execute_menu_action(bundle_id, path),
+        _ => anyhow::bail!("unsupported desktop step"),
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("step did not run")))
 }

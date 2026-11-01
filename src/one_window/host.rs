@@ -33,6 +33,12 @@ pub(crate) struct OneWindowHost {
     wake_at: Option<Ms>,
     published_subject_page: Option<String>,
     pub(crate) tab_hints: bool,
+    pub(crate) front_probe: Option<crate::frontmost_app_tracker::TrackedApp>,
+    /// The current show-time window observation; titles and PIDs alone are not action targets.
+    pub(crate) observed_front: Option<(
+        crate::frontmost_app_tracker::TrackedApp,
+        crate::intent::window_target::WindowTarget,
+    )>,
     pub(crate) tab_modifier_generation: u64,
     /// The fixed height the main list's window is at or was last asked to take; cleared while a
     /// prompt sizes the window its own way.

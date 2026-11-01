@@ -140,6 +140,69 @@ pub fn menus_from_bar(items: &[MenuBarItem]) -> Vec<MenuCommand> {
     out
 }
 
+use crate::frontmost_app_tracker::TrackedApp;
+use crate::intent::window_target::{
+    ObservedWindow, WindowIdentity, WindowScope, WindowSnapshot, WindowTarget,
+};
+
+#[cfg(target_os = "macos")]
+fn window_snapshot(
+    windows: &[crate::window_control::WindowInfo],
+    front: Option<&TrackedApp>,
+) -> WindowSnapshot {
+    let own = std::process::id() as i32;
+    let active = crate::platform::accessibility::app_identity::current_frontmost_app_identity();
+    let front = front.filter(|app| {
+        active.process_id == Some(own)
+            || (active.process_id == Some(app.pid)
+                && active.bundle_id.as_deref() == Some(&app.bundle_id))
+    });
+    WindowSnapshot {
+        origin: front
+            .and_then(|app| Some((app.pid, app.bundle_id.clone(), app.window_title.clone()?))),
+        foreign_front: windows
+            .iter()
+            .find(|w| w.is_frontmost_app && w.pid != own)
+            .map(|w| w.pid),
+        // Don't truncate this set to the classifier's label limit; a later duplicate counts.
+        rows: windows
+            .iter()
+            .filter(|w| w.pid != own)
+            .map(|w| ObservedWindow {
+                identity: WindowIdentity {
+                    pid: w.pid,
+                    bundle: w.bundle_id.clone().unwrap_or_default(),
+                    app: w.app.clone(),
+                    title: w.title.clone(),
+                    native_id: w.handle.native_window_id.map_or(0, |id| id.0),
+                    generation: w.handle.registry_generation,
+                    nonce: w.handle.nonce,
+                },
+                focused: w.is_focused,
+                minimized: w.is_minimized,
+            })
+            .collect(),
+        scope: WindowScope::Screen,
+    }
+}
+
+/// Populate a window subject on the background executor, not when its action is clicked.
+#[cfg(target_os = "macos")]
+pub(crate) fn observe_front(app: &TrackedApp) -> Option<WindowTarget> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemDiscovery).ok()?;
+    let windows = crate::window_control::list_windows().ok()?;
+    let current = crate::frontmost_app_tracker::get_last_real_app()?;
+    if current != *app {
+        return None;
+    }
+    window_snapshot(&windows, Some(app)).bind(&app.name, true)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn observe_front(_: &TrackedApp) -> Option<WindowTarget> {
+    None
+}
+
 /// What's on screen now. Selected text and clipboard contents are never read here:
 /// steps that act on them read them when the plan runs.
 #[cfg(target_os = "macos")]
@@ -149,12 +212,22 @@ pub fn live_screen(last_action: Option<LastAction>) -> ScreenContext {
     let windows = crate::window_control::list_windows().unwrap_or_default();
     let filename_window = front.as_ref().and_then(|front| {
         let title = front.window_title.as_deref().filter(|t| !t.is_empty())?;
-        let mut found = windows.iter().filter(|w| w.pid == front.pid && w.bundle_id.as_deref() == Some(&front.bundle_id) && w.title == title && w.is_focused && !w.is_minimized);
+        let mut found = windows.iter().filter(|w| {
+            w.pid == front.pid
+                && w.bundle_id.as_deref() == Some(&front.bundle_id)
+                && w.title == title
+                && w.is_focused
+                && !w.is_minimized
+        });
         let w = found.next()?;
-        if found.next().is_some() { return None; }
+        if found.next().is_some() {
+            return None;
+        }
         Some((u32::try_from(w.pid).ok()?, w.handle.native_window_id?.0))
     });
-    let mut open_windows: Vec<OpenWindow> = windows.into_iter()
+    let window_snapshot = window_snapshot(&windows, front.as_ref());
+    let mut open_windows: Vec<OpenWindow> = windows
+        .into_iter()
         .filter(|w| !w.app.is_empty() && w.app != "Script Kit")
         .map(|w| OpenWindow {
             app: w.app,
@@ -165,6 +238,7 @@ pub fn live_screen(last_action: Option<LastAction>) -> ScreenContext {
     ScreenContext {
         id: "live".into(),
         filename_window,
+        window_snapshot,
         front_app: front
             .as_ref()
             .map(|app| FrontApp {
@@ -244,10 +318,15 @@ fn binary_tile(
     )
 }
 
-/// Apply a window step to the frontmost window of `app`.
+/// Re-observe immediately before dispatch. Never retry by app name, title or numeric list ID.
 #[cfg(target_os = "macos")]
-pub fn run_window_step(op: &WindowOp, app: &str) -> anyhow::Result<()> {
-    use crate::window_control as wc;
+pub fn run_window_step(
+    op: &WindowOp,
+    app: &str,
+    target: Option<&WindowTarget>,
+) -> anyhow::Result<()> {
+    use crate::window_control::{self as wc, LegacyWindowAction as Action};
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
     let action = op
         .action()
         .ok_or_else(|| anyhow::anyhow!("unknown window operation {}", op.label))?;
@@ -258,19 +337,33 @@ pub fn run_window_step(op: &WindowOp, app: &str) -> anyhow::Result<()> {
         );
         return crate::platform::run_osascript(&script, "intent_quit_app").map(|_| ());
     }
-    let window = wc::list_windows()?
-        .into_iter()
-        .filter(|w| w.app.eq_ignore_ascii_case(app))
-        .min_by_key(|w| w.global_order)
-        .ok_or_else(|| anyhow::anyhow!("no open window for {app}"))?;
-    match action {
-        WindowAction::Tile(position) => wc::tile_window(window.id, binary_tile(position)),
-        WindowAction::NextDisplay => wc::move_to_next_display(window.id),
-        WindowAction::PreviousDisplay => wc::move_to_previous_display(window.id),
-        WindowAction::Minimize => wc::minimize_window(window.id),
-        WindowAction::Close => wc::close_window(window.id),
-        WindowAction::Quit => unreachable!("quit returns before the window lookup"),
-    }
+    let target = target
+        .filter(|t| t.identity.app.eq_ignore_ascii_case(app))
+        .ok_or_else(|| anyhow::anyhow!("Choose one window and try again"))?;
+    let windows = wc::list_windows()?;
+    let front = crate::frontmost_app_tracker::get_last_real_app();
+    anyhow::ensure!(
+        window_snapshot(&windows, front.as_ref()).confirms(target),
+        "The window changed"
+    );
+    let w = &target.identity;
+    let handle = wc::WindowHandle {
+        pid: w.pid,
+        native_window_id: Some(wc::NativeWindowId(w.native_id)),
+        registry_generation: w.generation,
+        nonce: w.nonce,
+    };
+    wc::execute_observed_action(handle, |window_id| match action {
+        WindowAction::Tile(position) => Action::Tile {
+            window_id,
+            position: binary_tile(position),
+        },
+        WindowAction::NextDisplay => Action::MoveToNextDisplay { window_id },
+        WindowAction::PreviousDisplay => Action::MoveToPreviousDisplay { window_id },
+        WindowAction::Minimize => Action::Minimize { window_id },
+        WindowAction::Close => Action::Close { window_id },
+        WindowAction::Quit => unreachable!("quit is an application action"),
+    })
 }
 
 /// Opens `url` in `app`, or in the default browser.
@@ -298,6 +391,10 @@ pub fn open_url(url: &str, app: Option<&str>) -> anyhow::Result<()> {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn run_window_step(_op: &WindowOp, _app: &str) -> anyhow::Result<()> {
+pub fn run_window_step(
+    _op: &WindowOp,
+    _app: &str,
+    _target: Option<&WindowTarget>,
+) -> anyhow::Result<()> {
     anyhow::bail!("window steps need macOS")
 }
