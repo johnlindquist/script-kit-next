@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdtempSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -454,6 +456,22 @@ describe("mcp-cli", () => {
       expect(requestCount).toBe(0);
     },
   );
+
+  it("installs the real file from a path containing spaces, # and %, without replacing someone else's command", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "Kit #100% "));
+    const source = join(dir, "personal cli.ts"), destination = join(dir, "scriptkit");
+    try {
+      copyFileSync(new URL("./mcp-cli.ts", import.meta.url), source);
+      const install = () => Bun.spawnSync([process.execPath, source, "install-command", destination]);
+      expect(install().exitCode).toBe(0);
+      expect(realpathSync(destination)).toBe(realpathSync(source));
+      expect(install().exitCode).toBe(0);
+      rmSync(destination);
+      const foreign = join(dir,"missing-unrelated-command"); symlinkSync(foreign,destination);
+      expect(install().exitCode).not.toBe(0);
+      expect(readlinkSync(destination)).toBe(foreign);
+    } finally { rmSync(dir,{recursive:true,force:true}); }
+  });
 
   it("installs a scriptkit command symlink at a chosen target", async () => {
     const dir = mkdtempSync(join(tmpdir(), "script-kit-command-"));

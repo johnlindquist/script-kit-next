@@ -209,7 +209,7 @@ describe("independent nonactivation", () => {
 });
 
 test("helper source provenance hashes the exact current source bytes", () => {
-  const path = realpathSync(new URL("./macos-input.ts", import.meta.url).pathname);
+  const path = realpathSync(new URL("./macos-input.ts", import.meta.url));
   const sha256 = createHash("sha256").update(readFileSync(path)).digest("hex");
   expect(SOURCE_PROVENANCE).toEqual({ path, sha256 });
 });

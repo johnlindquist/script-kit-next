@@ -20,10 +20,11 @@ import {
   openSync,
   readFileSync,
   readlinkSync,
-  rmSync,
+  statSync,
   symlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
 type DiscoveryInfo = {
@@ -278,7 +279,7 @@ function currentScriptPath(): string {
   if (url.protocol !== "file:") {
     fail("Cannot install command because the current CLI is not running from a file path.");
   }
-  return url.pathname;
+  return fileURLToPath(url);
 }
 
 function installCommand(targetArg: string | undefined): CliResult {
@@ -286,24 +287,16 @@ function installCommand(targetArg: string | undefined): CliResult {
   const target = resolve(targetArg?.trim() || defaultCommandTarget());
   mkdirSync(dirname(target), { recursive: true });
 
-  if (existsSync(target)) {
-    const stat = lstatSync(target);
-    if (stat.isSymbolicLink()) {
-      const existing = readlinkSync(target);
-      if (resolve(dirname(target), existing) !== source) {
-        rmSync(target);
-      }
-    } else {
-      fail(
-        `Refusing to replace non-symlink at ${target}. Remove it or pass a different target path.`,
-      );
+  const existing = lstatSync(target, { throwIfNoEntry: false });
+  if (existing) {
+    if (!existing.isSymbolicLink() || resolve(dirname(target), readlinkSync(target)) !== source) {
+      fail(`Refusing to replace a different command at ${target}. Choose an unused target path.`);
     }
-  }
-
-  if (!existsSync(target)) {
+  } else {
     symlinkSync(source, target);
   }
-  chmodSync(source, 0o755);
+  const mode = statSync(source).mode & 0o777;
+  if (!(mode & 0o100)) chmodSync(source, mode | 0o100);
 
   return {
     success: true,
