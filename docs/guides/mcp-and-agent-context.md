@@ -111,7 +111,7 @@ The local-only restriction applies to the app's own discovery token, not to expl
 
 ## Agent Chat Context
 
-Agent Chat (double-tap the main hotkey, or `⌘⇧Space`) stages context for the active profile:
+Open a clean chat with ⌘↵ in the empty launcher, or use the Agent Chat shortcut (⌘⇧Space by default). A highlighted launcher result is not attached automatically. To bring something with you:
 
 - **`@` mentions** — in the main input or the chat composer, `@selection`, `@clipboard`, `@file:readme`, `@notes:...`, `@dictation:...` attach specific context parts. See [Main Menu Input](./main-menu-input.md).
 - **Add to AI** — surfaces like clipboard history and file search have "Attach to Agent Chat" actions (`⌃⌘A` in clipboard history).

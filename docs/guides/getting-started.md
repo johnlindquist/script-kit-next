@@ -5,7 +5,7 @@ Script Kit GPUI is one window you tell what should happen: run TypeScript script
 ## Prerequisites
 
 - **macOS** (Linux/Windows support planned)
-- **Rust** (1.70+) — https://rustup.rs
+- **Rust** (use the version pinned in [rust-toolchain.toml](../../rust-toolchain.toml)) — https://rustup.rs
 - **Bun** — https://bun.sh
 - Optional: `cargo-watch` for hot reload while developing the app:
 
@@ -16,7 +16,7 @@ cargo install cargo-watch
 ## 1. Build and Run
 
 ```bash
-git clone https://github.com/johnlindquist/script-kit-gpui.git
+git clone https://github.com/johnlindquist/script-kit-next.git script-kit-gpui
 cd script-kit-gpui
 cargo build --release
 ./target/release/script-kit-gpui
@@ -51,9 +51,11 @@ The main hotkey understands more than one gesture:
 
 | Gesture | Result |
 | --- | --- |
-| Tap | Open the launcher; a tap while it's open hides it |
-| Hold (~250 ms) | Open the Day Page (today's diary/notes surface) |
-| Double-tap | Open Agent Chat under the same input; a double-tap while it's open closes it |
+| Tap | Open the launcher on release; hide it if Kit already has focus |
+| Hold (~250 ms) | Dictate into the original field; release to finish |
+| Double-tap | Open Today; hold the second press to dictate into it |
+
+Use ⌘↵ in the empty launcher for a clean chat. See the [gesture guide](../specs/gesture-grammar.md) for routing and cancellation.
 
 ## 3. Your First Script
 
@@ -76,14 +78,14 @@ Press the hotkey, type `hello`, and press `Enter`. The prompt opens under the sa
 ## 4. The Core Workflow
 
 1. **Hotkey** — press `⌘;` from anywhere.
-2. **Say it** — type a script name, built-in, app, or a sentence saying what should happen. Fuzzy matching applies, and Jev lists up to three readings of a sentence under a "Jev · ⌘1–3" header.
+2. **Say it** — type a script name, built-in, app, or a sentence saying what should happen. Search is local. With [remote readings enabled](jev-intent.md), Jev lists up to three readings of a sentence under a "Jev · ⌘1–3" header.
 3. **Run** — press `Enter`. The ↵ label always names exactly what it will run.
 
 Along the way:
 
 - `⌘K` stages the selected row in the line above the input, and the list becomes its actions (edit, logs, copy path, and more). `Esc` lets go.
 - `⌘I` toggles an info panel about the selected item.
-- `Tab` on typed text hands the words to an agent (Tab again takes them back); `Tab` on an empty input opens the working-directory picker.
+- `Tab` on typed text hands the words to an agent (Tab again takes them back); `Tab` on an empty input cycles the available subject tabs. Type `>` to pick a working directory.
 - Nothing asks "Are you sure?": something that can't be undone waits 8 s in the line ("Runs in 8s") and `⌘Z` stops it; something that can be undone just happens, and `⌘Z` takes it back.
 - If nothing matches, fallback rows appear: **Do in Current App**, **Search Files**, **Ask AI**, open-as-URL/file, and an inline calculator for math input.
 

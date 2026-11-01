@@ -1,6 +1,6 @@
 # Main Menu Input
 
-The launcher input takes whatever you type: a command name, a search, or a sentence saying what should happen. Jev reads a sentence against what's on screen and fills up to three readings under a "Jev · ⌘1–3" header, while the list below keeps matching commands. The ↵ label always names exactly what Enter will run.
+The launcher input takes whatever you type: a command name, a search, or a sentence saying what should happen. Search is local by default. If you enable [remote readings](jev-intent.md), Jev can offer up to three interpretations under a "Jev · ⌘1–3" header, while the list below keeps matching commands. The ↵ label always names exactly what Enter will run.
 
 A small set of symbols says part of a sentence exactly, turning the input into a prompt builder, capture composer, or filtered search without leaving the main list. Each word the app understands gets a colored underline in its role's color (subject, action, target, details, owner); the text itself stays white. The parser is conservative: plain text, URLs, `localhost:3000`, `hello@world.com`, and unknown heads all stay normal search.
 
@@ -42,13 +42,13 @@ A sigil only counts at a word boundary — `hello@world.com` is plain search.
 
 - `Enter` — run what the ↵ label names: the current eligible selected row, or the highlighted picker row when a picker is listed. A stale query or missing row is refused; Enter never silently substitutes a neighboring result.
 - `⌘1`–`⌘3` — run one of Jev's readings.
-- `Tab` — with typed text: hand the words to an agent (Tab again takes them back). With empty input: the **cwd picker**. Directory-browse queries keep `Tab` for path completion.
-- `Shift+Tab` — open the agent **model/profile picker**.
+- `Tab` — with typed text: hand the words to an agent (Tab again takes them back). With empty input and subject tabs showing: select the next subject. Type `>` for the working-directory picker. Directory-browse queries keep `Tab` for path completion.
+- `Shift+Tab` — select the previous subject when the input is empty and the subject tabs are showing.
 - `⌘K` — stage the selected row in the line above the input; the list becomes its actions, in place.
 - `⌘↵` — with typed words, **Do It**: run Jev's first reading (same as `⌘1`). With empty input, **Agent**: open the model's chat.
-- `↑` on an empty input — stage the last run (undo it, run it again, share it).
+- `↑` on an empty input — select the last run; press again for an earlier one. ⌘V selects the copy. Space stages the selected subject; selecting it alone does not run anything.
 - `Escape` — let go of what's staged first, then go back one view, then clear the input, and only then hide the window.
-- Lists opened from the launcher (Apps, File Search, Clipboard History, Help, a script's choice prompt) follow their own order: `Escape` first clears what you typed, then goes back, or cancels the script's prompt. Three exceptions leave at once: an action list (`⌘K`) lets go of what's staged, and choosing a working folder after `Tab` or picking a file or copy to attach returns without clearing.
+- Lists opened from the launcher (Apps, File Search, Clipboard History, Help, a script's choice prompt) follow their own order: `Escape` first clears what you typed, then goes back, or cancels the script's prompt. Three exceptions leave at once: an action list (`⌘K`) lets go of what's staged, and choosing a working folder after `>` or picking a file or copy to attach returns without clearing.
 - The Notes list shows 60 notes at a time; a last "Show N More" row says how many matched in all, and ↵ on it lists the next ones.
 
 ### Selection while results arrive

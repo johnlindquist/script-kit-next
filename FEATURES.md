@@ -42,7 +42,7 @@ intent-first input itself promises. Like the Brain Time entries below, they sit 
 - Stable anchor: `jev-reads-the-sentence-and-fills-reserved-rows`
 - Surface: Main Input / One-window host / Intent engine
 - Status: Active
-- User contract: A typed or spoken sentence (not launcher syntax) is read by Jev against what is on screen, and its top readings fill three reserved rows under "Jev · ⌘1–3"; ⌘1–3 run them. The rows are reserved before Jev answers, so nothing below them moves when it does. A reading that needs a service the user hasn't connected is a "Needs <service>" row whose ↵ opens the connect view in place, and the waiting sentence runs once the service connects. An Enter that waited for Jev runs its row only when Jev's top reading leads clearly; otherwise the window asks once.
+- User contract: With [remote intent readings enabled](docs/guides/jev-intent.md), a typed or spoken sentence (not launcher syntax) is read by Jev against what is on screen, and its top readings fill three reserved rows under "Jev · ⌘1–3"; ⌘1–3 run them. The rows are reserved before Jev answers, so nothing below them moves when it does. A reading that needs an unavailable integration cannot connect or dispatch the request. An Enter that waited for Jev runs its row only when Jev's top reading leads clearly; otherwise the window asks once.
 - Regression risk: Host or engine changes can shift rows when Jev answers, send launcher syntax to Jev, run a reading Jev was unsure of, or treat a missing integration as an error.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test -p sk-one-window`
@@ -90,8 +90,8 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `day-page-opens-in-main-launcher-window`
 - Surface: Day Page / Main Launcher
 - Status: Active (Brain Time T9), pending QA lock-in selection
-- User contract: Holding the main hotkey from closed opens the Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes view, with selected rows opening in the current editor by default. Esc dismisses the main window.
-- Regression risk: Gesture routing or `AppView` refactors can break the hold-to-open route, day rollover binding, or editor save semantics.
+- User contract: Double-tapping the main hotkey opens the Day Page in the same main window (no resize, no window swap). Today's `brain/days/YYYY-MM-DD.md` binds on entry; the shared notes editor (`day-page-editor`) persists edits through the brain substrate. Cmd+P uses the same Notes search container/result language as the Notes view, with selected rows opening in the current editor by default. Esc dismisses a suggestion or retraces the note trail before leaving the editor.
+- Regression risk: Gesture routing or `AppView` refactors can break the double-tap route, day rollover binding, or editor save semantics.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib day_page`
   - `bun scripts/agentic/notes-day-page-switcher-probe.ts`
@@ -104,7 +104,7 @@ the matrix only through a future QA lock-in selection.
 - Stable anchor: `main-hotkey-gesture-grammar-morphs-surfaces`
 - Surface: Main Launcher / Day Page / Agent Chat
 - Status: Active (Brain Time T2/T8), pending QA lock-in selection
-- User contract: Key-down shows the main window immediately. A tap while it is open hides it: at once over an empty launcher or the Day Page, otherwise after the double-tap window so a double-tap can't destroy typed words. Double-tap opens a quick question in the model's chat with nothing attached, and closes it if it is already open. Hold (~250ms) from closed opens the Day Page; hold while open does nothing.
+- User contract: Tap opens the launcher on release, or hides it when it owns focus. Hold dictates at the original field. Two taps open Today; holding the second press dictates into Today. ⌘↵ on an empty launcher opens a clean chat. [Shortcut and focus map](docs/specs/gesture-grammar.md).
 - Regression risk: Hotkey delivery or classifier wiring can regress instant show, let a tap destroy typed words, attach the highlighted row to a quick question, or route gestures to the wrong view.
 - Proof commands:
   - `./scripts/agentic/agent-cargo.sh test --lib gesture`

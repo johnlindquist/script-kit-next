@@ -9,7 +9,7 @@ A complete rewrite of [Script Kit](https://scriptkit.com) using the [GPUI](https
 Script Kit GPUI is built from the ground up using Zed's GPUI framework, delivering:
 
 - **Blazing Fast Performance** - Native Rust performance with GPU-accelerated rendering
-- **Sub-Second Compilation** - Hot reload development with cargo-watch rebuilds in 2-5 seconds
+- **Development loop** - Rebuild on changes with the cargo-watch development script
 - **Single Repository** - SDK and app live together, making contributions and customizations straightforward
 - **Bun Runtime** - Scripts execute via Bun for fast startup and modern JavaScript/TypeScript support
 
@@ -41,17 +41,16 @@ What's changed:
 
 Script Kit is one window you tell what should happen.
 
-- **Say it.** Type or speak a sentence ("when does LeBron play next", "remind Sam about the deck
-  friday"). With [remote Jev readings enabled](docs/guides/jev-intent.md), TypeSafe receives your words and candidate actions; local search is the default. ⌘1–3 run
+- **Say it.** Type a name to search locally, or ask for an action such as “tile Slack on the right.” With [remote Jev readings enabled](docs/guides/jev-intent.md), TypeSafe receives your words and candidate actions; local search is the default. ⌘1–3 run
   Jev's readings, ↵ runs the highlighted row, and its label always names exactly what will run.
 - **Or say it exactly.** Symbols complete in the list and underline themselves: `@selection`,
   `@clipboard`, `@file:…` (what to act on), `/command` (what to do), `>:dev`, `todo;` (where it goes),
   `due:friday`, `.concise` (details), `|profile` (who does it).
-- **The input never moves.** The line above it shows what's staged, waiting, or just ran. Forms,
+- **Choose a subject.** With the launcher empty, Tab cycles between the selection, recent copy, front window and last run when available. Space stages the selected subject. Status and Undo share the Today footer while tabs show. Forms,
   answers, notes, the model's chat, agents, voice, and script prompts all open in place under it; Esc
   goes back one step.
 - **Act on anything.** ⌘K stages the highlighted row (or the clipboard, or the last run) in the line
-  and the list becomes what you can do with it. ⌘↵ hands it to the agent.
+  and the list becomes what you can do with it. ⌘↵ on the empty launcher opens a clean chat.
 - **No dialogs.** Irreversible actions wait 8 seconds in the line and run unless you stop them;
   reversible ones happen at once with ⌘Z.
 - **It learns.** What you ran becomes an instant match next time, and runs that did several things
@@ -80,7 +79,9 @@ New to Script Kit GPUI? Start with the user guides:
 - [Main Menu Input](docs/guides/main-menu-input.md)
 - [SDK Scripting](docs/guides/sdk-scripting.md)
 - [MCP and Agent Context](docs/guides/mcp-and-agent-context.md)
-- [Dictation](docs/guides/dictation.md)
+- [Dictation and recovery](docs/guides/dictation.md)
+- [Use Script Kit from an external agent](docs/guides/external-agents.md)
+- [Preview a Save-sheet filename](docs/guides/desktop-filename.md)
 - [Permissions](docs/guides/permissions.md)
 - [Computer Use](docs/guides/computer-use.md)
 
@@ -101,7 +102,7 @@ This is interactive **operator setup**. Agents should use [Owned native agent wo
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/johnlindquist/script-kit-gpui.git
+   git clone https://github.com/johnlindquist/script-kit-next.git script-kit-gpui
    cd script-kit-gpui
    ```
 

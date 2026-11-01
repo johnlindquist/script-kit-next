@@ -12,12 +12,10 @@ For a map of main UI surfaces to code implementation, see [GLOSSARY.md]
 
 Script Kit is one window that you tell what should happen. Every other section of this file assumes it.
 
-- **Say it, don't search for it.** The main input takes a sentence. `src/intent/**` asks Jev (fast,
-  near-free classification) to read it against what is on screen (`intent::ScreenContext`), and the engine
+- **Say it, don't search for it.** The main input searches locally by default. With [remote readings enabled](docs/guides/jev-intent.md),
+  `src/intent/**` asks Jev about the sentence and a bounded context, and the engine
   turns the readings into a runnable `Plan`. The top readings fill three reserved rows under
-  "Jev · ⌘1–3". Launcher syntax already says what to do and skips Jev (`intent::wants_reading`). A reading
-  that needs a service the user hasn't connected is a "Needs <service>" row whose ↵ opens the connect view
-  in place; the sentence runs once the service connects.
+  "Jev · ⌘1–3". Launcher syntax already says what to do and skips Jev (`intent::wants_reading`). An unavailable service must not report a connection or run the waiting sentence without a verified connector.
 - **Launcher subject tabs (T2).** On the main menu the input is first. A 38 pt browser-style tab strip under it opens directly into one shaded action panel. Selection, approved recent copy and front window lead newest-first; last run is separate. On an empty input Tab/Shift-Tab cycle, ⌘V selects the copy, ↑ walks runs, Space stages, and Esc unwinds. Once typing, Tab keeps its existing text owner. Status/Stop/Undo share the Today footer position while the tabs show. `window/subject_tabs.rs` in `sk-one-window` owns the rules; `main.subject-tabs` is the hidden evaluation fixture.
 - **The input never moves while typing.** Outside the tabbed launcher shell, above it is the 34 pt line (`sk_one_window::slot`): a staged subject,
   a waiting hold, the last thing that ran, or what "this" means. Every list starts with a 28 pt header.
@@ -250,7 +248,7 @@ There is one chat: the model's chat view under the main window's input (`crate::
 
 A fresh launcher always highlights a real row (`first_selectable_index` — a Brain Inbox capture, a flow, a script), so any "just open a clean chat" affordance that stages the highlighted row silently attaches it. This bit us on 2026-07-10: main-hotkey double-tap opened Agent Chat with the first row attached as if deliberately chosen.
 
-- Quick/clean-chat affordances (double-tap of the main hotkey, ⌘↵ with nothing typed, and anything with the same "I just have a quick question" intent) MUST use `ChatEntry::quick()`, which carries no words and no parts.
+- Quick/clean-chat affordances (⌘↵ with nothing typed, and anything with the same "I just have a quick question" intent) MUST use `ChatEntry::quick()`, which carries no words and no parts.
 - Only entries where the user deliberately targeted a row (⌘K then "Ask the model about it", actions payloads, explicit handoffs) may add the row's part with `ChatEntry::with`.
 - The contract is locked by `a_quick_question_takes_nothing_along_from_the_launcher` in `src/app_impl/ui_window_one_window_chat_tests.rs`; keep new entry points honest against it rather than weakening the test.
 

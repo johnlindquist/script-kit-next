@@ -4,7 +4,7 @@ Script Kit GPUI is one window you tell what should happen. It looks like a launc
 
 ## Say What Should Happen
 
-Type a command name, a search, or a sentence. Jev reads a sentence against what's on screen and lists up to three readings under a "Jev · ⌘1–3" header; the ↵ label names exactly what Enter will run, and it holds steady while you type. Words it understands get colored underlines. A missing integration is a row ("Needs Google Calendar", ↵ connects it). Every view opens under the same input, which never moves, and nothing pops up: something that can't be undone waits 8 s in the line above the input ("Runs in 8s") and `⌘Z` stops it; something that can be undone just happens, with `⌘Z` in the line to take it back.
+Search locally by typing a command, app or tab title. If you opt into [remote Jev readings](./jev-intent.md), you can also type a sentence and choose among its readings with ⌘1–3. The ↵ label names the action before you run it. An unavailable integration cannot connect or send a message. Irreversible actions wait eight seconds; ⌘Z in the empty launcher stops the countdown.
 
 ## One Hotkey, Three Gestures
 
@@ -12,9 +12,11 @@ The main hotkey (default `⌘;`) is gesture-aware:
 
 | Gesture | Result |
 | --- | --- |
-| Tap | Open the launcher; a tap while it's open hides it |
-| Hold (~250 ms) | Open the **Day Page** — today's markdown diary |
-| Double-tap | Open **Agent Chat** under the same input; a double-tap while it's open closes it |
+| Tap | Open the launcher; tap while Kit has focus to hide it |
+| Hold (~250 ms) | Dictate into the original field; release to finish, not to run a command |
+| Double-tap | Open **Today**; hold the second press to dictate into the note |
+
+For a clean Agent Chat use ⌘↵ in the empty launcher.
 
 ## Global Hotkeys
 
@@ -51,11 +53,7 @@ The launcher input accepts symbols that say part of a sentence exactly, or switc
 | `>` | Working-directory picker / command invocation |
 | `~` `!` `?` | Exit to File Search, Quick Terminal, Help |
 
-Two keyboard moves worth learning:
-
-- `Tab` — on typed text, hand the words to an agent (Tab again takes them back); on an empty input, the cwd picker.
-- `Shift+Tab` — open the agent **model/profile picker**.
-- `↑` on an empty input — stage the last run in the line: undo it, run it again, or share it.
+When subject tabs are showing, Tab and Shift-Tab cycle through the available subjects on an empty input. ⌘V selects the copy, ↑ walks past runs, and Space attaches the chosen subject. Selecting a tab does not run an action. Once you type, Tab hands the words to an agent instead.
 
 Full details with examples: [Main Menu Input](./main-menu-input.md).
 
@@ -108,13 +106,7 @@ Everything captured lands as plain markdown under `~/.scriptkit/brain/`:
 
 ## Notes Power Features
 
-`⌘⌃N` opens today's note under the main input. A note's lines are rows under a `NOTE · <name>` header; the input never moves:
-
-- Type and press `↵` — append a line
-- `↵` on a line — put its words in the input; `↵` again saves them in place (its time and bullet are kept)
-- `⌘⌫` — delete a line; it waits 8 s in the line above the input, and `⌘Z` stops it
-- `⌘P` — list notes by name under `NOTES` (including day notes)
-- `⌘↵` — hand the note to Agent Chat
+Today and named notes open in the same Markdown editor. Type directly; Return inserts a newline. ⌘P finds another note. Type [[ to complete a note link, or follow an existing link and use Esc to retrace the notes you opened. ⌘K lists actions for the current note, including pinning and copying a link.
 
 ## Clipboard History Power Actions
 

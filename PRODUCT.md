@@ -18,9 +18,9 @@ Script Kit is a sharp tool, not a playground. It respects the user's time and at
 
 1. **One window, one input** — The main window is the only window. Everything — lists, forms, answers, notes, the model's chat, agents, voice, SDK prompts — opens in place under the same input. Nothing floats over it: no popups, toasts, HUDs, or modal dialogs.
 
-2. **The input never moves** — The input is the anchor for the user's eye. The line above it is always there at one height; every list starts with a header that stays while typing; the window grows at once and shrinks only after typing pauses. Zero layout shift in every state.
+2. **The input never moves** — The input is the anchor for the user's eye. The launcher puts subject tabs below the input; other list views keep the status line above it. The window keeps one height while visible. Typing and later results never resize it.
 
-3. **Say what should happen** — The input takes a sentence, not a search term. Jev reads it against what's on screen and the list offers what it could mean; symbols (`@`, `/`, `.`, `>:`, `|`, `;`, `due:`) say it exactly. The words stay white; colored underlines show which part is the subject, action, target, details, and owner.
+3. **Say what should happen** — Local search accepts names and commands. With remote readings enabled, Jev offers interpretations of a sentence; symbols (`@`, `/`, `.`, `>:`, `|`, `;`, `due:`) say it exactly. The words stay white; colored underlines show which part is the subject, action, target, details, and owner.
 
 4. **Three keys, nothing more** — The capsule shows at most three affordances: ↵ (named for exactly what Enter runs), ⌘K (act on the focused thing), and ⌘↵ ("Agent" on an empty input, "Do It" — Jev's first reading — once words are typed). ↵'s label never flips back while a sentence is typed forward. Anything else belongs behind ⌘K, not in the chrome.
 
@@ -89,7 +89,7 @@ Hover, focus, and active/toggle states are always visually distinct — even ove
 
 ### Window Anatomy
 
-From top to bottom, in every state:
+The tabbed launcher starts with the input, then the 38 pt subject tabs and their action list. Status, Stop and Undo share the Today footer position. Outside that shell the order is:
 
 1. **The line** (34 pt) — always present, one height. It says what's staged ("Acting on …"), what's waiting ("Runs in 8s"), what just ran ("Last · … just now"), or what "this" means ("Focused"). Its words swap in place; only its dimming eases.
 2. **The input** — the anchor. It never moves. Text stays white; word marks are 2 pt underlines in the word's color.
@@ -165,7 +165,7 @@ Use when the list item is a label pointing at content that must be seen to selec
 
 ⌘K is the single discovery surface, and it is not a separate UI: it stages the focused thing in the line above the input ("Acting on …"), and the list becomes that thing's actions under "Say what to do with it, or pick one". Typing filters them in the same input; Enter runs one; Esc lets go and the view returns exactly as it was.
 
-**The line names what ⌘K acts on.** Dimmed, it says what's focused: the front app or its selection, or in the model's chat its latest reply. Moving the highlight doesn't change its words; once ↑/↓ moves it on an empty input (or words are typed), the line steps back and ⌘K acts on the highlighted row instead. The last run shows there only until the next key; ↑ on an empty input stages it any time. In the chat, ⌘K's actions take the conversation's place: the reply's next steps in Jev's order (so ⌘K then ↵ does what ↵ did), then the chat's; words nothing matches go to the model.
+**The line names what ⌘K acts on.** Dimmed, it says what's focused: the front app or its selection, or in the model's chat its latest reply. Moving the highlight doesn't change its words; once ↑/↓ moves it on an empty input (or words are typed), the line steps back and ⌘K acts on the highlighted row instead. On the tabbed launcher, ↑ selects past runs; Space stages the selected subject. In the chat, ⌘K's actions take the conversation's place: the reply's next steps in Jev's order (so ⌘K then ↵ does what ↵ did), then the chat's; words nothing matches go to the model.
 
 **Row anatomy:** Same as every list — action name left, row fill and gold icon tile when focused, no row dividers. Destructive actions use red text and run through the 8-second hold rather than a confirmation.
 
@@ -179,9 +179,9 @@ Use when the list item is a label pointing at content that must be seen to selec
 | **⌘K** | Stage what the line names (or the row the highlight was moved to) and list its actions | Universal — the single discovery surface |
 | **⌘↵** | Empty input: open the model's chat ("Agent"). Words typed: run Jev's first reading ("Do It") | Universal |
 | **⌘1–3** | Run one of Jev's readings | Main list |
-| **↑** (empty input) | Stage the last run: Undo it / Run it again / Share it | Main list |
+| **↑** (empty input) | Select the last run; press again to walk back through run history | Main list |
 | **⌘Z** (empty input) | Undo the last reversible action, or stop a waiting hold | Universal |
-| **Tab** | With words typed, hand them to an agent (Tab again takes them back); on an empty input, pick the working directory | Main list |
+| **Tab** | With words typed, hand them to an agent (Tab again takes them back); on an empty tabbed launcher, cycle subjects (Shift-Tab goes back) | Main list |
 | **⌘J** | Open the agent that needs you | Universal |
 | **⌘I** | Info / Peek | Universal — toggles detail view, Esc to return |
 | **Esc** | Back one step | Universal — lets go of what's staged, then goes back one view with that step's words, then clears the input, and only then hides the window |
