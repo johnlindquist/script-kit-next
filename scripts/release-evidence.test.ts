@@ -1335,7 +1335,7 @@ describe("fail-closed release evidence", () => {
 
   test.each([
     ["codesign", "--verify"],
-    ["xcrun", "stapler"],
+    ["/bin/bash", resolve(import.meta.dir, "release-stapler.sh")],
     ["spctl", "--assess"],
   ])("signing attestation fails closed when %s %s rejects the actual package", (tool, argument) => {
     const fixture = makeFixture();
@@ -3242,13 +3242,18 @@ describe("nonintrusive CI release ownership and publication graph", () => {
   describe("notarization ticket delivery", () => {
     const interrupted = "error is Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup";
     type Reply = readonly [number, string];
-    const ok: Reply = [0, "ok"], lost: Reply = [68, interrupted], missing: Reply = [65, "No ticket stapled"];
+    const ok: Reply = [0, "ok"], lost: Reply = [68, interrupted], missing: Reply = [65, "Script Kit.app does not have a ticket stapled to it."];
 
     // Exercise the workflow shell without invoking Apple tools, contacting Apple or signing anything.
-    function drive(staple: Reply[], validate: Reply[], receipt = { id: NOTARIZATION_ID, status: "Accepted" }) {
+    function drive(staple: Reply[], validate: Reply[], receipt = { id: NOTARIZATION_ID, status: "Accepted" }, mode = "staple", hosted = true) {
       const root = mkdtempSync(join(tmpdir(), "kit-ticket-"));
       try {
-        const step = workflow("release").jobs["sign-notarize-macos"].steps?.find(s => s.name === "Staple notarization ticket")?.run;
+        const step = mode === "staple"
+          ? workflow("release").jobs["sign-notarize-macos"].steps?.find(s => s.name === "Staple notarization ticket")?.run
+          : '/bin/bash scripts/release-stapler.sh validate "target/release/bundle/osx/Script Kit.app"';
+        mkdirSync(join(root, "scripts"));
+        cpSync(resolve(import.meta.dir, "release-stapler.sh"), join(root, "scripts/release-stapler.sh"));
+        mkdirSync(join(root, "target/release/bundle/osx/Script Kit.app"), { recursive: true });
         if (!step) throw Error("missing staple step");
         const clauses = Object.entries({ staple, validate }).flatMap(([op, replies]) => replies.map(([code, msg], i) =>
           op + ":" + (i + 1) + ") printf '%s\\n' '" + msg + "' >&2; exit " + code + ";;"));
@@ -3262,7 +3267,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
         writeFileSync(join(root, "calls"), "");
         json(join(root, "notarization-result.json"), receipt);
         const r = spawnSync("/bin/bash", ["-e", "-o", "pipefail", "-c", step], {
-          cwd: root, env: { PATH: root, RUNNER_TEMP: root }, encoding: "utf8", timeout: 3000,
+          cwd: root, env: { PATH: root, RUNNER_TEMP: root, GITHUB_ACTIONS: String(hosted), GITHUB_REF_TYPE: "tag", RUNNER_OS: "macOS", GITHUB_WORKSPACE: root }, encoding: "utf8", timeout: 3000,
         });
         if (r.error) throw r.error;
         return [r.status, readFileSync(join(root, "calls"), "utf8").trim().split(/\s+/).filter(Boolean)];
@@ -3272,6 +3277,13 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     test("recovers one interrupted lookup and validates the same bundle; never restaples an already valid ticket", () => {
       expect(drive([lost, ok], [missing, ok])).toEqual([0, ["staple", "validate", "staple", "validate"]]);
       expect(drive([lost], [ok])).toEqual([0, ["staple", "validate"]]);
+    });
+    test("retries a lost validation reply without a second staple", () => {
+      expect(drive([ok], [lost, ok])).toEqual([0, ["staple", "validate", "validate"]]);
+      expect(drive([], [lost, ok], undefined, "validate", false)).toEqual([0, ["validate", "validate"]]);
+      expect(drive([ok], [ok], undefined, "staple", false)).toEqual([64, []]);
+      expect(drive([lost], [[65, "invalid local ticket"]])).toEqual([65, ["staple", "validate"]]);
+      expect(drive([lost], [lost, lost, lost])).toEqual([68, ["staple", "validate", "validate", "validate"]]);
     });
     test("requires an explicitly accepted submission before touching the bundle", () => {
       for (const receipt of [{ id: NOTARIZATION_ID, status: "Invalid" }, { id: "", status: "Accepted" }]) {
