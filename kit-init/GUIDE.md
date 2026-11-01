@@ -1138,7 +1138,7 @@ Script Kit includes Agent Chat - a built-in chat surface for command-line agents
 - **Focus existing Agent Chat**: Use `aiFocus()`
 - **From skills**: Selecting a skill opens Agent Chat
 - **Hotkey**: `Cmd+Shift+Space` (default, configurable)
-- **Command+Enter behavior**: `Command+Enter` from the launcher opens Agent Chat with current context
+- **Clean chat**: Press `Command+Enter` in the empty launcher. The highlighted result is not attached. To ask about a specific result, select it, press `Command+K`, then choose **Ask the model about it**.
 
 ### Agent Setup
 
