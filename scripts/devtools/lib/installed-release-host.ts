@@ -205,7 +205,7 @@ async function verifyBundle(path: string, release: Release) {
       /flags=0x[\da-f]+\([^)]*runtime/.test(signature),
     "wrong_distribution_identity",
   );
-  command("notarization_ticket_invalid", "/usr/bin/xcrun", ["stapler", "validate", path], 60_000);
+  command("notarization_ticket_invalid", "/bin/bash", [join(PROJECT, "scripts/release-stapler.sh"), "validate", path], 120_000, { ...cleanEnv(), PATH: "/usr/bin:/bin:/usr/sbin:/sbin" });
   const assessment = command("gatekeeper_rejected", "/usr/sbin/spctl", [
     "--assess",
     "--type",

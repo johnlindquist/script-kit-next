@@ -46,6 +46,7 @@ async function exercise(
   options: {
     fault?: string;
     mic?: string;
+    ax?: string;
     deviceCount?: number;
     enumerationFailed?: boolean;
     defaultSetting?: boolean;
@@ -106,6 +107,7 @@ async function exercise(
           : 'denied',
     ]),
   );
+  if (options.ax) p.accessibility = options.ax;
   let windowQueries = 0,
     view = 'permissionsWizard',
     visible = true,
@@ -138,9 +140,13 @@ async function exercise(
         source: 'permissions.service',
         schemaVersion: 1,
         bundleIdentifier: fault === 'bundle' ? 'wrong.bundle' : 'com.scriptkit.app',
+        readinessScope: fault === 'scope' ? 'hardware-tested' : 'privacyPermissions',
         permissions: domainRows.map(([permission]) => ({
           permission,
           status: p[permission],
+          observation: fault === 'denial' ? 'personClickedDeny' : p[permission] === 'granted' ? 'authorizedBySystem'
+            : p[permission] === 'unknown' ? 'unavailable' : p[permission] === 'notAsked' ? 'notDeterminedBySystem'
+            : permission === 'microphone' ? 'deniedOrRestrictedBySystem' : 'notGrantedByPreflight',
           requestedAtUnixMs: null,
           grantLooksStuck: false,
         })),
@@ -159,12 +165,12 @@ async function exercise(
                 ? 'blocked'
                 : mic === 'notAsked'
                   ? 'askOnUse'
-                  : 'ready'
-              : feature === 'selectedText' && p.accessibility === 'unknown'
-                ? 'unknown'
-                : feature === 'pasteIntoApps' && p.accessibility === 'unknown'
-                  ? 'ready'
-                  : 'blocked',
+                  : fault === 'false-dictation' ? 'ready'
+                    : mic === 'unknown' || p.accessibility === 'unknown' ? 'unknown'
+                    : p.accessibility === 'granted' ? 'ready' : 'degraded'
+              : feature === 'selectedText' ? (p.accessibility === 'unknown' ? 'unknown' : p.accessibility === 'granted' ? 'ready' : 'blocked')
+              : feature === 'pasteIntoApps' ? (fault === 'false-paste' || p.accessibility === 'granted' ? 'ready' : p.accessibility === 'unknown' ? 'unknown' : 'degraded')
+              : 'blocked',
           missing: [],
           message: 'PRIVATE_FIXTURE_MESSAGE',
         })),
@@ -296,7 +302,7 @@ async function exercise(
         }
         case 'checkAccessibility':
           if (fault === 'grant-changed') p.screenRecording = 'granted';
-          res = { type: 'accessibilityStatus', granted: fault === 'ax' };
+          res = { type: 'accessibilityStatus', granted: (p.accessibility === 'granted') !== (fault === 'ax') };
           break;
         default:
           throw Error('unexpected request');
@@ -379,15 +385,26 @@ describe('installed release journeys — controlled transport fixtures only', ()
         evidence: { startupKitPermissionView: true, settings: { key: 'editorFontSize', value: 18 } },
         checkpoints: { start: { availability, permissions: { microphone: { status: mic } } } },
       });
-      if (mic === 'unknown')
-        expect(result.checkpoints.start.discrepancies).toEqual([
-          'dictation-ready-is-not-capture-proof',
-          'paste-ready-without-confirmed-grant',
-        ]);
+      expect(result.checkpoints.start.readinessScope).toBe('privacyPermissions');
+      if (mic === 'unknown') expect(result.checkpoints.start.permissions.microphone.observation).toBe('unavailable');
       expect(result.humanSteps).toHaveLength(7);
       expect(seen).toContain('run');
     });
+  it('does not equate ready permissions with a working microphone', async () => {
+    const { result } = await exercise({ mic: 'granted', ax: 'granted', deviceCount: 0 });
+    expect(result.checkpoints.start).toMatchObject({ readiness: { dictation: { readiness: 'ready' } },
+      availability: 'no-devices', dictationSetupReady: false, captureVerified: false });
+    expect(result.status).toBe('pass');
+  });
+  for (const [fault, reason] of [['false-paste', 'paste-ready-without-confirmed-grant'], ['false-dictation', 'dictation-readiness-disagrees']])
+    it(`refuses ${fault} with unknown access`, async () => {
+      const { result, seen } = await exercise({ fault, mic: 'unknown' });
+      expect(result).toMatchObject({ status: 'fail', reason });
+      expect(seen).not.toContain('simulateKey');
+    });
   for (const [fault, reason] of [
+    ['denial', 'permission-observation-disagrees'],
+    ['scope', 'missing-permission-scope'],
     ['dead', 'transport-or-owned-file-unavailable'],
     ['pid', 'wrong-window-identity'],
     ['bundle', 'wrong-state-owner'],

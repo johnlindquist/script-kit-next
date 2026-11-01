@@ -94,6 +94,7 @@ function inventory(s: Row) {
     'not-installed-permission-service',
     'blocked',
   );
+  requireProof(p.readinessScope === 'privacyPermissions', 'missing-permission-scope', 'blocked');
   const permissions = Object.fromEntries(
     domainIds.map((id) => {
       const r = oneRow(p.permissions, 'permission', id);
@@ -104,10 +105,15 @@ function inventory(s: Row) {
             (Number.isSafeInteger(r.requestedAtUnixMs) && r.requestedAtUnixMs > 0)),
         'invalid-domain-status',
       );
+      const observation = r.status === 'granted' ? 'authorizedBySystem'
+        : r.status === 'unknown' ? 'unavailable' : r.status === 'notAsked' ? 'notDeterminedBySystem'
+        : id === 'microphone' ? 'deniedOrRestrictedBySystem' : 'notGrantedByPreflight';
+      requireProof(r.observation === observation, 'permission-observation-disagrees');
       return [
         id,
         {
           status: r.status as string,
+          observation,
           requestedAtUnixMs: r.requestedAtUnixMs as number | null,
           grantLooksStuck: r.grantLooksStuck,
         },
@@ -157,8 +163,7 @@ function inventory(s: Row) {
       typeof d.setup.ready === 'boolean',
     'invalid-device-inventory',
   );
-  // v0.1.21 deliberately substitutes an EMPTY vector unless AVFoundation granted
-  // permission. Its deviceCount=0 is then NOT evidence the VM has no devices.
+  // Kit doesn't enumerate devices without a grant. Zero then says nothing about hardware.
   let availability: string;
   if (micStatus !== 'granted') {
     requireProof(
@@ -185,20 +190,15 @@ function inventory(s: Row) {
       readiness.selectedText.readiness === (axStatus === 'unknown' ? 'unknown' : 'blocked'),
       'selected-text-readiness-disagrees',
     );
-  if (micStatus === 'denied' || micStatus === 'notAsked')
-    requireProof(
-      readiness.dictation.readiness === (micStatus === 'denied' ? 'blocked' : 'askOnUse'),
-      'dictation-readiness-disagrees',
-    );
-  const discrepancies = [];
-  if (readiness.dictation.readiness === 'ready' && (micStatus !== 'granted' || !d.setup.ready))
-    discrepancies.push('dictation-ready-is-not-capture-proof');
-  if (
-    readiness.pasteIntoApps.readiness === 'ready' &&
-    !['accessibility', 'postEvents'].some((k) => permissions[k].status === 'granted')
-  )
-    discrepancies.push('paste-ready-without-confirmed-grant');
-  return { permissions, readiness, availability, dictationSetupReady: d.setup.ready, discrepancies };
+  const dictationPermission = micStatus === 'denied' ? 'blocked' : micStatus === 'notAsked' ? 'askOnUse'
+    : micStatus === 'unknown' || axStatus === 'unknown' ? 'unknown'
+    : axStatus === 'granted' ? 'ready' : 'degraded';
+  requireProof(readiness.dictation.readiness === dictationPermission, 'dictation-readiness-disagrees');
+  const post = [axStatus, permissions.postEvents.status];
+  requireProof(readiness.pasteIntoApps.readiness !== 'ready' || post.includes('granted'), 'paste-ready-without-confirmed-grant');
+  const pastePermission = post.includes('granted') ? 'ready' : post.includes('unknown') ? 'unknown' : 'degraded';
+  requireProof(readiness.pasteIntoApps.readiness === pastePermission, 'paste-readiness-disagrees');
+  return { permissions, readiness, readinessScope: 'privacyPermissions', availability, dictationSetupReady: d.setup.ready, captureVerified: false };
 }
 
 // Don't treat the settings writer's acknowledgement as its oracle. The installed
