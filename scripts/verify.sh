@@ -100,6 +100,8 @@ require_clean_source_identity() {
     src/installation_check.rs
     scripts/verify.sh
     scripts/verify-macos-bundle.sh
+    scripts/verify_macos_deployment.py
+    scripts/test_macos_deployment.py
     scripts/release-stapler.sh
     scripts/verify-release-version.sh
     scripts/release-evidence.ts
@@ -643,6 +645,7 @@ run_phase() {
       ;;
     bundle-verify)
       run_step "bundle-verify" bash scripts/verify-macos-bundle.sh "${BUNDLE_APP_PATH}"
+      run_step "bundle-deployment" python3 -B scripts/verify_macos_deployment.py "${BUNDLE_APP_PATH}"
       ;;
     *)
       echo "unknown verify phase: $phase" >&2

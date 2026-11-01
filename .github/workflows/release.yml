@@ -194,6 +194,8 @@ jobs:
           shared-key: "macos-debug"
           workspaces: ". -> target-agent/pools/agent-debug"
           cache-on-failure: true
+      - name: Exercise macOS deployment-floor checks on Mach-O headers
+        run: python3 -B scripts/test_macos_deployment.py
       - name: Build the application under test
         run: |
           bash scripts/agentic/agent-cargo.sh test --locked --lib theme::alpha::alpha_byte_tests::
@@ -492,7 +494,9 @@ jobs:
         run: bash scripts/install-goose-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
-        run: bash scripts/verify-macos-bundle.sh
+        run: |
+          bash scripts/verify-macos-bundle.sh
+          python3 -B scripts/verify_macos_deployment.py "target/release/bundle/osx/Script Kit.app"
 
       - name: Create temporary keychain
         env:
@@ -627,6 +631,7 @@ jobs:
           /usr/bin/ditto -x -k "target/release/bundle/osx/Script-Kit-macos.zip" "$TMP_DIR"
           APP="$TMP_DIR/Script Kit.app"
           bash scripts/verify-macos-bundle.sh "$APP"
+          python3 -B scripts/verify_macos_deployment.py "$APP"
           codesign --verify --deep --strict "$APP"
           /bin/bash scripts/release-stapler.sh validate "$APP"
           CHECK="$RUNNER_TEMP/installed-workspace-check.json"
