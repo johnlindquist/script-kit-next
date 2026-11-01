@@ -1,0 +1,40 @@
+# Passive venue preflight, not an installation, consent result, or product launch.
+name: Inspect disposable Mac test capability
+on:
+  push:
+    branches: ['qa/installed-host-preflight']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check clean install and Aqua prerequisites without launching an application
+        shell: bash
+        env:
+          EXPECT_RUNNER: ${{ runner.environment }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == johnlindquist/script-kit-next && "$GITHUB_REF" == refs/heads/qa/installed-host-preflight ]]
+          [[ "$EXPECT_RUNNER" == github-hosted && "$RUNNER_OS/$RUNNER_ARCH" == macOS/ARM64 && "$(id -un)" == runner ]]
+          [[ "$HOME" == /Users/runner && "$RUNNER_TEMP" == /Users/runner/work/_temp ]]
+          umask 077; cap=$(/usr/bin/uuidgen); helper="$RUNNER_TEMP/sk-capability-$cap"
+          /usr/bin/xcrun clang -fobjc-arc "-DSMOKE_CAPABILITY=\"$cap\"" scripts/devtools/lib/installed-release-process.m -framework AppKit -framework Security -framework CoreGraphics -lproc -o "$helper"
+          # These subcommands only inspect the ephemeral session; never open an app, drive input or edit TCC.
+          aqua=false; SMOKE_CAP="$cap" "$helper" aqua-info > "$RUNNER_TEMP/aqua.json" && aqua=true
+          absent=false; SMOKE_CAP="$cap" "$helper" absent && [[ ! -e '/Applications/Script Kit.app' && ! -L '/Applications/Script Kit.app' ]] && absent=true
+          writable=false; [[ -w /Applications ]] && writable=true
+          clean=false; [[ ! -e "$HOME/.scriptkit" && ! -e "$HOME/.kit" && ! -e "$HOME/.kenv" ]] && clean=true
+          jq --argjson absent "$absent" --argjson writable "$writable" --argjson clean "$clean" '. + {targetAbsent:$absent, applicationsWritable:$writable, emptyKitHome:$clean, installed:false, grantChanged:false}' "$RUNNER_TEMP/aqua.json" | tee "$RUNNER_TEMP/host-capability.json"
+          [[ "$aqua" == true && "$absent" == true && "$writable" == true && "$clean" == true ]]
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-capability
+          path: ${{ runner.temp }}/host-capability.json
+          if-no-files-found: error
+          retention-days: 14

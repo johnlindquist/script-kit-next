@@ -15,14 +15,22 @@ static BOOL fdMatches(pid_t pid, int fd, const char *path) {
            proc_pidfdinfo(pid, fd, PROC_PIDFDVNODEPATHINFO, &v, sizeof v) == sizeof v &&
            v.pvip.vip_vi.vi_stat.vst_dev == s.st_dev && v.pvip.vip_vi.vi_stat.vst_ino == s.st_ino;
 }
-static BOOL aqua(void) {
+static BOOL aqua(BOOL report) {
     NSDictionary *session = CFBridgingRelease(CGSessionCopyCurrentDictionary());
     struct stat s;
-    return session && [session[(__bridge NSString *)kCGSessionOnConsoleKey] boolValue] &&
-           [session[(__bridge NSString *)kCGSessionLoginDoneKey] boolValue] &&
-           ![session[@"CGSSessionScreenIsLocked"] boolValue] &&
-           [session[(__bridge NSString *)kCGSessionUserNameKey] isEqual:@"runner"] &&
-           stat("/dev/console", &s) == 0 && s.st_uid == getuid() && CGDisplayIsActive(CGMainDisplayID());
+    BOOL onConsole = [session[(__bridge NSString *)kCGSessionOnConsoleKey] boolValue];
+    BOOL loginDone = [session[(__bridge NSString *)kCGSessionLoginDoneKey] boolValue];
+    BOOL locked = [session[@"CGSSessionScreenIsLocked"] boolValue];
+    BOOL runner = [session[(__bridge NSString *)kCGSessionUserNameKey] isEqual:@"runner"];
+    BOOL consoleOwner = stat("/dev/console", &s) == 0 && s.st_uid == getuid();
+    BOOL display = CGDisplayIsActive(CGMainDisplayID());
+    BOOL ready = session && onConsole && loginDone && !locked && runner && consoleOwner && display;
+    if (report) {
+        NSDictionary *facts = @{@"scope":@"host_preflight_only", @"session":@(session != nil), @"onConsole":@(onConsole), @"loginDone":@(loginDone), @"locked":@(locked), @"runnerSession":@(runner), @"consoleOwner":@(consoleOwner), @"activeDisplay":@(display), @"aqua":@(ready)};
+        NSData *encoded = [NSJSONSerialization dataWithJSONObject:facts options:0 error:nil];
+        if (encoded) puts([[[NSString alloc] initWithData:encoded encoding:NSUTF8StringEncoding] UTF8String]);
+    }
+    return ready;
 }
 static NSArray *apps(void) {
     return [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.scriptkit.app"];
@@ -33,8 +41,8 @@ int main(int argc, char **argv) {
         if (!pw || strcmp(pw->pw_name, "runner") || strcmp(pw->pw_dir, "/Users/runner") ||
             !getenv("SMOKE_CAP") || strcmp(getenv("SMOKE_CAP"), SMOKE_CAPABILITY) || argc < 2)
             return 1;
-        if (!strcmp(argv[1], "aqua"))
-            return aqua() ? 0 : 2;
+        if (!strcmp(argv[1], "aqua") || !strcmp(argv[1], "aqua-info"))
+            return aqua(!strcmp(argv[1], "aqua-info")) ? 0 : 2;
         if (!strcmp(argv[1], "departed")) {
             if (argc != 4)
                 return 12;
