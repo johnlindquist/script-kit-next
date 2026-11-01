@@ -365,7 +365,7 @@ version = "0.1.20"
 copyright = "Copyright (c) 2024 Script Kit. All rights reserved."
 category = "public.app-category.developer-tools"
 short_description = "Automation made simple"
-osx_minimum_system_version = "10.15"
+osx_minimum_system_version = "11.0" # arm64 app and sidecar Mach-O deployment floor
 osx_url_schemes = ["scriptkit"]
 resources = [
     "assets/Info.plist.ext",

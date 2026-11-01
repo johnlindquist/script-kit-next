@@ -882,7 +882,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         "plugins/examples/scripts/todo-app.ts",
     );
 
-    // App-managed: .gitignore (refresh if changed)
+    // Seed .gitignore once; local additions may protect personal files.
     let gitignore_path = kit_dir.join(".gitignore");
     let gitignore_content = r#"# Script Kit managed .gitignore
 # Personal additions are preserved when Kit starts.

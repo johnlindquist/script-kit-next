@@ -42,6 +42,10 @@ pub fn sync_to_github_workspace() -> Result<SyncToGithubReport> {
 }
 
 pub fn sync_to_github_at_path(workspace: PathBuf) -> Result<SyncToGithubReport> {
+    ensure!(
+        std::env::var("SCRIPT_KIT_NONINTERACTIVE").as_deref() != Ok("1"),
+        "Personal GitHub backup is disabled in noninteractive mode"
+    );
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
     let dry_run = std::env::var(SCRIPT_KIT_SYNC_DRY_RUN_ENV).as_deref() == Ok("1");
     ensure!(
@@ -253,8 +257,37 @@ fn publish(
     Ok(())
 }
 
+/// Only resolve tools from absolute program directories. An empty/relative PATH component
+/// must not turn a file in the workspace or backup staging directory into the GitHub client.
+fn binary(name: &str, cwd: &Path) -> Result<Command> {
+    let active = crate::setup::get_kit_path();
+    for dir in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).chain([
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/bin"),
+    ]) {
+        if !dir.is_absolute() {
+            continue;
+        }
+        let Ok(tool) = dir.join(name).canonicalize() else {
+            continue;
+        };
+        if tool.starts_with(cwd) || tool.starts_with(&active) || !tool.is_file() {
+            continue;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if tool.metadata()?.permissions().mode() & 0o111 == 0 {
+                continue;
+            }
+        }
+        return Ok(Command::new(tool));
+    }
+    bail!("Missing trusted {name} executable")
+}
 fn git(dir: &Path, args: &[&str]) -> Result<(bool, Vec<u8>)> {
-    let mut c = Command::new("git");
+    let mut c = binary("git", dir)?;
     c.args([
         "-c",
         "core.hooksPath=/dev/null",
@@ -271,7 +304,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<(bool, Vec<u8>)> {
     command(c, dir, None)
 }
 fn request(dir: &Path, method: &str, path: &str, body: Option<Value>) -> Result<Reply> {
-    let mut c = Command::new("gh");
+    let mut c = binary("gh", dir)?;
     c.args([
         "api",
         "--hostname",
