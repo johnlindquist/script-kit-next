@@ -2580,62 +2580,15 @@ impl ScriptListApp {
             }
             builtins::BuiltInFeature::DictationToFrontmostApp => self
                 .execute_dictation_builtin_action(DictationBuiltinAction::FrontmostApp, dctx, cx),
-            builtins::BuiltInFeature::LastDictation => {
-                if let Some(entry) = crate::dictation::load_history().into_iter().next() {
-                    self.restore_saved_take(&entry.id, cx);
-                    Self::builtin_success(dctx, "Opening saved words")
-                } else {
-                    Self::builtin_error(
-                        dctx,
-                        "no_dictation",
-                        "No finished dictation",
-                        "No saved text",
-                    )
-                }
-            }
-            builtins::BuiltInFeature::RecentDictations => {
-                self.open_recovery_list(cx);
-                Self::builtin_success(dctx, "Opening recovery list")
-            }
-            builtins::BuiltInFeature::DictationDefault => {
-                self.choose_dictation_default(cx);
-                Self::builtin_success(dctx, "Choose starting destination")
-            }
-            builtins::BuiltInFeature::CancelCursorDictation => {
-                if self.cancel_cursor(cx) {
-                    Self::builtin_success(dctx, "Cancelled")
-                } else {
-                    Self::builtin_error(
-                        dctx,
-                        "no_recording",
-                        "No active cursor recording",
-                        "Nothing cancelled",
-                    )
-                }
-            }
-            builtins::BuiltInFeature::DictateIntoKit => self.toggle_kit_recording(true, dctx, cx),
-            builtins::BuiltInFeature::AgentHandoffs => {
-                self.review_agent_handoffs(cx);
-                Self::builtin_success(dctx, "Checked agent handoffs")
-            }
-            builtins::BuiltInFeature::UseDictationInKit
-            | builtins::BuiltInFeature::ReviewDictationMarkdown => {
-                let changed =
-                    if matches!(entry.feature, builtins::BuiltInFeature::UseDictationInKit) {
-                        self.toggle_cursor_kit(cx)
-                    } else {
-                        self.review_cursor_draft(cx)
-                    };
-                if changed {
-                    Self::builtin_success(dctx, "Dictation destination selected")
-                } else {
-                    Self::builtin_error(
-                        dctx,
-                        "dictation_unavailable",
-                        "No eligible dictation",
-                        "Start a recording first",
-                    )
-                }
+            builtins::BuiltInFeature::LastDictation=>{if let Some(entry)=crate::dictation::load_history().into_iter().next(){self.restore_saved_take(&entry.id,cx);Self::builtin_success(dctx,"Opening saved words")}else{Self::builtin_error(dctx,"no_dictation","No finished dictation","No saved text")}},
+            builtins::BuiltInFeature::RecentDictations=>{self.open_recovery_list(cx);Self::builtin_success(dctx,"Opening recovery list")},
+            builtins::BuiltInFeature::DictationDefault=>{self.choose_dictation_default(cx);Self::builtin_success(dctx,"Choose starting destination")},
+            builtins::BuiltInFeature::CancelCursorDictation=>{if self.cancel_cursor(cx){Self::builtin_success(dctx,"Cancelled")}else{Self::builtin_error(dctx,"no_recording","No active cursor recording","Nothing cancelled")}},
+            builtins::BuiltInFeature::DictateIntoKit => self.toggle_kit_recording(true,dctx,cx),
+            builtins::BuiltInFeature::AgentHandoffs => {self.review_agent_handoffs(cx);Self::builtin_success(dctx,"Checked agent handoffs")}
+            builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => {
+                let changed=if matches!(entry.feature,builtins::BuiltInFeature::UseDictationInKit){self.toggle_cursor_kit(cx)}else{self.review_cursor_draft(cx)};
+                if changed{Self::builtin_success(dctx,"Dictation destination selected")}else{Self::builtin_error(dctx,"dictation_unavailable","No eligible dictation","Start a recording first")}
             }
             builtins::BuiltInFeature::DictationToNotes => {
                 self.execute_dictation_builtin_action(DictationBuiltinAction::Notes, dctx, cx)
@@ -4438,12 +4391,7 @@ impl ScriptListApp {
         }
 
         let is_start_edge = !crate::dictation::is_dictation_busy();
-        if is_start_edge
-            && matches!(action, DictationBuiltinAction::CurrentSurface)
-            && self.config.get_dictation_preferences().start_in_kit == Some(true)
-        {
-            return self.toggle_kit_recording(false, dctx, cx);
-        }
+        if is_start_edge && matches!(action,DictationBuiltinAction::CurrentSurface) && self.config.get_dictation_preferences().start_in_kit == Some(true) {return self.toggle_kit_recording(false,dctx,cx);}
         tracing::info!(
             category = "DICTATION",
             action = ?action,
@@ -4489,19 +4437,9 @@ impl ScriptListApp {
             return Self::builtin_success(dctx, action.success_detail());
         }
 
-        if matches!(
-            action,
-            DictationBuiltinAction::CurrentSurface | DictationBuiltinAction::FrontmostApp
-        ) && (matches!(
-            dictation_target,
-            crate::dictation::DictationTarget::ExternalApp
-                | crate::dictation::DictationTarget::MainWindowFilter
-                | crate::dictation::DictationTarget::MainWindowPrompt
-        ) || (dictation_target == crate::dictation::DictationTarget::DayPageToday
-            && matches!(self.current_view, AppView::DayPage { .. })))
-        {
-            self.start_cursor_recording(dictation_target, false, false, cx);
-            return Self::builtin_success(dctx, action.success_detail());
+        if matches!(action, DictationBuiltinAction::CurrentSurface | DictationBuiltinAction::FrontmostApp) && (matches!(dictation_target,crate::dictation::DictationTarget::ExternalApp | crate::dictation::DictationTarget::MainWindowFilter | crate::dictation::DictationTarget::MainWindowPrompt) || (dictation_target==crate::dictation::DictationTarget::DayPageToday && matches!(self.current_view, AppView::DayPage{..}))) {
+            self.start_cursor_recording(dictation_target,false,false,cx);
+            return Self::builtin_success(dctx,action.success_detail());
         }
         self.start_ready_dictation_builtin_action(
             action,
@@ -4658,11 +4596,7 @@ impl ScriptListApp {
         }
 
         let prefs = crate::config::load_user_preferences();
-        if matches!(action, DictationBuiltinAction::CurrentSurface)
-            && prefs.dictation.start_in_kit == Some(false)
-        {
-            return self.cursor_context_target();
-        }
+        if matches!(action,DictationBuiltinAction::CurrentSurface) && prefs.dictation.start_in_kit==Some(false){return self.cursor_context_target();}
         let target = match prefs.dictation.target_mode() {
             crate::config::DictationTargetMode::Explicit(target) => target,
             crate::config::DictationTargetMode::Sticky => prefs
@@ -4951,16 +4885,7 @@ impl ScriptListApp {
                 mut job,
             }) => {
                 let selection = job.take_selection();
-                let protected_take = self
-                    .one_window_host
-                    .cursor_voice
-                    .active
-                    .as_mut()
-                    .filter(|s| s.generation == session_generation)
-                    .and_then(|s| {
-                        s.stop_started = Some(std::time::Instant::now());
-                        s.take.clone()
-                    });
+                let protected_take = self.one_window_host.cursor_voice.active.as_mut().filter(|s|s.generation==session_generation).and_then(|s| { s.stop_started = Some(std::time::Instant::now()); s.take.clone() });
                 // This stop request is the new parity baseline. Shortcut
                 // presses that arrive after it will toggle the queued restart
                 // state rather than being silently ignored.
@@ -5093,52 +5018,26 @@ impl ScriptListApp {
     ) {
         let audio_duration = capture.audio_duration;
         let chunks = capture.chunks;
-        let cursor = self
-            .one_window_host
-            .cursor_voice
-            .active
-            .as_ref()
-            .filter(|s| s.generation == session_generation)
-            .map(|s| (s.revoked.clone(), s.take.clone(), s.route));
+        let cursor=self.one_window_host.cursor_voice.active.as_ref().filter(|s|s.generation==session_generation).map(|s|(s.revoked.clone(),s.take.clone(),s.route));
         cx.spawn(async move |this, cx| {
             let transcript_result = cx
                 .background_executor()
                 .spawn(async move {
                     // Keep the recording first, so a failed or empty
                     // transcription can be retried from "Retry Last Dictation".
-                    if cursor.is_none() {
-                        let _ = crate::dictation::takes::save_take(&chunks);
-                    }
+                    if cursor.is_none(){let _ = crate::dictation::takes::save_take(&chunks);}
                     let transcript = crate::dictation::transcribe_captured_audio(&chunks)?;
                     // Vocabulary spelling and the optional clean-up style.
                     // Clean-up has a deadline and falls back to the raw words.
-                    if let Some((revoked, take, route)) = cursor {
-                        if revoked.load(std::sync::atomic::Ordering::Acquire) {
-                            return Ok(None);
-                        }
-                        if let Some(raw) = transcript {
+                    if let Some((revoked,take,route))=cursor {
+                        if revoked.load(std::sync::atomic::Ordering::Acquire){return Ok(None);}
+                        if let Some(raw)=transcript {
                             // Never ask the clean-up model to rewrite a launcher command.
-                            let (words, notice) = if route == CursorRoute::Kit {
-                                (raw.clone(), None)
-                            } else {
-                                let prefs = crate::config::load_user_preferences();
-                                let (out, n) = crate::dictation::polish::polish_transcript(
-                                    &raw,
-                                    &prefs.dictation,
-                                );
-                                (out.text, n)
-                            };
-                            if revoked.load(std::sync::atomic::Ordering::Acquire) {
-                                return Ok(None);
-                            }
-                            if let Some(t) = take {
-                                if t.ready(&raw, &words).is_err() {
-                                    tracing::warn!("Dictation journal could not save final text");
-                                }
-                            }
-                            return Ok(Some((words, notice)));
-                        }
-                        return Ok(None);
+                            let (words,notice)=if route==CursorRoute::Kit{(raw.clone(),None)}else{let prefs=crate::config::load_user_preferences();let (out,n)=crate::dictation::polish::polish_transcript(&raw,&prefs.dictation);(out.text,n)};
+                            if revoked.load(std::sync::atomic::Ordering::Acquire){return Ok(None);}
+                            if let Some(t)=take{if t.ready(&raw,&words).is_err(){tracing::warn!("Dictation journal could not save final text");}}
+                            return Ok(Some((words,notice)));
+                        }return Ok(None);
                     }
                     anyhow::Ok(transcript.map(|raw| {
                         let prefs = crate::config::load_user_preferences();
@@ -5655,37 +5554,14 @@ impl ScriptListApp {
             record_history,
         } = timing;
         self.drain_cursor_controls(cx);
-        if session_generation != 0
-            && (self
-                .one_window_host
-                .cursor_voice
-                .retired
-                .is_some_and(|id| session_generation <= id)
-                || self
-                    .one_window_host
-                    .cursor_voice
-                    .active
-                    .as_ref()
-                    .is_some_and(|s| session_generation < s.generation))
-            && preserved_request.is_none()
-        {
-            return;
-        }
-        if !matches!(&result,Ok(Some(words)) if !words.trim().is_empty())
-            && self.end_empty_cursor(session_generation, cx)
-        {
-            self.one_window_notice(crate::line_notice::INFO, "No transcript to insert", cx);
-            return;
+        if session_generation!=0 && (self.one_window_host.cursor_voice.retired.is_some_and(|id|session_generation<=id) || self.one_window_host.cursor_voice.active.as_ref().is_some_and(|s| session_generation<s.generation)) && preserved_request.is_none() {return;}
+        if !matches!(&result,Ok(Some(words)) if !words.trim().is_empty()) && self.end_empty_cursor(session_generation,cx) {
+            self.one_window_notice(crate::line_notice::INFO,"No transcript to insert",cx);return;
         }
         match result {
             Ok(Some(transcript)) => {
                 let recovery_request = preserved_request;
-                let cursor = self
-                    .one_window_host
-                    .cursor_voice
-                    .active
-                    .as_ref()
-                    .filter(|s| s.generation == session_generation);
+                let cursor=self.one_window_host.cursor_voice.active.as_ref().filter(|s|s.generation==session_generation);
                 let history_entry_id = cursor.map(|s|s.take.as_ref().map(|t|t.id.clone()).unwrap_or_default()).or_else(||recovery_request
                     .as_ref()
                     .map(|request| request.history_entry_id.clone()))
@@ -5840,14 +5716,8 @@ impl ScriptListApp {
                     return;
                 }
 
-                if self
-                    .one_window_host
-                    .cursor_voice
-                    .active
-                    .as_ref()
-                    .is_some_and(|s| s.generation == session_generation)
-                {
-                    self.deliver_cursor_once(request, timing, cx);
+                if self.one_window_host.cursor_voice.active.as_ref().is_some_and(|s|s.generation==session_generation) {
+                    self.deliver_cursor_once(request,timing,cx);
                     return;
                 }
                 let internal_result = self.mutate_internal_dictation_request(&request, None, cx);
@@ -7154,12 +7024,11 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let config = crate::config::load_config();
         let selected_device_id = prefs.dictation.selected_device_id.as_deref();
-        let devices =
-            if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
-                crate::dictation::list_input_devices().map_err(|error| error.to_string())
-            } else {
-                Ok(Vec::new())
-            };
+        let devices = if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
+            crate::dictation::list_input_devices().map_err(|error| error.to_string())
+        } else {
+            Ok(Vec::new())
+        };
         let model_id =
             crate::dictation::DictationModelId::from_preference(prefs.dictation.model.as_deref());
         let model = crate::dictation::dictation_model_entry(model_id);
@@ -7196,13 +7065,10 @@ impl ScriptListApp {
                         == crate::dictation::DictationDeviceTransport::BuiltIn
                 });
         DictationSetupExtras {
-            external_cursor_access: match crate::permissions::status(
-                crate::permissions::PermissionKind::Accessibility,
-            ) {
+            external_cursor_access: match crate::permissions::status(crate::permissions::PermissionKind::Accessibility) {
                 crate::permissions::PermissionStatus::Authorized => Some(true),
                 crate::permissions::PermissionStatus::Unknown => None,
-                crate::permissions::PermissionStatus::Denied
-                | crate::permissions::PermissionStatus::NotDetermined => Some(false),
+                crate::permissions::PermissionStatus::Denied | crate::permissions::PermissionStatus::NotDetermined => Some(false),
             },
             lid_closed_on_builtin_microphone,
             microphone_check: crate::dictation::last_microphone_check(),
@@ -7239,7 +7105,7 @@ impl ScriptListApp {
                 self.config.dictation = Some(prefs.dictation);
                 self.open_dictation_setup_prompt(cx);
             }
-            Err(e) => self.notice_failed(format!("Couldn't save screen spelling: {e}"), cx),
+            Err(e) => self.notice_failed(format!("Couldn't save screen spelling: {e}"),cx),
         }
     }
 
@@ -7275,15 +7141,7 @@ impl ScriptListApp {
 
     /// Review a retry; never copy, paste, or publish a new attempt implicitly.
     fn retry_last_dictation(&mut self, cx: &mut Context<Self>) {
-        if let Some(entry) = crate::dictation::load_history().into_iter().find(|e| {
-            ProtectedTake::existing(&e.id)
-                .get()
-                .is_ok_and(|i| i.has_audio)
-        }) {
-            self.open_take_actions(&entry.id, cx);
-            self.transcribe_saved_take(&entry.id, cx);
-            return;
-        }
+        if let Some(entry)=crate::dictation::load_history().into_iter().find(|e|ProtectedTake::existing(&e.id).get().is_ok_and(|i|i.has_audio)){self.open_take_actions(&entry.id,cx);self.transcribe_saved_take(&entry.id,cx);return;}
         let Some(take) = crate::dictation::takes::latest_take() else {
             self.notice_failed("There's no kept recording to retry".to_string(), cx);
             return;
@@ -7304,18 +7162,11 @@ impl ScriptListApp {
             DICTATION_RETRY_RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
             let _ = this.update(cx, |this, cx| {
                 match result {
-                    Ok(Some(text)) => {
-                        this.one_window_host.cursor_voice.saved_id = None;
-                        this.one_window_host.cursor_voice.saved_draft = Some(text);
-                        this.one_window_notice(
-                            crate::line_notice::DONE,
-                            "Transcription ready · Review Dictation in Markdown",
-                            cx,
-                        );
-                    }
+                    Ok(Some(text))=>{this.one_window_host.cursor_voice.saved_id=None;this.one_window_host.cursor_voice.saved_draft=Some(text);this.one_window_notice(crate::line_notice::DONE,"Transcription ready · Review Dictation in Markdown",cx);},
                     Ok(None) => {
-                        let reason = crate::dictation::takes::last_no_speech_reason()
-                            .unwrap_or(crate::dictation::takes::NoSpeechReason::NothingRecognized);
+                        let reason = crate::dictation::takes::last_no_speech_reason().unwrap_or(
+                            crate::dictation::takes::NoSpeechReason::NothingRecognized,
+                        );
                         this.one_window_notice(
                             crate::line_notice::INFO,
                             reason.message().to_string(),
@@ -7714,12 +7565,11 @@ impl ScriptListApp {
         let prefs = crate::config::load_user_preferences();
         let config = crate::config::load_config();
         let selected_device_id = prefs.dictation.selected_device_id.as_deref();
-        let devices =
-            if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
-                crate::dictation::list_input_devices().map_err(|error| error.to_string())
-            } else {
-                Ok(Vec::new())
-            };
+        let devices = if permission == crate::dictation::DictationMicrophonePermissionStatus::Granted {
+            crate::dictation::list_input_devices().map_err(|error| error.to_string())
+        } else {
+            Ok(Vec::new())
+        };
         let device_count = devices.as_ref().map(|devices| devices.len()).unwrap_or(0);
         // Real model status, not a hardcoded Available: the builtin start path
         // gates on the model upstream, but this preflight must stay honest for
@@ -7950,15 +7800,11 @@ impl ScriptListApp {
     /// tracked frontmost app > launcher main filter fallback > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
         let has_frontmost_app_target = Self::has_dictation_frontmost_target();
-        let kit_focused =
-            script_kit_gpui::is_main_window_visible() && platform::is_main_window_focused();
-        let target = if !kit_focused && has_frontmost_app_target {
-            crate::dictation::DictationTarget::ExternalApp
-        } else if kit_focused && matches!(self.current_view, AppView::DayPage { .. }) {
-            crate::dictation::DictationTarget::DayPageToday
-        } else if kit_focused && self.can_accept_dictation_into_main_filter() {
-            crate::dictation::DictationTarget::MainWindowFilter
-        } else if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+        let kit_focused=script_kit_gpui::is_main_window_visible() && platform::is_main_window_focused();
+        let target = if !kit_focused && has_frontmost_app_target { crate::dictation::DictationTarget::ExternalApp }
+        else if kit_focused && matches!(self.current_view,AppView::DayPage{..}) { crate::dictation::DictationTarget::DayPageToday }
+        else if kit_focused && self.can_accept_dictation_into_main_filter() { crate::dictation::DictationTarget::MainWindowFilter }
+        else if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             crate::dictation::DictationTarget::TabAiHarness
         } else if self.one_window.chat().is_some() {
             crate::dictation::DictationTarget::MainWindowFilter
