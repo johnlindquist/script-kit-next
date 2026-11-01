@@ -1,8 +1,8 @@
 # Script Kit changelog
 
-## 0.1.20 · Reliability
+## 0.1.21 · Reliability
 
-[Release notes and installation checks](docs/releases/v0.1.20.md). Browser and window targets are revalidated, settings edits are revision-checked, and upgrades preserve mixed legacy workspaces.
+[Release notes and installation checks](docs/releases/v0.1.21.md). Browser and window targets are revalidated, settings edits are revision-checked, and upgrades preserve mixed legacy workspaces.
 
 ## October 15–31, 2026 · One window, clearer targets
 

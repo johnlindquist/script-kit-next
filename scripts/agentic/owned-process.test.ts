@@ -100,9 +100,11 @@ test("isolated supervisor and exec-child imports leave no bytecode across real l
       `sys.path.insert(0, ${JSON.stringify(root)})`,
       "import bytecode_probe",
       "print(sys.dont_write_bytecode)",
-      "print(bytecode_probe.__cached__)",
+      // Python 3.15 no longer populates the deprecated module.__cached__. The
+      // ModuleSpec still names the cache file; require that file actually exists.
+      "print(bytecode_probe.__spec__.cached)",
     ].join("\n")], { cwd: root, env, encoding: "utf8", timeout: 5000, maxBuffer: 4096 });
-    expect(baseline.status).toBe(0);
+    if (baseline.status !== 0) throw new Error(`Python bytecode negative control failed (${baseline.status}): ${baseline.stderr?.slice(0, 1024)}`);
     expect(baseline.stderr).toBe("");
     const [suppressed, cached] = baseline.stdout.trim().split("\n");
     expect(suppressed).toBe("False");
@@ -356,7 +358,9 @@ test.each(["valid", "unobserved", "delayedBind"])("fake native parent loss persi
   if (mode === "delayedBind") {
     // Real helper latency may exceed three seconds while staying inside the five-second
     // metadata lease wait. exec preserves the supervisor's direct-child authority.
-    writeFileSync(helperExecutable, `#!${Bun.which("python3")}\nimport os,sys,time\ntime.sleep(4)\nos.execv(${JSON.stringify(process.execPath)},[${JSON.stringify(process.execPath)},*sys.argv[1:]])\n`, { mode: 0o700 });
+    // A shebang cannot encode an interpreter path containing spaces. env resolves
+    // python3 in this fixture's supplied PATH; execv still preserves the exact PID.
+    writeFileSync(helperExecutable, `#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(4)\nos.execv(${JSON.stringify(process.execPath)},[${JSON.stringify(process.execPath)},*sys.argv[1:]])\n`, { mode: 0o700 });
   }
   writeFileSync(script, `import {spawnOwnedProcess} from ${JSON.stringify(modulePath)};
 import {beginManagedTask,claimOutput,validateOutputTarget,adoptSupervisorTask} from ${JSON.stringify(lifecyclePath)};
