@@ -1,0 +1,606 @@
+{
+  "entities": [
+    {
+      "tag": "Textbox",
+      "id": "over",
+      "x": 22,
+      "y": 8,
+      "width": 1040,
+      "fixedWidth": true,
+      "wrapMode": "wrap",
+      "text": "SCRIPT KIT   /   ROUTING PROPOSAL",
+      "fontSize": 15,
+      "color": "#496982",
+      "typeface": "clean",
+      "hAlign": "left"
+    },
+    {
+      "tag": "Textbox",
+      "id": "title",
+      "x": 22,
+      "y": 34,
+      "width": 1080,
+      "fixedWidth": true,
+      "wrapMode": "wrap",
+      "text": "**When does the input box need to see the screen?**",
+      "fontSize": 32,
+      "color": "#19334b",
+      "typeface": "clean",
+      "hAlign": "left"
+    },
+    {
+      "tag": "Shape",
+      "id": "input",
+      "x": 376,
+      "y": 107,
+      "width": 352,
+      "height": 62,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#edf2fa",
+      "borderColor": "#7188a4",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Words + staged subject**",
+          "fontSize": 23,
+          "color": "#1b3552",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Pin what “this” refers to.",
+          "fontSize": 16,
+          "color": "#1b3552",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "exact",
+      "x": 90,
+      "y": 210,
+      "width": 355,
+      "height": 72,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#f9fbfd",
+      "borderColor": "#8ea1af",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Exact command or syntax**",
+          "fontSize": 20,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Kit resolves it locally.",
+          "fontSize": 16,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "sentence",
+      "x": 658,
+      "y": 210,
+      "width": 355,
+      "height": 72,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#f9fbfd",
+      "borderColor": "#8ea1af",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Natural-language request**",
+          "fontSize": 20,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Jev proposes a reading from Kit’s menu.",
+          "fontSize": 16,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "enough",
+      "x": 315,
+      "y": 327,
+      "width": 475,
+      "height": 79,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#edf2fa",
+      "borderColor": "#7188a4",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Can Kit name the effect and target?**",
+          "fontSize": 21,
+          "color": "#1b3552",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "And say what would prove the result?",
+          "fontSize": 17,
+          "color": "#1b3552",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "route",
+      "x": 31,
+      "y": 465,
+      "width": 499,
+      "height": 70,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#e5f5ed",
+      "borderColor": "#59967a",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**YES   /   Choose the action owner**",
+          "fontSize": 22,
+          "color": "#194b38",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Use the existing operation first.",
+          "fontSize": 16,
+          "color": "#194b38",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "missing",
+      "x": 575,
+      "y": 465,
+      "width": 499,
+      "height": 70,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#fff4d9",
+      "borderColor": "#bc9045",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**NO   /   Name the missing fact**",
+          "fontSize": 22,
+          "color": "#604216",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Ask for the least revealing evidence that settles it.",
+          "fontSize": 16,
+          "color": "#604216",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "lchoices",
+      "x": 51,
+      "y": 565,
+      "width": 459,
+      "height": 220,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#f9fbfd",
+      "borderColor": "#8ea1af",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**App operation**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Kit, script, app API or browser DOM. No pixels.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "**Task for an agent**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Delegate the named job with scoped context.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "**Native control**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Read its accessibility ref; act headlessly. No pointer.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "**Only physical input fits**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Ask for a separate foreground grant, or hand back.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "rchoices",
+      "x": 595,
+      "y": 565,
+      "width": 459,
+      "height": 220,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#f9fbfd",
+      "borderColor": "#8ea1af",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Which object or control?**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Read scoped app state, DOM or accessibility subtree.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "**What does it look like?**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "If allowed, inspect the relevant image or window crop.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "**Which did you mean?**",
+          "fontSize": 18,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Ask in Kit. Pixels cannot settle a preference.",
+          "fontSize": 15,
+          "color": "#21394c",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "verify",
+      "x": 31,
+      "y": 863,
+      "width": 499,
+      "height": 75,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#e5f5ed",
+      "borderColor": "#59967a",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Apply only the authorized effect**",
+          "fontSize": 21,
+          "color": "#194b38",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "Recheck state, run once, verify the outcome.",
+          "fontSize": 16,
+          "color": "#194b38",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Shape",
+      "id": "again",
+      "x": 575,
+      "y": 863,
+      "width": 499,
+      "height": 75,
+      "shape": "rectangle",
+      "styleMode": "plain",
+      "cornerRadius": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "bgColor": "#fff4d9",
+      "borderColor": "#bc9045",
+      "borderWidth": 1.5,
+      "texts": [
+        {
+          "text": "**Reconsider with the new evidence**",
+          "fontSize": 21,
+          "color": "#604216",
+          "typeface": "clean",
+          "hAlign": "center"
+        },
+        {
+          "text": "No new fact, no grant or still ambiguous? Ask or stop.",
+          "fontSize": 16,
+          "color": "#604216",
+          "typeface": "clean",
+          "hAlign": "center"
+        }
+      ]
+    },
+    {
+      "tag": "Textbox",
+      "id": "cost",
+      "x": 25,
+      "y": 975,
+      "width": 1085,
+      "fixedWidth": true,
+      "text": "**Cost cues**   ·   Jev: $0.000042 per 1k input tokens   ·   Scoped native read: 58 ms median¹   ·   Foreground input: one shared pointer",
+      "fontSize": 15,
+      "color": "#2e4c61",
+      "typeface": "clean",
+      "hAlign": "left"
+    },
+    {
+      "tag": "Textbox",
+      "id": "costnote",
+      "x": 25,
+      "y": 1003,
+      "width": 1070,
+      "fixedWidth": true,
+      "text": "¹ One Save dialog, 12 Linux VM samples; not a macOS latency estimate. Images add upload, visual tokens and disclosure.",
+      "fontSize": 13,
+      "color": "#405968",
+      "typeface": "clean",
+      "hAlign": "left"
+    }
+  ],
+  "connections": [
+    {
+      "from": "input",
+      "to": "exact",
+      "fromPort": "left",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "input",
+      "to": "sentence",
+      "fromPort": "right",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "exact",
+      "to": "enough",
+      "fromPort": "bottom",
+      "toPort": "left",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "sentence",
+      "to": "enough",
+      "fromPort": "bottom",
+      "toPort": "right",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "enough",
+      "to": "route",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "enough",
+      "to": "missing",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "route",
+      "to": "lchoices",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "missing",
+      "to": "rchoices",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "lchoices",
+      "to": "verify",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "rchoices",
+      "to": "again",
+      "fromPort": "bottom",
+      "toPort": "top",
+      "color": "#708597",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow"
+    },
+    {
+      "from": "again",
+      "to": "enough",
+      "fromPort": "right",
+      "toPort": "right",
+      "color": "#ac812f",
+      "endArrowhead": "triangle",
+      "cornerStyle": "elbow",
+      "lineStyle": "dashed",
+      "points": [
+        {
+          "x": 1074,
+          "y": 901
+        },
+        {
+          "x": 1116,
+          "y": 901
+        },
+        {
+          "x": 1116,
+          "y": 414
+        },
+        {
+          "x": 815,
+          "y": 414
+        },
+        {
+          "x": 815,
+          "y": 386
+        },
+        {
+          "x": 791,
+          "y": 386
+        }
+      ]
+    }
+  ]
+}
