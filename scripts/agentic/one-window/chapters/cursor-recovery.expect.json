@@ -1,5 +1,6 @@
 {
-  "cancel": {
-    "input": ""
-  }
+  "record": {"lineTitle": "Dictating into Script Kit"},
+  "original": {"lineTitle": "Writing in launcher field"},
+  "cancel": {"lineTitle": "Recording cancelled · Restore in Kit", "input": ""},
+  "restore": {"input": "keep these words"}
 }

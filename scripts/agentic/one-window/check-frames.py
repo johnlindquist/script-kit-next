@@ -242,6 +242,14 @@ def main():
             above = m.get("aboveInputAll") or []
             slot = next((a for a in above if a["name"] == "main-view-slot-line"), None)
             others = [a["name"] for a in above if not a["name"].startswith("main-view-slot-line")]
+            # While recording, the route-switch button wraps the existing line. It is not
+            # a second band: require BOTH an active take and the same painted y/height.
+            toggle = next((a for a in above if a["name"] == "dictation-toggle-kit"), None)
+            if slot and toggle and toggle["y"] == slot["y"] and toggle["h"] == slot["h"]:
+                with open(os.path.join(d, m["_file"][:-5] + ".capture.json")) as capture:
+                    voice = json.load(capture)["state"]["oneWindow"].get("cursorDictation") or {}
+                if voice.get("active"):
+                    others.remove("dictation-toggle-kit")
         else:
             dy, slot, others = None, layout_slot(m), []
             notes.append("no main input")

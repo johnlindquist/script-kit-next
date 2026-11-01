@@ -1,13 +1,14 @@
 {
   "hold": {
-    "input": ""
+    "lineTitle": "Writing in launcher field", "input": ""
   },
   "redirect": {
-    "input": ""
+    "lineTitle": "Dictating into Script Kit", "input": ""
   },
   "return": {
-    "input": ""
+    "lineTitle": "Writing in launcher field", "input": ""
   },
+  "kit": {"lineTitle": "Dictating into Script Kit", "input": ""},
   "draft": {
     "input": "open slack"
   }
