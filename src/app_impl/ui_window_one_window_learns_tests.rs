@@ -254,7 +254,7 @@ fn giving_a_script_a_shortcut_records_the_keys_in_the_main_window() {
         (view, label, saved_label, closed)
     });
     assert_eq!(view, Some("shortcut"));
-    assert_eq!(label, "Press the keys first");
+    assert_eq!(label, "Record shortcut");
     assert!(saved_label.starts_with("Save ⌘"), "{saved_label}");
     assert!(closed, "Esc backs out");
 }
@@ -289,7 +289,10 @@ fn dictation_history_lists_what_you_said_newest_first_and_cmd_k_stages_the_row()
     let (title, actions) = staged.expect("⌘K stages the highlighted dictation");
     assert_eq!(title, "email sarah about friday");
     assert!(
-        actions.iter().any(|a| a == "Paste Dictation")
+        actions
+            .first()
+            .is_some_and(|a| a == "Review recording versions")
+            && !actions.iter().any(|a| a == "Paste Dictation")
             && actions.iter().any(|a| a == "Add to Agent Chat"),
         "the staged row lists its actions: {actions:?}"
     );
@@ -536,7 +539,7 @@ fn a_scripts_hotkey_prompt_records_under_the_input_and_answers_with_the_same_jso
     );
     assert_eq!(opened.header.as_deref(), Some("Press a shortcut"));
     assert_eq!(opened.titles, ["Waiting for keys…"]);
-    assert_eq!(opened.label, "Press the keys first");
+    assert_eq!(opened.label, "Record shortcut");
     assert!(
         !elements.iter().any(|id| {
             id.contains("shortcut-recorder")
@@ -553,7 +556,7 @@ fn a_scripts_hotkey_prompt_records_under_the_input_and_answers_with_the_same_jso
     );
 
     assert_eq!(partial.titles, ["K"], "one key shows as its keycap");
-    assert_eq!(partial.label, "Press the keys first");
+    assert_eq!(partial.label, "Record shortcut");
     assert_eq!(complete.titles, ["⌘⇧K"]);
     assert_eq!(complete.label, "Use ⌘⇧K");
 

@@ -4,7 +4,7 @@
 
 use sk_one_window::answer::{Answer, Fact, Shape};
 use sk_one_window::contract::ENTER_GUARD_MS;
-use sk_one_window::form::{FieldState, SlotName, Source, Verb};
+use sk_one_window::form::{SlotName, Source};
 use sk_one_window::{Key, SubjectKind};
 
 use super::{in_launcher, key, launcher, type_into_launcher, wait, Jev};
@@ -38,7 +38,6 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
             let staged = paste(&app, cx);
             wait(cx, 20);
             let (slot, rows, drawn, kind) = app.update(cx, |app, cx| {
-                let now = app.one_window_clock();
                 let list = app.one_window.list();
                 let rows: Vec<String> = list
                     .visible()
@@ -82,47 +81,41 @@ fn pasting_into_the_empty_input_stages_what_was_copied() {
 }
 
 #[test]
-fn a_copied_link_sent_to_someone_asks_who_and_then_waits_in_the_line() {
-    let (asks, caret_on_to, named, held, closed) = in_launcher("clipboard_message_form", 0, |cx| {
-        let (app, window) = launcher(cx, Jev::Off);
+fn a_copied_link_cannot_be_sent_without_a_verified_messaging_connector() {
+    in_launcher("clipboard_messaging_unavailable", 0, |cx| {
+        let (app, _) = launcher(cx, Jev::Off);
         copy(cx, LINK);
         paste(&app, cx);
         wait(cx, 20);
         key(&app, cx, Key::Down);
+        assert_eq!(enter_label(&app, cx), "Unavailable");
         key(&app, cx, Key::Enter);
         wait(cx, 20);
-        let Some(HostedView::Form(form)) = hosted(&app, cx) else {
-            panic!("Send it to someone opens a form in place");
-        };
-        let what = form.field(SlotName::What).expect("the message").clone();
-        assert_eq!(what.value, LINK);
-        assert_eq!(what.source_words(), "from the clipboard");
-        let to = form.fields.iter().position(|f| f.name == SlotName::Who);
-        let caret_on_to = to.is_some() && form.caret == to;
-        assert_eq!(form.fields[to.unwrap()].state, FieldState::Needed);
-        let asks = enter_label(&app, cx);
-        type_into_launcher(cx, window, &app, "Sarah");
-        wait(cx, 20);
-        let named = enter_label(&app, cx);
-        wait(cx, ENTER_GUARD_MS);
-        key(&app, cx, Key::Enter);
-        wait(cx, 20);
-        let held = app.update(cx, |app, _| app.one_window.holds().live().count());
-        (asks, caret_on_to, named, held, hosted(&app, cx).is_none())
+        assert!(
+            hosted(&app, cx).is_none(),
+            "no form can imply that a connector exists"
+        );
+        app.update(cx, |app, _| {
+            assert_eq!(
+                app.one_window.holds().live().count(),
+                0,
+                "no send countdown"
+            );
+            assert!(
+                app.one_window
+                    .ledger()
+                    .entries()
+                    .iter()
+                    .any(|entry| entry.title.starts_with("Messaging isn't available")),
+                "explain that nothing was sent"
+            );
+        });
     });
-    assert_eq!(
-        asks, "Say who gets it",
-        "the field nobody filled owns Enter"
-    );
-    assert!(caret_on_to, "and takes the caret");
-    assert_eq!(named, format!("Send “{LINK}” to Sarah"));
-    assert_eq!(held, 1, "the message waits in the line before it goes");
-    assert!(closed, "the form closes back to the list");
 }
 
 #[test]
 fn enter_runs_the_action_highlighted_after_pasting_again() {
-    let opened = in_launcher("paste_again_enter", 0, |cx| {
+    let (label, opened, explained) = in_launcher("paste_again_enter", 0, |cx| {
         let (app, _) = launcher(cx, Jev::Off);
         copy(cx, "84");
         paste(&app, cx);
@@ -137,13 +130,25 @@ fn enter_runs_the_action_highlighted_after_pasting_again() {
         wait(cx, ENTER_GUARD_MS);
         paste(&app, cx);
         wait(cx, 20);
+        let label = enter_label(&app, cx);
         key(&app, cx, Key::Enter);
         wait(cx, 20);
-        hosted(&app, cx)
+        let explained = app.update(cx, |app, _| {
+            app.one_window
+                .ledger()
+                .entries()
+                .iter()
+                .any(|e| e.title.starts_with("Messaging isn't available"))
+        });
+        (label, hosted(&app, cx), explained)
     });
+    assert_eq!(
+        label, "Unavailable",
+        "the first action is messaging, not the previous selection"
+    );
     assert!(
-        matches!(&opened, Some(HostedView::Form(form)) if form.verb == Verb::Message),
-        "Enter after pasting again runs the first action, not the last paste's: {opened:?}"
+        opened.is_none() && explained,
+        "Enter did not reopen the previous answer or dispatch a send"
     );
 }
 

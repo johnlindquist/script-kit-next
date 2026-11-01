@@ -109,159 +109,104 @@ fn cmd_enter_with_nothing_typed_asks_the_model_under_the_same_input() {
 }
 
 #[test]
-fn several_jobs_become_steps_that_connect_calendar_in_place_and_carry_on() {
-    const SENTENCE: &str =
-        "move standup to tomorrow at 9, tell mo i'm running late and open the beta notes";
-    let receipt = in_launcher("steps_connect_in_place", 0, |cx| {
-        let (app, window) = launcher(cx, Jev::Off);
+fn unsupported_offline_steps_never_connect_a_calendar_or_report_partial_success() {
+    const SENTENCE: &str = "add to today's note: blue kite and tell Mo the bell rang";
+    in_launcher("steps_offline_no_effect", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Failing);
         let before = windows(cx);
         type_into_launcher(cx, window, &app, SENTENCE);
-        wait(cx, 20);
-        let row = enter_label(&app, cx);
+        wait(cx, 1_400);
+        assert_eq!(enter_label(&app, cx), "Unavailable");
         key(&app, cx, Key::Enter);
-        wait(cx, 20);
-        let needs = (top_view(&app, cx), enter_label(&app, cx));
-        wait(cx, ENTER_GUARD_MS);
-        key(&app, cx, Key::Enter);
-        wait(cx, 20);
-        let connect = (
-            app.update(cx, |app, _| app.one_window.views().crumb()),
-            enter_label(&app, cx),
-        );
-        key(&app, cx, Key::Enter);
-        wait(cx, 20);
-        let signing_in = enter_label(&app, cx);
         wait(cx, 700);
-        let handed_back = (
-            top_view(&app, cx),
-            slot_title(&app, cx),
-            app.update(cx, |app, _| app.filter_text.clone()),
-            enter_label(&app, cx),
+        assert_eq!(windows(cx), before);
+        assert!(
+            top_view(&app, cx).is_none(),
+            "no pretend sign-in or agent handoff"
         );
-        wait(cx, ENTER_GUARD_MS);
-        key(&app, cx, Key::Enter);
-        wait(cx, 50);
-        let done = app.update(cx, |app, _| {
-            (
-                app.one_window.in_view(),
-                app.one_window.work().strip().tasks().len(),
-                app.one_window
-                    .ledger()
-                    .entries()
-                    .iter()
-                    .map(|e| e.title.clone())
-                    .collect::<Vec<_>>(),
-            )
+        assert!(slot_title(&app, cx).starts_with("Can't run these steps offline."));
+        app.update(cx, |app, _| {
+            assert!(!app.one_window.work().connections().has("calendar"));
+            assert!(app.one_window.work().strip().tasks().is_empty());
+            assert!(!app
+                .one_window
+                .ledger()
+                .entries()
+                .iter()
+                .any(|entry| entry.title.starts_with("Did ")));
         });
-        (
-            row,
-            needs,
-            connect,
-            signing_in,
-            handed_back,
-            done,
-            windows(cx) == before,
-        )
     });
-    let (row, needs, connect, signing_in, handed_back, done, one_window) = receipt;
-    assert_eq!(row, "Do these 3 things");
-    assert_eq!(
-        needs,
-        (
-            Some("steps".into()),
-            "Connect Google Calendar for step 1, then do all 3".into()
-        )
-    );
-    assert_eq!(
-        connect,
-        (
-            "Steps › Connect Google Calendar".into(),
-            "Connect Google Calendar".into()
-        )
-    );
-    assert_eq!(signing_in, "Connecting Google Calendar…");
-    assert_eq!(
-        handed_back.0.as_deref(),
-        Some("steps"),
-        "the connect view handed back"
-    );
-    assert_eq!(handed_back.1, "Google Calendar connected");
-    assert_eq!(
-        handed_back.2, SENTENCE,
-        "the sentence waited, nothing to retype"
-    );
-    assert_eq!(handed_back.3, "Do all 3");
-    let (in_view, tasks, titles) = done;
-    assert!(!in_view, "Do all finished and went home");
-    assert!(
-        titles
-            .iter()
-            .any(|t| t.starts_with("Did 3 steps: move standup")),
-        "{titles:?}"
-    );
-    assert!(
-        tasks >= 1,
-        "steps nothing else can do go to an agent in the strip"
-    );
-    assert!(one_window, "no window opened");
 }
 
 #[test]
 fn tab_makes_the_agent_the_owner_enter_starts_it_and_esc_parks_it_in_the_strip() {
-    let (owner, opened, parked, list_kept, reopened, one_window) = in_launcher("agent_strip", 0, |cx| {
-        let (app, window) = launcher(cx, Jev::Off);
-        let before = windows(cx);
-        type_into_launcher(cx, window, &app, "fix SK-431");
-        wait(cx, 20);
-        let form_takes_tab = cx.update(|cx| {
-            window
-                .update(cx, |_, window, cx| {
-                    app.update(cx, |app, cx| {
-                        app.handle_menu_syntax_form_key_input(
-                            "tab",
-                            Some("\t"),
-                            &gpui::Modifiers::default(),
-                            window,
-                            cx,
-                        )
+    let (owner, opened, parked, list_kept, reopened, one_window) =
+        in_launcher("agent_strip", 0, |cx| {
+            let (app, window) = launcher(cx, Jev::Off);
+            let before = windows(cx);
+            type_into_launcher(cx, window, &app, "fix SK-431");
+            wait(cx, 20);
+            let form_takes_tab = cx.update(|cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |app, cx| {
+                            app.handle_menu_syntax_form_key_input(
+                                "tab",
+                                Some("\t"),
+                                &gpui::Modifiers::default(),
+                                window,
+                                cx,
+                            )
+                        })
                     })
-                })
-                .expect("offer Tab to the capture form")
-        });
-        let taken = simulate_key(cx, window, &app, "tab");
-        wait(cx, 20);
-        let owns = app.update(cx, |app, _| app.one_window.agent_owns());
-        let owner = (!form_takes_tab && taken, owns, top_view(&app, cx), enter_label(&app, cx));
-        key(&app, cx, Key::Enter);
-        wait(cx, 20);
-        let opened = top_view(&app, cx);
-        key(&app, cx, Key::Escape);
-        wait(cx, 20);
-        let parked = app.update(cx, |app, _| {
+                    .expect("offer Tab to the capture form")
+            });
+            let taken = simulate_key(cx, window, &app, "tab");
+            wait(cx, 20);
+            let owns = app.update(cx, |app, _| app.one_window.agent_owns());
+            let owner = (
+                !form_takes_tab && taken,
+                owns,
+                top_view(&app, cx),
+                enter_label(&app, cx),
+            );
+            key(&app, cx, Key::Enter);
+            wait(cx, 20);
+            let opened = top_view(&app, cx);
+            key(&app, cx, Key::Escape);
+            wait(cx, 20);
+            let parked = app.update(cx, |app, _| {
+                (
+                    app.one_window.in_view(),
+                    app.filter_text.clone(),
+                    app.one_window
+                        .work()
+                        .strip()
+                        .tasks()
+                        .iter()
+                        .map(|t| (t.label.clone(), t.state))
+                        .collect::<Vec<_>>(),
+                )
+            });
+            type_into_launcher(cx, window, &app, "play");
+            wait(cx, 20);
+            let list = app.update(cx, |app, _| app.one_window.list().layout());
+            wait(cx, 400);
+            let list_kept = app.update(cx, |app, _| app.one_window.list().layout()) == list;
+            type_into_launcher(cx, window, &app, "");
+            wait(cx, ENTER_GUARD_MS);
+            key(&app, cx, Key::CmdJ);
+            wait(cx, 20);
+            let reopened = (top_view(&app, cx), enter_label(&app, cx));
             (
-                app.one_window.in_view(),
-                app.filter_text.clone(),
-                app.one_window
-                    .work()
-                    .strip()
-                    .tasks()
-                    .iter()
-                    .map(|t| (t.label.clone(), t.state))
-                    .collect::<Vec<_>>(),
+                owner,
+                opened,
+                parked,
+                list_kept,
+                reopened,
+                windows(cx) == before,
             )
         });
-        type_into_launcher(cx, window, &app, "play");
-        wait(cx, 20);
-        let list = app.update(cx, |app, _| app.one_window.list().layout());
-        wait(cx, 400);
-        let list_kept = app.update(cx, |app, _| app.one_window.list().layout()) == list;
-        type_into_launcher(cx, window, &app, "");
-        wait(cx, ENTER_GUARD_MS);
-        key(&app, cx, Key::CmdJ);
-        wait(cx, 20);
-        let reopened = (top_view(&app, cx), enter_label(&app, cx));
-        (owner, opened, parked, list_kept, reopened, windows(cx) == before)
-    });
     assert_eq!(
         owner,
         (true, true, None, sk_one_window::contract::words::START_AGENT.to_string()),
@@ -308,7 +253,14 @@ fn esc_leaves_a_view_opened_over_a_symbol_picker_with_every_typed_word() {
             let escaped = simulate_key(cx, window, &app, "escape");
             wait(cx, 20);
             let input = app.update(cx, |app, _| app.filter_text.clone());
-            seen.push((typed, picker_owns, opened, escaped, top_view(&app, cx), input));
+            seen.push((
+                typed,
+                picker_owns,
+                opened,
+                escaped,
+                top_view(&app, cx),
+                input,
+            ));
         }
         seen
     });
@@ -316,8 +268,14 @@ fn esc_leaves_a_view_opened_over_a_symbol_picker_with_every_typed_word() {
         assert!(picker_owns, "{typed:?}: a symbol picker owns the list");
         assert!(opened.is_some(), "{typed:?}: the answer opens as a view");
         assert!(escaped, "{typed:?}: Esc is handled");
-        assert_eq!(after, None, "{typed:?}: Esc leaves the view, not the picker under it");
-        assert_eq!(input, typed, "{typed:?}: every typed word is still in the input");
+        assert_eq!(
+            after, None,
+            "{typed:?}: Esc leaves the view, not the picker under it"
+        );
+        assert_eq!(
+            input, typed,
+            "{typed:?}: every typed word is still in the input"
+        );
     }
 }
 
@@ -347,8 +305,15 @@ fn a_typed_capture_is_a_row_under_the_capture_header() {
     ];
     for ((typed, owns, header, first, enter), (title, label)) in seen.into_iter().zip(want) {
         assert!(owns, "{typed:?}: the one-window list owns a typed capture");
-        assert_eq!(header, "Capture", "{typed:?}: the `;` picker's header stays");
-        assert_eq!(first.as_deref(), Some(title), "{typed:?}: the capture leads");
+        assert_eq!(
+            header, "Capture",
+            "{typed:?}: the `;` picker's header stays"
+        );
+        assert_eq!(
+            first.as_deref(),
+            Some(title),
+            "{typed:?}: the capture leads"
+        );
         assert_eq!(enter, label, "{typed:?}: ↵ says what it does");
     }
 }
