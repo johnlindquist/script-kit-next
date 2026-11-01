@@ -475,7 +475,8 @@ export const coverageProfiles: CoverageProfile[] = [
     supportedNow: [],
     missingRuntimePrimitives: ["There is no ActionsDialog window. Address staged actions through ScriptList instead."],
     regressionRecipeRole: "Keep the retired route discoverable without treating it as supported runtime coverage.",
-    availablePrimitiveIds: [],
+    // These generic state transports exist; neither proves that a popup was mounted.
+    availablePrimitiveIds: ["devtools.targets.inspect", "devtools.surface.inspect"],
     bindingSelectors: [
       { relation: "Direct", priority: 95, contractKinds: ["ActionsDialog"], hostKinds: ["ActionsDialog"] },
     ],

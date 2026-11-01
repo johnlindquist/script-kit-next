@@ -40,6 +40,7 @@ import {
 } from "./devtools/generated-byte-compare.ts";
 import {
   buildCanonicalMappings,
+  EXPECTED_CENSUS,
   buildCoverageBindingSet,
   type CoverageBindingRecord,
   type SurfaceContractRegistry,
@@ -223,7 +224,7 @@ function syntheticDirectMatrix(): {
     })),
   };
   const canonical = buildCoverageBindingSet(buildCanonicalMappings(registry));
-  if (canonical.errors.length > 0 || canonical.set.bindings.length !== 54) {
+  if (canonical.errors.length > 0 || canonical.set.bindings.length !== EXPECTED_CENSUS.contractMappingCount) {
     throw new Error(`invalid synthetic canonical bindings: ${canonical.errors.join(", ")}`);
   }
 
@@ -340,8 +341,8 @@ function syntheticDirectMatrix(): {
     registry,
     observation: {
       observationLayer: "RUNTIME_HIDDEN",
-      expectedMappings: 54,
-      directProvenMappings: 54,
+      expectedMappings: canonical.set.bindings.length,
+      directProvenMappings: targets.length,
       transactionId,
       everyTargetDirect: true,
       sameTransaction: true,
@@ -966,7 +967,7 @@ describe("fail-closed release evidence", () => {
       "utf8",
     )));
     expect(directMatrix?.bindingFingerprintSha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(directMatrix?.primitiveReceiptCount).toBe(108);
+    expect(directMatrix?.primitiveReceiptCount).toBe(2 * EXPECTED_CENSUS.contractMappingCount);
     expect(manifest.verification.gates.find((gate) => gate.gateId === "consistency-catalog")?.evidenceClass)
       .toBe("STATIC_INVENTORY");
   });
@@ -1584,7 +1585,7 @@ describe("fail-closed release evidence", () => {
 
     for (const invalid of [
       { expectedMappings: 1, directProvenMappings: 1 },
-      { directProvenMappings: 53 },
+      { directProvenMappings: EXPECTED_CENSUS.contractMappingCount - 1 },
       { transactionId: "" },
       { everyTargetDirect: false },
       { sameTransaction: false },
@@ -1629,7 +1630,7 @@ describe("fail-closed release evidence", () => {
     }
   });
 
-  test("direct runtime coverage binds all 54 states to canonical kind, view, host, parent, and generations", () => {
+  test("direct runtime coverage binds every canonical state to canonical kind, view, host, parent, and generations", () => {
     const fixture = makeFixture();
     const path = join(fixture.root, "packaged-direct-matrix-result.json");
     const original = JSON.parse(readFileSync(path, "utf8"));
@@ -2656,8 +2657,8 @@ describe("fail-closed release evidence", () => {
     expect(scorecard.directSurfaceCoverage).toMatchObject({
       status: "pass",
       evidenceClass: "RUNTIME_HIDDEN",
-      expectedMappings: 54,
-      directProvenMappings: 54,
+      expectedMappings: EXPECTED_CENSUS.contractMappingCount,
+      directProvenMappings: EXPECTED_CENSUS.contractMappingCount,
       transactionId: "synthetic-same-candidate-transaction",
     });
     expect(scorecard.gates.find((gate) => gate.gateId === "rust-tests")?.passed).toBe(32);

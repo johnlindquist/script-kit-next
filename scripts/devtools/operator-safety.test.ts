@@ -1776,7 +1776,11 @@ describe("noninteractive DevTools operator safety", () => {
       commands: Array<{ name: string; description: string }>;
     };
     expect(help.script).toBe("index");
-    expect(help.commands.length).toBeGreaterThanOrEqual(120);
+    const names = help.commands.map(command => command.name);
+    // The detached chat/Notes, warning-banner and modal-stack scenarios were retired.
+    // Keep the remaining inventory intact and verify unrelated command families still load.
+    expect(new Set(names).size).toBeGreaterThanOrEqual(119);
+    expect(names).toEqual(expect.arrayContaining(["scenario", "surface-navigate", "vision-loop", "permission-privacy-preflight"]));
     expect(help.commands.find((command) => command.name === "confirm-modal-style-preview-proof")?.description)
       .toContain("scenario owner is missing");
     expect(result.stderr.toString()).not.toContain("passive agentic help started");

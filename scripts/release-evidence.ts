@@ -27,6 +27,7 @@ import {
 } from "./devtools/generated-byte-compare.ts";
 import {
   buildCanonicalMappings,
+  EXPECTED_CENSUS,
   buildCoverageBindingSet,
   validateCoverageBindingSet,
   type CoverageBindingRecord,
@@ -93,7 +94,7 @@ export const REQUIRED_PACKAGED_ASSURANCES = [
 
 type PackagedAssuranceId = typeof REQUIRED_PACKAGED_ASSURANCES[number]["id"];
 type PackagedAssuranceGateId = typeof REQUIRED_PACKAGED_ASSURANCES[number]["gateId"];
-const REQUIRED_DIRECT_SURFACE_MAPPING_COUNT = 54;
+const REQUIRED_DIRECT_SURFACE_MAPPING_COUNT = EXPECTED_CENSUS.contractMappingCount;
 
 // These measurements remain advisory until owner ratification and capture authorization.
 const PACKAGED_ADVISORY_GATES: Record<string, true> = {
