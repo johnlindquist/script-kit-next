@@ -128,9 +128,10 @@ fn select(
             }
         }
     }
-    match installed.len() {
-        1 => Ok(installed.pop_first().unwrap()),
-        0 => Err(io::Error::new(
+    let mut installed = installed.into_iter();
+    match (installed.next(), installed.next()) {
+        (Some(one), None) => Ok(one),
+        (None, _) => Err(io::Error::new(
             io::ErrorKind::NotFound,
             "Bun was not found; install Bun or set bun_path in config.ts",
         )),
