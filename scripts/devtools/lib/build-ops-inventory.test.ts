@@ -168,6 +168,83 @@ test("missing roots are absent but permission failures and disappearing children
   expect(refusal(() => requireBuildAdmission(root)).observation.complete).toBe(false);
 });
 
+// Mutate only these private fixtures, at the precise boundary after readdir and before lstat.
+function beforeStat(effect: (path: string) => void): void {
+  const original = fs.lstatSync;
+  const spy = spyOn(fs, "lstatSync").mockImplementation(((path: fs.PathLike, ...args: unknown[]) => {
+    effect(String(path)); return Reflect.apply(original, fs, [path, ...args]);
+  }) as typeof fs.lstatSync);
+  restore.push(() => spy.mockRestore());
+}
+
+test("one vanished object re-enumerates only its directory and commits exactly the clean rescan", () => {
+  const root = fixture(), tree = join(root, "target-agent"), deps = join(tree, "debug/deps");
+  const seed = file(root, "outside/seed"), stable = file(deps, "nested/keep");
+  fs.linkSync(seed, join(deps, "already-seen")); fs.linkSync(stable, join(deps, "alias"));
+  fs.symlinkSync(stable, join(deps, "count-the-link"));
+  file(deps, "a.rcgu.o"); file(deps, "b.rcgu.o");
+  const before = fs.lstatSync(seed), seeded = `${before.dev}:${before.ino}`, seen = new Set([seeded]);
+  const opens = spyOn(fs, "opendirSync"); restore.push(() => opens.mockRestore());
+  const objects: string[] = [];
+  beforeStat(path => {
+    if (!path.endsWith(".rcgu.o")) return;
+    objects.push(path);
+    if (objects.length === 2) {
+      // One object has already contributed bytes and an inode; the next now fails lstat.
+      fs.renameSync(objects[0]!, join(root, "outside/first")); fs.renameSync(path, join(root, "outside/second"));
+      file(deps, "only-on-rescan");
+    }
+  });
+  const recovered = allocation(tree, [], seen);
+  expect(objects).toHaveLength(2);
+  expect(opens.mock.calls.filter(([path]) => path === deps)).toHaveLength(2);
+  expect(opens.mock.calls.filter(([path]) => path === tree)).toHaveLength(1);
+  expect(recovered).toMatchObject({ complete: true, errors: [], linksNotFollowed: 1 });
+  const cleanSeen = new Set([seeded]);
+  expect(recovered).toEqual(allocation(tree, [], cleanSeen));
+  expect(seen).toEqual(cleanSeen);
+});
+
+for (const fault of ["replacement", "symlink", "reappeared-link", "permission", "churn"] as const) test(`disappearance cannot recover from ${fault}`, () => {
+  const root = fixture(), target = file(root, "target-agent/deps/1.rcgu.o"), deps = dirname(target);
+  let misses = 0;
+  beforeStat(path => {
+    if (path === deps && misses && fault === "permission") throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+    if (!path.startsWith(deps + "/") || !path.endsWith(".rcgu.o")) return;
+    misses++;
+    if (fault === "replacement" || fault === "symlink") {
+      fs.renameSync(deps, join(root, "old"));
+      if (fault === "replacement") fs.mkdirSync(deps); else fs.symlinkSync(join(root, "old"), deps);
+      // The redirected link still resolves the old child; model the observed lstat ENOENT.
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    }
+    fs.renameSync(path, join(root, `old-${misses}`));
+    if (fault === "reappeared-link") {
+      // The name is reused between listings. Do not follow or silently accept that link.
+      fs.symlinkSync(join(root, `old-${misses}`), path);
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    }
+    if (fault === "churn") file(deps, `${misses + 1}.rcgu.o`);
+  });
+  const denied = refusal(() => requireBuildAdmission(root));
+  expect(denied.code).toBe("resource_observation_incomplete");
+  expect(denied.observation.complete).toBe(false);
+  expect(denied.observation.errors!.join(" ")).toContain(fault === "churn" || fault === "reappeared-link" ? "inventory_unstable_directory" : fault === "permission" ? "EACCES" : "inventory_directory_changed");
+  expect(misses).toBe(fault === "churn" ? 2 : 1);
+});
+
+test("a recovered allocation must still fit the publication reserve", () => {
+  const root = fixture(), deps = join(root, "target-agent/deps"), target = file(deps, "gone.rcgu.o");
+  observedVolume(2 * GiB);
+  beforeStat(path => {
+    if (path === target) { fs.renameSync(target, join(root, "old")); file(deps, "new-object"); }
+  });
+  const denied = refusal(() => requireBuildAdmission(root, { phase: "pre-publication", reserveBytes: GiB }));
+  expect(denied.code).toBe("resource_budget_exceeded");
+  expect(denied.observation).toMatchObject({ complete: true, withinLimits: false, reserveBytes: GiB,
+    targetAgentAllocatedBytes: allocation(join(root, "target-agent")).allocatedBytes });
+});
+
 test("mounted subtrees refuse admission rather than disappearing from the budget", () => {
   const root = fixture(), payload = file(root, "target-agent/unknown/payload"), original = fs.lstatSync;
   observedVolume(2 * GiB);
@@ -210,6 +287,28 @@ test("entry and time limits are incomplete, not successful truncated inventories
   let now = 0; clock.mockImplementation(() => { const value = now; now += 9_000; return value; });
   const expired = allocation(tree);
   expect(expired.complete).toBe(false); expect(expired.errors.join(" ")).toContain("inventory_time_limit");
+});
+
+for (const limit of ["entry", "time"]) test(`local rescan shares the original ${limit} limit`, () => {
+  const tree = fixture(), payload = file(tree, "keep"), payloadStat = fs.lstatSync(payload), original = fs.lstatSync;
+  const stat = spyOn(fs, "lstatSync").mockImplementation(((path: fs.PathLike, ...args: unknown[]) => String(path) === payload ? payloadStat : Reflect.apply(original, fs, [path, ...args])) as typeof fs.lstatSync);
+  const timeout = Number(process.env.SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS ?? 8_000);
+  let now = 0, opened = 0, closed = 0;
+  const clock = spyOn(performance, "now").mockImplementation(() => now);
+  const open = spyOn(fs, "opendirSync").mockImplementation((() => {
+    const pass = ++opened;
+    let reads = 0;
+    return { readSync() {
+      if (++reads <= (limit === "entry" ? 130_000 : 1)) return { name: "keep" };
+      if (pass === 1) { now = timeout - 1; return { name: "vanished", isFile: () => true }; }
+      if (limit === "time") now += 2;
+      return null;
+    }, closeSync() { closed++; } };
+  }) as unknown as typeof fs.opendirSync);
+  restore.push(() => stat.mockRestore(), () => clock.mockRestore(), () => open.mockRestore());
+  const result = allocation(tree);
+  expect(result.complete).toBe(false); expect(result.errors.join(" ")).toContain(`inventory_${limit}_limit`);
+  expect(opened).toBe(2); expect(closed).toBe(2);
 });
 
 test("publication reserve needs both total-budget and free-space headroom, with inclusive boundaries", () => {
@@ -332,7 +431,7 @@ for (const breach of ["allocation", "free", "incomplete"] as const) test(`guard 
 
 test("one transient allocation race retries without masking persistent incompleteness", async () => {
   const f = guardFixture(), guard = f.start();
-  f.worker.answer(sample(0, ["ENOENT"])); await microtasks();
+  f.worker.answer(sample(0, ["EAGAIN"])); await microtasks();
   expect(f.refusals).toEqual([]); await f.advance(250); expect(f.worker.requests).toHaveLength(2);
   f.worker.answer(sample(4096)); await f.advance(10_000); expect(f.worker.requests).toHaveLength(3);
   f.worker.answer(sample(0, ["ESTALE"])); await f.advance(250); expect(f.worker.requests).toHaveLength(4);
@@ -340,6 +439,62 @@ test("one transient allocation race retries without masking persistent incomplet
   expect(f.refusals.map(error => error.code)).toEqual(["resource_observation_incomplete"]);
   expect(await guard.stop()).toMatchObject({ transientFailureCount: 2, complete: false, workerClosed: true });
   expect(f.timers.size).toBe(0);
+});
+
+for (const error of ["ENOENT", "Error: inventory_directory_changed", "Error: inventory_unstable_directory: /ESTALE/object"]) test(`guard does not retry a refused directory: ${error}`, async () => {
+  const f = guardFixture(), guard = f.start(); f.worker.answer(sample(4096, [error]));
+  await f.advance(250);
+  expect(f.worker.requests).toHaveLength(1); expect(f.refusals).toHaveLength(1);
+  expect((await guard.stop()).trigger?.errors).toEqual([error]);
+});
+
+test("a transient-looking partial scan already above budget records an immediate terminal trigger", async () => {
+  const f = guardFixture(), guard = f.start(); f.worker.answer(sample(GiB + 1, ["ESTALE"]));
+  const summary = await guard.stop();
+  expect(summary.trigger).toBe(f.refusals[0]!.observation);
+  expect(summary.trigger?.failureCodes).toEqual(["resource_budget_exceeded", "resource_observation_incomplete"]);
+  expect(summary).toMatchObject({ workerClosed: true, complete: false, transientFailureCount: 0 });
+  expect(f.worker.requests).toHaveLength(1);
+});
+
+for (const outcome of ["complete", "budget", "floor", "incomplete", "unclosed"] as const) test(`stop before transient retry requires a fresh pair and worker closure: ${outcome}`, async () => {
+  const f = guardFixture(); observedVolume(2 * GiB); process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "1";
+  const initial = requireBuildAdmission(f.root), oldFree = Promise.withResolvers<fs.StatsFs>();
+  f.free.mockImplementationOnce(() => oldFree.promise);
+  const guard = f.start(initial);
+  f.worker.answer(sample(0, ["ESTALE"]));
+  const stopping = guard.stop(); expect(guard.stop()).toBe(stopping);
+  expect(f.worker.requests).toHaveLength(2); expect(f.free).toHaveBeenCalledTimes(1);
+  if (outcome === "unclosed") f.worker.termination = Promise.withResolvers<number>().promise;
+  f.worker.answer(outcome === "incomplete" ? sample(0, ["ESTALE"]) : sample(outcome === "budget" ? GiB + 1 : 8192));
+  if (outcome === "complete" || outcome === "floor" || outcome === "unclosed") {
+    expect(f.worker.terminated).toBe(0); // A fresh allocation and old free-space claim are not enough.
+    f.free.mockResolvedValue(volume(outcome === "floor" ? GiB - 1 : GiB));
+    oldFree.resolve(volume(2 * GiB)); await microtasks();
+    expect(f.free).toHaveBeenCalledTimes(2);
+  }
+  await f.advance(1_000);
+  const summary = await stopping;
+  expect(summary).toMatchObject({ complete: outcome === "complete", workerClosed: outcome !== "unclosed", transientFailureCount: 1 });
+  if (outcome === "complete") expect(summary).toMatchObject({ trigger: null, maximumSampledAllocatedBytes: 8192, minimumSampledAvailableBytes: GiB });
+  if (["budget", "floor", "incomplete"].includes(outcome)) {
+    expect(summary.trigger).toBe(f.refusals[0]!.observation);
+    expect(f.refusals.map(e => e.code)).toEqual([outcome === "budget" ? "resource_budget_exceeded" : outcome === "floor" ? "resource_free_space_below_floor" : "resource_observation_incomplete"]);
+  }
+  expect(f.timers.size).toBe(0); expect(f.worker.terminated).toBe(1);
+});
+
+test("stop after transient free failure cannot accept an allocation scan started before stop", async () => {
+  const f = guardFixture(); f.free.mockRejectedValueOnce(new Error("EBUSY"));
+  const guard = f.start(); await microtasks();
+  const stopping = guard.stop(); expect(f.worker.requests).toHaveLength(1);
+  const deadline = Number(process.env.SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS ?? 8_000) + 1_000;
+  await f.advance(deadline - 30); f.worker.answer(sample(4096)); await microtasks();
+  expect(f.worker.requests).toHaveLength(2); expect(f.worker.terminated).toBe(0);
+  // Waiting for the old request used most of the final pair's deadline.
+  await f.advance(29); expect(f.worker.terminated).toBe(0); await f.advance(1);
+  expect((await stopping).trigger?.errors).toEqual(["inventory_time_limit"]);
+  expect(f.worker.terminated).toBe(1); expect(f.timers.size).toBe(0);
 });
 
 test("free observation retries are bounded and do not retain stale available-space claims", async () => {

@@ -1,5 +1,5 @@
 import { accessSync, constants, existsSync, lstatSync, opendirSync, readFileSync, statfsSync } from "node:fs";
-import type { Stats } from "node:fs";
+import type { Dirent, Stats } from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -27,44 +27,74 @@ function protectedOutputRoot(child: string): boolean {
 function scanAllocation(path: string, excluded: readonly string[], seen: Set<string>, expectedDevice?: number, protectOutputs = false): AllocationObservation {
   const result: AllocationObservation = { present: false, complete: true, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [] };
   const started = performance.now();
-  let device = expectedDevice;
-  const visit = (current: string, child: string, depth: number): void => {
-    if (excluded.some(value => child === value || child.startsWith(value + "/"))) return;
-    if (++result.entries > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit");
-    if (depth > 256) throw new Error("inventory_depth_limit");
-    if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit");
-    let stat: Stats;
-    try { stat = lstatSync(current); }
-    catch (error) {
-      // Only a missing scan root is an absent tree. Disappearing children are incomplete observations.
-      if (!child && (error as NodeJS.ErrnoException).code === "ENOENT") { result.entries = 0; return; }
-      throw error;
-    }
-    if (!child) result.present = true;
-    device ??= Number(stat.dev);
-    if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
+  let device = expectedDevice, work = 0;
+  const added: string[] = []; // Undo only identities this walk inserted after a directory checkpoint.
+  const checkTime = () => { if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit"); };
+  const charge = () => { if (++work > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit"); checkTime(); };
+  const account = (stat: Stats) => {
+    result.entries++;
     const identity = `${stat.dev}:${stat.ino}`;
     if (!seen.has(identity)) {
-      seen.add(identity);
+      seen.add(identity); added.push(identity);
       const bytes = Number(stat.blocks) * 512;
       if (!Number.isSafeInteger(bytes) || bytes < 0 || !Number.isSafeInteger(result.allocatedBytes + bytes)) throw new Error("inventory_invalid_allocation");
       result.allocatedBytes += bytes;
       if (!stat.isDirectory()) result.logicalBytes += Number(stat.size);
     }
+  };
+  // false means ONLY that the direct, enumerated regular file vanished before its first lstat.
+  const visit = (current: string, child: string, depth: number, listed?: Dirent): boolean => {
+    if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
+    charge();
+    if (depth > 256) throw new Error("inventory_depth_limit");
+    let stat: Stats;
+    try { stat = lstatSync(current); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        if (!child) return true; // Absent scan root, not a missing enumerated child.
+        if (listed?.isFile()) return false;
+      }
+      throw error;
+    }
+    if (!child) result.present = true;
+    device ??= Number(stat.dev);
+    if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
     if (stat.isSymbolicLink()) {
+      account(stat);
       result.linksNotFollowed++;
       if (protectOutputs && protectedOutputRoot(child)) throw new Error("inventory_output_symlink");
-      return;
+      return true;
     }
     if (protectOutputs && !child && !stat.isDirectory()) throw new Error("inventory_output_not_directory");
-    if (!stat.isDirectory()) return;
-    const directory = opendirSync(current);
-    try {
-      let entry;
-      while ((entry = directory.readSync()) !== null) visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1);
-      const after = lstatSync(current);
-      if (!after.isDirectory() || after.dev !== stat.dev || after.ino !== stat.ino) throw new Error("inventory_directory_changed");
-    } finally { directory.closeSync(); }
+    if (!stat.isDirectory()) { account(stat); return true; }
+
+    const { entries, logicalBytes, allocatedBytes, linksNotFollowed } = result, mark = added.length;
+    const sameDirectory = (): Stats => {
+      const now = lstatSync(current);
+      if (!now.isDirectory() || now.dev !== stat.dev || now.ino !== stat.ino) throw new Error("inventory_directory_changed");
+      return now;
+    };
+    let vanished: string | undefined;
+    for (;;) {
+      account(stat);
+      const directory = opendirSync(current);
+      let entry: Dirent | null;
+      try {
+        while ((entry = directory.readSync()) !== null) {
+          // We have no inode witness for that name. Do not accept a replacement (even a link).
+          if (entry.name === vanished) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
+          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry)) break;
+        }
+        sameDirectory(); checkTime();
+        if (!entry) return true; // Only an enumeration that reached EOF can commit.
+        if (vanished !== undefined) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
+        vanished = entry.name;
+      } finally { directory.closeSync(); }
+      Object.assign(result, { entries, logicalBytes, allocatedBytes, linksNotFollowed });
+      while (added.length > mark) seen.delete(added.pop()!);
+      charge(); // Rolled-back visits and this reopen still cost work against the original deadline.
+      stat = sameDirectory(); // Revalidate after rollback and re-account the directory's own blocks.
+    }
   };
   try { visit(path, "", 0); }
   catch (error) { result.complete = false; result.errors.push(String(error)); }
@@ -317,7 +347,10 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   let allocated: AllocationObservation | null = null, available: number | null = initial ? initialObservation!.availableBytes : null;
   let availableError: string | undefined;
   let scanId = 0, pendingScan = 0, scanStarted = 0, scanFailures = 0, freeFailures = 0;
-  let scanDeadline: NodeJS.Timeout | undefined;
+  let scanDeadline: NodeJS.Timeout | undefined, pendingFree = false;
+  let finalPair: { started: number; nextScanId: number; allocation: boolean; free: boolean; done: PromiseWithResolvers<BuildResourceSummary> } | undefined;
+  // Waiting for an older, still-live query consumes the closing pair's time, not a second deadline.
+  const remaining = (ms: number) => finalPair ? Math.max(0, ms - (performance.now() - finalPair.started)) : ms;
 
   const cancel = (timer: NodeJS.Timeout | undefined): void => {
     if (timer !== undefined) { clearTimeout(timer); timers.delete(timer); }
@@ -326,7 +359,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     const timer = setTimeout(() => { timers.delete(timer); if (!stopped) fn(); }, ms);
     timers.add(timer); return timer;
   };
-  const stop = (): Promise<BuildResourceSummary> => {
+  const close = (): Promise<BuildResourceSummary> => {
     if (stopPromise) return stopPromise;
     stopped = true;
     for (const timer of timers) clearTimeout(timer);
@@ -359,7 +392,8 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     if (stopped || summary.trigger) return;
     summary.complete = false; summary.trigger = observation;
     // Stop scheduling before the owner's close callback, which may itself call stop().
-    const closing = stop();
+    const closing = close();
+    finalPair?.done.resolve(closing);
     try { onRefusal(new BuildResourceError(observation.failureCodes[0]!, observation)); }
     catch { summary.callbackFailed = true; }
     void closing;
@@ -372,31 +406,36 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     if (availableError) observation.errors = [...(observation.errors ?? []), availableError];
     // While the initial two independent samples are pending, known breaches still refuse immediately.
     if (forceIncomplete || observation.failureCodes.some(code => code !== "resource_observation_incomplete")) refuse(observation);
+    else if (finalPair?.allocation && finalPair.free && observation.withinLimits) finalPair.done.resolve(close());
   };
-  const transient = (errors: readonly string[]): boolean => errors.length > 0 && errors.every(error => /\b(ENOENT|ESTALE|EAGAIN|EBUSY)\b|inventory_directory_changed/.test(error));
+  // Match the leading OS code, never a filename. Allocation ENOENT has already had its
+  // only safe retry in the exact directory; a whole-tree retry could hide a replacement.
+  const transient = (errors: readonly string[], free = false): boolean => errors.length > 0 && errors.every(error =>
+    /^(?:Error: )?(?:ESTALE|EAGAIN|EBUSY)\b/.test(error) || (free && /^(?:Error: )?ENOENT\b/.test(error)));
   const failedAllocation = (errors: string[]): void => {
     allocated = { present: false, complete: false, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors };
     summary.sampleCount++;
     check(true);
   };
   const scan = (): void => {
-    if (stopped || pendingScan || !worker) return;
+    if (stopped || pendingScan || finalPair?.allocation || !worker) return;
     pendingScan = ++scanId; scanStarted = performance.now();
-    scanDeadline = later(() => { pendingScan = 0; failedAllocation(["inventory_time_limit"]); }, ALLOCATION_TIMEOUT_MS + 1_000);
+    scanDeadline = later(() => { pendingScan = 0; failedAllocation(["inventory_time_limit"]); }, remaining(ALLOCATION_TIMEOUT_MS + 1_000));
     try { worker.postMessage(pendingScan); }
     catch (error) { cancel(scanDeadline); pendingScan = 0; failedAllocation([String(error)]); }
   };
   const sampleFree = (): void => {
-    if (stopped) return;
-    const started = performance.now();
+    if (stopped || pendingFree || finalPair?.free) return;
+    pendingFree = true;
+    const requestedFor = finalPair, started = performance.now();
     let settled = false;
     const deadline = later(() => {
       settled = true; available = null; availableError = "inventory_free_space_time_limit"; summary.sampleCount++; check(true);
-    }, freeSampleTimeoutMs);
+    }, remaining(freeSampleTimeoutMs));
     const failed = (error: unknown): void => {
       if (stopped || settled) return;
-      settled = true; cancel(deadline); available = null; availableError = String(error); summary.sampleCount++;
-      if (transient([String(error)]) && freeFailures++ === 0) {
+      settled = true; cancel(deadline); pendingFree = false; available = null; availableError = String(error); summary.sampleCount++;
+      if (!finalPair && transient([String(error)], true) && freeFailures++ === 0) {
         summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(sampleFree, 250);
       } else check(true);
     };
@@ -409,10 +448,12 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
         if (amounts.some(value => !Number.isSafeInteger(value) || value < 0)) { failed(new Error("inventory_invalid_available")); return; }
         try { if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed"); }
         catch (error) { failed(error); return; }
-        settled = true; cancel(deadline); freeFailures = 0; available = bytes; availableError = undefined; summary.sampleCount++;
+        settled = true; cancel(deadline); pendingFree = false; freeFailures = 0; available = bytes; availableError = undefined; summary.sampleCount++;
         summary.minimumSampledAvailableBytes = Math.min(summary.minimumSampledAvailableBytes ?? bytes, bytes);
+        if (requestedFor) requestedFor.free = true;
         check();
-        if (!stopped) later(sampleFree, Math.max(0, 1_000 - (performance.now() - started)));
+        if (finalPair) sampleFree(); // Replace a result that was already in flight at stop.
+        else if (!stopped) later(sampleFree, Math.max(0, 1_000 - (performance.now() - started)));
       }, failed);
     } catch (error) { failed(error); }
   };
@@ -435,20 +476,22 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
         cancel(scanDeadline); pendingScan = 0;
         const sample = message.allocation;
         if (!sample || typeof sample.complete !== "boolean" || !Array.isArray(sample.errors)
-          || !sample.errors.every(error => typeof error === "string")
+          || sample.complete !== (sample.errors.length === 0) || !sample.errors.every(error => typeof error === "string")
           || !Number.isSafeInteger(sample.allocatedBytes) || sample.allocatedBytes < 0) {
           failedAllocation(["inventory_worker_protocol"]); return;
         }
         allocated = sample; summary.sampleCount++;
         summary.maximumSampledAllocatedBytes = Math.max(summary.maximumSampledAllocatedBytes ?? sample.allocatedBytes, sample.allocatedBytes);
+        if (finalPair && sample.complete && message.id >= finalPair.nextScanId) finalPair.allocation = true;
         check();
         if (stopped) return;
-        if (!sample.complete && transient(sample.errors) && scanFailures++ === 0) {
+        if (!finalPair && !sample.complete && transient(sample.errors) && scanFailures++ === 0) {
           summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(scan, 250); return;
         }
         if (!sample.complete) { check(true); return; }
         scanFailures = 0;
-        if (!stopped) later(scan, Math.max(0, 10_000 - (performance.now() - scanStarted)));
+        if (finalPair) scan(); // An older in-flight result cannot settle the final pair.
+        else if (!stopped) later(scan, Math.max(0, 10_000 - (performance.now() - scanStarted)));
       });
       worker.on("error", error => { if (!stopped) failedAllocation([String(error)]); });
       worker.on("exit", () => {
@@ -460,6 +503,15 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
       queueMicrotask(() => { if (!stopped) failedAllocation([String(error)]); });
     }
   }
+  const stop = (): Promise<BuildResourceSummary> => {
+    if (finalPair) return finalPair.done.promise;
+    if (stopped || (!scanFailures && !freeFailures)) return close();
+    // Only a still-pending transient gets a closing sample. Both halves must start
+    // afresh and pass normal checks/deadlines; neither preflight nor a partial scan counts.
+    finalPair = { started: performance.now(), nextScanId: scanId + 1, allocation: false, free: false, done: Promise.withResolvers<BuildResourceSummary>() };
+    scan(); sampleFree();
+    return finalPair.done.promise;
+  };
   return { stop };
 }
 if (workerThreads.isMainThread && import.meta.main && process.argv[2] === "admission") {
