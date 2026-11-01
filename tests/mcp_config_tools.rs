@@ -13,7 +13,7 @@ fn with_temp_config(test_name: &'static str, f: impl FnOnce(&std::path::Path)) {
         assert!(setup.is_fresh_install);
         assert!(setup.kit_path.join("sdk/config-schema.ts").is_file());
         f(&setup.kit_path.join("config.ts"));
-        std::fs::write("completed", test_name).unwrap();
+        eprintln!("MCP_INSTALL_COMPLETED:{test_name}");
         return;
     }
     let dir = TempDir::new().expect("scratch install");
@@ -48,10 +48,10 @@ fn with_temp_config(test_name: &'static str, f: impl FnOnce(&std::path::Path)) {
         String::from_utf8_lossy(&result.stdout),
         String::from_utf8_lossy(&result.stderr)
     );
-    assert_eq!(
-        std::fs::read_to_string(cwd.join("completed")).unwrap(),
-        test_name
-    );
+    let completed = format!("MCP_INSTALL_COMPLETED:{test_name}");
+    assert!(String::from_utf8_lossy(&result.stderr)
+        .lines()
+        .any(|l| l == completed));
 }
 
 fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) -> Value {
@@ -202,8 +202,25 @@ fn config_set_get_validate_and_reset_round_trip_through_cli() {
             assert_eq!(get_payload["result"]["data"]["value"], 18);
 
             let rev = &get_payload["result"]["data"]["revision"];
-            let before = std::fs::read_to_string(config_path).unwrap() + "// changed by hand\n";
-            std::fs::write(config_path, &before).unwrap();
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(config_path)
+                .unwrap()
+                .write_all(b"// changed by hand\n")
+                .unwrap();
+            let effective_revision = || {
+                first_tool_text(&call_tool(
+                    "kit/config_get",
+                    json!({"key":"editorFontSize"}),
+                    Some(&context),
+                ))["result"]["data"]["revision"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            };
+            let before = effective_revision();
+            assert_ne!(rev.as_str().unwrap(), before);
             for args in [
                 json!({"key":"editorFontSize","value":22,"expectedRevision":rev}),
                 json!({"key":"editorFontSize","value":22,"expectedRevision":null}),
@@ -213,7 +230,11 @@ fn config_set_get_validate_and_reset_round_trip_through_cli() {
             ] {
                 let denied = call_tool("kit/config_set", args, Some(&context));
                 assert_eq!(denied["isError"], true);
-                assert_eq!(std::fs::read_to_string(config_path).unwrap(), before);
+                assert_eq!(
+                    effective_revision(),
+                    before,
+                    "a denied write must preserve the complete source revision"
+                );
             }
             let validate = call_tool("kit/config_validate", json!({}), Some(&context));
             let validate_payload = first_tool_text(&validate);
@@ -239,14 +260,25 @@ fn config_set_get_validate_and_reset_round_trip_through_cli() {
             );
             let reset_payload = first_tool_text(&reset);
             assert_eq!(reset_payload["ok"], true);
-            let dynamic = "throw Error('must not run'); export default { editorFontSize: 16 }";
-            std::fs::write(config_path, dynamic).unwrap();
+            let marker = config_path.with_file_name("must-not-have-run");
+            let dynamic = format!(
+                "import {{writeFileSync}} from 'node:fs'; writeFileSync({}, 'executed'); export default {{ editorFontSize: 16 }}",
+                serde_json::to_string(&marker).unwrap()
+            );
+            std::fs::write(config_path, &dynamic).unwrap();
+            let modified = config_path.metadata().unwrap().modified().unwrap();
             for (name, args) in [
                 ("kit/config_validate", json!({})),
                 ("kit/config_set", json!({"key":"editorFontSize","value":18})),
             ] {
                 assert_eq!(call_tool(name, args, Some(&context))["isError"], true);
-                assert_eq!(std::fs::read_to_string(config_path).unwrap(), dynamic);
+                assert!(
+                    !marker.exists(),
+                    "a scoped settings call executed the configuration"
+                );
+                let observed = config_path.metadata().unwrap();
+                assert_eq!(observed.len(), dynamic.len() as u64);
+                assert_eq!(observed.modified().unwrap(), modified);
             }
             let schema = config_path.parent().unwrap().join("sdk/config-schema.ts");
             std::fs::write(schema, "throw new Error('mixed install')").unwrap();
