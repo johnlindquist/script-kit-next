@@ -796,7 +796,7 @@ pub fn ensure_kit_setup() -> SetupResult {
     // App-managed: .gitignore (refresh if changed)
     let gitignore_path = kit_dir.join(".gitignore");
     let gitignore_content = r#"# Script Kit managed .gitignore
-# This file is regenerated on app start - edit with caution
+# Personal additions are preserved when Kit starts.
 
 # =============================================================================
 # Node.js / Bun dependencies
@@ -850,8 +850,13 @@ frecency.json
 # Server state
 server.json
 
-# Authentication tokens
+# Authentication tokens and encrypted stores
 agent-token
+secrets.age
+.secrets-*
+agent_chat/auth/
+*.p12
+*.pfx
 
 # =============================================================================
 # Build & Tooling
@@ -891,7 +896,9 @@ build/
 tmp/
 temp/
 "#;
-    write_string_if_changed(
+    // This is a user-owned source of exclusions once created. The backup implementation
+    // independently allowlists personal files; it does not rely on mutable ignore rules.
+    write_string_if_missing(
         &gitignore_path,
         gitignore_content,
         &mut warnings,

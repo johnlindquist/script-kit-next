@@ -1013,7 +1013,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/sync-to-github",
             "Sync to GitHub",
-            "Initialize git and sync the Script Kit workspace to GitHub",
+            "Back up personal scripts and themes to a private GitHub repository",
             vec![
                 "sync",
                 "github",

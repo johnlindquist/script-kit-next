@@ -103,6 +103,7 @@ pub const DEFAULT_SUGGESTED_TRACK_USAGE: bool = true;
 /// Commands that require confirmation before execution by default.
 /// Users can override this behavior per-command in config.ts using `confirmationRequired`.
 pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
+    "builtin/sync-to-github",
     "builtin/shut-down",
     "builtin/restart",
     "builtin/log-out",

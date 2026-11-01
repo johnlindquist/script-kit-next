@@ -1,87 +1,39 @@
-//! GitHub sync worker for the Script Kit workspace.
+//! Export user-authored Kit files to a dedicated branch of a verified private repository.
+//! The workspace's index, refs and history are never part of the upload.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use serde_json::{json, Value};
 use std::{
+    fs,
+    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
 
+#[path = "snapshot.rs"]
+mod snapshot;
+
 pub const SCRIPT_KIT_SYNC_DRY_RUN_ENV: &str = "SCRIPT_KIT_SYNC_DRY_RUN";
+const BRANCH: &str = "script-kit-personal";
+const OWNER_MARKER: &str = ".script-kit-snapshot-v1";
+const MARK: &str = "Script Kit personal workspace snapshot v1\n";
 
-const DEFAULT_REPO_NAME: &str = "scriptkit-sync";
-const DEFAULT_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
-const PUSH_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
-const GITIGNORE_MARKER: &str = "# Script Kit Sync sensitive exclusions";
-
-#[derive(Debug, Clone)]
 pub struct SyncToGithubReport {
     pub workspace: PathBuf,
     pub dry_run: bool,
-    pub steps: Vec<SyncStepReport>,
+    pub files: usize,
 }
-
 impl SyncToGithubReport {
     pub fn summary_message(&self) -> String {
-        let skipped = self.steps.iter().filter(|step| step.skipped).count();
         if self.dry_run {
-            format!("GitHub sync dry-run complete ({skipped} remote step(s) skipped)")
+            format!("{} personal files ready; nothing uploaded", self.files)
         } else {
-            "Synced Script Kit to GitHub".to_string()
+            format!(
+                "{} personal files synced to private GitHub backup",
+                self.files
+            )
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SyncStepReport {
-    pub label: String,
-    pub command: String,
-    pub stdout: String,
-    pub stderr: String,
-    pub skipped: bool,
-}
-
-#[derive(Debug, Clone)]
-struct ShellCommand {
-    label: String,
-    program: String,
-    args: Vec<String>,
-    timeout: Duration,
-    skip_when_dry_run: bool,
-}
-
-impl ShellCommand {
-    fn new(
-        label: impl Into<String>,
-        program: impl Into<String>,
-        args: Vec<String>,
-        timeout: Duration,
-    ) -> Self {
-        Self {
-            label: label.into(),
-            program: program.into(),
-            args,
-            timeout,
-            skip_when_dry_run: false,
-        }
-    }
-
-    fn shell(label: impl Into<String>, script: String, timeout: Duration) -> Self {
-        Self::new(label, "/bin/sh", vec!["-c".to_string(), script], timeout)
-    }
-
-    fn skip_when_dry_run(mut self) -> Self {
-        self.skip_when_dry_run = true;
-        self
-    }
-
-    fn display_command(&self) -> String {
-        let mut parts = Vec::with_capacity(self.args.len() + 1);
-        parts.push(quote_for_log(&self.program));
-        for arg in &self.args {
-            parts.push(quote_for_log(arg));
-        }
-        parts.join(" ")
     }
 }
 
@@ -90,284 +42,303 @@ pub fn sync_to_github_workspace() -> Result<SyncToGithubReport> {
 }
 
 pub fn sync_to_github_at_path(workspace: PathBuf) -> Result<SyncToGithubReport> {
-    if !workspace.exists() {
-        bail!(
-            "Script Kit workspace does not exist: {}",
-            workspace.display()
-        );
-    }
-    if !workspace.is_dir() {
-        bail!(
-            "Script Kit workspace is not a directory: {}",
-            workspace.display()
-        );
-    }
-
-    let dry_run = sync_dry_run_enabled();
-    let commands = build_sync_commands(DEFAULT_REPO_NAME.to_string());
-    let mut steps = Vec::with_capacity(commands.len());
-
-    tracing::info!(
-        target: "script_kit::sync",
-        workspace = %workspace.display(),
-        dry_run,
-        command_count = commands.len(),
-        "sync.github.start"
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process)?;
+    let dry_run = std::env::var(SCRIPT_KIT_SYNC_DRY_RUN_ENV).as_deref() == Ok("1");
+    ensure!(
+        workspace.symlink_metadata()?.is_dir(),
+        "Invalid workspace root"
     );
-
-    for command in commands {
-        let step = run_shell_command(&workspace, &command, dry_run)?;
-        steps.push(step);
+    let workspace = workspace.canonicalize()?;
+    let scratch = tempfile::tempdir()?;
+    let files = snapshot::collect(&workspace, scratch.path())?;
+    ensure!(!files.is_empty(), "No personal files to sync");
+    if !dry_run {
+        let repo = configured_destination(&workspace)?;
+        publish(&files, repo.as_deref(), |method, path, body| {
+            request(scratch.path(), method, path, body)
+        })?;
     }
-
-    tracing::info!(
-        target: "script_kit::sync",
-        workspace = %workspace.display(),
-        dry_run,
-        step_count = steps.len(),
-        "sync.github.finished"
-    );
-
     Ok(SyncToGithubReport {
         workspace,
         dry_run,
-        steps,
+        files: files.len(),
     })
 }
 
-pub fn sensitive_exclusion_patterns() -> Vec<String> {
-    [
-        "agent-token",
-        "server.json",
-        ".env",
-        ".env.*",
-        "secrets/",
-        ".pem",
-        ".key",
-        ".p12",
-        ".pfx",
-        "agent_chat/auth/",
-        "logs/",
-        "*.log",
-        ".DS_Store",
-        "node_modules/",
-        ".cache/",
-        "tmp/",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
+fn valid_component(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 100
+        && s != "."
+        && s != ".."
+        && !s.starts_with('-')
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
 }
-
-fn sync_dry_run_enabled() -> bool {
-    std::env::var(SCRIPT_KIT_SYNC_DRY_RUN_ENV)
-        .map(|value| value == "1")
-        .unwrap_or(false)
-}
-
-fn build_sync_commands(repo_name: String) -> Vec<ShellCommand> {
-    vec![
-        gitignore_write_command(),
-        ShellCommand::new(
-            "git init",
-            "git",
-            vec!["init".to_string()],
-            DEFAULT_COMMAND_TIMEOUT,
-        ),
-        ShellCommand::new(
-            "git add",
-            "git",
-            vec!["add".to_string(), ".".to_string()],
-            DEFAULT_COMMAND_TIMEOUT,
-        ),
-        ShellCommand::shell("git commit", git_commit_script(), DEFAULT_COMMAND_TIMEOUT),
-        ShellCommand::shell(
-            "gh repo create",
-            gh_repo_create_script(repo_name),
-            DEFAULT_COMMAND_TIMEOUT,
-        )
-        .skip_when_dry_run(),
-        ShellCommand::new(
-            "git push",
-            "git",
-            vec![
-                "push".to_string(),
-                "-u".to_string(),
-                "origin".to_string(),
-                "HEAD".to_string(),
-            ],
-            PUSH_COMMAND_TIMEOUT,
-        )
-        .skip_when_dry_run(),
-    ]
-}
-
-fn gitignore_write_command() -> ShellCommand {
-    let marker = quote_for_shell(GITIGNORE_MARKER);
-    let block = gitignore_exclusion_block();
-    let script = format!(
-        "set -eu\n\
-         touch .gitignore\n\
-         if ! grep -Fq {marker} .gitignore; then\n\
-         cat >> .gitignore <<'SCRIPT_KIT_SYNC_GITIGNORE'\n\
-         {block}SCRIPT_KIT_SYNC_GITIGNORE\n\
-         fi\n"
+fn github_name(url: &str) -> Result<String> {
+    let name = url
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("git@github.com:"))
+        .or_else(|| url.strip_prefix("ssh://git@github.com/"))
+        .context("Only a github.com origin can be synced")?;
+    let name = name.strip_suffix(".git").unwrap_or(name);
+    let (owner, repo) = name.split_once('/').context("Invalid GitHub origin")?;
+    ensure!(
+        valid_component(owner) && valid_component(repo),
+        "Invalid GitHub origin"
     );
-
-    ShellCommand::shell("gitignore write", script, DEFAULT_COMMAND_TIMEOUT)
+    Ok(name.to_owned())
 }
-
-fn gitignore_exclusion_block() -> String {
-    let mut block = String::new();
-    block.push('\n');
-    block.push_str(GITIGNORE_MARKER);
-    block.push('\n');
-    for pattern in sensitive_exclusion_patterns() {
-        block.push_str(&pattern);
-        block.push('\n');
+fn configured_destination(workspace: &Path) -> Result<Option<String>> {
+    match fs::symlink_metadata(workspace.join(".git")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Ok(m) => ensure!(
+            m.is_dir(),
+            "Automatic sync requires an ordinary workspace repository"
+        ),
+        Err(e) => return Err(e.into()),
     }
-    block
-}
-
-fn git_commit_script() -> String {
-    "set -eu\n\
-     if git diff --cached --quiet; then\n\
-     echo 'No Script Kit changes to commit'\n\
-     else\n\
-     git commit -m 'Sync Script Kit'\n\
-     fi\n"
-        .to_string()
-}
-
-fn gh_repo_create_script(repo_name: String) -> String {
-    let repo_name = quote_for_shell(&repo_name);
-    format!(
-        "set -eu\n\
-         if git remote get-url origin >/dev/null 2>&1; then\n\
-         echo 'origin remote already configured'\n\
-         else\n\
-         gh repo create {repo_name} --private --source . --remote origin\n\
-         fi\n"
-    )
-}
-
-fn run_shell_command(
-    workspace: &Path,
-    command: &ShellCommand,
-    dry_run: bool,
-) -> Result<SyncStepReport> {
-    let command_text = command.display_command();
-    tracing::info!(
-        target: "script_kit::sync",
-        label = %command.label,
-        command = %command_text,
-        timeout_ms = command.timeout.as_millis() as u64,
-        dry_run,
-        skip_when_dry_run = command.skip_when_dry_run,
-        "sync.github.command"
+    let (ok, raw) = git(workspace, &["remote"])?;
+    ensure!(ok, "Couldn't read workspace remotes");
+    if !std::str::from_utf8(&raw)?.lines().any(|l| l == "origin") {
+        return Ok(None);
+    }
+    let one = |args: &[&str]| -> Result<String> {
+        let (ok, raw) = git(workspace, args)?;
+        let urls = std::str::from_utf8(&raw)?.lines().collect::<Vec<_>>();
+        ensure!(
+            ok && urls.len() == 1,
+            "Sync requires one unambiguous GitHub origin"
+        );
+        github_name(urls[0])
+    };
+    let name = one(&["remote", "get-url", "--all", "origin"])?;
+    ensure!(
+        one(&["remote", "get-url", "--push", "--all", "origin"])?.eq_ignore_ascii_case(&name),
+        "Fetch and push destinations differ"
     );
-
-    if dry_run && command.skip_when_dry_run {
-        tracing::info!(
-            target: "script_kit::sync",
-            label = %command.label,
-            command = %command_text,
-            "sync.github.command_skipped_dry_run"
-        );
-        return Ok(SyncStepReport {
-            label: command.label.clone(),
-            command: command_text,
-            stdout: String::new(),
-            stderr: String::new(),
-            skipped: true,
-        });
-    }
-
-    let output = run_command_with_timeout(workspace, command, &command_text)?;
-    if !output.status_success {
-        bail!(
-            "Command failed: {}\nstdout:\n{}\nstderr:\n{}",
-            command_text,
-            output.stdout,
-            output.stderr
-        );
-    }
-
-    Ok(SyncStepReport {
-        label: command.label.clone(),
-        command: command_text,
-        stdout: output.stdout,
-        stderr: output.stderr,
-        skipped: false,
-    })
+    Ok(Some(name))
 }
 
-struct TimedCommandOutput {
-    status_success: bool,
-    stdout: String,
-    stderr: String,
+type Reply = (u16, Value);
+fn accepted(r: Reply) -> Result<Value> {
+    ensure!(
+        (200..300).contains(&r.0),
+        "GitHub refused the backup operation (HTTP {})",
+        r.0
+    );
+    Ok(r.1)
 }
-
-fn run_command_with_timeout(
-    workspace: &Path,
-    command: &ShellCommand,
-    command_text: &str,
-) -> Result<TimedCommandOutput> {
-    let mut child = Command::new(&command.program)
-        .args(&command.args)
-        .current_dir(workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("Failed to spawn command: {command_text}"))?;
-
-    let started = Instant::now();
-    loop {
-        if child
-            .try_wait()
-            .with_context(|| format!("Failed to poll command: {command_text}"))?
-            .is_some()
-        {
-            let output = child
-                .wait_with_output()
-                .with_context(|| format!("Failed to collect command output: {command_text}"))?;
-            return Ok(TimedCommandOutput {
-                status_success: output.status.success(),
-                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            });
-        }
-
-        if started.elapsed() >= command.timeout {
-            let _ = child.kill();
-            let output = child
-                .wait_with_output()
-                .with_context(|| format!("Failed to collect timed-out command: {command_text}"))?;
-            bail!(
-                "Command timed out after {} ms: {}\nstdout:\n{}\nstderr:\n{}",
-                command.timeout.as_millis(),
-                command_text,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        std::thread::sleep(Duration::from_millis(50));
-    }
+fn sha(v: &Value) -> Result<&str> {
+    v.as_str()
+        .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+        .context("GitHub returned an invalid object identity")
 }
-
-fn quote_for_log(value: &str) -> String {
-    if value
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '_' | '-' | '='))
-    {
-        value.to_string()
+fn verify_private(repo: &Value, name: &str, id: Option<u64>) -> Result<u64> {
+    ensure!(
+        repo["private"] == true
+            && repo["visibility"] == "private"
+            && repo["full_name"]
+                .as_str()
+                .is_some_and(|n| n.eq_ignore_ascii_case(name))
+            && repo["permissions"]["push"] == true,
+        "Sync requires a verified private GitHub repository you can write"
+    );
+    repo["id"]
+        .as_u64()
+        .filter(|v| *v > 0 && id.is_none_or(|old| old == *v))
+        .context("GitHub repository identity changed")
+}
+/// Upload a new root tree, not a user's local git ancestry. Verify privacy before any
+/// content leaves the machine; update only our branch, by non-forced fast-forward.
+fn publish(
+    files: &[(String, String)],
+    origin: Option<&str>,
+    mut api: impl FnMut(&str, &str, Option<Value>) -> Result<Reply>,
+) -> Result<()> {
+    let name = if let Some(o) = origin {
+        o.to_owned()
     } else {
-        quote_for_shell(value)
+        let user = accepted(api("GET", "user", None)?)?;
+        let login = user["login"]
+            .as_str()
+            .filter(|s| valid_component(s))
+            .context("No GitHub user")?;
+        format!("{login}/scriptkit-sync")
+    };
+    let base = format!("repos/{name}");
+    let mut repo = api("GET", &base, None)?;
+    if origin.is_none() && repo.0 == 404 {
+        accepted(api(
+            "POST",
+            "user/repos",
+            Some(json!({"name":"scriptkit-sync","private":true,"auto_init":true})),
+        )?)?;
+        repo = api("GET", &base, None)?;
     }
+    let id = verify_private(&accepted(repo)?, &name, None)?;
+    let git_base = format!("repositories/{id}/git");
+    let head = format!("{git_base}/ref/heads/{BRANCH}");
+    let prior = match api("GET", &head, None)? {
+        (404, _) => None,
+        r => Some(sha(&accepted(r)?["object"]["sha"])?.to_owned()),
+    };
+    if let Some(prior) = &prior {
+        let marker = accepted(api(
+            "GET",
+            &format!("{base}/contents/{OWNER_MARKER}?ref={prior}"),
+            None,
+        )?)?;
+        use base64::Engine;
+        ensure!(
+            marker["type"] == "file"
+                && marker["encoding"] == "base64"
+                && marker["content"]
+                    .as_str()
+                    .and_then(|s| base64::engine::general_purpose::STANDARD
+                        .decode(s.replace('\n', ""))
+                        .ok())
+                    .as_deref()
+                    == Some(MARK.as_bytes()),
+            "Refusing to replace a branch not owned by Script Kit backup"
+        );
+    }
+    let mut tree: Vec<_> = files
+        .iter()
+        .map(|(p, s)| json!({"path":p,"mode":"100644","type":"blob","content":s}))
+        .collect();
+    tree.push(json!({"path":OWNER_MARKER,"mode":"100644","type":"blob","content":MARK}));
+    verify_private(&accepted(api("GET", &base, None)?)?, &name, Some(id))?;
+    let native_tree = accepted(api(
+        "POST",
+        &format!("{git_base}/trees"),
+        Some(json!({"tree":tree})),
+    )?)?;
+    let tree_id = sha(&native_tree["sha"])?;
+    if let Some(p) = &prior {
+        let current = accepted(api("GET", &format!("{git_base}/commits/{p}"), None)?)?;
+        if sha(&current["tree"]["sha"])? == tree_id {
+            ensure!(
+                accepted(api("GET", &head, None)?)?["object"]["sha"] == p.as_str(),
+                "Backup branch changed; retry"
+            );
+            return Ok(());
+        }
+    }
+    let commit = accepted(api(
+        "POST",
+        &format!("{git_base}/commits"),
+        Some(
+            json!({"message":"Back up personal Script Kit files","tree":tree_id,"parents":prior.iter().collect::<Vec<_>>()}),
+        ),
+    )?)?;
+    let new = sha(&commit["sha"])?;
+    verify_private(&accepted(api("GET", &base, None)?)?, &name, Some(id))?;
+    if prior.is_some() {
+        accepted(api(
+            "PATCH",
+            &format!("{git_base}/refs/heads/{BRANCH}"),
+            Some(json!({"sha":new,"force":false})),
+        )?)?;
+    } else {
+        accepted(api(
+            "POST",
+            &format!("{git_base}/refs"),
+            Some(json!({"ref":format!("refs/heads/{BRANCH}"),"sha":new})),
+        )?)?;
+    }
+    ensure!(
+        accepted(api("GET", &head, None)?)?["object"]["sha"] == new,
+        "Backup tip could not be verified"
+    );
+    Ok(())
 }
 
-fn quote_for_shell(value: &str) -> String {
-    let escaped = value.replace('\'', "'\"'\"'");
-    format!("'{escaped}'")
+fn git(dir: &Path, args: &[&str]) -> Result<(bool, Vec<u8>)> {
+    let mut c = Command::new("git");
+    c.args([
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "core.fsmonitor=false",
+    ])
+    .args(args);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("GIT_") {
+            c.env_remove(name);
+        }
+    }
+    c.env("GIT_TERMINAL_PROMPT", "0");
+    command(c, dir, None)
 }
+fn request(dir: &Path, method: &str, path: &str, body: Option<Value>) -> Result<Reply> {
+    let mut c = Command::new("gh");
+    c.args([
+        "api",
+        "--hostname",
+        "github.com",
+        "--include",
+        "--method",
+        method,
+        path,
+    ])
+    .env("GH_PROMPT_DISABLED", "1")
+    .env_remove("GH_REPO")
+    .env_remove("GH_HOST");
+    if body.is_some() {
+        c.args(["--input", "-"]);
+    }
+    let b = body.map(|v| serde_json::to_vec(&v)).transpose()?;
+    let (ok, out) = command(c, dir, b.as_deref())?;
+    let raw = std::str::from_utf8(&out)?.replace("\r\n", "\n");
+    let (headers, body) = raw
+        .split_once("\n\n")
+        .context("GitHub CLI returned no HTTP response")?;
+    let code = headers
+        .lines()
+        .next()
+        .and_then(|l| l.split_whitespace().nth(1))
+        .and_then(|s| s.parse().ok())
+        .context("Invalid GitHub response")?;
+    ensure!(ok || !(200..300).contains(&code), "GitHub CLI failed");
+    Ok((code, serde_json::from_str(body)?))
+}
+fn command(mut c: Command, dir: &Path, body: Option<&[u8]>) -> Result<(bool, Vec<u8>)> {
+    let mut input = tempfile::tempfile()?;
+    if let Some(b) = body {
+        input.write_all(b)?;
+        input.rewind()?;
+    }
+    let mut output = tempfile::tempfile()?;
+    let mut child = c
+        .current_dir(dir)
+        .stdin(input)
+        .stdout(Stdio::from(output.try_clone()?))
+        .stderr(Stdio::null())
+        .spawn()
+        .context("Couldn't start git or GitHub CLI")?;
+    let start = Instant::now();
+    let status = loop {
+        if let Some(s) = child.try_wait()? {
+            break s;
+        }
+        if start.elapsed() > Duration::from_secs(60) || output.metadata()?.len() > 8 * 1024 * 1024 {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("Backup subprocess exceeded its limit");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    ensure!(
+        output.metadata()?.len() <= 8 * 1024 * 1024,
+        "Backup response too large"
+    );
+    output.seek(SeekFrom::Start(0))?;
+    let mut data = Vec::new();
+    output
+        .read_to_end(&mut data)
+        .map_err(|_| anyhow!("Couldn't read backup result"))?;
+    Ok((status.success(), data))
+}
+
+#[cfg(test)]
+mod tests;

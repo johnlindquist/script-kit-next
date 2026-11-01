@@ -3140,7 +3140,7 @@ impl ScriptListApp {
                         trace_id = %dctx_owned.trace_id,
                         workspace = %report.workspace.display(),
                         dry_run = report.dry_run,
-                        step_count = report.steps.len(),
+                        exported_file_count = report.files,
                         "{}",
                         action_for_task.completed_log_message()
                     );
