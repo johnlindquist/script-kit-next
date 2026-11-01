@@ -11,11 +11,21 @@
 // Kit panel is on) with Script Kit's own windows excluded.
 
 #[cfg(target_os = "macos")]
-mod screen_capture_kit_link {
-    // Force ScreenCaptureKit to be linked so the SC* classes resolve through
-    // the ObjC class registry at runtime.
-    #[link(name = "ScreenCaptureKit", kind = "framework")]
-    unsafe extern "C" {}
+fn load_optional_screen_capture_kit() -> bool {
+    static LOADED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *LOADED.get_or_init(|| {
+        // A strong LC_LOAD_DYLIB would prevent the *launcher* from starting on an OS
+        // without this optional framework. Load only the fixed system framework when
+        // its feature is used. The handle stays open for Objective-C classes/blocks.
+        // SAFETY: a static absolute NUL-terminated path; no user-controlled search path.
+        unsafe {
+            !libc::dlopen(
+                c"/System/Library/Frameworks/ScreenCaptureKit.framework/ScreenCaptureKit".as_ptr(),
+                libc::RTLD_LAZY | libc::RTLD_LOCAL,
+            )
+            .is_null()
+        }
+    })
 }
 
 /// Render a human-readable description for an NSError pointer.
@@ -106,6 +116,9 @@ pub fn capture_active_display_screenshot_sck(
         fn CGImageRelease(image: *mut c_void);
     }
 
+    if !load_optional_screen_capture_kit() {
+        return Err("Optional ScreenCaptureKit framework unavailable".into());
+    }
     let (Some(content_class), Some(screenshot_manager_class)) = (
         Class::get("SCShareableContent"),
         Class::get("SCScreenshotManager"),
@@ -148,8 +161,12 @@ pub fn capture_active_display_screenshot_sck(
         .recv_timeout(Duration::from_secs(8))
         .map_err(|_| "Timed out waiting for SCShareableContent".to_string())
         .and_then(|result| result)
-        .map_err(|error| format!("SCShareableContent failed: {error}{}", sck_permission_hint()))?
-        as *mut Object;
+        .map_err(|error| {
+            format!(
+                "SCShareableContent failed: {error}{}",
+                sck_permission_hint()
+            )
+        })? as *mut Object;
 
     // From here on, `content` holds a retain we must balance on every path.
     let capture_result = (|| -> Result<(Vec<u8>, u32, u32), String> {
