@@ -1,28 +1,8 @@
-//! Secrets storage using age encryption
-//!
-//! Provides secure secret storage using age (https://age-encryption.org) with
-//! scrypt passphrase-based encryption. Secrets are stored as encrypted JSON
-//! in ~/.scriptkit/secrets.age.
-//!
-//! The passphrase is derived from machine-specific identifiers (hostname + app ID)
-//! for transparent encryption without requiring user interaction.
-//!
-//! ## Performance
-//!
-//! Secrets are cached in memory after first load to avoid repeated scrypt
-//! decryption (~1.3s per call). The cache is invalidated on write operations.
-//!
-//! ## Security
-//!
-//! - At-rest: Secrets encrypted with age/scrypt in ~/.scriptkit/secrets.age
-//! - In-memory: Decrypted cache (standard practice for desktop apps)
-//! - Cache cleared on app exit (process memory reclaimed by OS)
-//!
-//! API matches the keyring functions in prompts/env.rs for easy migration:
-//! - `get_secret(key: &str) -> Option<String>`
-//! - `set_secret(key: &str, value: &str) -> Result<(), String>`
-//! - `delete_secret(key: &str) -> Result<(), String>`
-//! - `get_secret_info(key: &str) -> Option<SecretInfo>` - includes metadata
+//! The personal credential vault. New ciphertext uses a random age X25519 identity
+//! held by the macOS Keychain, outside the workspace. A readable legacy scrypt vault
+//! is re-encrypted on access. A missing/locked key is never treated as an empty vault.
+
+mod vault_key;
 
 use age::secrecy::SecretString;
 use chrono::{DateTime, Utc};
@@ -58,6 +38,7 @@ pub struct SecretInfo {
 pub enum SecretStoreErrorKind {
     PolicyRefused,
     PathUnavailable,
+    KeyUnavailable,
     ReadFailed,
     InvalidFormat,
     UnsupportedEncryption,
@@ -71,6 +52,7 @@ impl SecretStoreErrorKind {
         match self {
             SecretStoreErrorKind::PolicyRefused => "credentials_refused",
             SecretStoreErrorKind::PathUnavailable => "path_unavailable",
+            SecretStoreErrorKind::KeyUnavailable => "key_unavailable",
             SecretStoreErrorKind::ReadFailed => "read_failed",
             SecretStoreErrorKind::InvalidFormat => "invalid_format",
             SecretStoreErrorKind::UnsupportedEncryption => "unsupported_encryption",
@@ -105,6 +87,7 @@ impl SecretStoreError {
             SecretStoreErrorKind::PathUnavailable => {
                 "Secret storage location is unavailable. Check your home directory and try again."
             }
+            SecretStoreErrorKind::KeyUnavailable => "Unlock the macOS Keychain for this workspace and try again. Your saved vault has not been replaced.",
             SecretStoreErrorKind::ReadFailed => {
                 "Secret storage could not be read. Check file permissions and try again."
             }
@@ -146,6 +129,12 @@ fn get_cached_secrets() -> Result<HashMap<String, SecretEntry>, SecretStoreError
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials).map_err(
         |error| SecretStoreError::new(SecretStoreErrorKind::PolicyRefused, error.to_string()),
     )?;
+    if cfg!(test) || std::env::var("SCRIPT_KIT_NONINTERACTIVE").as_deref() == Ok("1") {
+        return Err(SecretStoreError::new(
+            SecretStoreErrorKind::PolicyRefused,
+            "System credentials are disabled in this process",
+        ));
+    }
     let mut guard = secrets_cache().lock().map_err(|e| {
         SecretStoreError::new(
             SecretStoreErrorKind::CacheUnavailable,
@@ -175,56 +164,20 @@ fn update_cache(secrets: HashMap<String, SecretEntry>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Warm up the secrets cache (call at app startup).
-/// Loads and decrypts secrets in the background so they're ready when needed.
-pub fn warmup_cache() {
-    if let Err(error) =
-        crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)
-    {
-        tracing::warn!(%error, "Secret warmup refused");
-        return;
-    }
-    std::thread::spawn(|| {
-        let start = std::time::Instant::now();
-        let secrets = match get_cached_secrets() {
-            Ok(secrets) => secrets,
-            Err(error) => {
-                tracing::error!(
-                    kind = error.kind_str(),
-                    "Failed to warm secrets cache: {}",
-                    error.message
-                );
-                HashMap::new()
-            }
-        };
-        let elapsed = start.elapsed();
-        logging::log(
-            "SECRETS",
-            &format!(
-                "Warmed up secrets cache: {} keys in {:.2}s",
-                secrets.len(),
-                elapsed.as_secs_f64()
-            ),
-        );
-    });
-}
-
-/// App identifier used in passphrase derivation
+/// Read-only compatibility with the original scrypt format; never used to encrypt a new file.
 const APP_IDENTIFIER: &str = "com.scriptkit.secrets";
 
 /// Get the path to the secrets file
 fn secrets_path() -> anyhow::Result<PathBuf> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)?;
-    let home =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-    Ok(home.join(".scriptkit").join("secrets.age"))
+    Ok(crate::setup::get_kit_path().join("secrets.age"))
 }
 
 /// Derive a machine-specific passphrase
 ///
 /// Combines the system hostname with the app identifier to create a passphrase
 /// that is unique to this machine but consistent across app restarts.
-fn derive_passphrase() -> SecretString {
+fn legacy_passphrase() -> SecretString {
     let hostname = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown-host".to_string());
@@ -233,33 +186,43 @@ fn derive_passphrase() -> SecretString {
     SecretString::from(format!("{}:{}", hostname, APP_IDENTIFIER))
 }
 
-fn load_secrets_from_path(
-    path: &std::path::Path,
-) -> Result<HashMap<String, SecretEntry>, SecretStoreError> {
-    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials).map_err(
-        |error| SecretStoreError::new(SecretStoreErrorKind::PolicyRefused, error.to_string()),
-    )?;
-    if !path.exists() {
-        return Ok(HashMap::new());
-    }
+type Entries = HashMap<String, SecretEntry>;
+type KeySource = fn(&std::path::Path, bool) -> Result<age::x25519::Identity, SecretStoreError>;
 
-    let encrypted_data = match fs::read(path) {
-        Ok(data) => data,
-        Err(e) => {
-            return Err(SecretStoreError::new(
-                SecretStoreErrorKind::ReadFailed,
-                format!("Failed to read secrets file: {e}"),
-            ));
-        }
+/// Read but do not follow links or silently reinterpret a corrupt/empty vault.
+fn read_vault(path: &std::path::Path, key: KeySource) -> Result<(Entries, bool), SecretStoreError> {
+    use std::fs::OpenOptions;
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)
+        .map_err(|e| SecretStoreError::new(SecretStoreErrorKind::PolicyRefused, e.to_string()))?;
+    let mut opts = OpenOptions::new();
+    opts.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let failure = || {
+        SecretStoreError::new(
+            SecretStoreErrorKind::ReadFailed,
+            "Couldn't read the private vault",
+        )
     };
-
-    if encrypted_data.is_empty() {
-        return Ok(HashMap::new());
+    let file = match opts.open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Entries::new(), false)),
+        Err(_) => return Err(failure()),
+    };
+    let meta = file.metadata().map_err(|_| failure())?;
+    if !meta.is_file() || meta.len() > 16 * 1024 * 1024 {
+        return Err(failure());
     }
-
-    let passphrase = derive_passphrase();
-    let identity = age::scrypt::Identity::new(passphrase);
-
+    let mut encrypted_data = vec![];
+    file.take(16 * 1024 * 1024 + 1)
+        .read_to_end(&mut encrypted_data)
+        .map_err(|_| failure())?;
+    if encrypted_data.len() > 16 * 1024 * 1024 {
+        return Err(failure());
+    }
     let decryptor = match age::Decryptor::new(&encrypted_data[..]) {
         Ok(d) => d,
         Err(e) => {
@@ -270,16 +233,14 @@ fn load_secrets_from_path(
         }
     };
 
-    // Verify it's a passphrase-encrypted file
-    if !decryptor.is_scrypt() {
-        return Err(SecretStoreError::new(
-            SecretStoreErrorKind::UnsupportedEncryption,
-            "Secrets file is not passphrase-encrypted",
-        ));
-    }
-
+    let legacy = decryptor.is_scrypt();
+    let identity: Box<dyn age::Identity> = if legacy {
+        Box::new(age::scrypt::Identity::new(legacy_passphrase()))
+    } else {
+        Box::new(key(path, false)?)
+    };
     let mut decrypted = vec![];
-    let mut reader = match decryptor.decrypt(iter::once(&identity as &dyn age::Identity)) {
+    let mut reader = match decryptor.decrypt(iter::once(identity.as_ref())) {
         Ok(r) => r,
         Err(e) => {
             return Err(SecretStoreError::new(
@@ -299,7 +260,7 @@ fn load_secrets_from_path(
     // Try to parse as new format first
     if let Ok(secrets) = serde_json::from_slice::<HashMap<String, SecretEntry>>(&decrypted) {
         logging::log("SECRETS", "Loaded secrets in new format with metadata");
-        return Ok(secrets);
+        return Ok((secrets, legacy));
     }
 
     // Fall back to old format and migrate
@@ -324,7 +285,7 @@ fn load_secrets_from_path(
                 )
             })
             .collect();
-        return Ok(migrated);
+        return Ok((migrated, legacy));
     }
 
     Err(SecretStoreError::new(
@@ -339,6 +300,12 @@ fn load_secrets_from_path(
 /// Handles migration from old format (HashMap<String, String>) to new format
 /// (HashMap<String, SecretEntry>) automatically.
 fn load_secrets_from_disk() -> Result<HashMap<String, SecretEntry>, SecretStoreError> {
+    if cfg!(test) || std::env::var("SCRIPT_KIT_NONINTERACTIVE").as_deref() == Ok("1") {
+        return Err(SecretStoreError::new(
+            SecretStoreErrorKind::PolicyRefused,
+            "System credentials are disabled in this process",
+        ));
+    }
     let path = secrets_path().map_err(|e| {
         SecretStoreError::new(
             SecretStoreErrorKind::PathUnavailable,
@@ -346,24 +313,61 @@ fn load_secrets_from_disk() -> Result<HashMap<String, SecretEntry>, SecretStoreE
         )
     })?;
 
-    let result = load_secrets_from_path(&path);
-    if let Err(error) = &result {
-        logging::log(
-            "SECRETS",
-            &format!(
-                "Failed to load secrets store kind={} error={}",
-                error.kind_str(),
-                error.message
-            ),
-        );
+    if matches!(fs::symlink_metadata(&path),Err(e) if e.kind()==std::io::ErrorKind::NotFound) {
+        return Ok(Entries::new());
     }
-    result
+    let _lock = lock_vault(&path)?;
+    open_and_upgrade(&path, vault_key::identity)
 }
 
-/// Encrypt and save the secrets store to the default path.
-fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
-    let path = secrets_path().map_err(|e| format!("Failed to resolve secrets path: {e}"))?;
-    save_secrets_to_path(secrets, &path)
+fn open_and_upgrade(path: &std::path::Path, key: KeySource) -> Result<Entries, SecretStoreError> {
+    let (entries, legacy) = read_vault(path, key)?;
+    if legacy {
+        let id = key(path, true)?;
+        save_secrets_to_path(&entries, path, &id)
+            .map_err(|e| SecretStoreError::new(SecretStoreErrorKind::ReadFailed, e))?;
+    }
+    Ok(entries)
+}
+fn lock_vault(path: &std::path::Path) -> Result<fs::File, SecretStoreError> {
+    let failed = || {
+        SecretStoreError::new(
+            SecretStoreErrorKind::CacheUnavailable,
+            "Vault is busy or inaccessible",
+        )
+    };
+    let parent = path.parent().ok_or_else(failed)?;
+    fs::create_dir_all(parent).map_err(|_| failed())?;
+    let mut opts = fs::OpenOptions::new();
+    opts.create(true).truncate(false).read(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let fd = opts
+        .open(parent.join(".secrets-lock"))
+        .map_err(|_| failed())?;
+    if !fd.metadata().is_ok_and(|m| m.is_file()) {
+        return Err(failed());
+    }
+    fd.try_lock().map_err(|_| failed())?;
+    Ok(fd)
+}
+fn mutate_vault(change: impl FnOnce(&mut Entries) -> bool) -> Result<(), String> {
+    if cfg!(test) || std::env::var("SCRIPT_KIT_NONINTERACTIVE").as_deref() == Ok("1") {
+        return Err("System credentials are disabled in this process".into());
+    }
+    let path = secrets_path().map_err(|e| e.to_string())?;
+    let _lock = lock_vault(&path).map_err(|e| e.message)?;
+    let (mut entries, legacy) = read_vault(&path, vault_key::identity).map_err(|e| e.message)?;
+    let changed = change(&mut entries);
+    if changed || legacy {
+        let id = vault_key::identity(&path, legacy || !path.exists()).map_err(|e| e.message)?;
+        save_secrets_to_path(&entries, &path, &id)?;
+    }
+    update_cache(entries).map_err(|e| e.to_string())
 }
 
 /// Encrypt and atomically persist the secrets store to `path`.
@@ -383,6 +387,7 @@ fn save_secrets(secrets: &HashMap<String, SecretEntry>) -> Result<(), String> {
 fn save_secrets_to_path(
     secrets: &HashMap<String, SecretEntry>,
     path: &std::path::Path,
+    identity: &age::x25519::Identity,
 ) -> Result<(), String> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Credentials)
         .map_err(|error| error.to_string())?;
@@ -395,10 +400,9 @@ fn save_secrets_to_path(
     let json =
         serde_json::to_vec(secrets).map_err(|e| format!("Failed to serialize secrets: {}", e))?;
 
-    let passphrase = derive_passphrase();
-
-    // Use with_user_passphrase for simple passphrase-based encryption
-    let encryptor = age::Encryptor::with_user_passphrase(passphrase);
+    let recipient = identity.to_public();
+    let encryptor = age::Encryptor::with_recipients(iter::once(&recipient as &dyn age::Recipient))
+        .map_err(|e| e.to_string())?;
 
     let mut encrypted = vec![];
     let mut writer = encryptor
@@ -552,22 +556,16 @@ pub fn get_secret_info_result(key: &str) -> Result<Option<SecretInfo>, SecretSto
 /// set_secret("OPENAI_API_KEY", "sk-...")?;
 /// ```
 pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
-    let mut secrets = get_cached_secrets()
-        .map_err(|e| format!("Failed to get cached secrets for set_secret: {}", e.message))?;
-    secrets.insert(
-        key.to_string(),
-        SecretEntry {
-            value: value.to_string(),
-            modified_at: Utc::now(),
-        },
-    );
-    save_secrets(&secrets)?;
-
-    // Update the in-memory cache
-    update_cache(secrets).map_err(|e| format!("Failed to update secrets cache: {e}"))?;
-
-    logging::log("SECRETS", &format!("Stored secret for key: {}", key));
-    Ok(())
+    mutate_vault(|entries| {
+        entries.insert(
+            key.to_owned(),
+            SecretEntry {
+                value: value.to_owned(),
+                modified_at: Utc::now(),
+            },
+        );
+        true
+    })
 }
 
 /// Delete a secret from the encrypted store
@@ -579,23 +577,7 @@ pub fn set_secret(key: &str, value: &str) -> Result<(), String> {
 /// delete_secret("OPENAI_API_KEY")?;
 /// ```
 pub fn delete_secret(key: &str) -> Result<(), String> {
-    let mut secrets = get_cached_secrets().map_err(|e| {
-        format!(
-            "Failed to get cached secrets for delete_secret: {}",
-            e.message
-        )
-    })?;
-
-    if secrets.remove(key).is_some() {
-        save_secrets(&secrets)?;
-        // Update the in-memory cache
-        update_cache(secrets).map_err(|e| format!("Failed to update secrets cache: {e}"))?;
-        logging::log("SECRETS", &format!("Deleted secret for key: {}", key));
-    } else {
-        logging::log("SECRETS", &format!("No secret to delete for key: {}", key));
-    }
-
-    Ok(())
+    mutate_vault(|entries| entries.remove(key).is_some())
 }
 
 #[cfg(test)]
@@ -603,9 +585,56 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    static TEST_ID: LazyLock<age::x25519::Identity> =
+        LazyLock::new(age::x25519::Identity::generate);
+    fn fixture_key(
+        _: &std::path::Path,
+        _: bool,
+    ) -> Result<age::x25519::Identity, SecretStoreError> {
+        Ok(TEST_ID.clone())
+    }
+    fn load_secrets_from_path(p: &std::path::Path) -> Result<Entries, SecretStoreError> {
+        read_vault(p, fixture_key).map(|(v, _)| v)
+    }
+
+    #[test]
+    fn legacy_upgrade_preserves_bytes_when_key_denied_and_rekeys_without_hostname() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("secrets.age");
+        let legacy = encrypted_test_payload(br#"{"fixture":"example"}"#);
+        fs::write(&path, &legacy).unwrap();
+        let denied = |_: &std::path::Path, _| {
+            Err(SecretStoreError::new(
+                SecretStoreErrorKind::KeyUnavailable,
+                "locked",
+            ))
+        };
+        assert_eq!(
+            open_and_upgrade(&path, denied).unwrap_err().kind,
+            SecretStoreErrorKind::KeyUnavailable
+        );
+        assert_eq!(fs::read(&path).unwrap(), legacy);
+        assert_eq!(
+            open_and_upgrade(&path, fixture_key).unwrap()["fixture"].value,
+            "example"
+        );
+        let upgraded = fs::read(&path).unwrap();
+        assert!(!age::Decryptor::new(upgraded.as_slice())
+            .unwrap()
+            .is_scrypt());
+        assert_eq!(
+            read_vault(&path, denied).unwrap_err().kind,
+            SecretStoreErrorKind::KeyUnavailable
+        );
+        assert_eq!(fs::read(&path).unwrap(), upgraded);
+        assert_eq!(
+            read_vault(&path, fixture_key).unwrap().0["fixture"].value,
+            "example"
+        );
+    }
     #[test]
     fn test_passphrase_derivation() {
-        let passphrase = derive_passphrase();
+        let passphrase = legacy_passphrase();
         // SecretString doesn't expose its content easily in tests,
         // but we can verify it was created successfully
         drop(passphrase);
@@ -615,11 +644,11 @@ mod tests {
     fn test_secrets_path() {
         let path = secrets_path().expect("secrets path should resolve in tests");
         assert!(path.ends_with("secrets.age"));
-        assert!(path.to_string_lossy().contains(".scriptkit"));
+        assert_eq!(path.parent(), Some(crate::setup::get_kit_path().as_path()));
     }
 
     fn encrypted_test_payload(bytes: &[u8]) -> Vec<u8> {
-        let passphrase = derive_passphrase();
+        let passphrase = legacy_passphrase();
         let encryptor = age::Encryptor::with_user_passphrase(passphrase);
         let mut encrypted = vec![];
         let mut writer = encryptor.wrap_output(&mut encrypted).unwrap();
@@ -692,7 +721,7 @@ mod tests {
 
         // Manually save secrets to temp path (copy save_secrets logic)
         let json = serde_json::to_vec(&test_secrets).unwrap();
-        let passphrase = derive_passphrase();
+        let passphrase = legacy_passphrase();
         let encryptor = age::Encryptor::with_user_passphrase(passphrase);
         let mut encrypted = vec![];
         let mut writer = encryptor.wrap_output(&mut encrypted).unwrap();
@@ -770,7 +799,7 @@ mod tests {
                 modified_at: Utc::now(),
             },
         );
-        save_secrets_to_path(&secrets, &path).expect("atomic save should succeed");
+        save_secrets_to_path(&secrets, &path, &TEST_ID).expect("atomic save should succeed");
 
         // (a) Permissions are re-tightened to 0o600 even though the destination
         // already existed at 0o644. Fails if the fix regresses to an in-place write.

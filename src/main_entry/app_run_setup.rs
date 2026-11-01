@@ -233,10 +233,8 @@ app.run(move |cx: &mut App| {
         })
         .detach();
 
-        // Warm up the secrets cache in background thread
-        // This pre-decrypts secrets.age so AI chat opens instantly instead of
-        // waiting ~7s for sequential keyring lookups
-        secrets::warmup_cache();
+        // Unlock/decrypt the credential vault only when a feature actually requests it.
+        // Basic launcher startup must not prompt for Keychain access.
 
         // Configure as accessory app FIRST, before any windows are created
         // This is equivalent to LSUIElement=true in Info.plist:

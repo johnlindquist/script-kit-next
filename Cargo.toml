@@ -166,9 +166,9 @@ libc = "0.2.178"
 raw-window-handle = "0.6"
 
 # Age encryption for secrets storage (alternative to keyring)
-# Uses scrypt passphrase-based encryption for portable secrets at ~/.scriptkit/secrets.age
+# New vaults use age X25519 and a private macOS Keychain identity.
 age = "0.11"
-hostname = "0.4"  # Get machine hostname for passphrase derivation
+hostname = "0.4"  # Read-only compatibility with legacy vaults.
 
 # Process monitoring for orphan detection and cleanup
 sysinfo = "0.37"
@@ -231,6 +231,7 @@ tree-sitter-typescript = "0.23.2"
 chrono-humanize = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3.7"
 # Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)
 core-graphics = "0.24"
 cocoa = "0.26"

@@ -7805,6 +7805,7 @@ dependencies = [
  "rust-embed",
  "rustfft",
  "script-kit-lucide-assets",
+ "security-framework",
  "semver",
  "serde",
  "serde_json",
