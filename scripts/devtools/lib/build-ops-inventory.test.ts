@@ -200,6 +200,28 @@ for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "b
   expect(moved).toBe(true);
 });
 
+test("a new sibling arriving after compiler deps replay EOF invalidates that observation", () => {
+  const root = fixture(), deps = join(root, compilerDeps), gone = join(deps, "gone");
+  fs.mkdirSync(gone, { recursive: true });
+  file(deps, "keep");
+  let calls = 0;
+  beforeStat(path => {
+    if (path !== gone) return;
+    if (++calls === 1) {
+      fs.renameSync(gone, join(root, "outside"));
+      fs.utimesSync(deps, 100, 100); // The replay takes its starting stamp after this.
+    } else if (calls === 2) {
+      // The replay reached EOF and is checking the vanished name. This new
+      // allocation wasn't enumerated, even though the original name stays gone.
+      file(deps, "arrived-after-eof");
+    }
+  });
+  observedVolume(2 * GiB);
+  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_observation_incomplete");
+  expect(calls).toBe(2);
+  expect(fs.existsSync(join(deps, "arrived-after-eof"))).toBe(true);
+});
+
 for (const kind of ["deps root", "nested directory", "dangling symlink", "second disappearance"] as const) test(`compiler directory replay refuses ${kind}`, () => {
   const root = fixture(), deps = join(root, compilerDeps);
   const target = kind === "deps root" ? deps : join(deps, kind === "nested directory" ? "sub/child" : "sub");

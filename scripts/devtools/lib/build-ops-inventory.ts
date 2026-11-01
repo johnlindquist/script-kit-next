@@ -92,8 +92,14 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           try { lstatSync(join(current, vanished!)); throw new Error(`inventory_unstable_directory: ${current}/${vanished}`); }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         }
-        try { sameDirectory(); }
-        catch (error) {
+        try {
+          const after = sameDirectory();
+          // Proving that the lost name is absent does not cover a different
+          // sibling inserted behind the iterator. A changed membership stamp
+          // during the one compiler-directory replay is still incomplete.
+          if (!entry && confirmAbsence && (after.mtimeMs !== stat.mtimeMs || after.ctimeMs !== stat.ctimeMs
+            || after.nlink !== stat.nlink || after.size !== stat.size)) throw new Error("inventory_unstable_compiler_deps");
+        } catch (error) {
           // Only a first, empty enumeration reached EOF without unresolved child work.
           if (compilerDirectory && !entry && !vanished && result.entries === entries + 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return false;
           throw error;
