@@ -569,10 +569,29 @@ jobs:
 
       - name: Staple notarization ticket
         run: |
-          xcrun stapler staple "target/release/bundle/osx/Script Kit.app"
-
-          # Verify stapling
-          xcrun stapler validate "target/release/bundle/osx/Script Kit.app"
+          set -euo pipefail
+          app="target/release/bundle/osx/Script Kit.app"
+          jq -se 'length == 1 and (.[0] | .status == "Accepted" and (.id | type == "string" and test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"; "i")))' \
+            "$RUNNER_TEMP/notarization-result.json" >/dev/null || { echo "Apple did not confirm an accepted submission ID" >&2; exit 1; }
+          for attempt in 1 2 3; do
+            if result=$(xcrun stapler staple "$app" 2>&1); then
+              xcrun stapler validate "$app"
+              exit 0
+            else
+              rc=$?
+            fi
+            # Error 68 also covers permanent ticket failures. Retry only Apple's
+            # ticket endpoint losing its transport, never a missing/invalid ticket.
+            if [[ $rc != 68 || $result != *'Error Domain=NSURLErrorDomain Code=-1005 '* || $result != *'https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup'* ]]; then
+              printf '%s\n' "$result" >&2
+              exit "$rc"
+            fi
+            # If the reply was lost after attachment, do not repeat the mutation.
+            if xcrun stapler validate "$app" >/dev/null 2>&1; then exit 0; fi
+            echo "Ticket lookup lost its connection (attempt $attempt of 3)" >&2
+            if [[ $attempt == 3 ]]; then exit "$rc"; fi
+            sleep "$((2 * attempt))"
+          done
 
       - name: Verify post-staple Gatekeeper acceptance
         run: spctl --assess --verbose=4 --type execute "target/release/bundle/osx/Script Kit.app"

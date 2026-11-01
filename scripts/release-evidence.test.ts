@@ -3239,6 +3239,55 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     )) as ReturnType<typeof workflow>;
   }
 
+  describe("notarization ticket delivery", () => {
+    const interrupted = "error is Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/records/lookup";
+    type Reply = readonly [number, string];
+    const ok: Reply = [0, "ok"], lost: Reply = [68, interrupted], missing: Reply = [65, "No ticket stapled"];
+
+    // Exercise the workflow shell without invoking Apple tools, contacting Apple or signing anything.
+    function drive(staple: Reply[], validate: Reply[], receipt = { id: NOTARIZATION_ID, status: "Accepted" }) {
+      const root = mkdtempSync(join(tmpdir(), "kit-ticket-"));
+      try {
+        const step = workflow("release").jobs["sign-notarize-macos"].steps?.find(s => s.name === "Staple notarization ticket")?.run;
+        if (!step) throw Error("missing staple step");
+        const clauses = Object.entries({ staple, validate }).flatMap(([op, replies]) => replies.map(([code, msg], i) =>
+          op + ":" + (i + 1) + ") printf '%s\\n' '" + msg + "' >&2; exit " + code + ";;"));
+        writeFileSync(join(root, "xcrun"), ["#!/bin/bash", "set -eu",
+          '[[ $# == 3 && $1 == stapler && $3 == "target/release/bundle/osx/Script Kit.app" ]] || exit 98',
+          'printf "%s\\n" "$2" >> calls', 'n=0; if [[ -f $2.count ]]; then read -r n < "$2.count"; fi',
+          'n=$((n+1)); echo "$n" > "$2.count"', 'case "$2:$n" in', ...clauses, "*) exit 99;;", "esac",
+        ].join("\n"), { mode: 0o700 });
+        writeFileSync(join(root, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+        symlinkSync(Bun.which("jq")!, join(root, "jq"));
+        writeFileSync(join(root, "calls"), "");
+        json(join(root, "notarization-result.json"), receipt);
+        const r = spawnSync("/bin/bash", ["-e", "-o", "pipefail", "-c", step], {
+          cwd: root, env: { PATH: root, RUNNER_TEMP: root }, encoding: "utf8", timeout: 3000,
+        });
+        if (r.error) throw r.error;
+        return [r.status, readFileSync(join(root, "calls"), "utf8").trim().split(/\s+/).filter(Boolean)];
+      } finally { rmSync(root, { force: true, recursive: true }); }
+    }
+
+    test("recovers one interrupted lookup and validates the same bundle; never restaples an already valid ticket", () => {
+      expect(drive([lost, ok], [missing, ok])).toEqual([0, ["staple", "validate", "staple", "validate"]]);
+      expect(drive([lost], [ok])).toEqual([0, ["staple", "validate"]]);
+    });
+    test("requires an explicitly accepted submission before touching the bundle", () => {
+      for (const receipt of [{ id: NOTARIZATION_ID, status: "Invalid" }, { id: "", status: "Accepted" }]) {
+        const [status, calls] = drive([ok], [ok], receipt);
+        expect(status).not.toBe(0); expect(calls).toEqual([]);
+      }
+    });
+    test("refuses a missing ticket, exhausted transport retries, and an invalid final staple", () => {
+      expect(drive([[68, "CloudKit: Record not found"]], [])).toEqual([68, ["staple"]]);
+      expect(drive([[68, interrupted.replace("api.apple-cloudkit.com", "elsewhere.invalid")]], [])).toEqual([68, ["staple"]]);
+      expect(drive([[69, interrupted]], [])).toEqual([69, ["staple"]]);
+      expect(drive([lost, lost, lost], [missing, missing, missing])).toEqual([68, ["staple", "validate", "staple", "validate", "staple", "validate"]]);
+      expect(drive([ok], [missing])).toEqual([65, ["staple", "validate"]]);
+    });
+  });
+
   test("every workflow refuses visible probes, screen takeover, live AI, and local app launch", () => {
     for (const name of ["ci", "release", "perf-gates"] as const) {
       const definition = workflow(name);
