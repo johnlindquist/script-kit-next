@@ -875,12 +875,9 @@ fn a_late_answer_for_identical_words_cannot_replace_the_finished_request() {
         wait(cx, 400);
         let before = jev_titles(&app, cx);
         app.update(cx, |app, cx| {
-            let mut late = app
-                .intent_launcher
-                .shown_top(words)
-                .expect("current plan")
-                .as_ref()
-                .clone();
+            let (shown_words, plan) = app.intent_launcher.shown_top().expect("current plan");
+            assert_eq!(shown_words, words, "use the plan for the current request");
+            let mut late = plan.as_ref().clone();
             late.reading.title = "Old response".into();
             let screen = app.intent_screen_key();
             app.one_window_jev_answered(0, words.into(), screen, Ok(late), cx);

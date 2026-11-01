@@ -59,6 +59,48 @@ fn proposal(s: &Service<Fake>) -> Uuid {
         .proposal_id
 }
 #[test]
+fn scoped_agent_proposes_applies_and_reads_the_same_receipt() {
+    // The owned service belongs to the library. A binary test links the production
+    // library, where that fixture must not exist. Drive the same MCP adapter here.
+    use super::owned as fixture;
+    use crate::mcp_protocol::desktop_fill::call_with;
+    const SCOPE: &str = "desktop:fill";
+    const PROPOSE: &str = "desktop/filename_propose";
+    const APPLY: &str = "desktop/filename_apply";
+    const STATUS: &str = "desktop/filename_status";
+    let invoke = |owner: &str, name: &str, args: Value| {
+        let envelope = smol::block_on(call_with(
+            fixture::api(),
+            name,
+            args,
+            Some(owner.into()),
+            &[SCOPE.into()],
+        ));
+        serde_json::from_str::<Value>(envelope["content"][0]["text"].as_str().unwrap()).unwrap()
+    };
+    let p = invoke(
+        "agent-a",
+        PROPOSE,
+        json!({"app":fixture::APP,"pid":fixture::PID,"nativeWindowId":fixture::WINDOW,"filename":"Agent outline"}),
+    );
+    assert_eq!(p["state"], "proposed");
+    let h = json!({"proposalId":p["proposal"]["proposalId"]});
+    assert_eq!(
+        invoke("agent-b", APPLY, h.clone())["error"]["code"],
+        "unknown_or_expired_proposal"
+    );
+    assert_eq!(
+        invoke("agent-a", STATUS, h.clone())["result"]["state"],
+        "proposed"
+    );
+    assert_eq!(
+        invoke("agent-a", APPLY, h.clone())["result"]["state"],
+        "verified"
+    );
+    assert_eq!(invoke("agent-a", STATUS, h)["result"]["state"], "verified");
+}
+
+#[test]
 fn fill_is_single_use_and_bound_to_caller() {
     let s = fixture();
     let id = proposal(&s);

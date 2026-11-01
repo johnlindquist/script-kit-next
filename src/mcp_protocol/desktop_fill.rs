@@ -34,7 +34,7 @@ pub(super) async fn call(
 ) -> Value {
     call_with(agent_api(), name, args, principal, scopes).await
 }
-async fn call_with(
+pub(crate) async fn call_with(
     api: &'static dyn FilenameApi,
     name: &str,
     args: Value,
@@ -81,40 +81,6 @@ mod tests {
                 .to_string()
                 .contains("scope_denied")
         );
-    }
-    #[test]
-    fn scoped_agent_proposes_applies_and_reads_the_same_receipt() {
-        use crate::desktop_fill::owned as fixture;
-        let invoke = |owner: &str, name: &str, args: Value| {
-            let envelope = smol::block_on(call_with(
-                fixture::api(),
-                name,
-                args,
-                Some(owner.into()),
-                &[SCOPE.into()],
-            ));
-            serde_json::from_str::<Value>(envelope["content"][0]["text"].as_str().unwrap()).unwrap()
-        };
-        let p = invoke(
-            "agent-a",
-            PROPOSE,
-            json!({"app":fixture::APP,"pid":fixture::PID,"nativeWindowId":fixture::WINDOW,"filename":"Agent outline"}),
-        );
-        assert_eq!(p["state"], "proposed");
-        let h = json!({"proposalId":p["proposal"]["proposalId"]});
-        assert_eq!(
-            invoke("agent-b", APPLY, h.clone())["error"]["code"],
-            "unknown_or_expired_proposal"
-        );
-        assert_eq!(
-            invoke("agent-a", STATUS, h.clone())["result"]["state"],
-            "proposed"
-        );
-        assert_eq!(
-            invoke("agent-a", APPLY, h.clone())["result"]["state"],
-            "verified"
-        );
-        assert_eq!(invoke("agent-a", STATUS, h)["result"]["state"], "verified");
     }
     #[test]
     fn no_command_or_value_can_be_smuggled_into_apply() {

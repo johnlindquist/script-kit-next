@@ -20,7 +20,7 @@ mod access;
 pub(crate) mod bridge;
 #[cfg(test)]
 mod bridge_tests;
-mod desktop_fill;
+pub(crate) mod desktop_fill;
 use crate::mcp_clipboard_tools;
 use crate::mcp_computer_use_tools;
 use crate::mcp_config_tools;
