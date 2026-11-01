@@ -584,6 +584,7 @@ fn fixture_browser_tabs() -> Vec<crate::browser_tabs::BrowserTabInfo> {
             browser_name: "Fixture Browser".into(),
             browser_bundle_id: "dev.scriptkit.fixture-browser".into(),
             window_index: 1,
+            identity: None,
             tab_index: index + 1,
             title: title.into(),
             url: format!("https://example.invalid/{index}").into(),

@@ -5,10 +5,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use rayon::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
-const FIELD_SEPARATOR: char = '\u{1e}';
-const RECORD_SEPARATOR: char = '\u{1f}';
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(3);
 const ROOT_BROWSER_TABS_MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE: Duration = Duration::from_secs(15);
@@ -83,12 +82,21 @@ const SUPPORTED_BROWSERS: &[SupportedBrowser] = &[
     },
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct BrowserTabIdentity {
+    pub pid: i32,
+    pub window: Arc<str>,
+    pub tab: Option<Arc<str>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BrowserTabInfo {
     pub browser_name: Arc<str>,
     pub browser_bundle_id: Arc<str>,
     pub window_index: usize,
     pub tab_index: usize,
+    #[serde(default)]
+    pub identity: Option<BrowserTabIdentity>,
     pub title: Arc<str>,
     pub url: Arc<str>,
 }
@@ -106,6 +114,27 @@ impl BrowserTabInfo {
 }
 
 pub(crate) fn browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
+    if let Some(id) = &tab.identity {
+        // Reordering is not a new target. Navigation must not inherit the previous selection.
+        let mut hash = Sha256::new();
+        for part in [
+            id.window.as_bytes(),
+            id.tab.as_deref().unwrap_or("").as_bytes(),
+            tab.title.as_bytes(),
+            tab.url.as_bytes(),
+        ] {
+            hash.update((part.len() as u64).to_be_bytes());
+            hash.update(part);
+        }
+        return format!(
+            "{}{}/{}/{:x}",
+            sk_one_window::contract::OPEN_TAB_KEY_PREFIX,
+            tab.browser_bundle_id,
+            id.pid,
+            hash.finalize()
+        );
+    }
+    // Legacy snapshots remain searchable but carry no native focus authority.
     format!(
         "{}{}/{}/{}/{}",
         sk_one_window::contract::OPEN_TAB_KEY_PREFIX,
@@ -375,50 +404,25 @@ pub(crate) fn focus_named_tab(app: &str, query: &str) -> Result<()> {
 }
 
 pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
-    let browser = supported_browser_for(tab).ok_or_else(|| {
-        anyhow!(
-            "Unsupported browser '{}'",
-            if tab.browser_name.is_empty() {
-                tab.browser_bundle_id.as_ref()
-            } else {
-                tab.browser_name.as_ref()
-            }
-        )
-    })?;
-
-    let script = build_activate_tab_script(browser, tab.window_index, tab.tab_index);
-    let index_error = match crate::platform::run_osascript(&script, "browser_tabs_activate") {
-        Ok(_) => return Ok(()),
-        Err(error) => error,
-    };
-
-    // Activation requests come from cached snapshots, so the window/tab
-    // indexes are often stale by the time the user hits Enter (a closed or
-    // reordered window yields "Window N is no longer available"). Re-locate
-    // the tab by URL across all windows before reporting failure.
-    activate_tab_by_url(browser, &tab.url).with_context(|| {
-        format!(
-            "activate_browser_tab_failed: browser={} window_index={} tab_index={} index_error={index_error:#}",
-            browser.app_name, tab.window_index, tab.tab_index
-        )
-    })
-}
-
-fn activate_tab_by_url(browser: &SupportedBrowser, url: &str) -> Result<()> {
-    let url = url.trim();
-    if url.is_empty() {
-        bail!("tab has no URL to re-locate");
+    let browser = SUPPORTED_BROWSERS
+        .iter()
+        .find(|b| b.bundle_id == tab.browser_bundle_id.as_ref())
+        .context("Unsupported browser")?;
+    anyhow::ensure!(
+        tab.identity.is_some(),
+        "Tab identity is unavailable; refresh the list"
+    );
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
+    let script = snapshot_program(browser, Some(tab))?;
+    let result =
+        crate::platform::run_jxa_with_timeout(&script, "browser_tabs_focus_exact", BROWSER_TIMEOUT)
+            .map_err(|_| anyhow!("Could not verify the browser tab; check Automation access"))?;
+    match result.trim() {
+        "focused" => Ok(()),
+        "ambiguous" => bail!("Several identical tabs are open in the selected window"),
+        "not-running" => bail!("The selected browser is no longer running"),
+        _ => bail!("The selected tab changed; refresh the list"),
     }
-    let script = build_activate_tab_by_url_jxa(browser, url);
-    let output = crate::platform::run_jxa_with_timeout(
-        &script,
-        "browser_tabs_activate_by_url",
-        BROWSER_TIMEOUT,
-    )?;
-    if output.trim() == "ok" {
-        return Ok(());
-    }
-    bail!("no open tab with URL {url} in {}", browser.app_name)
 }
 
 pub fn fuzzy_search_browser_tabs(tabs: &[BrowserTabInfo], query: &str) -> Vec<BrowserTabMatch> {
@@ -1125,11 +1129,11 @@ fn browser_tab_provider_for_bundle_id(
 }
 
 fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInfo>> {
-    let script = build_list_tabs_jxa(browser);
+    let script = snapshot_program(browser, None)?;
     let output =
         crate::platform::run_jxa_with_timeout(&script, "browser_tabs_list", BROWSER_TIMEOUT)
             .with_context(|| format!("list_browser_tabs_failed: browser={}", browser.app_name))?;
-    parse_tab_rows(browser, &output)
+    serde_json::from_str(&output).context("Invalid browser tab snapshot")
 }
 
 /// One read-only AppKit snapshot per scan. A slow System Events process (or an
@@ -1164,260 +1168,25 @@ fn running_tab_browsers(
         .collect()
 }
 
-fn supported_browser_for(tab: &BrowserTabInfo) -> Option<&'static SupportedBrowser> {
-    SUPPORTED_BROWSERS.iter().find(|browser| {
-        browser.bundle_id == tab.browser_bundle_id.as_ref()
-            || browser.app_name == tab.browser_name.as_ref()
-    })
-}
-
 fn host_from_url(url: &str) -> &str {
     let after_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
     after_scheme.split('/').next().unwrap_or(after_scheme)
 }
 
-fn parse_tab_rows(browser: &SupportedBrowser, output: &str) -> Result<Vec<BrowserTabInfo>> {
-    let trimmed = output.trim();
-    if trimmed.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    trimmed
-        .split(RECORD_SEPARATOR)
-        .filter(|row| !row.is_empty())
-        .map(|row| {
-            let mut parts = row.split(FIELD_SEPARATOR);
-            let window_index = parts
-                .next()
-                .ok_or_else(|| anyhow!("Missing window index"))?
-                .parse::<usize>()
-                .context("Invalid window index")?;
-            let tab_index = parts
-                .next()
-                .ok_or_else(|| anyhow!("Missing tab index"))?
-                .parse::<usize>()
-                .context("Invalid tab index")?;
-            let title = parts
-                .next()
-                .ok_or_else(|| anyhow!("Missing title"))?
-                .trim()
-                .to_string();
-            let url = parts
-                .next()
-                .ok_or_else(|| anyhow!("Missing URL"))?
-                .trim()
-                .to_string();
-
-            Ok(BrowserTabInfo {
-                browser_name: browser.app_name.into(),
-                browser_bundle_id: browser.bundle_id.into(),
-                window_index,
-                tab_index,
-                title: title.into(),
-                url: url.into(),
-            })
-        })
-        .collect()
-}
-
-#[cfg(test)]
-fn build_list_tabs_script(browser: &SupportedBrowser) -> String {
-    let title_property = match browser.family {
-        BrowserFamily::Safari => "name",
-        BrowserFamily::Chromium => "title",
-    };
-
-    format!(
-        r#"
-on replace_text(the_text, old_text, new_text)
-    set AppleScript's text item delimiters to old_text
-    set text_items to every text item of the_text
-    set AppleScript's text item delimiters to new_text
-    set the_text to text_items as text
-    set AppleScript's text item delimiters to ""
-    return the_text
-end replace_text
-
-on sanitize_text(value_text)
-    if value_text is missing value then return ""
-    set safe_text to value_text as text
-    set safe_text to my replace_text(safe_text, return, " ")
-    set safe_text to my replace_text(safe_text, linefeed, " ")
-    set safe_text to my replace_text(safe_text, ascii character 30, " ")
-    set safe_text to my replace_text(safe_text, ascii character 31, " ")
-    return safe_text
-end sanitize_text
-
-tell application "System Events"
-    set is_running to exists application process "{app_name}"
-end tell
-if not is_running then return ""
-
-set tab_records to {{}}
-tell application "{app_name}"
-    set window_count to count of windows
-    repeat with w from 1 to window_count
-        set tab_count to count of tabs of window w
-        repeat with t from 1 to tab_count
-            set the_tab to tab t of window w
-            try
-                set tab_title to {title_property} of the_tab
-            on error
-                set tab_title to ""
-            end try
-            try
-                set tab_url to URL of the_tab
-            on error
-                set tab_url to ""
-            end try
-
-            set safe_title to my sanitize_text(tab_title)
-            set safe_url to my sanitize_text(tab_url)
-
-            if safe_title is not "" or safe_url is not "" then
-                set end of tab_records to (w as text) & (ascii character 30) & (t as text) & (ascii character 30) & safe_title & (ascii character 30) & safe_url
-            end if
-        end repeat
-    end repeat
-end tell
-
-set AppleScript's text item delimiters to ascii character 31
-set joined_tabs to tab_records as text
-set AppleScript's text item delimiters to ""
-return joined_tabs
-"#,
-        app_name = browser.app_name,
-        title_property = title_property,
-    )
-}
-
-fn build_list_tabs_jxa(browser: &SupportedBrowser) -> String {
-    let title_property = match browser.family {
-        BrowserFamily::Safari => "name",
-        BrowserFamily::Chromium => "title",
-    };
-
-    // JXA reliably enumerates all Chrome windows (including those on other
-    // macOS Spaces/desktops), whereas AppleScript's `count of windows` often
-    // returns only the windows on the current Space.
-    format!(
-        r#"
-var app = Application("{bundle_id}");
-if (!app.running()) {{ ""; }}
-else {{
-    var FS = "\u001e";
-    var RS = "\u001f";
-    var rows = [];
-    var wins = app.windows();
-    for (var w = 0; w < wins.length; w++) {{
-        var win = wins[w];
-        var titles = win.tabs.{title_property}();
-        var urls = win.tabs.url();
-        for (var t = 0; t < titles.length; t++) {{
-            var title = (titles[t] || "").replace(/[\r\n\u001e\u001f]/g, " ");
-            var url   = (urls[t]   || "").replace(/[\r\n\u001e\u001f]/g, " ");
-            if (title || url) {{
-                rows.push((w + 1) + FS + (t + 1) + FS + title + FS + url);
-            }}
-        }}
-    }}
-    rows.join(RS);
-}}
-"#,
-        bundle_id = browser.bundle_id,
-        title_property = title_property,
-    )
-}
-
-fn build_activate_tab_script(
-    browser: &SupportedBrowser,
-    window_index: usize,
-    tab_index: usize,
-) -> String {
-    let activate_body = match browser.family {
-        BrowserFamily::Safari => format!(
-            r#"
-    set tab_count to count of tabs of window {window_index}
-    if tab_count < {tab_index} then error "Tab {tab_index} is no longer available"
-    set current tab of window {window_index} to tab {tab_index} of window {window_index}
-    set index of window {window_index} to 1
-    activate
-"#,
-            window_index = window_index,
-            tab_index = tab_index,
-        ),
-        BrowserFamily::Chromium => format!(
-            r#"
-    set tab_count to count of tabs of window {window_index}
-    if tab_count < {tab_index} then error "Tab {tab_index} is no longer available"
-    set active tab index of window {window_index} to {tab_index}
-    set index of window {window_index} to 1
-    activate
-"#,
-            window_index = window_index,
-            tab_index = tab_index,
-        ),
-    };
-
-    format!(
-        r#"
-tell application "System Events"
-    set is_running to exists application process "{app_name}"
-end tell
-if not is_running then error "{app_name} is not running"
-
-tell application "{app_name}"
-    set window_count to count of windows
-    if window_count < {window_index} then error "Window {window_index} is no longer available"
-{activate_body}end tell
-"#,
-        app_name = browser.app_name,
-        window_index = window_index,
-        activate_body = activate_body,
-    )
-}
-
-/// Fallback activation that scans every window for an exact URL match.
-///
-/// Unlike `build_activate_tab_script`, this does not trust cached indexes, so
-/// it survives windows being closed or reordered between the snapshot and the
-/// user's Enter press. JXA is used for the same reason as `build_list_tabs_jxa`:
-/// it reliably enumerates windows on other Spaces.
-fn build_activate_tab_by_url_jxa(browser: &SupportedBrowser, url: &str) -> String {
-    // Serializing a &str is infallible; fall back to an empty JSON string so the
-    // generated JXA stays syntactically valid even in the impossible case.
-    let app_name_json =
-        serde_json::to_string(browser.app_name).unwrap_or_else(|_| "\"\"".to_string());
-    let target_json = serde_json::to_string(url).unwrap_or_else(|_| "\"\"".to_string());
-    let select_tab = match browser.family {
-        BrowserFamily::Safari => "win.currentTab = win.tabs[t];",
-        BrowserFamily::Chromium => "win.activeTabIndex = t + 1;",
-    };
-
-    format!(
-        r#"
-var app = Application({app_name_json});
-var found = false;
-if (app.running()) {{
-    var target = {target_json};
-    var wins = app.windows();
-    for (var w = 0; w < wins.length && !found; w++) {{
-        var win = wins[w];
-        var urls = win.tabs.url();
-        for (var t = 0; t < urls.length; t++) {{
-            if ((urls[t] || "") === target) {{
-                {select_tab}
-                win.index = 1;
-                app.activate();
-                found = true;
-                break;
-            }}
-        }}
-    }}
-}}
-found ? "ok" : "not-found";
-"#
-    )
+/// Bind a running process and its window before resolving the page. Neither cached positions
+/// nor an identical URL in another window are substitutes for the selected target.
+fn snapshot_program(browser: &SupportedBrowser, target: Option<&BrowserTabInfo>) -> Result<String> {
+    let bundle = serde_json::to_string(browser.bundle_id)?;
+    let name = serde_json::to_string(browser.app_name)?;
+    let target = serde_json::to_string(&target)?;
+    let safari = browser.family == BrowserFamily::Safari;
+    Ok(format!(
+        r#"ObjC.import('AppKit');
+const bundle = {bundle};
+const pid = () => {{ const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(bundle); return apps.count === 1 ? Number(apps.objectAtIndex(0).processIdentifier) : 0; }};
+{}(Application(bundle), bundle, {name}, {safari}, pid, {target})"#,
+        include_str!("browser_tabs/snapshot.js").trim_end()
+    ))
 }
 
 // Favicon logic moved to src/favicons.rs
@@ -1436,6 +1205,7 @@ mod tests {
     #[test]
     fn browser_tab_read_failure_is_not_partial_success_or_empty_success() {
         let tab = BrowserTabInfo {
+            identity: None,
             browser_name: "Safari".into(),
             browser_bundle_id: "com.apple.Safari".into(),
             window_index: 1,
@@ -1502,34 +1272,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_tab_rows_returns_empty_for_blank_output() {
-        let browser = &SUPPORTED_BROWSERS[0];
-        let rows = parse_tab_rows(browser, "   ").expect("parse rows");
-        assert!(rows.is_empty());
-    }
-
-    #[test]
-    fn parse_tab_rows_extracts_multiple_tabs() {
-        let browser = &SUPPORTED_BROWSERS[1];
-        let output = format!(
-            "1{field}1{field}Docs{field}https://docs.rs{record}2{field}3{field}Chat{field}https://chat.openai.com",
-            field = FIELD_SEPARATOR,
-            record = RECORD_SEPARATOR,
-        );
-
-        let rows = parse_tab_rows(browser, &output).expect("parse rows");
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].browser_name.as_ref(), "Google Chrome");
-        assert_eq!(rows[0].window_index, 1);
-        assert_eq!(rows[0].tab_index, 1);
-        assert_eq!(rows[0].title.as_ref(), "Docs");
-        assert_eq!(rows[1].url.as_ref(), "https://chat.openai.com");
-    }
-
-    #[test]
     fn fuzzy_search_browser_tabs_prefers_title_match() {
         let tabs = vec![
             BrowserTabInfo {
+                identity: None,
                 browser_name: "Safari".into(),
                 browser_bundle_id: "com.apple.Safari".into(),
                 window_index: 1,
@@ -1538,6 +1284,7 @@ mod tests {
                 url: "https://vercel.com/kb/guide".into(),
             },
             BrowserTabInfo {
+                identity: None,
                 browser_name: "Google Chrome".into(),
                 browser_bundle_id: "com.google.Chrome".into(),
                 window_index: 1,
@@ -1559,6 +1306,7 @@ mod tests {
     #[test]
     fn root_browser_tabs_compact_mode_rejects_sparse_natural_language_url_match() {
         let tabs = vec![BrowserTabInfo {
+            identity: None,
             browser_name: "Google Chrome".into(),
             browser_bundle_id: "com.google.Chrome".into(),
             window_index: 1,
@@ -1598,6 +1346,7 @@ mod tests {
     #[test]
     fn universal_search_finds_late_open_tabs_from_the_first_character() {
         let base = BrowserTabInfo {
+            identity: None,
             browser_name: "Google Chrome".into(),
             browser_bundle_id: "com.google.Chrome".into(),
             title: "Unrelated".into(),
@@ -1640,6 +1389,7 @@ mod tests {
     fn expired_root_browser_tab_snapshot_returns_stale_rows() {
         reset_root_browser_tabs_snapshot_for_test();
         let tab = BrowserTabInfo {
+            identity: None,
             browser_name: "Google Chrome".into(),
             browser_bundle_id: "com.google.Chrome".into(),
             window_index: 1,
@@ -1667,6 +1417,7 @@ mod tests {
     fn direct_browser_tabs_lookup_is_snapshot_only_and_keeps_permissive_matching() {
         reset_root_browser_tabs_snapshot_for_test();
         let previous_rows = Arc::new(vec![BrowserTabInfo {
+            identity: None,
             browser_name: "Google Chrome".into(),
             browser_bundle_id: "com.google.Chrome".into(),
             window_index: 1,
@@ -1825,6 +1576,7 @@ mod tests {
         assert!(root_browser_tabs_snapshot_status().refreshing);
 
         let tab = BrowserTabInfo {
+            identity: None,
             browser_name: "Google Chrome".into(),
             browser_bundle_id: "com.google.Chrome".into(),
             window_index: 1,
@@ -1891,61 +1643,22 @@ mod tests {
     }
 
     #[test]
-    fn build_list_tabs_script_uses_browser_specific_title_property() {
-        let safari_script = build_list_tabs_script(&SUPPORTED_BROWSERS[0]);
-        let chrome_script = build_list_tabs_script(&SUPPORTED_BROWSERS[1]);
-
-        assert!(safari_script.contains("set the_tab to tab t of window w"));
-        assert!(safari_script.contains("set tab_title to name of the_tab"));
-        assert!(chrome_script.contains("set tab_title to title of the_tab"));
-        assert!(chrome_script.contains("set tab_url to URL of the_tab"));
-    }
-
-    #[test]
-    fn build_list_tabs_jxa_uses_browser_specific_title_property() {
-        let safari_script = build_list_tabs_jxa(&SUPPORTED_BROWSERS[0]);
-        let chrome_script = build_list_tabs_jxa(&SUPPORTED_BROWSERS[1]);
-
-        assert!(safari_script.contains(r#"win.tabs.name()"#));
-        assert!(chrome_script.contains(r#"win.tabs.title()"#));
-        assert!(chrome_script.contains(r#"win.tabs.url()"#));
-        // Verify it targets the correct app
-        assert!(safari_script.contains(r#"Application("com.apple.Safari")"#));
-        assert!(chrome_script.contains(r#"Application("com.google.Chrome")"#));
-    }
-
-    #[test]
-    fn build_activate_tab_script_switches_browser_specific_tab_property() {
-        let safari_script = build_activate_tab_script(&SUPPORTED_BROWSERS[0], 2, 4);
-        let chrome_script = build_activate_tab_script(&SUPPORTED_BROWSERS[1], 2, 4);
-
-        assert!(safari_script.contains("set current tab of window 2 to tab 4 of window 2"));
-        assert!(chrome_script.contains("set active tab index of window 2 to 4"));
-        assert!(chrome_script.contains("set index of window 2 to 1"));
-    }
-
-    #[test]
-    fn build_activate_tab_by_url_jxa_switches_browser_specific_tab_property() {
-        let safari_script =
-            build_activate_tab_by_url_jxa(&SUPPORTED_BROWSERS[0], "https://chatgpt.com/");
-        let chrome_script =
-            build_activate_tab_by_url_jxa(&SUPPORTED_BROWSERS[1], "https://chatgpt.com/");
-
-        assert!(safari_script.contains("win.currentTab = win.tabs[t];"));
-        assert!(!safari_script.contains("activeTabIndex"));
-        assert!(chrome_script.contains("win.activeTabIndex = t + 1;"));
-        assert!(chrome_script.contains(r#"Application("Google Chrome")"#));
-        assert!(chrome_script.contains(r#"var target = "https://chatgpt.com/";"#));
-    }
-
-    #[test]
-    fn build_activate_tab_by_url_jxa_escapes_url_as_json_string() {
-        let script = build_activate_tab_by_url_jxa(
-            &SUPPORTED_BROWSERS[1],
-            "https://example.com/?q=\"quoted\"",
-        );
-
-        assert!(script.contains(r#"var target = "https://example.com/?q=\"quoted\"";"#));
+    fn tab_selection_follows_identity_across_reorder_but_not_navigation() {
+        let mut tab: BrowserTabInfo = serde_json::from_value(serde_json::json!({
+            "browser_name":"Safari", "browser_bundle_id":"com.apple.Safari", "window_index":1, "tab_index":1,
+            "title":"Docs", "url":"https://example.invalid/one", "identity":{"pid":42,"window":"9","tab":null}
+        })).unwrap();
+        let original = browser_tab_stable_key(&tab);
+        tab.window_index = 3;
+        tab.tab_index = 4;
+        assert_eq!(original, browser_tab_stable_key(&tab));
+        tab.url = "https://example.invalid/two".into();
+        assert_ne!(original, browser_tab_stable_key(&tab));
+        tab.identity = None;
+        assert!(activate_tab(&tab)
+            .unwrap_err()
+            .to_string()
+            .contains("identity"));
     }
 
     #[test]

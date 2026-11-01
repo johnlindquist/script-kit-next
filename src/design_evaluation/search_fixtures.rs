@@ -1196,6 +1196,7 @@ pub(crate) fn tab_result(
                 browser_name: "Google Chrome".into(),
                 browser_bundle_id: "com.google.Chrome".into(),
                 window_index: 1,
+                identity: None,
                 tab_index: run.row_key(index) + 1,
                 title: run.title("tab", index).into(),
                 url: format!("https://example.invalid/{}", run.row_key(index)).into(),

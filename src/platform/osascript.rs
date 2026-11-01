@@ -201,43 +201,46 @@ pub fn run_jxa_with_timeout(
     );
 
     OSASCRIPT_RUNTIME.block_on(async {
-        let child = tokio::process::Command::new("osascript")
-            .arg("-l")
-            .arg("JavaScript")
-            .arg("-e")
-            .arg(script)
+        // Browser automation carries selected URLs and titles. Neither the process list
+        // nor an AppleScript error diagnostic should publish the invocation or its values.
+        use tokio::io::AsyncWriteExt;
+        let mut child = tokio::process::Command::new("/usr/bin/osascript")
+            .args(["-l", "JavaScript", "-"])
+            .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
             .kill_on_drop(true)
             .spawn()
             .with_context(|| {
                 format!(
-                    "platform_run_jxa_failed: stage=spawn context={} attempt=osascript -l JavaScript -e",
+                    "platform_run_jxa_failed: stage=spawn context={} attempt=osascript-stdin",
                     context
                 )
             })?;
 
-        match tokio::time::timeout(timeout, child.wait_with_output()).await {
+        let run = async move {
+            let mut input = child
+                .stdin
+                .take()
+                .ok_or_else(|| std::io::Error::other("missing script pipe"))?;
+            input.write_all(script.as_bytes()).await?;
+            drop(input);
+            child.wait_with_output().await
+        };
+        match tokio::time::timeout(timeout, run).await {
             Ok(Ok(output)) => {
                 let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
 
                 if !output.status.success() {
                     tracing::error!(
                         context = context,
                         status = %output.status,
-                        stderr = %stderr,
                         "JXA exited with non-zero status"
                     );
                     anyhow::bail!(
-                        "platform_run_jxa_failed: stage=exit_status context={} status={} stderr={}",
+                        "platform_run_jxa_failed: stage=exit_status context={} status={}",
                         context,
-                        output.status,
-                        if stderr.is_empty() {
-                            "<empty>"
-                        } else {
-                            stderr.as_str()
-                        }
+                        output.status
                     );
                 }
                 Ok(stdout)
@@ -247,7 +250,11 @@ pub fn run_jxa_with_timeout(
                 context
             ))),
             Err(_) => {
-                tracing::warn!(context, timeout_ms = timeout.as_millis() as u64, "JXA timed out");
+                tracing::warn!(
+                    context,
+                    timeout_ms = timeout.as_millis() as u64,
+                    "JXA timed out"
+                );
                 anyhow::bail!(
                     "platform_run_jxa_failed: stage=timeout context={} timeout={:?}",
                     context,

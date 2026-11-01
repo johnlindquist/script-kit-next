@@ -456,6 +456,7 @@ mod advanced_query_tests {
                 browser_name: "Safari".into(),
                 browser_bundle_id: "com.apple.Safari".into(),
                 window_index: 1,
+                identity: None,
                 tab_index: 1,
                 title: title.into(),
                 url: "https://example.com/design".into(),
