@@ -17,6 +17,8 @@ import {
 } from "./lib/operator-safety.ts";
 import { AttachedDriver } from "./driver.ts";
 
+const repositoryRoot = join(import.meta.dir, "../..");
+
 const environment = {
   SCRIPT_KIT_NONINTERACTIVE: "1",
   SCRIPT_KIT_ALLOW_SCREEN_TAKEOVER: "0",
@@ -35,7 +37,7 @@ function check(command: Record<string, unknown>): void {
 
 function child(source: string, overrides: Record<string, string> = {}) {
   return Bun.spawnSync(["bun", "-e", source], {
-    cwd: new URL("../..", import.meta.url).pathname,
+    cwd: repositoryRoot,
     env: {
       ...process.env,
       ...environment,
@@ -732,7 +734,7 @@ describe("noninteractive DevTools operator safety", () => {
     const sessionRoot = join(temporaryRoot, "must-remain-absent");
     try {
       const result = Bun.spawnSync(["bash", "scripts/agentic/session.sh", ...args], {
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: repositoryRoot,
         env: {
           ...process.env,
           ...environment,
@@ -765,7 +767,7 @@ describe("noninteractive DevTools operator safety", () => {
         "status",
         "isolated-safety-probe",
       ], {
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: repositoryRoot,
         env: {
           ...process.env,
           ...environment,
@@ -796,7 +798,7 @@ describe("noninteractive DevTools operator safety", () => {
         "status",
         "isolated-safety-probe",
       ], {
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: repositoryRoot,
         env: {
           ...process.env,
           ...environment,
@@ -833,7 +835,7 @@ describe("noninteractive DevTools operator safety", () => {
     const sessionRoot = join(temporaryRoot, "must-remain-absent");
     try {
       const result = Bun.spawnSync(["bash", "scripts/agentic/session.sh", ...args], {
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: repositoryRoot,
         env: {
           ...process.env,
           ...environment,
@@ -1361,7 +1363,7 @@ describe("noninteractive DevTools operator safety", () => {
   test("Flow multiline proof refuses before reading the operator clipboard or creating output", () => {
     const root = mkdtempSync(join(tmpdir(), "script-kit-clipboard-proof-safety-"));
     const output = join(root, ".test-output", "ai-rock-solid-ux");
-    const probe = join(new URL("../..", import.meta.url).pathname, "scripts/agentic/flow-composer-multiline-probe.ts");
+    const probe = join(repositoryRoot, "scripts/agentic/flow-composer-multiline-probe.ts");
     try {
       const result = child(`
         import { existsSync } from "node:fs";
@@ -1469,7 +1471,7 @@ describe("noninteractive DevTools operator safety", () => {
     const root = mkdtempSync(join(tmpdir(), "script-kit-safe001-receipt-safety-"));
     const directory = join(root, ".artifacts", "consistency", "cons-flow-ux", "safe001-canonical-v2", "SAFE-001");
     const receipt = join(directory, "receipt.json");
-    const owner = join(new URL("../..", import.meta.url).pathname, "scripts/agentic/cons-flow-ux/context-preparation-probe.ts");
+    const owner = join(repositoryRoot, "scripts/agentic/cons-flow-ux/context-preparation-probe.ts");
     mkdirSync(directory, { recursive: true });
     writeFileSync(receipt, "preserve-exact-runtime-evidence");
     try {
@@ -1964,7 +1966,7 @@ describe("noninteractive DevTools operator safety", () => {
         `scripts/devtools/${tool}.ts`,
         ...args,
       ], {
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: repositoryRoot,
         env: {
           ...process.env,
           ...environment,
