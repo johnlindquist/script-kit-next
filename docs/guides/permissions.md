@@ -1,18 +1,20 @@
 # Permissions
 
-Several Script Kit features need a macOS privacy permission. You give it once in **System Settings → Privacy & Security**. This page lists which features need which permission, what happens while a permission is missing, and how to fix a grant that doesn't take.
+Local search, scripts, forms and notes work without blanket privacy grants. If the setup list opens, press Esc to return to Kit. Enable access when you want a feature that needs it, under **System Settings → Privacy & Security**.
 
 ## Which feature needs what
 
 | Feature | Needs | While it's missing |
 | --- | --- | --- |
 | Snippets (keyword expansion) | Accessibility | Snippets don't expand. Script Kit starts them on its own once Accessibility is on; no restart is needed. |
-| Pasting into other apps (dictation, AI results, history) | Accessibility | Text is copied to the clipboard instead, and Script Kit tells you so. |
+| Pasting an AI result or history item | Accessibility or Post Events | Kit offers the text on the clipboard instead of claiming it was pasted. |
+| Dictating into the original field of another app | Microphone and Accessibility | Kit cannot verify an external field without Accessibility. Dictating in Kit is still available with microphone access. |
 | Selected text, window commands | Accessibility | These commands are off. |
 | Dictation | Microphone | macOS asks the first time you dictate. If you said no, dictation can't hear you. |
-| Screenshots, screen context for AI | Screen Recording | macOS asks the first time you use them. |
+| Screenshots, optional screen spelling and screen context | Screen Recording | Ordinary dictation does not need this. macOS may ask at first use; if it does not, check Settings. |
+| Browser tab activation | Automation for the particular browser | Approval for Safari is not approval for Chrome. If denied, the tab cannot be verified or activated. |
 
-Accessibility is the only permission Script Kit needs for most of what it does. It is the one the first-run setup asks for. **Input Monitoring** and **Post Events** appear in the list too, but Accessibility already covers them.
+Accessibility unlocks cross-app actions, not basic launcher use. It is the permission highlighted by first-run setup. **Input Monitoring** and **Post Events** appear in the list too, but Accessibility already covers them.
 
 ## Set Up Permissions
 
@@ -28,7 +30,7 @@ Search **Set Up Permissions** in the launcher. Each row shows whether a permissi
 
 ## When a grant doesn't take
 
-Sometimes System Settings shows Script Kit switched on, but the feature still says the permission is missing. This happens when the entry belongs to an older copy of the app (after an update, a rebuild, or moving the app), and Screen Recording always needs a restart. If Script Kit asked for a permission and it is still off a little later, its row in **Set Up Permissions** says so and offers the two fixes:
+Sometimes System Settings shows Script Kit switched on, but the feature still says the permission is missing. This happens when the entry belongs to an older copy of the app (after an update, a rebuild, or moving the app), or when a change has not yet taken effect in the running process. If Script Kit asked for a permission and it is still off a little later, its row in **Set Up Permissions** says so and offers the two fixes:
 
 1. **⌘R — Restart Script Kit.** This is enough for Screen Recording and often for Accessibility.
 2. **⌘⇧R — Reset the entry and ask again.** This removes Script Kit's entry for that permission (with macOS's own `tccutil` command). macOS then asks again and records the current copy of the app.
@@ -39,8 +41,8 @@ To fix it by hand instead, remove Script Kit from the list in System Settings wi
 
 Script Kit says when it can't do what you asked, and why:
 
-- **Dictation without Accessibility.** Your words are put on the clipboard, and a message says why. If the Script Kit window is hidden, the message is a system notification.
-- **An app ignores a paste.** Some apps, or a click outside a text field, never take the text. Dictation and AI results are left on the clipboard so you can press ⌘V. A snippet gives you your clipboard back, and a notification names the snippet.
+- **Cursor dictation without a verified field.** Kit does not paste into a different field. If recording completed and delivery was withheld, review the retained draft in Kit; do not expect a clipboard copy. If delivery is **unknown**, check the original field before inserting anything again.
+- **An app ignores an ordinary paste.** Some apps never take the text. Follow the specific copy or recovery notice; a receipt that the destination changed is not a verified paste.
 - **Snippets can't run.** If macOS stops Script Kit from watching typing (Accessibility turned off, or a stale entry), a notification says so. Script Kit keeps retrying and starts snippets again on its own when it can.
 - **At startup**, Script Kit reminds you only about permissions your own setup depends on. Accessibility is always worth a reminder. A missing microphone is mentioned only if you use a dictation hotkey. Screen Recording never triggers a startup reminder.
 
@@ -50,7 +52,7 @@ While a password field is focused, macOS hides typing from every app ("Secure In
 
 **Dictation Setup** also shows:
 
-- **Allow typing into other apps.** This row appears when Accessibility is off, so you know dictation will copy instead of type.
+- **Allow typing into other apps.** This row appears when Accessibility is off, because Kit cannot verify an external cursor without Accessibility.
 - **Test microphone.** It records three seconds and says whether sound comes through, is very quiet, or is silent. A muted or wrong input then shows up before you dictate.
 - **A closed-lid warning.** This appears when the built-in microphone is selected and the laptop lid is closed.
 
@@ -66,6 +68,7 @@ The build’s first-run and permission fixtures exercise seeded files and simula
 
 - `permissions[]` lists each permission with:
   - `status`: `granted`, `denied`, `notAsked` or `unknown`;
+  - `observation`: the OS evidence behind that status. A false Accessibility or CoreGraphics preflight means **not granted**, not proof that a person clicked Don’t Allow. Microphone can distinguish not determined from denied/restricted;
   - `requirement`;
   - `requestedAtUnixMs` and `changedAtUnixMs`;
   - `grantLooksStuck`;
@@ -77,5 +80,7 @@ The build’s first-run and permission fixtures exercise seeded files and simula
   - a `fix` (`grant` a permission, or `restartScriptKit`).
 - `textExpansion` is the live snippet watcher state: `waitingForAccessibility`, `running`, `secureInput` (with the owning app), or `failed` (with the reason).
 - `canRestart` and `bundleIdentifier` show whether the restart and reset fixes are available.
+
+Feature readiness here describes privacy prerequisites, not the presence of an input device, a loaded model, or successful delivery. A request timestamp is not an observation of a visible macOS dialog.
 
 The scripting SDK's `checkAccessibility()` and the built-in commands above use the same status.

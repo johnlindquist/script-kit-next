@@ -129,6 +129,18 @@ fn unknown(status: PermissionStatus) -> bool {
     status == PermissionStatus::Unknown
 }
 
+/// Either native grant can authorize posting a keystroke. An unreadable observation
+/// proves neither authorization nor denial. It must never authorize a real dispatch.
+pub(super) fn post_access(ax: PermissionStatus, post: PermissionStatus) -> Option<bool> {
+    if granted(ax) || granted(post) {
+        Some(true)
+    } else if unknown(ax) || unknown(post) {
+        None
+    } else {
+        Some(false)
+    }
+}
+
 fn entry(
     feature: Feature,
     readiness: Readiness,
@@ -159,7 +171,7 @@ pub fn readiness(
     let post = status_of(PermissionKind::EventSynthesizing);
     let mic = status_of(PermissionKind::Microphone);
     let screen = status_of(PermissionKind::ScreenRecording);
-    let can_paste = granted(ax) || granted(post) || (unknown(ax) && unknown(post));
+    let can_paste = post_access(ax, post);
     let ax_missing = !granted(ax) && !unknown(ax);
     let accessibility = [PermissionKind::Accessibility];
 
@@ -225,23 +237,25 @@ pub fn readiness(
             Some("macOS asks for the microphone the first time you dictate.".to_string()),
             grant(PermissionKind::Microphone),
         ),
-        _ if !can_paste => entry(
+        PermissionStatus::Unknown => entry(Feature::Dictation, Readiness::Unknown, &[], Some("Kit couldn't check microphone access.".into()), None),
+        PermissionStatus::Authorized if unknown(ax) => entry(Feature::Dictation, Readiness::Unknown, &[], Some("Kit couldn't verify access to an external cursor.".into()), None),
+        PermissionStatus::Authorized if !granted(ax) => entry(
             Feature::Dictation,
             Readiness::Degraded,
             &accessibility,
             Some(
-                "Dictation copies your words to the clipboard instead of typing them: Script Kit needs Accessibility to paste into other apps."
+                "Dictation works in Kit. To type into another app, Kit needs Accessibility to verify the original field. If delivery is withheld, review the text in Kit."
                     .to_string(),
             ),
             grant(PermissionKind::Accessibility),
         ),
-        _ => entry(Feature::Dictation, Readiness::Ready, &[], None, None),
+        PermissionStatus::Authorized => entry(Feature::Dictation, Readiness::Ready, &[], None, None),
     };
 
-    let paste = if can_paste {
-        entry(Feature::PasteIntoApps, Readiness::Ready, &[], None, None)
-    } else {
-        entry(
+    let paste = match can_paste {
+        Some(true) => entry(Feature::PasteIntoApps, Readiness::Ready, &[], None, None),
+        None => entry(Feature::PasteIntoApps, Readiness::Unknown, &[], Some("Kit couldn't verify permission to paste into other apps.".into()), None),
+        Some(false) => entry(
             Feature::PasteIntoApps,
             Readiness::Degraded,
             &accessibility,
@@ -250,7 +264,7 @@ pub fn readiness(
                     .to_string(),
             ),
             grant(PermissionKind::Accessibility),
-        )
+        ),
     };
 
     let needs_accessibility = |feature: Feature, message: &str| {
@@ -289,7 +303,7 @@ pub fn readiness(
             Readiness::AskOnUse,
             &[PermissionKind::ScreenRecording],
             Some(
-                "Screenshots and screen context need Screen Recording; macOS asks the first time you use them."
+                "Screenshots and screen context need Screen Recording. macOS may ask on first use; if not, enable it in Privacy & Security."
                     .to_string(),
             ),
             grant(PermissionKind::ScreenRecording),
@@ -420,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_accessibility_blocks_snippets_and_degrades_dictation_to_clipboard() {
+    fn missing_accessibility_blocks_external_cursor_delivery_without_promising_a_paste() {
         let list = readiness(
             &statuses(S::Denied, S::Denied, S::Authorized, S::Authorized),
             &running(),
@@ -434,7 +448,7 @@ mod tests {
             .message
             .as_deref()
             .unwrap_or("")
-            .contains("clipboard"));
+            .contains("verify the original field"));
         assert_eq!(
             find(&list, Feature::PasteIntoApps).readiness,
             Readiness::Degraded
@@ -446,12 +460,15 @@ mod tests {
     }
 
     #[test]
-    fn post_event_grant_alone_still_lets_dictation_paste() {
+    fn post_event_grant_allows_generic_paste_but_cannot_verify_an_external_cursor() {
         let list = readiness(
             &statuses(S::Denied, S::Authorized, S::Authorized, S::Authorized),
             &running(),
         );
-        assert_eq!(find(&list, Feature::Dictation).readiness, Readiness::Ready);
+        assert_eq!(
+            find(&list, Feature::Dictation).readiness,
+            Readiness::Degraded
+        );
         assert_eq!(
             find(&list, Feature::PasteIntoApps).readiness,
             Readiness::Ready
@@ -532,8 +549,12 @@ mod tests {
             &LiveFacts::default(),
         );
         assert_eq!(
+            find(&list, Feature::Dictation).readiness,
+            Readiness::Unknown
+        );
+        assert_eq!(
             find(&list, Feature::PasteIntoApps).readiness,
-            Readiness::Ready
+            Readiness::Unknown
         );
         assert_eq!(
             find(&list, Feature::SelectedText).readiness,
@@ -543,6 +564,25 @@ mod tests {
             find(&list, Feature::ScreenCapture).readiness,
             Readiness::Unknown
         );
+    }
+
+    #[test]
+    fn missing_facts_never_authorize_native_input_or_mark_the_mic_as_ready() {
+        for (ax, post, expected) in [
+            (S::Unknown, S::Unknown, None),
+            (S::Denied, S::Unknown, None),
+            (S::Unknown, S::Denied, None),
+            (S::Denied, S::Denied, Some(false)),
+            (S::Authorized, S::Unknown, Some(true)),
+            (S::Unknown, S::Authorized, Some(true)),
+        ] {
+            assert_eq!(post_access(ax, post), expected);
+            let rows = readiness(&statuses(ax, post, S::Unknown, S::Denied), &running());
+            assert_eq!(
+                find(&rows, Feature::Dictation).readiness,
+                Readiness::Unknown
+            );
+        }
     }
 
     #[test]

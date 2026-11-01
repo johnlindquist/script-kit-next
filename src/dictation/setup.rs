@@ -137,7 +137,7 @@ pub fn vocabulary_candidate(selection: &str) -> Option<String> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DictationSetupExtras {
     /// Script Kit can post ⌘V, so dictated words are typed in place.
-    pub paste_ready: bool,
+    pub external_cursor_access: Option<bool>,
     /// The selected microphone is the built-in one and the lid is closed.
     pub lid_closed_on_builtin_microphone: bool,
     /// The last microphone test in this session.
@@ -161,7 +161,7 @@ pub struct DictationSetupExtras {
 impl Default for DictationSetupExtras {
     fn default() -> Self {
         Self {
-            paste_ready: true,
+            external_cursor_access: None,
             lid_closed_on_builtin_microphone: false,
             microphone_check: None,
             microphone_check_running: false,
@@ -313,20 +313,25 @@ pub fn dictation_setup_extra_rows(
             .to_string(),
     });
 
-    rows.push(if extras.paste_ready {
-        DictationSetupRow {
-            name: "Typing into other apps: ready".to_string(),
+    rows.push(match extras.external_cursor_access {
+        Some(true) => DictationSetupRow {
+            name: "Typing into other apps: access granted".into(),
             value: "paste-ready",
-            description: "Dictated words go where you're working".to_string(),
-        }
-    } else {
-        DictationSetupRow {
-            name: "Allow typing into other apps".to_string(),
+            description: "Kit checks the original field and selection before delivering words"
+                .into(),
+        },
+        Some(false) => DictationSetupRow {
+            name: "Allow typing into other apps".into(),
             value: DICTATION_SETUP_GRANT_ACCESSIBILITY,
             description:
-                "Needs Accessibility. Without it, dictated words are copied to the clipboard instead"
-                    .to_string(),
-        }
+                "Accessibility lets Kit verify the original field. You can still dictate into Kit."
+                    .into(),
+        },
+        None => DictationSetupRow {
+            name: "External typing access not verified".into(),
+            value: "paste-status-unknown",
+            description: "Kit could not read the system's Accessibility status".into(),
+        },
     });
     rows
 }
@@ -482,11 +487,11 @@ mod tests {
     }
 
     #[test]
-    fn setup_offers_accessibility_when_dictation_would_only_copy() {
+    fn setup_distinguishes_external_field_access_from_an_unavailable_check() {
         let rows = dictation_setup_extra_rows(
             &ready_state(),
             &DictationSetupExtras {
-                paste_ready: false,
+                external_cursor_access: Some(false),
                 ..DictationSetupExtras::default()
             },
         );
@@ -494,9 +499,17 @@ mod tests {
             .iter()
             .find(|row| row.value == DICTATION_SETUP_GRANT_ACCESSIBILITY)
             .expect("missing Accessibility is offered in setup");
-        assert!(grant.description.contains("copied to the clipboard"));
-
-        let ready = dictation_setup_extra_rows(&ready_state(), &DictationSetupExtras::default());
+        assert!(grant.description.contains("verify the original field"));
+        let unknown = dictation_setup_extra_rows(&ready_state(), &DictationSetupExtras::default());
+        assert!(unknown.iter().any(|r| r.value == "paste-status-unknown"));
+        assert!(!unknown.iter().any(|r| r.value == "paste-ready"));
+        let ready = dictation_setup_extra_rows(
+            &ready_state(),
+            &DictationSetupExtras {
+                external_cursor_access: Some(true),
+                ..Default::default()
+            },
+        );
         assert!(ready.iter().any(|row| row.value == "paste-ready"));
         assert!(!ready
             .iter()

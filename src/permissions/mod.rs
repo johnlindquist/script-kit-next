@@ -121,17 +121,14 @@ pub fn accessibility_granted() -> bool {
 /// Can Script Kit post keystrokes (⌘V, Delete) to other apps?
 ///
 /// macOS allows it with Accessibility, or with the narrower "post events"
-/// grant. A status that can't be read here (a test or evaluation run that
-/// forbids native effects) counts as allowed, so the caller's own policy
-/// check decides instead.
+/// grant. Neither a missing observation nor an unavailable detector authorizes native input.
 pub fn can_post_keystrokes() -> bool {
     let accessibility = status(PermissionKind::Accessibility);
     if accessibility == PermissionStatus::Authorized {
         return true;
     }
     let post_events = status(PermissionKind::EventSynthesizing);
-    post_events == PermissionStatus::Authorized
-        || (accessibility == PermissionStatus::Unknown && post_events == PermissionStatus::Unknown)
+    features::post_access(accessibility, post_events) == Some(true)
 }
 
 /// The last recorded status, without reading the OS.
@@ -317,6 +314,20 @@ pub fn status_code(status: PermissionStatus) -> &'static str {
     }
 }
 
+/// What the OS established, not an inference about a user's choice. CG and AX expose
+/// boolean preflight results, while AVFoundation distinguishes not-determined vs denied.
+fn observation_code(kind: PermissionKind, status: PermissionStatus) -> &'static str {
+    match status {
+        PermissionStatus::Authorized => "authorizedBySystem",
+        PermissionStatus::Unknown => "unavailable",
+        PermissionStatus::NotDetermined => "notDeterminedBySystem",
+        PermissionStatus::Denied if kind == PermissionKind::Microphone => {
+            "deniedOrRestrictedBySystem"
+        }
+        PermissionStatus::Denied => "notGrantedByPreflight",
+    }
+}
+
 /// Wire name of a permission, used in agent state.
 pub fn kind_code(kind: PermissionKind) -> &'static str {
     match kind {
@@ -335,13 +346,16 @@ pub fn kind_code(kind: PermissionKind) -> &'static str {
 pub fn automation_state() -> serde_json::Value {
     let facts = live_facts();
     let mut statuses = Vec::new();
+    let mut observed = [PermissionStatus::Unknown; KIND_COUNT];
     for &kind in PermissionKind::all() {
         let live = status(kind);
+        observed[index(kind)] = live;
         let entry = registry().lock().entries[index(kind)];
         statuses.push(serde_json::json!({
             "permission": kind_code(kind),
             "name": kind.name(),
-            "status": status_code(live),
+            "status": status_code(live), // compatibility for existing clients
+            "observation": observation_code(kind, live),
             "requirement": kind.requirement(),
             "requestedAtUnixMs": entry.requested_at_unix_ms,
             "changedAtUnixMs": entry.changed_at_unix_ms,
@@ -349,13 +363,11 @@ pub fn automation_state() -> serde_json::Value {
             "settingsUrl": kind.settings_url(),
         }));
     }
-    let features = features::readiness(
-        &|kind| cached(kind).unwrap_or(PermissionStatus::Unknown),
-        &facts,
-    );
+    let features = features::readiness(&|kind| observed[index(kind)], &facts);
     serde_json::json!({
         "schemaVersion": 1,
         "source": "permissions.service",
+        "readinessScope": "privacyPermissions",
         "watcherIntervalMs": WATCH_INTERVAL.as_millis() as u64,
         "permissions": statuses,
         "features": features,
@@ -370,6 +382,21 @@ pub fn automation_state() -> serde_json::Value {
 mod tests {
     use super::*;
 
+    #[test]
+    fn false_preflight_is_not_evidence_that_a_person_declined_a_prompt() {
+        assert_eq!(
+            observation_code(PermissionKind::Accessibility, PermissionStatus::Denied),
+            "notGrantedByPreflight"
+        );
+        assert_eq!(
+            observation_code(PermissionKind::Microphone, PermissionStatus::NotDetermined),
+            "notDeterminedBySystem"
+        );
+        assert_eq!(
+            observation_code(PermissionKind::Microphone, PermissionStatus::Denied),
+            "deniedOrRestrictedBySystem"
+        );
+    }
     #[test]
     fn stuck_needs_a_request_and_time_and_a_status_that_is_still_off() {
         let now = Instant::now();
