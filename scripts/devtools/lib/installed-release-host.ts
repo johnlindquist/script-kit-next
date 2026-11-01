@@ -578,7 +578,13 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
       throw new SmokeFault("no_unlocked_aqua_console", "blocked");
     }
     receipt.aqua = true;
-    let marker: { path: string; value: string; workspace: string } | null = null;
+    let marker: {path:string; value:string; workspace:string; day:string; dayHash:string; configHash:string; initialGrants:string[]} | null = null;
+    const personalHash=async (relative:string) => {
+      check(relative==="config.ts" || /^brain\/days\/\d{4}-\d{2}-\d{2}\.md$/.test(relative),"unexpected_upgrade_file");
+      const path=join(KIT,relative), st=lstatSync(path);
+      check(st.isFile() && st.nlink===1 && st.size<=1024*1024 && realpathSync(path)===path,"unverified_upgrade_file");
+      return fileHash(path);
+    };
     for (const tag of plan.mode === "update" ? [previous!, plan.tag] : [plan.tag]) {
       const r: Json = { tag };
       receipt.verifiedInstalls.push(r);
@@ -587,12 +593,21 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
         const workspace = dirIdentity(KIT);
         check(lstatSync(KIT).uid === process.getuid!(), "wrong_workspace_owner");
         if (tag !== plan.tag) {
+          // Seed the prior version by exercising its actual SDK, form and Notes editor,
+          // not by fabricating their output files. Keep readbacks before the second app writes.
+          const prior = await journeys(kit);
+          check(prior?.status==="pass" && prior.evidence?.notes?.savedAndReopened === true && prior.evidence?.settings?.revisionMatchedDisk === true,"prior_installed_journeys_not_verified");
+          const day = "brain/days/"+prior.evidence.notes.date+".md", dayHash=await personalHash(day);
+          check(dayHash===prior.evidence.notes.sha256,"prior_app_note_readback_mismatch");
+          const configHash=await personalHash("config.ts");
+          const initialGrants=Object.entries(prior.checkpoints.start.permissions).filter(([,row])=>(row as Json).status==="granted").map(([name])=>name);
+          r.journeys=prior;
           const scripts = join(KIT, "plugins/main/scripts");
           dirIdentity(scripts);
           marker = {
             path: join(scripts, `installed-upgrade-${randomUUID()}.ts`),
             value: `// Synthetic user script preserved across upgrade: ${randomUUID()}\nexport {};\n`,
-            workspace,
+            workspace, day,dayHash,configHash,initialGrants,
           };
           writeFileSync(marker.path, marker.value, { flag: "wx", mode: 0o600 });
           r.priorReady = true;
@@ -604,8 +619,10 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
               readFileSync(marker.path, "utf8") === marker.value,
             "workspace_not_preserved",
           );
+          check(await personalHash(marker.day)===marker.dayHash && await personalHash("config.ts")===marker.configHash,"prior_editor_note_or_settings_changed");
           receipt.verifiedUpdate = true;
           r.sameWorkspaceAndMarker = true;
+          r.previousNoteAndSettingsBytesPreserved = true;
         }
         const result = await journeys(kit);
         check(
@@ -614,6 +631,12 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
           "invalid_redacted_journey_receipt",
         );
         r.journeys = result;
+        if(marker && plan.mode==="update" && result?.checkpoints?.start?.permissions){
+          const after=result.checkpoints.start.permissions;
+          r.priorGrants=marker.initialGrants;
+          r.preExistingGrantsStillReported=marker.initialGrants.filter(k=>after[k]?.status==="granted");
+          r.effectAfterHumanConsent="not_exercised";
+        }
         checkpoint();
         check(
           result?.status === "pass",

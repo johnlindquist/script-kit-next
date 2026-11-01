@@ -491,6 +491,7 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     await kit.send({ type: 'openNotes' });
     const reopened = await waitView('dayPage');
     requireProof(reopened.inputValue === note && reopened.dayPage?.dirty === false, 'reopened-note-mismatch');
+    evidence.notes = { date, sha256:digest(note), savedAndReopened:true };
     await checkpoint('notes');
     passed.push(stage);
 
