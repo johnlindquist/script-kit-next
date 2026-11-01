@@ -8,7 +8,6 @@
   "expectedHost": "MainWindow",
   "memberBindingIds": [
     "About::About@MainWindow",
-    "ConfirmPrompt::ConfirmPrompt@MainWindow",
     "Feedback::CreationFeedback@MainWindow",
     "Feedback::ScriptIssuesView@MainWindow"
   ],

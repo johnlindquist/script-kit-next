@@ -1438,8 +1438,9 @@ describe("verify-family mutations", () => {
     expect(exitCode).toBe(4);
   });
 
-  test("all nine plan families are known", () => {
-    expect(FAMILY_IDS.length).toBe(9);
+  test("the retired detached Notes/Chat host is not a canonical fixture family", () => {
+    expect(FAMILY_IDS.length).toBe(8);
+    expect([...FAMILY_IDS] as string[]).not.toContain("native-secondary-window");
   });
 });
 

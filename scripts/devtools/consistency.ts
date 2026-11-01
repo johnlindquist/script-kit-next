@@ -144,8 +144,7 @@ export const FAMILY_IDS = [
   "attachment-portal",
   "assistant-workspace",
   "feedback-surface",
-  "attached-popup-dialog",
-  "native-secondary-window",
+  "attached-popup-dialog", // static legacy descriptor; in-place actions belong to main-menu
 ] as const;
 
 /** Current generated GOV-005 lifecycle inventory; never force obsolete conflicts back into the exporter. */

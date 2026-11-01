@@ -7,18 +7,9 @@ import {
   runCoverageNegativeControls,
 } from "../../devtools/surfaces.ts";
 
+import { FAMILY_IDS } from "../../devtools/consistency.ts";
+
 const ROOT = ".artifacts/consistency";
-const FAMILY_IDS = [
-  "main-menu",
-  "filterable-launcher-list",
-  "script-prompt",
-  "utility-workspace",
-  "attachment-portal",
-  "assistant-workspace",
-  "feedback-surface",
-  "attached-popup-dialog",
-  "native-secondary-window",
-] as const;
 
 function writeJson(path: string, value: unknown) {
   mkdirSync(dirname(path), { recursive: true });
@@ -47,15 +38,10 @@ writeJson(join(ROOT, "PF-009", "coverage-bindings.json"), bindingsReceipt);
 
 const allBindings = [...pipeline.build.set.bindings, ...pipeline.build.set.aliases];
 const familyFixtures = FAMILY_IDS.map((familyId) => {
-  let members = allBindings.filter((entry) => entry.fixtureFamily === familyId);
-  if (familyId === "native-secondary-window") {
-    members = pipeline.build.set.aliases.filter((entry) =>
-      ["NotesWindow", "DictationWindow"].includes(entry.hostKind)
-    );
-  }
+  const members = allBindings.filter((entry) => entry.fixtureFamily === familyId);
   const first = members[0];
-  const host = first?.hostKind ?? (familyId === "native-secondary-window" ? "NotesWindow" : "MainWindow");
-  const appView = first?.appViewVariant ?? (familyId === "native-secondary-window" ? "NotesWindow" : "Unknown");
+  if (!first) throw new Error("No binding for " + familyId);
+  const {hostKind: host, appViewVariant: appView} = first;
   const fixture = {
     schemaVersion: 1,
     taskId: "PF-010",
@@ -81,7 +67,7 @@ const familyFixtures = FAMILY_IDS.map((familyId) => {
 });
 
 const fixtureNegatives = [
-  { id: "missing-family", rejected: familyFixtures.length === 9 },
+  { id: "missing-family", rejected: familyFixtures.length === FAMILY_IDS.length },
   { id: "wrong-appview", rejected: familyFixtures.every((f) => f.appView === f.expectedAppView) },
   { id: "wrong-host", rejected: familyFixtures.every((f) => f.host === f.expectedHost) },
   { id: "disabled-called-enabled", rejected: familyFixtures.every((f) => !f.states.disabled.actionAllowed) },
@@ -89,7 +75,7 @@ const fixtureNegatives = [
   { id: "dismiss-without-focus-return", rejected: familyFixtures.every((f) => f.states.dismiss.restoresOwnerFocus) },
   { id: "action-without-selection-identity", rejected: familyFixtures.every((f) => f.states.actionPolicy.selectionIdentityRequired) },
 ];
-const fixturePass = familyFixtures.length === 9 && fixtureNegatives.every((entry) => entry.rejected);
+const fixturePass = bindingPass && familyFixtures.length === FAMILY_IDS.length && fixtureNegatives.every((entry) => entry.rejected);
 writeJson(join(ROOT, "PF-010", "family-fixtures.json"), {
   schemaVersion: 2,
   primitiveId: "devtools.consistency.family-fixtures",
@@ -100,7 +86,7 @@ writeJson(join(ROOT, "PF-010", "family-fixtures.json"), {
   disposition: fixturePass ? "EVALUABLE_PASS" : "EVALUABLE_FAIL",
   pass: fixturePass,
   familyCount: familyFixtures.length,
-  expectedFamilyCount: 9,
+  expectedFamilyCount: FAMILY_IDS.length,
   fixtures: familyFixtures.map((fixture) => ({
     familyId: fixture.familyId,
     appView: fixture.appView,
@@ -118,7 +104,7 @@ writeJson(join(ROOT, "PF-010", "family-fixtures.json"), {
   interference: { monitored: false, disposition: null },
   cleanup: { closed: true, ownedPids: [], ownedSessions: [], survivors: [] },
   evidence: {
-    intended: { source: "surface-contract-registry", familyCount: 9 },
+    intended: { source: "surface-contract-registry", familyCount: FAMILY_IDS.length },
     model: { source: "typed-coverage-bindings", bindingFingerprint: pipeline.build.set.fingerprint },
   },
 });

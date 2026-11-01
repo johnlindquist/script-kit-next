@@ -26,6 +26,11 @@ import { isReferenceReceipt, readReceiptDocument, resolveReceiptDetails, OWNED_R
 
 export const RECEIPT_SCHEMA_VERSION = 2;
 export const RECEIPT_REGISTRY_VERSION = 1;
+// Reviewed against the exhaustive AppView/SurfaceKind matches. Chat/history, questions,
+// shortcut recording and dictation history moved in-window; they are not additional routes.
+export const REVIEWED_SURFACE_CENSUS = { contractKindCount: 34, contractMappingCount: 49 } as const;
+const REVIEWED_FIXTURE_FAMILIES = 8;
+const REVIEWED_ORIENTATION_ALIASES = 3;
 
 export const receiptDispositions = [
   "EVALUABLE_PASS",
@@ -818,12 +823,12 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
           errors.push("coverage bindings must bind to the canonical PF-009 catalog section");
         }
         if (
-          expected.contractKindCount !== 37 ||
-          expected.contractMappingCount !== 54 ||
-          actual.contractKindCount !== 37 ||
-          actual.contractMappingCount !== 54
+          expected.contractKindCount !== REVIEWED_SURFACE_CENSUS.contractKindCount ||
+          expected.contractMappingCount !== REVIEWED_SURFACE_CENSUS.contractMappingCount ||
+          actual.contractKindCount !== REVIEWED_SURFACE_CENSUS.contractKindCount ||
+          actual.contractMappingCount !== REVIEWED_SURFACE_CENSUS.contractMappingCount
         ) {
-          errors.push("coverage bindings require the exact 37-kind / 54-mapping census");
+          errors.push("coverage bindings require the exact 34-kind / 49-mapping census");
         }
         if (sourceParity.pass !== true) {
           errors.push("coverage bindings require exact source-contract parity");
@@ -834,8 +839,8 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
         if (profileRegistry.validationErrorCount !== 0) {
           errors.push("coverage bindings require valid repository-contained source owners");
         }
-        if (receipt.bindingSetUsable !== true || bindings.length !== 54) {
-          errors.push("coverage bindings require 54 usable canonical mappings");
+        if (receipt.bindingSetUsable !== true || bindings.length !== REVIEWED_SURFACE_CENSUS.contractMappingCount) {
+          errors.push("coverage bindings require 49 usable canonical mappings");
         }
         if (
           summary.freshDirectRuntimeProofCount !== 0 ||
@@ -853,7 +858,7 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
       },
     }],
     description:
-      "Validate the complete static 37-kind / 54-mapping surface binding inventory without claiming runtime proof.",
+      "Validate the complete static 34-kind / 49-mapping surface binding inventory without claiming runtime proof.",
   }),
   schema({
     primitiveId: "devtools.consistency.safe-task-proof",
@@ -1298,20 +1303,20 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
           errors.push("fixture contracts must bind to the canonical PF-010 catalog section");
         }
         if (
-          receipt.expectedFamilyCount !== 9 ||
-          receipt.auditedFamilyCount !== 9 ||
-          families.length !== 9 ||
+          receipt.expectedFamilyCount !== REVIEWED_FIXTURE_FAMILIES ||
+          receipt.auditedFamilyCount !== REVIEWED_FIXTURE_FAMILIES ||
+          families.length !== REVIEWED_FIXTURE_FAMILIES ||
           families.some((family) => asObject(family).pass !== true)
         ) {
-          errors.push("fixture contracts require all nine validated surface families");
+          errors.push("fixture contracts require all eight validated surface families");
         }
         if (
-          receipt.expectedCanonicalBindingCount !== 54 ||
-          receipt.auditedCanonicalBindingCount !== 54 ||
-          receipt.expectedAliasBindingCount !== 5 ||
-          receipt.auditedAliasBindingCount !== 5
+          receipt.expectedCanonicalBindingCount !== REVIEWED_SURFACE_CENSUS.contractMappingCount ||
+          receipt.auditedCanonicalBindingCount !== REVIEWED_SURFACE_CENSUS.contractMappingCount ||
+          receipt.expectedAliasBindingCount !== REVIEWED_ORIENTATION_ALIASES ||
+          receipt.auditedAliasBindingCount !== REVIEWED_ORIENTATION_ALIASES
         ) {
-          errors.push("fixture contracts require all 54 canonical and five alias bindings");
+          errors.push("fixture contracts require all 49 canonical and three alias bindings");
         }
         const safety = asObject(receipt.safety);
         for (const field of [
@@ -1337,7 +1342,7 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
       },
     }],
     description:
-      "Verify all nine deterministic family fixtures against canonical bindings without runtime interaction.",
+      "Verify all eight deterministic family fixtures against canonical bindings without runtime interaction.",
   }),
   // ── GOV-006 consistency completion auditor (metadata-only; identity none) ──
   schema({

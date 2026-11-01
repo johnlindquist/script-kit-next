@@ -2,20 +2,18 @@
   "schemaVersion": 1,
   "taskId": "PF-010",
   "familyId": "assistant-workspace",
-  "appView": "AgentChatView",
+  "appView": "DayPage",
   "host": "MainWindow",
-  "expectedAppView": "AgentChatView",
+  "expectedAppView": "DayPage",
   "expectedHost": "MainWindow",
   "memberBindingIds": [
-    "AgentChat::AgentChatView@MainWindow",
-    "AgentChatHistory::AgentChatHistoryView@MainWindow",
     "DayPage::DayPage@MainWindow"
   ],
   "memberReceiptPaths": [
     ".artifacts/consistency/PF-010/family-fixtures.json"
   ],
   "states": {
-    "defaultAppView": "AgentChatView",
+    "defaultAppView": "DayPage",
     "enabled": {
       "actionAllowed": true,
       "disabledReason": null

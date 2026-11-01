@@ -21,7 +21,7 @@ async function bindings() {
 }
 
 describe("deterministic consistency fixture-family contracts", () => {
-  test("all nine families cover exactly 54 canonical mappings and five non-counting aliases", async () => {
+  test("all eight families cover exactly 49 canonical mappings and three non-counting aliases", async () => {
     const candidate = await auditFamilyFixtureSet();
     const prepared = prepareValidatedReceipt(
       "devtools.consistency.family-fixtures",
@@ -32,9 +32,9 @@ describe("deterministic consistency fixture-family contracts", () => {
     expect(prepared.receipt.evidenceClass).toBe("FIXTURE_CONTRACT");
     expect(prepared.receipt.provesRuntimeBehavior).toBe(false);
     expect(prepared.receipt.verifiedRuntimeProofCount).toBe(0);
-    expect(prepared.receipt.auditedFamilyCount).toBe(9);
-    expect(prepared.receipt.auditedCanonicalBindingCount).toBe(54);
-    expect(prepared.receipt.auditedAliasBindingCount).toBe(5);
+    expect(prepared.receipt.auditedFamilyCount).toBe(8);
+    expect(prepared.receipt.auditedCanonicalBindingCount).toBe(49);
+    expect(prepared.receipt.auditedAliasBindingCount).toBe(3);
     expect((prepared.receipt.catalogBinding as Record<string, unknown>).taskId).toBe(
       "PF-010",
     );

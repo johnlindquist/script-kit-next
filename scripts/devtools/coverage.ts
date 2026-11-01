@@ -9,7 +9,7 @@
  *
  * Namespace discipline (RPT-001): runtime coverage profiles are NOT contract
  * kinds, contract mappings, unique AppView variants, or orientation aliases.
- * Profile counts must never be mixed into the 37/54 source census.
+ * Profile counts must never be mixed into the source census.
  *
  * Binding support (PF-009) is derived ONLY from the machine-readable fields
  * `availablePrimitiveIds` and `bindingSelectors` — never from the prose
@@ -466,37 +466,16 @@ export const coverageProfiles: CoverageProfile[] = [
   },
   {
     id: "actions-dialog",
-    name: "Actions dialog and attached action menus",
-    status: "partial",
-    domains: ["targets", "elements", "layout", "input", "screenshots", "accessibility"],
-    sourceFiles: ["src/one_window/view_staging.rs", "src/components/staged_actions.rs", "src/actions/command_bar.rs", "src/actions/types/action_model.rs"],
-    features: ["route stack", "sections", "filter input", "shortcut hints", "disabled reasons", "anchor placement", "resize"],
-    shortcuts: ["Cmd+K", "Escape", "Enter", "Backspace", "ArrowUp", "ArrowDown"],
-    supportedNow: [
-      "devtools.actions.inspect",
-      "devtools.actions.inspect --start --keep-open --open-target-kind notes",
-      "inspectAutomationWindow target kind actionsDialog",
-      "getState target kind actionsDialog",
-      "attached popup parent/anchor geometry",
-      "attached popup resize generation",
-      "runtime row and section bounds model",
-      "runtime hover row availability",
-      "target-scoped ActionsDialog first-click selection proof",
-      "target-scoped ActionsDialog second-click activation lifecycle proof",
-      "target-scoped ActionsDialog semantic freshness proof after first-click selection",
-      "target-scoped ActionsDialog close cleanup proof after activation",
-      "target-scoped ActionsDialog Cmd+K shortcut-open first-frame freshness proof",
-      "target-scoped ActionsDialog Cmd+K shortcut-close cleanup proof",
-      "target-scoped ActionsDialog Escape close cleanup proof",
-      "runtime shortcut layout bounds model",
-      "getElements(target)",
-      "getLayoutInfo(target actionsDialog) ActionsDialog/search/header/list/visible-row/shortcut bounds",
-      "target bounds",
-      "proof-session keep-open guard",
-    ],
-    missingRuntimePrimitives: ["disabled reason bounds for routes that render visible disabled explanations"],
-    regressionRecipeRole: "Smoke actions menu invariants only after direct target-scoped popup layout receipts isolate the bug.",
-    availablePrimitiveIds: [...mainWindowPrimitiveIds, "devtools.actions.inspect"],
+    name: "ActionsDialog (inactive legacy descriptor)",
+    status: "missing",
+    domains: ["targets"],
+    sourceFiles: ["src/main_sections/app_view_state.rs", "src/one_window/view_staging.rs"],
+    features: ["historical surface contract"],
+    shortcuts: [],
+    supportedNow: [],
+    missingRuntimePrimitives: ["There is no ActionsDialog window. Address staged actions through ScriptList instead."],
+    regressionRecipeRole: "Keep the retired route discoverable without treating it as supported runtime coverage.",
+    availablePrimitiveIds: [],
     bindingSelectors: [
       { relation: "Direct", priority: 95, contractKinds: ["ActionsDialog"], hostKinds: ["ActionsDialog"] },
     ],

@@ -13,7 +13,7 @@ async function passingInventory() {
 }
 
 describe("executable PF-009 surface coverage binding inventory", () => {
-  test("all 54 mappings produce a valid static receipt without runtime claims", async () => {
+  test("all 49 mappings produce a valid static receipt without runtime claims", async () => {
     const candidate = await passingInventory();
     const prepared = prepareValidatedReceipt(
       "devtools.coverage.bindings",
@@ -25,7 +25,7 @@ describe("executable PF-009 surface coverage binding inventory", () => {
     expect((prepared.receipt.catalogBinding as Record<string, unknown>).taskId).toBe(
       "PF-009",
     );
-    expect((prepared.receipt.bindings as unknown[]).length).toBe(54);
+    expect((prepared.receipt.bindings as unknown[]).length).toBe(49);
     const summary = prepared.receipt.summary as Record<string, unknown>;
     expect(summary.staticDirectBindingCount).toBeGreaterThan(0);
     expect(summary.freshDirectRuntimeProofCount).toBe(0);
@@ -60,7 +60,7 @@ describe("executable PF-009 surface coverage binding inventory", () => {
     expect(receipt.summary.freshDirectRuntimeProofCount).toBe(0);
   });
 
-  test("eight high-traffic surfaces use exact production owners instead of inherited host coverage", async () => {
+  test("high-traffic surfaces use exact production owners instead of inherited host coverage", async () => {
     const pipeline = await runBindingsPipeline();
     const expected = [
       ["ClipboardHistoryView", "clipboard-history"],
@@ -69,10 +69,13 @@ describe("executable PF-009 surface coverage binding inventory", () => {
       ["FileSearchView", "file-search"],
       ["DayPage", "day-page"],
       ["CurrentAppCommandsView", "current-app-commands"],
-      ["AgentChatHistoryView", "agent-chat-history"],
       ["WebcamView", "webcam"],
     ] as const;
 
+    // Past chats and ⌘K now open under ScriptList rather than a second window.
+    expect(pipeline.build.set.bindings.some(b => b.appViewVariant === "AgentChatHistoryView")).toBe(false);
+    expect(pipeline.build.set.aliases.find(b => b.alias === "actions-dialog")?.appViewVariant).toBe("ScriptList");
+    expect(pipeline.build.set.bindings.find(b => b.appViewVariant === "ActionsDialog")?.supported).toBe(false);
     for (const [variant, owner] of expected) {
       const matches = pipeline.build.set.bindings.filter(
         (binding) => binding.appViewVariant === variant,

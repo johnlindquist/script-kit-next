@@ -15,7 +15,7 @@
  *    visual/dismiss detail and must have exact kind+mapping parity with the
  *    Rust extraction.
  *
- * The expected census is 37 kinds / 54 mappings (FileSearchView contributes
+ * The expected census is 34 kinds / 49 mappings (FileSearchView contributes
  * two mappings). Any other census, a parity failure, or a missing real
  * feature map produces BLOCKED_SCOPE_DRIFT — never a trimmed or padded
  * binding list.
@@ -44,6 +44,7 @@ import {
 import {
   emitValidatedReceipt,
   receiptSchemaRegistry,
+  REVIEWED_SURFACE_CENSUS,
   validateReceiptFile,
   RECEIPT_SCHEMA_VERSION,
 } from "./lib/receipt-schema.ts";
@@ -219,10 +220,7 @@ export const paths = {
   surfacesModule: "scripts/devtools/surfaces.ts",
 };
 
-export const EXPECTED_CENSUS = {
-  contractKindCount: 37,
-  contractMappingCount: 54,
-} as const;
+export const EXPECTED_CENSUS = REVIEWED_SURFACE_CENSUS;
 
 /**
  * Explicit non-counting orientation aliases. An alias exists ONLY here —
@@ -231,7 +229,7 @@ export const EXPECTED_CENSUS = {
  */
 export const coverageSurfaceAliases = [
   { alias: "main", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
-  { alias: "actions-dialog", resolvesTo: { surfaceKind: "ActionsDialog" }, countsAsCoverage: false },
+  { alias: "actions-dialog", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
   { alias: "dictation-history", resolvesTo: { surfaceKind: "ScriptList" }, countsAsCoverage: false },
 ] as const;
 
@@ -765,10 +763,8 @@ export async function resolveFeatureMapGate(): Promise<FeatureMapGate> {
 // ---------------------------------------------------------------------------
 
 export function resolveContractHost(contractKind: string): string {
-  // Runtime registration truth: the live Cmd+K Actions route is an attached
-  // popup window; every other canonical AppView mapping renders in the Main
-  // launcher window. Native secondary windows never inflate the census —
-  // they are represented by explicit non-counting orientation aliases.
+  // Keep the typed but inactive legacy descriptor addressable in this static inventory.
+  // Actual ⌘K actions use ScriptList in the main window, not this historical popup.
   return contractKind === "ActionsDialog" ? "ActionsDialog" : "MainWindow";
 }
 
@@ -1463,7 +1459,7 @@ export function buildBindingsReceipt(
     blockReasons: pipeline.blockReasons,
     generatorNotes: build.errors,
     assertions: blocked ? [] : [
-      { id: "census-37-54", pass: pipeline.censusPass },
+      { id: "reviewed-surface-census", pass: pipeline.censusPass },
       { id: "source-parity", pass: parity.pass },
       { id: "binding-set-valid", pass: validation.pass },
       { id: "negative-controls-detected", pass: negativesPass },

@@ -7,9 +7,7 @@
   "expectedAppView": "ActionsDialog",
   "expectedHost": "ActionsDialog",
   "memberBindingIds": [
-    "ActionsDialog::ActionsDialog@ActionsDialog",
-    "alias:actions-dialog",
-    "alias:confirm-prompt-popup"
+    "ActionsDialog::ActionsDialog@ActionsDialog"
   ],
   "memberReceiptPaths": [
     ".artifacts/consistency/PF-010/family-fixtures.json"

@@ -9,6 +9,7 @@
   "memberBindingIds": [
     "ScriptList::ScriptList@MainWindow",
     "alias:main",
+    "alias:actions-dialog",
     "alias:dictation-history"
   ],
   "memberReceiptPaths": [

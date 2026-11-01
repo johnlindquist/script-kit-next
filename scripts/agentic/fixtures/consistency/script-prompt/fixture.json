@@ -16,7 +16,6 @@
     "PromptEntity::ChatPrompt@MainWindow",
     "PromptEntity::DivPrompt@MainWindow",
     "PromptEntity::FormPrompt@MainWindow",
-    "PromptEntity::HotkeyPrompt@MainWindow",
     "PromptEntity::MicroPrompt@MainWindow",
     "PromptEntity::MiniPrompt@MainWindow",
     "PromptEntityCancelsToScript::DropPrompt@MainWindow",
