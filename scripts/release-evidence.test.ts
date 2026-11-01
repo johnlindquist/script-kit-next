@@ -3307,7 +3307,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
 
   test("macOS proof job executes real platform fixtures without hidden skips", () => {
     const proof = workflow("release").jobs["validate-proof-contracts"];
-    expect(proof["runs-on"]).toBe("macos-14");
+    expect(proof["runs-on"]).toBe("macos-15");
     const steps = proof.steps ?? [];
     const installIndex = steps.findIndex((step) =>
       step.run === "bash scripts/install-root-rust-toolchain.sh");

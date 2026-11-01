@@ -52,7 +52,7 @@ env:
 jobs:
   root-frame-identity:
     name: Root Frame Identity
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
 
       - uses: Swatinem/rust-cache@v2
         with:

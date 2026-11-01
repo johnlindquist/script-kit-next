@@ -27,7 +27,7 @@ env:
   SCRIPT_KIT_REQUIRE_CLEAN_SOURCE: "1"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-version:
@@ -35,37 +35,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Verify tag matches Cargo.toml version
         run: bash scripts/verify-release-version.sh
 
   validate-fmt:
     name: Validate release format
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - name: Validate format
         run: bash scripts/verify.sh --skip-bundle --only fmt
 
   validate-check:
     name: Validate release check
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
@@ -77,18 +83,20 @@ jobs:
 
   validate-clippy:
     name: Validate release clippy
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
@@ -100,7 +108,7 @@ jobs:
 
   validate-tests:
     name: Execute release Rust behavior
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -108,6 +116,8 @@ jobs:
       RUST_TEST_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -119,7 +129,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - name: Execute application Rust tests
         env:
           SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/release-rust-evidence/rust-tests.json
@@ -164,18 +174,20 @@ jobs:
 
   validate-proof-contracts:
     name: Validate headless proof and consistency contracts
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: Swatinem/rust-cache@v2
         with:
@@ -223,13 +235,15 @@ jobs:
 
   validate-sdk-types:
     name: Validate release SDK types
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
       - name: Validate SDK types
@@ -237,13 +251,15 @@ jobs:
 
   validate-sdk-tests:
     name: Validate release SDK tests
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
       - name: Validate SDK tests
@@ -285,19 +301,21 @@ jobs:
 
   build-macos-app:
     name: Build unsigned macOS app
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
@@ -312,11 +330,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-bundle
-          key: cargo-bundle-zed-deploy-v2-${{ runner.os }}
+          key: cargo-bundle-2be2669972dff3ddd4daf89a2cb29d2d06cad7c7-${{ runner.os }}
 
       - name: Install cargo-bundle
         if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
-        run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy --locked
+        run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --rev 2be2669972dff3ddd4daf89a2cb29d2d06cad7c7 --locked
 
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
@@ -338,7 +356,7 @@ jobs:
 
   build-goose-sidecar:
     name: Build goose sidecar
-    runs-on: macos-14
+    runs-on: macos-15
     needs: validate-version
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -346,12 +364,14 @@ jobs:
       GOOSE_SIDECAR_REF: "302b60806639ea9f0ae8f053f49f8bf0e88b26f4"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
 
       - uses: mozilla-actions/sccache-action@v0.0.9
 
@@ -389,19 +409,21 @@ jobs:
 
   sign-notarize-macos:
     name: Sign and notarize macOS app
-    runs-on: macos-14
+    runs-on: macos-15
     needs:
       - validate-release-gates
       - build-macos-app
       - build-goose-sidecar
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Install root-pinned Rust toolchain
         run: bash scripts/install-root-rust-toolchain.sh
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -708,6 +730,8 @@ jobs:
 
   release:
     name: Create Release
+    permissions:
+      contents: write
     needs:
       - validate-release-gates
       - sign-notarize-macos
@@ -719,10 +743,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.21
+          bun-version-file: .bun-version
 
       - name: Download artifact
         uses: actions/download-artifact@v4
