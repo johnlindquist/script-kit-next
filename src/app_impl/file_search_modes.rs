@@ -232,11 +232,13 @@ impl ScriptListApp {
         );
         self.return_to_file_search_query(&pick.origin_query, window, cx);
         self.finish_file_search_place(
-            pick.kind,
-            &pick.path,
-            &folder,
+            crate::file_search::PendingPlace {
+                kind: pick.kind,
+                path: pick.path,
+                destination_dir: folder,
+                previous_display_index: pick.previous_display_index,
+            },
             crate::file_search::file_ops::OnConflict::Refuse,
-            pick.previous_display_index,
             window,
             cx,
         );

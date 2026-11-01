@@ -171,16 +171,10 @@ impl ScriptListApp {
         )
     }
     pub(crate) fn cancel_cursor(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(id) = self
-            .one_window_host
-            .cursor_voice
-            .active
-            .as_ref()
-            .map(|s| s.generation)
-        else {
+        let Some(s) = self.one_window_host.cursor_voice.active.as_ref() else {
             return false;
         };
-        let s = self.one_window_host.cursor_voice.active.as_ref().unwrap();
+        let id = s.generation;
         s.revoked.store(true, std::sync::atomic::Ordering::Release);
         let take = s.take.clone();
         let saved = take.as_ref().map(|t| t.cancel(&s.partial));

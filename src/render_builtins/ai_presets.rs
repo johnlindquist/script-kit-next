@@ -340,7 +340,7 @@ impl ScriptListApp {
                 let name_val = &values["name"];
                 let prompt_val = &values["systemPrompt"];
                 let model_val = AiPresetModelSelection::from_input(&values["model"]).as_create_arg();
-                match crate::ai::presets::create_preset(&name_val, &prompt_val, model_val) {
+                match crate::ai::presets::create_preset(name_val, prompt_val, model_val) {
                     Ok(preset) => {
                         tracing::info!(
                             preset_fingerprint = %crate::ai::reliability::redacted_fingerprint(

@@ -413,7 +413,7 @@ impl ScriptListApp {
             let field = CursorField::capture_pid(pid)?;
             let label = selection.display_label.clone();
             self.one_window_host.cursor_voice.paste_anchor = Some((id.into(), field, selection));
-            return Some(label);
+            Some(label)
         }
         #[cfg(not(target_os = "macos"))]
         None

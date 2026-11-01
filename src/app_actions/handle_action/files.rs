@@ -815,11 +815,8 @@ impl ScriptListApp {
     /// both or replace; anything else either lands with ⌘Z offered or says why it didn't.
     pub(crate) fn finish_file_search_place(
         &mut self,
-        kind: crate::file_search::PlaceKind,
-        path: &str,
-        destination_dir: &str,
+        pending: crate::file_search::PendingPlace,
         on_conflict: crate::file_search::file_ops::OnConflict,
-        previous_display_index: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -827,6 +824,10 @@ impl ScriptListApp {
         use crate::file_search::PlaceKind;
 
         self.clear_file_search_action_target();
+        let kind = pending.kind;
+        let previous_display_index = pending.previous_display_index;
+        let path = pending.path.as_str();
+        let destination_dir = pending.destination_dir.as_str();
         let place_action = match kind {
             PlaceKind::Move => FileSearchMoveHandlerAction::MovePath,
             PlaceKind::Copy => FileSearchMoveHandlerAction::CopyTo,
@@ -836,16 +837,7 @@ impl ScriptListApp {
         {
             Ok(placed) => placed,
             Err(FileOpError::Exists { name, folder }) => {
-                self.ask_file_search_place_conflict(
-                    kind,
-                    path,
-                    destination_dir,
-                    &name,
-                    &folder,
-                    previous_display_index,
-                    window,
-                    cx,
-                );
+                self.ask_file_search_place_conflict(pending, &name, &folder, window, cx);
                 return;
             }
             Err(e) => {
@@ -946,27 +938,19 @@ impl ScriptListApp {
 
     /// The destination already has an item with this name: ask whether to keep both or
     /// replace it (the replaced item goes to the Trash, and ⌘Z brings it back).
-    #[allow(clippy::too_many_arguments)]
     fn ask_file_search_place_conflict(
         &mut self,
-        kind: crate::file_search::PlaceKind,
-        path: &str,
-        destination_dir: &str,
+        pending: crate::file_search::PendingPlace,
         name: &str,
         folder: &str,
-        previous_display_index: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         use crate::actions::{Action, ActionCategory};
         use crate::designs::icon_variations::IconName;
 
-        self.file_search_pending_place = Some(crate::file_search::PendingPlace {
-            kind,
-            path: path.to_string(),
-            destination_dir: destination_dir.to_string(),
-            previous_display_index,
-        });
+        let kind = pending.kind;
+        self.file_search_pending_place = Some(pending);
         let verb = match kind {
             crate::file_search::PlaceKind::Move => "Move",
             crate::file_search::PlaceKind::Copy => "Copy",
@@ -1019,15 +1003,7 @@ impl ScriptListApp {
             self.restore_file_search_input_focus(cx);
             return;
         };
-        self.finish_file_search_place(
-            pending.kind,
-            &pending.path,
-            &pending.destination_dir,
-            on_conflict,
-            pending.previous_display_index,
-            window,
-            cx,
-        );
+        self.finish_file_search_place(pending, on_conflict, window, cx);
     }
 
     /// File actions that need the window: Rename… and Move to… / Copy to… borrow the main
