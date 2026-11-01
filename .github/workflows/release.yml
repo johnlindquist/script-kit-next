@@ -197,6 +197,10 @@ jobs:
       - name: Exercise macOS deployment-floor checks on Mach-O headers
         run: python3 -B scripts/test_macos_deployment.py
       - name: Build the application under test
+        # Serialize cold compiler writes; storage sampling and its limits stay unchanged.
+        env:
+          CARGO_BUILD_JOBS: "1"
+          SCRIPT_KIT_AGENT_TIMEOUT_MS: "3600000"
         run: |
           bash scripts/agentic/agent-cargo.sh test --locked --lib theme::alpha::alpha_byte_tests::
           bash scripts/agentic/agent-cargo.sh test --locked --doc --package script-kit-gpui theme::alpha::
@@ -212,9 +216,12 @@ jobs:
           SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/release-proof-evidence/consistency-catalog.json
         run: bash scripts/verify.sh --skip-bundle --only consistency-catalog
       - name: Build the exact non-GUI design token exporter
+        env:
+          CARGO_BUILD_JOBS: "1"
         run: |
           mkdir -p .test-output/release
           bun scripts/devtools/devtools.ts build-ops act exporter-build \
+            --timeout-ms 3600000 \
             --artifact-out .test-output/release/exporter.reference.json
       - name: Prove generated design JSON and CSS match the authoritative exporter
         run: |
@@ -479,6 +486,7 @@ jobs:
 
       - name: Build and install the exact pre-sign compile artifact
         env:
+          CARGO_BUILD_JOBS: "1"
           SCRIPT_KIT_AGENT_TIMEOUT_MS: "5400000"
         run: |
           mkdir -p .test-output/release
