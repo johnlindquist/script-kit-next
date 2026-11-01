@@ -262,6 +262,30 @@ test("compiler replay measures concurrent fingerprint outputs and their hardlink
   expect(recovered.targetAgentAllocatedBytes).toBe(allocation(tree).allocatedBytes);
 });
 
+test("a probed sibling cannot be replaced by a cheaper namesake after moving into measured compiler output", () => {
+  const root = fixture(), tree = join(root, "target-agent"), deps = join(root, compilerDeps);
+  const prior = join(tree, "probed-first"), gone = join(deps, "gone");
+  fs.mkdirSync(gone, { recursive: true }); fs.writeFileSync(prior, Buffer.alloc(512 * 1024, 97));
+  const limit = allocation(tree).allocatedBytes - 128 * 1024;
+  const open = fs.opendirSync.bind(fs); let opens = 0, lost = false, moved = false;
+  const ordered = spyOn(fs, "opendirSync").mockImplementation(((path: fs.PathLike) => {
+    if (String(path) !== tree) return open(path);
+    if (++opens === 2) {
+      fs.renameSync(prior, join(deps, "still-budgeted")); file(tree, "probed-first"); moved = true;
+    }
+    const dir = open(path); const rows: fs.Dirent[] = []; let e;
+    while ((e = dir.readSync()) !== null) rows.push(e);
+    rows.sort((a, b) => Number(b.name === "probed-first") - Number(a.name === "probed-first"));
+    return { readSync: () => rows.shift() ?? null, closeSync: () => dir.closeSync() } as fs.Dir;
+  }) as typeof fs.opendirSync); restore.push(() => ordered.mockRestore());
+  beforeStat(path => { if (!lost && path === gone) { lost = true; fs.rmdirSync(gone); } });
+  observedVolume(2 * GiB);
+  const admit = () => requireBuildAdmission(root, { reserveBytes: GiB - limit });
+  expect(["resource_observation_incomplete", "resource_budget_exceeded"]).toContain(refusal(admit).code);
+  expect(lost && moved).toBe(true);
+  expect(refusal(admit).code).toBe("resource_budget_exceeded");
+});
+
 for (const fault of ["missing", "replacement"] as const) test(`compiler-first parent reconciliation rejects ${fault}`, () => {
   const root = fixture(), deps = join(root, compilerDeps), payload = file(deps, "output");
   const open = fs.opendirSync.bind(fs);

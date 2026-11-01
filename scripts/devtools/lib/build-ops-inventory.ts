@@ -73,11 +73,13 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         if (!child) return true; // Absent scan root, not a missing enumerated child.
+        if (expected) throw new Error("inventory_probe_missing");
         if (listed?.isFile() || compilerDirectory) return false;
       }
       throw error;
     }
-    if (expected && (!stat.isDirectory() || stat.dev !== expected.dev || stat.ino !== expected.ino)) throw new Error("inventory_probe_identity");
+    if (expected && (stat.dev !== expected.dev || stat.ino !== expected.ino || (stat.mode & 0o170000) !== (expected.mode & 0o170000)
+      || (!expected.isDirectory() && Number(stat.blocks) < Number(expected.blocks)))) throw new Error("inventory_probe_identity");
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
@@ -105,7 +107,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       // never a compound speculative path. Remember every name the probe exposed:
       // a fresh enumeration must actually encounter those entries, not infer them.
       const preferred = protectOutputs ? compilerRoute.get(child) : undefined;
-      const witnessed = preferred && !vanished ? new Map<string, Dirent>() : undefined;
+      const witnessed = preferred && !vanished ? new Map<string, { entry: Dirent; stat: Stats }>() : undefined;
       let first: Stats | undefined;
       if (preferred && witnessed) {
         const probe = opendirSync(current);
@@ -114,12 +116,16 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           while ((row = probe.readSync()) !== null) {
             charge();
             if (witnessed.has(row.name)) throw new Error("inventory_probe_duplicate");
-            witnessed.set(row.name, row);
+            // A type alone cannot distinguish a cheaper same-name replacement
+            // after the old object has moved into the premeasured compiler tree.
+            charge(); sameDirectory();
+            const next = join(current, row.name), pinned = lstatSync(next);
+            if (pinned.dev !== device) throw new Error("inventory_unexpected_mount");
+            if (pinned.isFile() !== row.isFile() || pinned.isDirectory() !== row.isDirectory() || pinned.isSymbolicLink() !== row.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
+            witnessed.set(row.name, { entry: row, stat: pinned });
             if (row.name !== preferred) continue;
             if (!row.isDirectory()) throw new Error(row.isSymbolicLink() ? "inventory_output_symlink" : "inventory_output_not_directory");
-            const next = join(current, preferred);
-            charge(); sameDirectory();
-            first = lstatSync(next);
+            first = pinned;
             if (!first.isDirectory()) throw new Error(first.isSymbolicLink() ? "inventory_output_symlink" : "inventory_output_not_directory");
             if (first.dev !== device) throw new Error("inventory_unexpected_mount");
             if (!visit(next, child ? `${child}/${preferred}` : preferred, depth + 1, row, false, first)) throw new Error("inventory_probe_missing");
@@ -134,7 +140,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
         while ((entry = directory.readSync()) !== null) {
           const probed = witnessed?.get(entry.name);
           if (probed) {
-            if (probed.isDirectory() !== entry.isDirectory() || probed.isFile() !== entry.isFile() || probed.isSymbolicLink() !== entry.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
+            if (probed.entry.isDirectory() !== entry.isDirectory() || probed.entry.isFile() !== entry.isFile() || probed.entry.isSymbolicLink() !== entry.isSymbolicLink()) throw new Error("inventory_probe_type_changed");
             witnessed!.delete(entry.name);
           }
           if (first && entry.name === preferred) {
@@ -146,7 +152,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
           }
           // We have no inode witness for that name. Do not accept a replacement (even a link).
           if (entry.name === vanished) throw new Error("inventory_unstable_directory:reappeared");
-          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory())) break;
+          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory(), probed?.stat)) break;
         }
         if (witnessed?.size) throw new Error("inventory_probe_missing");
         if (!entry && vanished !== undefined) {
