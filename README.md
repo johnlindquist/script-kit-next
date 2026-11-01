@@ -1,6 +1,8 @@
 # Script Kit GPUI
 
-A complete rewrite of [Script Kit](https://scriptkit.com) using the [GPUI](https://gpui.rs) framework from Zed. This version combines the SDK and app into a single repository for a streamlined development experience.
+Script Kit is a programmable Mac launcher for you and the agents you authorize. Search by name, dictate into the field you’re already using, or send a selected passage to a named agent. An [external agent](docs/guides/external-agents.md) can also save a quiet note or run a reviewed version of one of your commands without taking over the desktop.
+
+This native rewrite of [Script Kit](https://scriptkit.com) uses Zed’s [GPUI](https://gpui.rs) framework. The app and scripting SDK live in this repository. [See the October changelog and screenshots.](CHANGELOG.md)
 
 ## Project Goals
 
@@ -702,8 +704,6 @@ bash scripts/install-goose-sidecar-into-bundle.sh
 # Verify bundle contents
 bash scripts/verify-macos-bundle.sh
 ```
-
-[October changelog with screenshots](CHANGELOG.md)
 
 ## Features
 

@@ -2,7 +2,9 @@
 
 ## October 15–31, 2026 · One window, clearer targets
 
-**[Read the illustrated changelog](https://merry-flint-85wx.here.now/)** · [Offline edition](docs/changelog/2026-10/index.html)
+**[Read the illustrated changelog](https://merry-flint-85wx.here.now/)** · [Offline edition](docs/changelog/2026-10/index.html) · [Try the sample desktops](https://proud-unity-7aj4.here.now/)
+
+Send a selected error to one named agent, then return to your work until the reply is ready. The interactive examples also show window placement, selection rewriting, and finding a previously visited page using sample data.
 
 | Change | Try it |
 | --- | --- |
