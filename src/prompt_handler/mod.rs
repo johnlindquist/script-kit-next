@@ -6778,6 +6778,10 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if semantic_id.starts_with("staged:") {
+            self.pick_visible_staged_row(semantic_id,submit,cx)?;
+            return Ok(semantic_id.to_owned());
+        }
         if let Some(id)=semantic_id.strip_prefix("stage-subject:") {
             anyhow::ensure!(submit && self.stage_tab_tile(id,cx),"stage_subject_requires_current_tile_and_submit"); return Ok(semantic_id.to_string());
         }
@@ -6956,6 +6960,7 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.one_window_view_covers_list(), "main_menu_covered_by_view");
         anyhow::ensure!(
             self.select_main_menu_row(grouped_index, MainMenuSelectionOrigin::Agent, cx),
             "main_menu_choice_not_selectable"

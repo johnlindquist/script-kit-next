@@ -93,6 +93,9 @@ pub struct McpKitRuntimeCommand {
 }
 
 pub trait McpKitRuntimeBridge: Send + Sync {
+    fn state(&self) -> Option<crate::mcp_resources::AppStateResource> {
+        None
+    }
     fn dispatch_external_command(
         &self,
         command: ExternalCommand,
@@ -102,6 +105,9 @@ pub trait McpKitRuntimeBridge: Send + Sync {
 
 #[derive(Clone)]
 pub struct GpuiKitRuntimeBridge {
+    state_tx: Option<
+        async_channel::Sender<std::sync::mpsc::SyncSender<crate::mcp_resources::AppStateResource>>,
+    >,
     tx: async_channel::Sender<McpKitRuntimeCommand>,
     timeout: Duration,
 }
@@ -111,11 +117,26 @@ impl GpuiKitRuntimeBridge {
         Self {
             tx,
             timeout: KIT_RUNTIME_BRIDGE_TIMEOUT,
+            state_tx: None,
         }
+    }
+    pub fn with_state_channel(
+        mut self,
+        tx: async_channel::Sender<
+            std::sync::mpsc::SyncSender<crate::mcp_resources::AppStateResource>,
+        >,
+    ) -> Self {
+        self.state_tx = Some(tx);
+        self
     }
 }
 
 impl McpKitRuntimeBridge for GpuiKitRuntimeBridge {
+    fn state(&self) -> Option<crate::mcp_resources::AppStateResource> {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+        self.state_tx.as_ref()?.try_send(tx).ok()?;
+        rx.recv_timeout(self.timeout).ok()
+    }
     fn dispatch_external_command(
         &self,
         command: ExternalCommand,
@@ -222,17 +243,10 @@ pub fn handle_kit_tool_call(name: &str, _arguments: &Value) -> ToolResult {
             }],
             is_error: None,
         },
-        KIT_STATE_TOOL => {
-            // Return default state - actual state will be injected by caller
-            let state = AppState::default();
-            ToolResult {
-                content: vec![ToolContent {
-                    content_type: "text".to_string(),
-                    text: serde_json::to_string(&state).unwrap_or_default(),
-                }],
-                is_error: None,
-            }
-        }
+        KIT_STATE_TOOL => error_tool_result(
+            "kit_state",
+            KitToolError::new(KitToolErrorCode::MissingRuntime, "Live state unavailable"),
+        ),
         _ => ToolResult {
             content: vec![ToolContent {
                 content_type: "text".to_string(),
@@ -275,6 +289,10 @@ pub fn handle_kit_tool_call_with_runtime(
     trace_id: &str,
 ) -> ToolResult {
     match name {
+        KIT_STATE_TOOL => match runtime.and_then(|b|b.state()) {
+            Some(s)=>ToolResult{is_error:None,content:vec![ToolContent{content_type:"text".into(),text:serde_json::json!({"visible":s.visible,"focused":s.focused,"activePrompt":s.active_prompt,"source":"mainWindow"}).to_string()}]},
+            None=>handle_kit_tool_call(name,arguments),
+        },
         KIT_SHOW_TOOL => {
             let args: KitShowHideArgs = match serde_json::from_value(arguments.clone()) {
                 Ok(args) => args,
@@ -502,18 +520,8 @@ mod tests {
     fn test_kit_state_returns_json() {
         let result = handle_kit_tool_call("kit/state", &serde_json::json!({}));
 
-        assert!(result.is_error.is_none() || result.is_error == Some(false));
-        assert!(!result.content.is_empty());
-        assert_eq!(result.content[0].content_type, "text");
-
-        // Verify the result is valid JSON with expected fields
-        let state: Result<AppState, _> = serde_json::from_str(&result.content[0].text);
-        assert!(state.is_ok(), "kit/state should return valid JSON");
-
-        let state = state.unwrap();
-        // Default state should have visible=false, focused=false
-        assert!(!state.visible);
-        assert!(!state.focused);
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("missing_runtime"));
     }
 
     #[test]

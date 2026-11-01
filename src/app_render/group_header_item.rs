@@ -59,6 +59,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::UseDictationInKit => "Use Dictation in Kit".into(),
         builtins::BuiltInFeature::ReviewDictationMarkdown => "Review Dictation in Markdown".into(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
+        builtins::BuiltInFeature::AgentHandoffs => "Agent Handoffs".into(),
         builtins::BuiltInFeature::AgentChatHistory => "Agent Chat History".to_string(),
         builtins::BuiltInFeature::AiVault => "AI Vault".to_string(),
         builtins::BuiltInFeature::DictationHistory => "Dictation History".to_string(),

@@ -627,6 +627,32 @@ pub fn ensure_kit_setup() -> SetupResult {
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
 
     // App-managed: user-facing `scriptkit` command shim (refresh if changed)
+    let agent_docs = kit_dir.join("share/external-agent");
+    ensure_dir(&agent_docs, &mut warnings);
+    write_string_if_changed(
+        &agent_docs.join("manual.md"),
+        include_str!("../../kit-init/agent-manual.md"),
+        &mut warnings,
+        "share/external-agent/manual.md",
+    );
+    write_string_if_changed(
+        &agent_docs.join("SKILL.md"),
+        include_str!("../../skills/script-kit/SKILL.md"),
+        &mut warnings,
+        "share/external-agent/SKILL.md",
+    );
+    write_string_if_changed(
+        &kit_dir.join("bin/agent-bridge-cli.ts"),
+        include_str!("../../scripts/agent-bridge-cli.ts"),
+        &mut warnings,
+        "bin/agent-bridge-cli.ts",
+    );
+    write_string_if_changed(
+        &agent_docs.join("prepare-handout.ts"),
+        include_str!("../../kit-init/examples/scripts/prepare-handout.ts"),
+        &mut warnings,
+        "share/external-agent/prepare-handout.ts",
+    );
     let scriptkit_cli_path = kit_dir.join("bin").join("scriptkit");
     write_executable_string_if_changed(
         &scriptkit_cli_path,

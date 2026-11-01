@@ -56,6 +56,8 @@ pub struct ResourceContent {
 /// Application state exposed via kit://state resource
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppStateResource {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_prompt: Option<String>,
     /// Whether the app window is visible
     pub visible: bool,
     /// Whether the app window is focused
@@ -83,7 +85,7 @@ pub struct ScriptResourceEntry {
     /// Description (if available)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Whether script has a schema (makes it an MCP tool)
+    /// Whether a script declares structured I/O (not authority to execute it).
     pub has_schema: bool,
 }
 impl From<&Script> for ScriptResourceEntry {
@@ -737,10 +739,7 @@ fn read_audit_resource(uri: &str) -> Result<ResourceContent, String> {
         .clamp(1, AUDIT_HARD_LIMIT);
     let trace_id_filter = query_string_param(uri, "traceId");
 
-    let audit_path = dirs::home_dir()
-        .ok_or_else(|| "Failed to resolve home directory for MCP audit log".to_string())?
-        .join(".scriptkit")
-        .join("mcp-audit.jsonl");
+    let audit_path = crate::setup::get_kit_path().join("mcp-audit.jsonl");
 
     let text = match std::fs::read_to_string(&audit_path) {
         Ok(text) => text,
@@ -787,7 +786,8 @@ fn read_audit_resource(uri: &str) -> Result<ResourceContent, String> {
 }
 /// Read kit://state resource
 fn read_state_resource(app_state: Option<&AppStateResource>) -> Result<ResourceContent, String> {
-    let state = app_state.cloned().unwrap_or_default();
+    let state = app_state
+        .ok_or_else(|| "state_unavailable: no live main-window observation".to_string())?;
     let json = serde_json::to_string_pretty(&state)
         .map_err(|e| format!("Failed to serialize app state: {}", e))?;
 
@@ -4826,6 +4826,14 @@ fn parse_bool_param(value: &str) -> Result<bool, String> {
     }
 }
 
+// The external resource never inherits the launcher's pixel-collecting profiles.
+fn metadata_only(
+    mut options: crate::context_snapshot::CaptureContextOptions,
+) -> crate::context_snapshot::CaptureContextOptions {
+    options.include_screenshot = false;
+    options.include_panel_screenshot = false;
+    options
+}
 fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, String> {
     use crate::context_snapshot::CaptureContextOptions;
 
@@ -4841,7 +4849,7 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
     if uri == "kit://context" {
         return Ok(ContextResourceRequest {
             kind: ContextResourceKind::Snapshot,
-            options: CaptureContextOptions::default(),
+            options: metadata_only(CaptureContextOptions::default()),
             effective_profile: "full".to_string(),
             diagnostics: false,
         });
@@ -4862,7 +4870,7 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
         return Err(format!("Resource not found: {uri}"));
     }
 
-    let mut options = CaptureContextOptions::default();
+    let mut options = metadata_only(CaptureContextOptions::default());
     let mut selected_profile: Option<&str> = None;
     let mut diagnostics = false;
     let mut saw_override = false;
@@ -4874,11 +4882,11 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
 
         match (key, value) {
             ("profile", "full") => {
-                options = CaptureContextOptions::all();
+                options = metadata_only(CaptureContextOptions::all());
                 selected_profile = Some("full");
             }
             ("profile", "minimal") => {
-                options = CaptureContextOptions::minimal();
+                options = metadata_only(CaptureContextOptions::minimal());
                 selected_profile = Some("minimal");
             }
             ("profile", other) => {
@@ -4959,13 +4967,13 @@ fn build_context_schema_document() -> ContextSchemaDocument {
         profiles: vec![
             ContextProfileDescriptor {
                 name: "full",
-                description: "Capture every currently supported context provider.",
-                options: crate::context_snapshot::CaptureContextOptions::all(),
+                description: "Capture context metadata and selection. Images require an explicit flag.",
+                options: metadata_only(crate::context_snapshot::CaptureContextOptions::all()),
             },
             ContextProfileDescriptor {
                 name: "minimal",
                 description: "Lower-cost profile that omits selected text and menu bar.",
-                options: crate::context_snapshot::CaptureContextOptions::minimal(),
+                options: metadata_only(crate::context_snapshot::CaptureContextOptions::minimal()),
             },
         ],
         parameters: vec![

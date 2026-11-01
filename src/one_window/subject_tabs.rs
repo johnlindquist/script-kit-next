@@ -72,6 +72,12 @@ pub(crate) fn selection_source(subject: Subject, text: &str) -> TabSource {
                 "Add to note",
             ),
             action("show", "Read the full selection", "text-cursor", "Read"),
+            action(
+                "handoff",
+                "Share selection with a named agent…",
+                "send",
+                "Choose agent",
+            ),
         ],
     }
 }
@@ -316,6 +322,9 @@ impl ScriptListApp {
                     ChatEntry::quick()
                 };
                 self.one_window_open_chat(entry.with(part), cx);
+            }
+            "handoff" if source.subject.kind == SubjectKind::Selection => {
+                self.choose_handoff_recipient(source.body.to_string(), cx)
             }
             "note" => self.one_window_open_note(source.body.to_string(), cx),
             "show" => {

@@ -7,6 +7,8 @@ assets
 kit-init
 scripts/kit-sdk.ts
 scripts/mcp-cli.ts
+scripts/agent-bridge-cli.ts
+skills/script-kit/SKILL.md
 scripts/examples/menu-syntax
 .cargo
 Cargo.toml

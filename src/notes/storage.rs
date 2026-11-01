@@ -219,11 +219,7 @@ fn get_notes_db_path() -> PathBuf {
             .join("notes.sqlite");
     }
 
-    let kit_dir = dirs::home_dir()
-        .map(|h| h.join(".scriptkit"))
-        .unwrap_or_else(|| PathBuf::from(".scriptkit"));
-
-    kit_dir.join("db").join("notes.sqlite")
+    crate::setup::get_kit_path().join("db").join("notes.sqlite")
 }
 
 fn get_notes_brain_base_path() -> PathBuf {
@@ -1638,6 +1634,15 @@ pub(crate) fn rewrite_note_links(
     }
     invalidate_root_notes_search_cache();
     Ok(changed)
+}
+
+/// Preview exactly what a fresh index would load, without writing a note. Narrow
+/// imports must not acquire different words or metadata after an app restart.
+pub(crate) fn cold_content_for_new_note(note: &Note) -> Result<String> {
+    let frontmatter = brain_frontmatter_from_note(note, None)?;
+    let raw = frontmatter.render(&note_body_for_file(&note.content))?;
+    let (saved, body) = BrainFrontmatter::parse(&raw)?;
+    user_facing_content(&saved, &body)
 }
 
 /// Read back the canonical file and index after a delivery save.

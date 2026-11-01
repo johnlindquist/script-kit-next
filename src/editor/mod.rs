@@ -856,6 +856,16 @@ impl EditorPrompt {
         }
     }
 
+    /// A local review can return to its owner on the same submit/cancel routes as the
+    /// keyboard, accessible controls, and footer. Keep the original prompt receipt intact.
+    pub(crate) fn observe_local_finish(&mut self, finish: async_channel::Sender<()>) {
+        let original = self.on_submit.clone();
+        self.on_submit = std::sync::Arc::new(move |id, value| {
+            original(id, value);
+            let _ = finish.try_send(());
+        });
+    }
+
     /// Submit the current content
     pub fn submit(&self, cx: &Context<Self>) {
         let content = self.content(cx);

@@ -2585,6 +2585,7 @@ impl ScriptListApp {
             builtins::BuiltInFeature::DictationDefault=>{self.choose_dictation_default(cx);Self::builtin_success(dctx,"Choose starting destination")},
             builtins::BuiltInFeature::CancelCursorDictation=>{if self.cancel_cursor(cx){Self::builtin_success(dctx,"Cancelled")}else{Self::builtin_error(dctx,"no_recording","No active cursor recording","Nothing cancelled")}},
             builtins::BuiltInFeature::DictateIntoKit => self.toggle_kit_recording(true,dctx,cx),
+            builtins::BuiltInFeature::AgentHandoffs => {self.review_agent_handoffs(cx);Self::builtin_success(dctx,"Checked agent handoffs")}
             builtins::BuiltInFeature::UseDictationInKit | builtins::BuiltInFeature::ReviewDictationMarkdown => {
                 let changed=if matches!(entry.feature,builtins::BuiltInFeature::UseDictationInKit){self.toggle_cursor_kit(cx)}else{self.review_cursor_draft(cx)};
                 if changed{Self::builtin_success(dctx,"Dictation destination selected")}else{Self::builtin_error(dctx,"dictation_unavailable","No eligible dictation","Start a recording first")}

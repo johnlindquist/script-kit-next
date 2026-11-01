@@ -101,9 +101,7 @@ impl McpServer {
 
     /// Create server with default settings
     pub fn with_defaults() -> Result<Self> {
-        let kit_path = dirs::home_dir()
-            .context("Failed to get home directory")?
-            .join(".scriptkit");
+        let kit_path = crate::setup::get_kit_path();
 
         let port = std::env::var("MCP_PORT")
             .ok()
@@ -114,9 +112,7 @@ impl McpServer {
     }
 
     pub fn with_defaults_and_runtime_context(runtime_context: McpRuntimeContext) -> Result<Self> {
-        let kit_path = dirs::home_dir()
-            .context("Failed to get home directory")?
-            .join(".scriptkit");
+        let kit_path = crate::setup::get_kit_path();
 
         let port = std::env::var("MCP_PORT")
             .ok()
@@ -201,7 +197,7 @@ impl McpServer {
 
     /// Get the server URL
     pub fn url(&self) -> String {
-        format!("http://localhost:{}", self.port)
+        format!("http://127.0.0.1:{}", self.port)
     }
 
     /// Check if server is running
@@ -222,29 +218,15 @@ impl McpServer {
         let json = serde_json::to_string_pretty(&discovery)
             .context("Failed to serialize discovery info")?;
 
-        // Write discovery file with restrictive permissions (0o600 - contains token)
-        #[cfg(unix)]
-        {
-            use std::fs::OpenOptions;
-            use std::os::unix::fs::OpenOptionsExt;
-
-            OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&discovery_path)
-                .and_then(|mut file| {
-                    use std::io::Write;
-                    file.write_all(json.as_bytes())
-                })
-                .context("Failed to write server.json")?;
-        }
-
-        #[cfg(not(unix))]
-        {
-            fs::write(&discovery_path, json).context("Failed to write server.json")?;
-        }
+        sk_storage::write_private_atomic(&discovery_path, json.as_bytes())
+            .context("Failed to write server.json")?;
+        // A narrowly credentialed process needs only this address, never the operator bearer.
+        sk_storage::write_private_atomic(
+            &self.kit_path.join("server-location.json"),
+            serde_json::json!({"url":self.url(),"version":VERSION})
+                .to_string()
+                .as_bytes(),
+        )?;
 
         info!("Wrote discovery file to {:?}", discovery_path);
         Ok(())
@@ -270,12 +252,10 @@ impl McpServer {
             anyhow::bail!("Server is already running");
         }
 
-        // Write discovery file before starting
-        self.write_discovery_file()?;
-
         let listener = TcpListener::bind(format!("127.0.0.1:{}", self.port))
             .with_context(|| format!("Failed to bind to port {}", self.port))?;
 
+        self.write_discovery_file()?;
         // Set non-blocking for graceful shutdown
         listener
             .set_nonblocking(true)
@@ -327,6 +307,7 @@ impl McpServer {
                 let _ = fs::remove_file(&discovery_path);
             }
 
+            let _ = fs::remove_file(kit_path.join("server-location.json"));
             info!("MCP server stopped");
         });
 
@@ -449,7 +430,8 @@ fn handle_connection(
         let Some(scopes) = auth_scopes else {
             return send_response(&mut stream, 401, "Unauthorized", "Invalid or missing token");
         };
-        runtime_context.desktop_principal = headers.get("authorization")
+        runtime_context.desktop_principal = headers
+            .get("authorization")
             .and_then(|header| header.strip_prefix("Bearer "))
             .map(|token| format!("mcp:{}", hash_token(token)));
         token_scopes = scopes;
@@ -468,11 +450,29 @@ fn handle_connection(
             });
             send_response(&mut stream, 200, "OK", &info.to_string())
         }
+        ("GET" | "DELETE", "/rpc") => send_response(
+            &mut stream,
+            405,
+            "Method Not Allowed",
+            "Stateless JSON responses only",
+        ),
         ("POST", "/rpc") => {
             // Handle JSON-RPC request
             handle_rpc_request(&mut reader, &mut stream, &headers, runtime_context)
         }
         ("POST", crate::mcp_agent_tools::AGENT_TOOLS_PATH) => {
+            if headers
+                .get("authorization")
+                .and_then(|h| h.strip_prefix("Bearer "))
+                != Some(expected_token)
+            {
+                return send_response(
+                    &mut stream,
+                    403,
+                    "Forbidden",
+                    "Agent Chat session credential required",
+                );
+            }
             handle_agent_tools_request(&mut reader, &mut stream, &headers, &runtime_context)
         }
         // Streamable HTTP clients may probe for a server-sent event stream or
@@ -540,26 +540,54 @@ fn handle_rpc_request(
     }
 
     // Read request body
+    if content_length > 2 * 1024 * 1024 {
+        return send_response(stream, 413, "Payload Too Large", "Request body too large");
+    }
     let mut body = vec![0u8; content_length];
     reader.read_exact(&mut body)?;
     let body_str = String::from_utf8_lossy(&body);
-    let body_summary = logging::summarize_payload(&body_str);
     debug!(
         category = "MCP",
         event_type = "mcp_rpc_request_body",
         content_length = content_length,
-        payload_summary = %body_summary,
         "Received MCP RPC request body"
     );
 
-    // Load scripts and scriptlets for context-aware responses
-    // This allows resources/read and tools/list to return actual data
-    let scripts = crate::scripts::read_scripts()?;
-    let scriptlets = crate::scripts::load_scriptlets()?.into_scriptlets();
+    // Metadata discovery, note receipts, and denied reads must not scan unrelated scripts.
+    if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&body_str) {
+        if msg["jsonrpc"] == "2.0"
+            && msg.get("id").is_none()
+            && msg["method"] == "notifications/initialized"
+        {
+            return send_response(stream, 202, "Accepted", "");
+        }
+    }
 
     // Parse and handle request with full context
     let response = match mcp_protocol::parse_request(&body_str) {
         Ok(request) => {
+            let uri = request.params["uri"].as_str().unwrap_or_default();
+            let inventory = request.method == "resources/read"
+                && matches!(
+                    uri,
+                    "scripts://"
+                        | "scriptlets://"
+                        | "kit://scripts"
+                        | "kit://scriptlets"
+                        | "kit://command-doctor"
+                        | "kit://failed-scripts"
+                )
+                && crate::mcp_control::scope_allows(&runtime_context.token_scopes, "scripts:read");
+            let scripts = if inventory {
+                crate::scripts::read_scripts()?
+            } else {
+                vec![]
+            };
+            let scriptlets = if inventory {
+                crate::scripts::load_scriptlets()?.into_scriptlets()
+            } else {
+                vec![]
+            };
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
@@ -585,6 +613,52 @@ struct AgentTokenConfig {
     scopes: Vec<String>,
 }
 
+// A local grant grants authority: never follow a symlink, block on a FIFO, or trust a file or
+// registry directory writable by another account. Hashes are not bearer secrets.
+fn read_registration(path: &std::path::Path) -> Option<AgentTokenConfig> {
+    use std::io::Read;
+    let parent = fs::symlink_metadata(path.parent()?).ok()?;
+    if !parent.is_dir() {
+        return None;
+    }
+    let mut opts = fs::OpenOptions::new();
+    opts.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+        if parent.uid() != unsafe { libc::geteuid() } || parent.mode() & 0o022 != 0 {
+            return None;
+        }
+        opts.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = opts.open(path).ok()?;
+    let m = file.metadata().ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if m.uid() != unsafe { libc::geteuid() } || m.mode() & 0o022 != 0 {
+            return None;
+        }
+    }
+    if !m.is_file() || m.len() > 65536 {
+        return None;
+    }
+    let mut buf = Vec::new();
+    file.take(65537).read_to_end(&mut buf).ok()?;
+    if buf.len() > 65536 {
+        return None;
+    }
+    serde_json::from_slice(&buf).ok()
+}
+pub(crate) fn recipient_grant_current(name: &str, owner: &str) -> bool {
+    let path = crate::setup::get_kit_path()
+        .join("agents")
+        .join(format!("{name}.json"));
+    read_registration(&path).is_some_and(|c| {
+        owner.strip_prefix("mcp:") == Some(c.token_hash.as_str())
+            && c.scopes.contains(&format!("handoff:receive:{name}"))
+    })
+}
 fn authorize_bearer_token(
     token: &str,
     legacy_token: &str,
@@ -608,10 +682,7 @@ fn authorize_bearer_token(
         if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
             continue;
         }
-        let Ok(text) = fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(config) = serde_json::from_str::<AgentTokenConfig>(&text) else {
+        let Some(config) = read_registration(&path) else {
             continue;
         };
         if config.token_hash == token_hash {
@@ -885,7 +956,7 @@ mod tests {
     #[test]
     fn test_url_format() -> anyhow::Result<()> {
         let (server, _temp_dir) = create_test_server(43218)?;
-        assert_eq!(server.url(), "http://localhost:43218");
+        assert_eq!(server.url(), "http://127.0.0.1:43218");
         Ok(())
     }
 

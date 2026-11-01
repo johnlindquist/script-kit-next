@@ -62,6 +62,10 @@ impl MutationRegistry {
         tools
     }
 
+    pub(crate) fn required_scope(&self, name: &str) -> Option<&'static str> {
+        self.tools.get(name).map(|tool| tool.meta().required_scope)
+    }
+
     pub fn contains(&self, name: &str) -> bool {
         self.tools.contains_key(name)
     }
@@ -766,24 +770,26 @@ pub(crate) fn scope_allows(scopes: &[String], required: &str) -> bool {
     })
 }
 
+pub(crate) fn bridge_audit(trace: &str, action: &str, error: Option<&str>) {
+    append_audit_event(&McpAuditEvent {
+        ts: chrono::Utc::now(),
+        trace_id: trace.into(),
+        method: "tools/call".into(),
+        tool: Some(action.into()),
+        resource_uri: None,
+        action: action.into(),
+        risk: "ScopedAgentOperation".into(),
+        success: error.is_none(),
+        error_code: error.map(str::to_owned),
+        target_id: None,
+    });
+}
 fn append_audit_event(event: &McpAuditEvent) {
-    let Some(home) = dirs::home_dir() else {
-        return;
-    };
-    let audit_path = home.join(".scriptkit").join("mcp-audit.jsonl");
-    if let Some(parent) = audit_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let Ok(line) = serde_json::to_string(event) else {
-        return;
-    };
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(audit_path)
-    {
-        use std::io::Write;
-        let _ = writeln!(file, "{line}");
+    let path = crate::setup::get_kit_path().join("mcp-audit.jsonl");
+    if let Ok(record) = serde_json::to_vec(event) {
+        if sk_storage::append_private_jsonl_record(&path, &record).is_err() {
+            tracing::warn!(target:"script_kit::mcp", "audit_write_unavailable");
+        }
     }
 }
 

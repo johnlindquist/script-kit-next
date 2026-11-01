@@ -23,7 +23,13 @@ struct ViewRow {
 }
 
 fn form_value(view: &HostedView, index: usize) -> &str {
-    match view { HostedView::Form(form) => form.fields.get(index).map_or("", |field| field.value.as_str()), _ => "" }
+    match view {
+        HostedView::Form(form) => form
+            .fields
+            .get(index)
+            .map_or("", |field| field.value.as_str()),
+        _ => "",
+    }
 }
 
 fn field_icon(name: SlotName) -> &'static str {
@@ -48,10 +54,13 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 title: f.label.clone(),
                 description: Some(match f.state {
                     FieldState::Needed => match f.name {
-                        SlotName::Who => "Enter a recipient", SlotName::When => "Enter a date or time",
-                        SlotName::Where => "Enter a location", SlotName::What | SlotName::Body => "Enter the text",
+                        SlotName::Who => "Enter a recipient",
+                        SlotName::When => "Enter a date or time",
+                        SlotName::Where => "Enter a location",
+                        SlotName::What | SlotName::Body => "Enter the text",
                         SlotName::Event => "Enter an event",
-                    }.to_string(),
+                    }
+                    .to_string(),
                     FieldState::Filled => format!("{} · {}", f.value, f.source_words()),
                 }),
                 icon: field_icon(f.name),
@@ -271,14 +280,35 @@ impl ScriptListApp {
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
             let form_field = row.id.starts_with("form-field:").then(|| row.id.clone());
-            let (title, detail, label) = if let Some(HostedView::Form(form)) = self.one_window_hosted_view() {
-                let field = &form.fields[ix];
-                let value = if field.state == FieldState::Needed { row.description.unwrap_or_default() } else { field.value.clone() };
-                let label = div().w(px(theme.def().list.main_hint_fragment_role_width)).text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM).text_color(gpui::rgba(crate::theme::AppChromeColors::from_theme(&self.theme).text_muted_rgba))
-                    .child(row.title).into_any_element();
-                (value, (field.from.is_some()).then(|| field.source_words().to_string()), Some(label))
-            } else { (row.title, row.description, None) };
+            let stage_action = row
+                .id
+                .starts_with("staged:")
+                .then(|| (row.id.clone(), row.selected));
+            let (title, detail, label) =
+                if let Some(HostedView::Form(form)) = self.one_window_hosted_view() {
+                    let field = &form.fields[ix];
+                    let value = if field.state == FieldState::Needed {
+                        row.description.unwrap_or_default()
+                    } else {
+                        field.value.clone()
+                    };
+                    let label = div()
+                        .w(px(theme.def().list.main_hint_fragment_role_width))
+                        .text_xs()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(gpui::rgba(
+                            crate::theme::AppChromeColors::from_theme(&self.theme).text_muted_rgba,
+                        ))
+                        .child(row.title)
+                        .into_any_element();
+                    (
+                        value,
+                        (field.from.is_some()).then(|| field.source_words().to_string()),
+                        Some(label),
+                    )
+                } else {
+                    (row.title, row.description, None)
+                };
             let item = ListItem::new(title, colors)
                 .index(ix)
                 .selected(row.selected)
@@ -297,12 +327,29 @@ impl ScriptListApp {
                 ),
             };
             list = list.child(
-                div().id(gpui::SharedString::from(selector.clone()))
+                div()
+                    .id(gpui::SharedString::from(selector.clone()))
                     .flex_none()
                     .debug_selector(move || selector.clone())
-                    .when_some(form_field, |d, id| d.cursor_pointer().on_click(cx.listener(move |app, _, window, cx| {
-                        if app.one_window_pick_form_field(&id, cx) { app.focus_main_filter(window, cx); }
-                    })))
+                    .when_some(form_field, |d, id| {
+                        d.cursor_pointer()
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                if app.one_window_pick_form_field(&id, cx) {
+                                    app.focus_main_filter(window, cx);
+                                }
+                            }))
+                    })
+                    .when_some(stage_action, |d, (id, selected)| {
+                        d.cursor_pointer().on_click(cx.listener(
+                            move |app, event: &gpui::ClickEvent, _, cx| {
+                                let submit = crate::ui_foundation::should_submit_selected_row_click(
+                                    selected,
+                                    event.click_count(),
+                                );
+                                let _ = app.pick_visible_staged_row(&id, submit, cx);
+                            },
+                        ))
+                    })
                     .child(item),
             );
         }
@@ -362,6 +409,16 @@ impl ScriptListApp {
 
     /// The staged subject's rows as the reducer lays them out, the first under its header.
     fn one_window_staged_rows(&self) -> Option<(String, Vec<ViewRow>)> {
+        let staged = self.one_window.staged()?;
+        if !matches!(self.current_view, crate::AppView::ScriptList)
+            || self.one_window.in_view()
+            || !self.filter_text.trim().is_empty()
+        {
+            return None;
+        }
+        let identity =
+            crate::logging::log_private_user_value(&serde_json::to_string(&staged.subject).ok()?)
+                .sha256;
         let list = self.one_window.list();
         let layout = list.layout();
         let head = layout.iter().find_map(|item| match item {
@@ -375,7 +432,10 @@ impl ScriptListApp {
             .filter_map(|(pos, item)| {
                 let row = list.row(item)?;
                 Some(ViewRow {
-                    id: format!("staged:{}", row.key),
+                    id: format!(
+                        "staged:{identity}:{}",
+                        crate::logging::log_private_user_value(&row.key).sha256
+                    ),
                     title: row.title.clone(),
                     description: row.sub.clone(),
                     icon: staged_icon(row.icon.as_deref()),
@@ -385,6 +445,31 @@ impl ScriptListApp {
             })
             .collect();
         Some((head, rows))
+    }
+
+    /// Resolve only the drawn stage, never the covered main search result at the same index.
+    pub(crate) fn pick_visible_staged_row(
+        &mut self,
+        id: &str,
+        submit: bool,
+        cx: &mut gpui::Context<Self>,
+    ) -> anyhow::Result<()> {
+        let (_, rows) = self
+            .one_window_staged_rows()
+            .ok_or_else(|| anyhow::anyhow!("stage_not_current"))?;
+        let ix = rows
+            .iter()
+            .position(|r| r.id == id)
+            .ok_or_else(|| anyhow::anyhow!("staged_action_not_current"))?;
+        self.one_window_handle(sk_one_window::Event::Select(ix), cx);
+        anyhow::ensure!(
+            self.one_window_view_selected_id().as_deref() == Some(id),
+            "staged_selection_changed"
+        );
+        if submit {
+            self.one_window_enter(cx)?;
+        }
+        Ok(())
     }
 
     /// Whether an open view, or a staged subject's rows, is drawn in place of the list.
@@ -414,8 +499,11 @@ impl ScriptListApp {
         &self,
         limit: usize,
     ) -> Option<(Vec<ElementInfo>, usize)> {
-        let view = self.one_window_hosted_view()?;
-        let label = view.label();
+        let view = self.one_window_hosted_view();
+        let (label, rows) = match view {
+            Some(v) => (v.label(), view_rows(v)),
+            None => self.one_window_staged_rows()?,
+        };
         let mut out = vec![
             ElementInfo::input(
                 "filter",
@@ -424,21 +512,25 @@ impl ScriptListApp {
             ),
             header_element(0, &label),
         ];
-        out.extend(
-            view_rows(view)
-                .into_iter()
-                .enumerate()
-                .map(|(ix, row)| ElementInfo {
-                    semantic_id: row.id,
-                    ..ElementInfo::redacted_choice(
-                        ix,
-                        &row.title,
-                        if matches!(view, HostedView::Form(_)) { form_value(view, ix) } else { &row.title },
-                        row.selected,
-                        ElementContentKind::UserContent,
-                    )
-                }),
-        );
+        out.extend(rows.into_iter().enumerate().map(|(ix, row)| {
+            let mut el = ElementInfo::redacted_choice(
+                ix,
+                &row.title,
+                if let Some(v @ HostedView::Form(_)) = view {
+                    form_value(v, ix)
+                } else {
+                    &row.title
+                },
+                row.selected,
+                ElementContentKind::UserContent,
+            );
+            el.semantic_id = row.id;
+            if view.is_none() {
+                el.role = Some("row".into());
+                el.selectable = Some(true);
+            }
+            el
+        }));
         let total = out.len();
         out.truncate(limit);
         Some((out, total))
@@ -479,6 +571,7 @@ fn staged_icon(icon: Option<&str>) -> &'static str {
         Some("notebook-pen") => "notebook-pen",
         Some("text-cursor") => "text-cursor",
         Some("clipboard") => "clipboard",
+        Some("send") => "send",
         Some("panel-left") => "panel-left",
         Some("panel-right") => "panel-right",
         Some("copy") => "copy",

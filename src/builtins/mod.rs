@@ -291,6 +291,7 @@ pub enum BuiltInFeature {
     DictateIntoKit,
     UseDictationInKit,
     ReviewDictationMarkdown,
+    AgentHandoffs,
     /// Dictation transcript history browser
     DictationHistory,
     /// Settings hub for viewing configuration panels
@@ -559,6 +560,7 @@ impl BuiltInEntry {
             BuiltInFeature::CancelCursorDictation => "Cancel Dictation",
             BuiltInFeature::DictateIntoKit => "Dictate into Kit",
             BuiltInFeature::UseDictationInKit => "Use Dictation in Kit",
+            BuiltInFeature::AgentHandoffs => "Agent Handoffs",
             BuiltInFeature::ReviewDictationMarkdown => "Review Dictation in Markdown",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
             BuiltInFeature::DictationHistory => "Open Dictation History",
@@ -694,6 +696,7 @@ impl BuiltInEntry {
             BuiltInFeature::CancelCursorDictation => "Cancel Dictation",
             BuiltInFeature::DictateIntoKit => "Dictate into Kit",
             BuiltInFeature::UseDictationInKit => "Use in Kit",
+            BuiltInFeature::AgentHandoffs => "Review handoffs",
             BuiltInFeature::ReviewDictationMarkdown => "Review in Markdown",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
             BuiltInFeature::DictationHistory => "History",
@@ -2005,7 +2008,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "builtin/webcam",
             "Capture Webcam Photo",
             "Open the webcam prompt and capture a photo",
-            vec!["webcam", "camera", "capture", "photo", "image", "picture", "selfie", "countdown"],
+            vec![
+                "webcam",
+                "camera",
+                "capture",
+                "photo",
+                "image",
+                "picture",
+                "selfie",
+                "countdown",
+            ],
             BuiltInFeature::Webcam,
             "camera",
         ));
@@ -2029,13 +2041,70 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "mic",
         ));
 
-        entries.push(BuiltInEntry::new_with_icon("builtin/last-dictation","Last Dictation","Review the latest finished dictation without pasting",vec!["dictation"],BuiltInFeature::LastDictation,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/recently-cancelled","Recently Cancelled Dictations","Recover private cancelled or interrupted recordings",vec!["dictation"],BuiltInFeature::RecentDictations,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/dictation-starting-destination","Dictation Starting Destination","Choose cursor or Script Kit as the starting destination",vec!["dictation"],BuiltInFeature::DictationDefault,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/cancel-cursor-dictation","Cancel Dictation","Stop the current cursor recording without inserting or running it",vec!["cancel recording"],BuiltInFeature::CancelCursorDictation,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/dictate-into-kit","Dictate into Kit","Start or finish an editable spoken launcher command",vec!["voice shortcut","speak to kit"],BuiltInFeature::DictateIntoKit,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/use-dictation-in-kit","Use Dictation in Kit","Switch the current recording between its original field and the launcher",vec!["use in kit","voice command"],BuiltInFeature::UseDictationInKit,"mic"));
-        entries.push(BuiltInEntry::new_with_icon("builtin/review-dictation-markdown","Review Dictation in Markdown","Review the current recording or a withheld transcript without pasting it",vec!["dictation draft","review dictation"],BuiltInFeature::ReviewDictationMarkdown,"mic"));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/last-dictation",
+            "Last Dictation",
+            "Review the latest finished dictation without pasting",
+            vec!["dictation"],
+            BuiltInFeature::LastDictation,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/recently-cancelled",
+            "Recently Cancelled Dictations",
+            "Recover private cancelled or interrupted recordings",
+            vec!["dictation"],
+            BuiltInFeature::RecentDictations,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictation-starting-destination",
+            "Dictation Starting Destination",
+            "Choose cursor or Script Kit as the starting destination",
+            vec!["dictation"],
+            BuiltInFeature::DictationDefault,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/cancel-cursor-dictation",
+            "Cancel Dictation",
+            "Stop the current cursor recording without inserting or running it",
+            vec!["cancel recording"],
+            BuiltInFeature::CancelCursorDictation,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictate-into-kit",
+            "Dictate into Kit",
+            "Start or finish an editable spoken launcher command",
+            vec!["voice shortcut", "speak to kit"],
+            BuiltInFeature::DictateIntoKit,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/agent-handoffs",
+            "Agent Handoffs",
+            "Review editable agent replies or stop sharing a pending selection",
+            vec!["review agent replies", "agent draft", "herdr"],
+            BuiltInFeature::AgentHandoffs,
+            "inbox",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/use-dictation-in-kit",
+            "Use Dictation in Kit",
+            "Switch the current recording between its original field and the launcher",
+            vec!["use in kit", "voice command"],
+            BuiltInFeature::UseDictationInKit,
+            "mic",
+        ));
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/review-dictation-markdown",
+            "Review Dictation in Markdown",
+            "Review the current recording or a withheld transcript without pasting it",
+            vec!["dictation draft", "review dictation"],
+            BuiltInFeature::ReviewDictationMarkdown,
+            "mic",
+        ));
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-to-ai",
             "Dictate to Agent Chat",

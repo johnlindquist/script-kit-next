@@ -122,6 +122,7 @@ impl ScriptListApp {
                             && is_editor_escape_key_variant(&key_str)
                             && !this.show_actions_popup
                         {
+                            if this.leave_handoff_editor(true, cx) { cx.stop_propagation(); return true; }
                             const EDITOR_ESCAPE_GUARD_MS: u128 = 2000;
                             let armed_recently = this
                                 .editor_escape_armed_at

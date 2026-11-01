@@ -161,8 +161,9 @@ impl ScriptListApp {
         let title = title.into();
         let mut rows = Vec::with_capacity(choices.len());
         let mut runs = HashMap::with_capacity(choices.len());
+        let question = uuid::Uuid::new_v4();
         for (i, (label, run)) in choices.into_iter().enumerate() {
-            let key = format!("{ASK_PREFIX}{i}");
+            let key = format!("{ASK_PREFIX}{question}:{i}");
             rows.push(Row::new(key.clone(), label.clone()).with_enter_label(label));
             runs.insert(key, run);
         }

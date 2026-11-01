@@ -42,12 +42,13 @@
         std::sync::Arc::new(crate::mcp_control::GpuiNotesMcpBridge::with_default_timeout(
             mcp_notes_ui_tx,
         ));
+    let (mcp_state_tx,mcp_state_rx)=async_channel::bounded::<std::sync::mpsc::SyncSender<crate::mcp_resources::AppStateResource>>(16);
     let (mcp_kit_runtime_tx, mcp_kit_runtime_rx) = async_channel::bounded(100);
     let mcp_kit_runtime_bridge: std::sync::Arc<
         dyn crate::mcp_kit_tools::McpKitRuntimeBridge + Send + Sync,
     > = std::sync::Arc::new(crate::mcp_kit_tools::GpuiKitRuntimeBridge::with_default_timeout(
         mcp_kit_runtime_tx,
-    ));
+    ).with_state_channel(mcp_state_tx));
 
     // Start MCP server for AI agent integration
     // Server runs on localhost:43210 with Bearer token authentication
@@ -1593,6 +1594,16 @@ let stdin_response_sender = app_entity
     .clone()
     .or_else(|| app_entity.read(cx).default_response_sender.clone());
 let stdin_rx = start_stdin_listener(stdin_response_sender);
+app_entity.update(cx, |app,cx| app.listen_for_handoff_replies(cx));
+let state_app=app_entity.clone();
+cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+    while let Ok(reply)=mcp_state_rx.recv().await {
+        cx.update(|cx| {
+            let app=state_app.read(cx);
+            let _=reply.send(crate::mcp_resources::AppStateResource {active_prompt:(!matches!(app.current_view,AppView::ScriptList)).then(||app.current_view.app_view_variant().to_string()),visible:script_kit_gpui::is_main_window_visible(), focused:crate::platform::is_main_window_focused(),script_count:app.scripts.len(),scriptlet_count:app.scriptlets.len(),filter_text:None,selected_index:None});
+        });
+    }
+}).detach();
 let window_for_stdin = window;
 let app_entity_for_stdin = app_entity.clone();
 

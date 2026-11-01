@@ -2,6 +2,8 @@
 
 Script Kit GPUI uses MCP in both directions: the running app **is** an MCP server that external agents can read and control, and scripts/Agent Chat can **call** MCP servers you configure.
 
+For scoped credentials, quiet notes, reviewed commands and Herdr handoffs, see [Use Script Kit from your own agent](./external-agents.md).
+
 ## Script Kit as an MCP Server
 
 While the app runs, it serves HTTP MCP on `localhost:43210`:

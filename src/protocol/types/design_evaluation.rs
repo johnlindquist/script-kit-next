@@ -268,8 +268,19 @@ pub enum OneWindowTalkDestination {
     deny_unknown_fields
 )]
 pub enum OneWindowFixtureCommand {
-    CursorBegin { #[serde(default)] hands_free:bool, #[serde(default)] in_kit:bool, #[serde(default)] recoverable_sample:bool },
-    CursorFinal { words: String },
+    HandoffRecipient {},
+    HandoffAnswer {},
+    CursorBegin {
+        #[serde(default)]
+        hands_free: bool,
+        #[serde(default)]
+        in_kit: bool,
+        #[serde(default)]
+        recoverable_sample: bool,
+    },
+    CursorFinal {
+        words: String,
+    },
     ShortcutOutside {},
     /// Starts the voice session "Start Dictation to Agent Chat/Notes" starts; the typed words
     /// stand in for the heard ones because evaluation never opens a microphone.
@@ -281,7 +292,10 @@ pub enum OneWindowFixtureCommand {
     Summon {},
     /// Stands in for the app the user came from, which evaluation never has: the line names this
     /// app's front window the way it names the real one, so Space stages it.
-    FocusWindow { app: String, title: String },
+    FocusWindow {
+        app: String,
+        title: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -44,7 +44,10 @@ function usage() {
     "Script Kit command line",
     "",
     "Usage:",
-    "  scriptkit --help",
+    "  scriptkit --help | --skill",
+    "  scriptkit agent discover | note | run | available | take | reply | away",
+    "  scriptkit install-skill <skills-directory> | inspect-command <name>",
+    "  scriptkit grant-agent <name> <private-credential-file> <scope> ...",
     "  scriptkit mcp tools",
     "  scriptkit mcp resources",
     "  scriptkit mcp call <tool-name> [json-arguments]",
@@ -119,8 +122,8 @@ function discoveryPath(): string {
   return join(workspace, "server.json");
 }
 
-function loadDiscovery(): DiscoveryInfo | null {
-  const path = discoveryPath();
+function loadDiscovery(locationOnly=false): DiscoveryInfo | null {
+  const path = locationOnly ? join(dirname(discoveryPath()),"server-location.json") : discoveryPath();
   if (!existsSync(path)) {
     return null;
   }
@@ -184,12 +187,12 @@ function reviewedLocalEndpoint(endpointOrBase: string): string {
   return endpoint.toString();
 }
 
-function resolveEndpointAndToken(): { endpoint: string; token: string } {
+function resolveEndpointAndToken(explicitToken?:string): { endpoint: string; token: string } {
   const endpointOverride = envValue("SCRIPT_KIT_MCP_ENDPOINT");
-  const tokenOverride = envValue("SCRIPT_KIT_MCP_TOKEN");
+  const tokenOverride = explicitToken ?? envValue("SCRIPT_KIT_MCP_TOKEN");
   // Validate an explicit destination before opening local bearer-token state.
   const reviewedOverride = endpointOverride ? reviewedLocalEndpoint(endpointOverride) : undefined;
-  const discovery = reviewedOverride && tokenOverride ? null : loadDiscovery();
+  const discovery = reviewedOverride && tokenOverride ? null : loadDiscovery(tokenOverride !== undefined);
   const token = tokenOverride ?? discovery?.token;
   const endpointOrBase = reviewedOverride ?? discovery?.url;
 
@@ -314,8 +317,10 @@ function installCommand(targetArg: string | undefined): CliResult {
   };
 }
 
-export async function rpc(method: string, params: unknown): Promise<unknown> {
-  const { endpoint, token } = resolveEndpointAndToken();
+export async function rpc(method: string, params: unknown, explicitToken?:string): Promise<unknown> {
+  const scopedFile=envValue("SCRIPT_KIT_AGENT_CREDENTIAL");
+  if(explicitToken===undefined && scopedFile) explicitToken=(await import("./agent-bridge-cli.ts")).credentialToken(scopedFile);
+  const { endpoint, token } = resolveEndpointAndToken(explicitToken);
   const timeoutMs = mcpRequestTimeoutMs();
   const maximumResponseBytes = mcpMaxResponseBytes();
   const requestId = `script-kit-mcp-cli-${crypto.randomUUID()}`;
@@ -400,6 +405,14 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     return usage();
   }
 
+  if (["--skill","grant-agent","install-skill","inspect-command","agent"].includes(rawCommand)) {
+    const bridge=await import("./agent-bridge-cli.ts");
+    if(rawCommand==='--skill')return bridge.agentDoc();
+    if(rawCommand==='agent')return {success:true,data:await bridge.agent(rest,rpc)};
+    if(["grant-agent","inspect-command"].includes(rawCommand) && (process.env.SCRIPT_KIT_AGENT_CREDENTIAL || process.env.SCRIPT_KIT_MCP_TOKEN)) fail("Use an operator shell, not an agent credential context");
+    if(process.env.SCRIPT_KIT_MCP_SERVER_JSON) fail('Use SK_PATH rather than an endpoint override for operator commands');
+    return {success:true,data:bridge.operator(argv,dirname(discoveryPath()))};
+  }
   if (rawCommand === "install-command") {
     return installCommand(rest[0]);
   }
@@ -429,6 +442,10 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
       name: first,
       arguments: parseJsonArg(second, {}),
     });
+    if ((data as {result?:{isError?:boolean}}).result?.isError) {
+      let code="tool_error";try {const v=JSON.parse((data as any).result.content[0].text);if(typeof v.error?.code==="string"&&/^[a-z_]{1,64}$/.test(v.error.code))code=v.error.code;}catch{}
+      fail(`Script Kit tool ${first} refused the call: ${code}`);
+    }
   } else if (command === "read") {
     if (!first) {
       fail("read requires a resource URI");

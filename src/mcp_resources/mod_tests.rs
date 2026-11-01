@@ -190,6 +190,7 @@ mod tests {
         let app_state = AppStateResource {
             visible: true,
             focused: true,
+            active_prompt:None,
             script_count: 10,
             scriptlet_count: 5,
             filter_text: Some("test".to_string()),
@@ -217,19 +218,7 @@ mod tests {
 
     #[test]
     fn test_state_resource_read_default() {
-        // When no app state is provided, should return defaults
-        let result = read_resource("kit://state", &[], &[], None);
-        assert!(result.is_ok());
-
-        let content = result.unwrap();
-        let parsed: AppStateResource = serde_json::from_str(&content.text).unwrap();
-
-        assert!(!parsed.visible);
-        assert!(!parsed.focused);
-        assert_eq!(parsed.script_count, 0);
-        assert_eq!(parsed.scriptlet_count, 0);
-        assert_eq!(parsed.filter_text, None);
-        assert_eq!(parsed.selected_index, None);
+        assert!(read_resource("kit://state", &[], &[], None).unwrap_err().contains("state_unavailable"));
     }
 
     #[test]
@@ -422,7 +411,7 @@ mod tests {
         let request = parse_context_resource_request("kit://context").unwrap();
         assert_eq!(
             request.options,
-            crate::context_snapshot::CaptureContextOptions::default()
+            metadata_only(crate::context_snapshot::CaptureContextOptions::default())
         );
         assert_eq!(request.effective_profile, "full");
         assert!(!request.diagnostics);
@@ -433,7 +422,7 @@ mod tests {
         let request = parse_context_resource_request("kit://context?profile=minimal").unwrap();
         assert_eq!(
             request.options,
-            crate::context_snapshot::CaptureContextOptions::minimal()
+            metadata_only(crate::context_snapshot::CaptureContextOptions::minimal())
         );
         assert_eq!(request.effective_profile, "minimal");
     }
@@ -498,7 +487,7 @@ mod tests {
         assert!(matches!(request.kind, ContextResourceKind::Snapshot));
         assert_eq!(
             request.options,
-            crate::context_snapshot::CaptureContextOptions::minimal()
+            metadata_only(crate::context_snapshot::CaptureContextOptions::minimal())
         );
         assert_eq!(request.effective_profile, "minimal");
         assert!(request.diagnostics);
@@ -548,7 +537,7 @@ mod tests {
         let minimal = parse_context_resource_request("kit://context?profile=minimal").unwrap();
         assert_eq!(
             minimal.options,
-            crate::context_snapshot::CaptureContextOptions::minimal()
+            metadata_only(crate::context_snapshot::CaptureContextOptions::minimal())
         );
     }
 

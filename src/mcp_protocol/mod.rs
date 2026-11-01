@@ -16,6 +16,10 @@
 #![allow(dead_code)]
 
 // --- merged from part_000.rs ---
+mod access;
+pub(crate) mod bridge;
+#[cfg(test)]
+mod bridge_tests;
 mod desktop_fill;
 use crate::mcp_clipboard_tools;
 use crate::mcp_computer_use_tools;
@@ -212,6 +216,7 @@ impl JsonRpcResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpCapabilities {
+    pub protocol_version: String,
     /// Server information
     pub server_info: ServerInfo,
     /// Supported capabilities
@@ -348,16 +353,73 @@ pub async fn handle_request_with_runtime_context(
         );
     }
 
+    if request.method == "ping" {
+        return JsonRpcResponse::success(request.id, serde_json::json!({}));
+    }
     // Route to appropriate handler based on method
     match McpMethod::from_str(&request.method) {
         Some(McpMethod::Initialize) => handle_initialize(request),
-        Some(McpMethod::ToolsList) => handle_tools_list_with_scripts(request, scripts),
+        Some(McpMethod::ToolsList) => {
+            let mut reply = handle_tools_list_with_scripts(request, scripts);
+            if let (Some(ctx), Some(rows)) = (
+                runtime_context,
+                reply
+                    .result
+                    .as_mut()
+                    .and_then(|v| v["tools"].as_array_mut()),
+            ) {
+                rows.retain(|v| {
+                    v["name"]
+                        .as_str()
+                        .is_some_and(|n| access::tool(n, &ctx.token_scopes))
+                });
+                rows.extend(
+                    bridge::commands::catalog(&ctx.token_scopes)
+                        .1
+                        .iter()
+                        .filter_map(|d| serde_json::to_value(d).ok()),
+                );
+            }
+            reply
+        }
         Some(McpMethod::ToolsCall) => {
             handle_tools_call_with_runtime_context(request, scripts, runtime_context).await
         }
-        Some(McpMethod::ResourcesList) => handle_resources_list(request),
+        Some(McpMethod::ResourcesList) => {
+            let mut reply = handle_resources_list(request);
+            if let (Some(ctx), Some(rows)) = (
+                runtime_context,
+                reply
+                    .result
+                    .as_mut()
+                    .and_then(|v| v["resources"].as_array_mut()),
+            ) {
+                rows.retain(|v| {
+                    v["uri"]
+                        .as_str()
+                        .is_some_and(|u| access::resource(u, &ctx.token_scopes))
+                });
+            }
+            reply
+        }
         Some(McpMethod::ResourcesRead) => {
-            handle_resources_read_with_context(request, scripts, scriptlets, app_state)
+            let uri = request.params["uri"].as_str().unwrap_or_default();
+            if runtime_context.is_some_and(|ctx| !access::resource(uri, &ctx.token_scopes)) {
+                return JsonRpcResponse::error(request.id, -32003, "scope_denied");
+            }
+            let observed = if uri == "kit://state" && app_state.is_none() {
+                runtime_context
+                    .and_then(|c| c.kit_runtime_bridge.as_ref())
+                    .and_then(|b| b.state())
+            } else {
+                None
+            };
+            handle_resources_read_with_context(
+                request,
+                scripts,
+                scriptlets,
+                app_state.or(observed.as_ref()),
+            )
         }
         Some(McpMethod::ResourcesWrite) | Some(McpMethod::ResourcesSubscribe) => {
             JsonRpcResponse::error(
@@ -376,17 +438,18 @@ pub async fn handle_request_with_runtime_context(
 /// Handle initialize request
 fn handle_initialize(request: JsonRpcRequest) -> JsonRpcResponse {
     let capabilities = McpCapabilities {
+        protocol_version: "2025-06-18".into(),
         server_info: ServerInfo {
             name: "script-kit".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
         capabilities: CapabilitySet {
             tools: Some(ToolsCapability {
-                list_changed: Some(true),
+                list_changed: Some(false),
             }),
             resources: Some(ResourcesCapability {
                 subscribe: Some(false),
-                list_changed: Some(true),
+                list_changed: Some(false),
             }),
         },
     };
@@ -414,6 +477,7 @@ pub fn handle_tools_list_with_scripts(
     let mut all_tools = mcp_control::build_default_mutation_registry().definitions();
     all_tools.extend(mcp_kit_tools::get_kit_tool_definitions());
     all_tools.extend(desktop_fill::definitions());
+    all_tools.extend(bridge::definitions());
     all_tools.extend(mcp_computer_use_tools::get_computer_use_tool_definitions());
 
     // Get scripts/* namespace tools (only scripts with schema.input)
@@ -535,8 +599,55 @@ async fn handle_tools_call_with_runtime_parts(
         .cloned()
         .unwrap_or(serde_json::json!({}));
 
-    if matches!(tool_name, desktop_fill::PROPOSE | desktop_fill::APPLY | desktop_fill::STATUS) {
-        return JsonRpcResponse::success(request.id, desktop_fill::call(tool_name, arguments, desktop_principal, &token_scopes).await);
+    if tool_name.starts_with("kit/handoff_") {
+        let result = desktop_principal
+            .as_deref()
+            .ok_or("scope_denied")
+            .and_then(|owner| bridge::handoff::call(tool_name, owner, &token_scopes, arguments));
+        if bridge::handoff::permitted(tool_name, &token_scopes) {
+            mcp_control::bridge_audit(&trace_id, tool_name, result.as_ref().err().copied());
+        }
+        return JsonRpcResponse::success(request.id, bridge::reply(result));
+    }
+    if tool_name == "kit/agent_access" {
+        return JsonRpcResponse::success(
+            request.id,
+            bridge::reply(Ok(
+                serde_json::json!({"ok":true,"commands":bridge::commands::catalog(&token_scopes).0}),
+            )),
+        );
+    }
+    if let Some(name) = tool_name.strip_prefix("commands/") {
+        let result = bridge::commands::run(name, arguments, &token_scopes).await;
+        mcp_control::bridge_audit(
+            &trace_id,
+            "reviewed_command",
+            result.as_ref().err().copied(),
+        );
+        return JsonRpcResponse::success(request.id, bridge::reply(result));
+    }
+    if let Some(scope) = bridge::scope(tool_name) {
+        let result = match desktop_principal
+            .as_deref()
+            .filter(|_| token_scopes.iter().any(|s| s == scope))
+        {
+            Some(owner) => bridge::quiet(tool_name, arguments, owner),
+            None => Err("scope_denied"),
+        };
+        mcp_control::bridge_audit(&trace_id, tool_name, result.as_ref().err().copied());
+        return JsonRpcResponse::success(request.id, bridge::reply(result));
+    }
+    if tool_name.starts_with("computer/") && !access::tool(tool_name, &token_scopes) {
+        return JsonRpcResponse::success(request.id, bridge::reply(Err("scope_denied")));
+    }
+    if matches!(
+        tool_name,
+        desktop_fill::PROPOSE | desktop_fill::APPLY | desktop_fill::STATUS
+    ) {
+        return JsonRpcResponse::success(
+            request.id,
+            desktop_fill::call(tool_name, arguments, desktop_principal, &token_scopes).await,
+        );
     }
     if mcp_notes_tools::is_notes_tool(tool_name)
         || mcp_scripts_tools::is_scripts_tool(tool_name)
@@ -1660,8 +1771,8 @@ mod tests {
         // Should be parseable as AppState JSON
         let state: serde_json::Value =
             serde_json::from_str(text).context("kit/state should return valid JSON")?;
-        assert!(state.get("visible").is_some());
-        assert!(state.get("focused").is_some());
+        assert_eq!(state["error"]["code"], "missing_runtime");
+        assert!(state.get("visible").is_none());
         Ok(())
     }
     #[test]
@@ -2149,6 +2260,7 @@ mod tests {
             let app_state = mcp_resources::AppStateResource {
                 visible: true,
                 focused: true,
+                active_prompt: None,
                 script_count: 5,
                 scriptlet_count: 3,
                 filter_text: Some("test".to_string()),
@@ -2213,6 +2325,7 @@ mod tests {
             let app_state = mcp_resources::AppStateResource {
                 visible: true,
                 focused: false,
+                active_prompt: None,
                 script_count: 1,
                 scriptlet_count: 1,
                 filter_text: None,

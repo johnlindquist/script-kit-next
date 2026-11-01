@@ -123,9 +123,8 @@ pub(super) fn tools() -> Vec<AppTool> {
         crate::mcp_control::build_default_mutation_registry().definitions();
     definitions.extend(crate::mcp_kit_tools::get_kit_tool_definitions());
     definitions.extend(crate::mcp_computer_use_tools::get_computer_use_tool_definitions());
-    definitions.extend(crate::mcp_script_tools::get_script_tool_definitions(
-        &scripts(),
-    ));
+    // A script schema alone is not an executable grant. Reviewed external commands
+    // have separate per-principal, digest-bound discovery.
     let mut tools = local_tools();
     for definition in definitions {
         let name = model_safe(&definition.name);

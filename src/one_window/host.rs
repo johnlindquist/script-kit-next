@@ -42,6 +42,8 @@ pub(crate) struct OneWindowHost {
     echo: Option<String>,
     /// Invalidates a pending, read-only Save-sheet preview when the user moves on.
     pub(super) fill_preview: u64,
+    pub(super) handoff_listening: bool,
+    pub(super) handoff_draft: Option<super::handoff::OpenDraft>,
     jev_asked: u64,
     jev_pending: Option<(u64, String)>,
     /// A row that ran and opened something; its title is what finished when that ends.
@@ -63,7 +65,7 @@ pub(crate) struct OneWindowHost {
     /// the list, so they go when a view opens and come back when it closes.
     pub(super) covered: bool,
     /// A note asked for while the window was hidden, opened once it's shown.
-    pub(crate) note_open_revision:u64,
+    pub(crate) note_open_revision: u64,
     pub(crate) note_waiting: Option<crate::notes::NoteTarget>,
     /// Scrolls a long view's rows so the highlighted one stays in sight.
     pub(super) view_scroll: gpui::ScrollHandle,
@@ -198,7 +200,9 @@ fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
             let row = Row::new(reading.key.clone(), reading.plan.title.clone());
             if crate::intent::launcher::unavailable(&reading.plan).is_some() {
                 row.with_enter_label("Unavailable")
-            } else { row }
+            } else {
+                row
+            }
         })
         .collect()
 }
@@ -280,15 +284,24 @@ impl ScriptListApp {
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
-        let action_page=self.one_window.page_for_action();
+        let action_page = self.one_window.page_for_action();
         let mut works = Vec::new();
         let mut first = true;
         self.one_window_load_lessons(cx);
         let now = self.one_window_now(cx);
         self.one_window_host.acting_on = self.one_window.staged().map(|s| s.subject.clone());
         while let Some(event) = queue.pop_front() {
-            if matches!(event, Event::Text(_) | Event::Dismissed | Event::Summon | Event::View(_) | Event::Stage(_) | Event::Key(_)) {
-                self.one_window_host.fill_preview = self.one_window_host.fill_preview.wrapping_add(1);
+            if matches!(
+                event,
+                Event::Text(_)
+                    | Event::Dismissed
+                    | Event::Summon
+                    | Event::View(_)
+                    | Event::Stage(_)
+                    | Event::Key(_)
+            ) {
+                self.one_window_host.fill_preview =
+                    self.one_window_host.fill_preview.wrapping_add(1);
             }
             let typed = matches!(event, Event::Text(_));
             let outcome = self.one_window.handle(now, event);
@@ -361,7 +374,11 @@ impl ScriptListApp {
             handled.ran = true;
             let said = self.one_window_host.ledger.said;
             let title = row.title.clone();
-            if let Err(error) = if row.key.starts_with("subject/") { self.run_subject_action(&row,action_page.clone(),cx) } else { self.one_window_run(row, cx) } {
+            if let Err(error) = if row.key.starts_with("subject/") {
+                self.run_subject_action(&row, action_page.clone(), cx)
+            } else {
+                self.one_window_run(row, cx)
+            } {
                 tracing::warn!(
                     target: "script_kit::one_window",
                     event = "run_failed",
@@ -500,8 +517,13 @@ impl ScriptListApp {
         }
         self.settle_intent_oracle_slot();
         let mut turn = vec![Event::Text(text.to_string())];
-        if self.intent_launcher.is_off() && !text.trim().is_empty()
-            && self.intent_tab_browser().and_then(|app| crate::intent::engine::named_tab_plan(text,app)).is_none() {
+        if self.intent_launcher.is_off()
+            && !text.trim().is_empty()
+            && self
+                .intent_tab_browser()
+                .and_then(|app| crate::intent::engine::named_tab_plan(text, app))
+                .is_none()
+        {
             turn.push(Event::JevDown {
                 text: text.to_string(),
             });
@@ -516,7 +538,10 @@ impl ScriptListApp {
         self.one_window_host.echo = Some(text.clone());
         self.filter_text = text.clone();
         self.pending_filter_sync = true;
-        if matches!(self.one_window_hosted_view(), Some(super::views::HostedView::Form(_))) {
+        if matches!(
+            self.one_window_hosted_view(),
+            Some(super::views::HostedView::Form(_))
+        ) {
             self.filter_coalescer.reset();
         } else {
             self.queue_filter_compute(text, cx);
@@ -561,7 +586,10 @@ impl ScriptListApp {
         for row in self.one_window.staged().iter().flat_map(|s| &s.rows) {
             row.key.hash(&mut hasher);
         }
-        self.one_window.subject_page().map(|p|p.id).hash(&mut hasher);
+        self.one_window
+            .subject_page()
+            .map(|p| p.id)
+            .hash(&mut hasher);
         self.one_window_own_token().hash(&mut hasher);
         self.one_window_ledger_token(&mut hasher);
         hasher.finish()
@@ -874,11 +902,22 @@ impl ScriptListApp {
         self.one_window_follow_own_selection(cx);
         // Re-anchoring the old first suggestion would scroll the entire new subject panel
         // out of sight, leaving Return bound to an invisible action on first show.
-        let page=self.has_launcher_tabs().then(||self.one_window.subject_page()).flatten().map(|p|p.id);
-        if page!=self.one_window_host.published_subject_page && page.is_some() && self.filter_text.is_empty() && self.one_window.list().sel==0 {
-            self.main_list_state.scroll_to(gpui::ListOffset{item_ix:0,offset_in_item:gpui::px(0.)});
+        let page = self
+            .has_launcher_tabs()
+            .then(|| self.one_window.subject_page())
+            .flatten()
+            .map(|p| p.id);
+        if page != self.one_window_host.published_subject_page
+            && page.is_some()
+            && self.filter_text.is_empty()
+            && self.one_window.list().sel == 0
+        {
+            self.main_list_state.scroll_to(gpui::ListOffset {
+                item_ix: 0,
+                offset_in_item: gpui::px(0.),
+            });
         }
-        self.one_window_host.published_subject_page=page;
+        self.one_window_host.published_subject_page = page;
     }
 
     // ------------------------------------------------------------------ Jev
@@ -892,18 +931,33 @@ impl ScriptListApp {
         if !self.one_window_owns(&text) || self.one_window.list().jev.is_down_for(&text) {
             return;
         }
-        if let Some(plan) = self.intent_tab_browser().and_then(|app| crate::intent::engine::named_tab_plan(&text,app)) {
-            let readings=crate::intent::readings(plan);
-            self.one_window_host.jev_pending=None;
-            self.intent_launcher.show(&text,self.intent_screen_key(),&readings);
-            queue.push_back(Event::Jev { rows: jev_rows(&readings), text });
+        if let Some(plan) = self
+            .intent_tab_browser()
+            .and_then(|app| crate::intent::engine::named_tab_plan(&text, app))
+        {
+            let readings = crate::intent::readings(plan);
+            self.one_window_host.jev_pending = None;
+            self.intent_launcher
+                .show(&text, self.intent_screen_key(), &readings);
+            queue.push_back(Event::Jev {
+                rows: jev_rows(&readings),
+                text,
+            });
             return;
         }
         if self.intent_launcher.is_off() {
             queue.push_back(Event::JevDown { text });
             return;
         }
-        if self.main_services.is_production() && (crate::intent::sensitive_words(&text) || self.one_window.list().names.iter().any(|r| !r.fallback && r.title.eq_ignore_ascii_case(text.trim()))) {
+        if self.main_services.is_production()
+            && (crate::intent::sensitive_words(&text)
+                || self
+                    .one_window
+                    .list()
+                    .names
+                    .iter()
+                    .any(|r| !r.fallback && r.title.eq_ignore_ascii_case(text.trim())))
+        {
             self.one_window_cancel_jev();
             queue.push_back(Event::Jev { rows: vec![], text });
             return;
@@ -1141,7 +1195,7 @@ impl ScriptListApp {
     pub(crate) fn one_window_automation_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
         let list = self.one_window.list();
         let now = self.one_window_peek_now(cx);
-        let cursor_voice=self.cursor_voice_state();
+        let cursor_voice = self.cursor_voice_state();
         let marks = {
             let input = self.gpui_input_state.read(cx);
             let value = input.value();

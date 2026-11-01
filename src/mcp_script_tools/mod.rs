@@ -168,20 +168,19 @@ pub fn handle_script_tool_call(
         }
     };
 
-    // Return success with script path for execution
-    // The actual execution should be done by the caller
+    // A declared schema is not an operator's authorization to execute code.
+    let _ = (script, arguments);
     ScriptToolResult {
         content: vec![ScriptToolContent {
             content_type: "text".to_string(),
             text: serde_json::json!({
-                "status": "pending",
-                "script_path": script.path.to_string_lossy(),
-                "arguments": arguments,
-                "message": format!("Script '{}' queued for execution", script.name)
+                "status": "not_dispatched",
+                "code": "review_required",
+                "message": "This schema is not a reviewed executable command. Nothing ran."
             })
             .to_string(),
         }],
-        is_error: None,
+        is_error: Some(true),
     }
 }
 
@@ -622,15 +621,8 @@ mod tests {
             &serde_json::json!({"title": "Test Note"}),
         );
 
-        assert!(
-            result.is_error.is_none() || result.is_error == Some(false),
-            "Should succeed for valid tool"
-        );
-        assert!(!result.content.is_empty());
-
-        // Result should contain script path
-        let text = &result.content[0].text;
-        assert!(text.contains("create-note"));
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("not_dispatched"));
     }
 
     #[test]
