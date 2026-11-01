@@ -45,6 +45,14 @@ The explicit Talk view is separate from direct cursor dictation. In that view, t
 
 Letting go acts on the final words only when Jev agrees and is at least 65 % sure. Otherwise the line reads "Pick one · ⌘1 or ⌘2". `Esc` drops everything.
 
+## Spell names from the window
+
+On macOS, dictation uses visible Accessibility text from the original window by default. It doesn’t take screenshots in this mode. For example, with `TypeScript` visible, “the type script project” can paste as “the TypeScript project”. Context applies to the final paste, not live partials. It fixes matching words, spacing and case; it does not guess that *Shawn* means *Sean*.
+
+In **Dictation Setup**, choose **Use visible text and window OCR for screen spelling** for windows with little readable text. This option requires existing macOS Screen Recording permission as well as Accessibility; recording never opens a permission dialog. Only the original window is eligible, not the display. OCR can misread characters. Your personal vocabulary takes precedence.
+
+Collection runs locally while you speak; if the terms aren't ready at delivery, dictation continues without them. No image, window text or term list is saved or sent to a model. The resulting dictated words follow your normal history settings. Password-manager exclusions and protected focused fields are skipped. Switching to Kit or Markdown discards the context. Choose **Turn off screen spelling** to turn it off.
+
 ## Live Partials
 
 While recording, the main input shows the words as they're recognized so you can see recognition in flight (on by default; `dictation.livePreview: false` disables it).
@@ -60,6 +68,7 @@ export default {
     model: "parakeet-tdt-0.6b-v3", // or "whisper-medium"
     language: "en",                // Whisper only; Parakeet auto-detects
     startInKit: false,             // usual cursor shortcut starts at the original field
+    screenSpelling: "accessibility", // default; alternatives: "off", "accessibilityAndOcr"
     switchShortcut: "Shift+Escape", // use e.g. "Alt+F12" or "off"
     keepRecordings: true,          // protected audio; saveHistory:false disables it too
     pushToTalk: true,              // hold-to-record (default: true)

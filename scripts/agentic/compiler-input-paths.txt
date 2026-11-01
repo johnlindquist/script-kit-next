@@ -1,5 +1,6 @@
 src
 tests/theme/snapshots
+tests/fixtures/dictation-screen-spelling.png
 crates
 vendor
 assets

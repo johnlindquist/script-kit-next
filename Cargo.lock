@@ -7750,6 +7750,7 @@ dependencies = [
  "base64 0.22.1",
  "bitflags 2.11.0",
  "block",
+ "cc",
  "chrono",
  "chrono-english",
  "chrono-humanize",

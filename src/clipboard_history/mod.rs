@@ -114,7 +114,10 @@ pub use temp_file::save_entry_to_temp_file;
 pub use open_with::{get_apps_for_file, open_file_with_app, AppInfo};
 
 // Secret rejection
-pub use rejection::{configure_secret_rejection, matches_secret_content, SecretRejectionConfig};
+pub use rejection::{
+    configure_secret_rejection, matches_blocked_source_app, matches_secret_content,
+    SecretRejectionConfig,
+};
 
 // Monitor/Init
 #[allow(unused_imports)]

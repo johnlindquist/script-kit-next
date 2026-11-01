@@ -98,7 +98,7 @@ impl PolishOutcome {
 
 /// Letters and digits only, lower-cased: "Open-AI" and "open ai" both become
 /// "openai".
-fn squash(text: &str) -> String {
+pub(super) fn squash(text: &str) -> String {
     text.chars()
         .filter(|ch| ch.is_alphanumeric())
         .flat_map(char::to_lowercase)
@@ -108,6 +108,7 @@ fn squash(text: &str) -> String {
 /// A token of the transcript: a run of word characters, or the text between.
 #[derive(Debug)]
 struct Token<'a> {
+    start: usize,
     text: &'a str,
     is_word: bool,
 }
@@ -122,6 +123,7 @@ fn tokenize(text: &str) -> Vec<Token<'_>> {
             Some(kind) if kind == is_word => {}
             Some(kind) => {
                 tokens.push(Token {
+                    start,
                     text: &text[start..index],
                     is_word: kind,
                 });
@@ -133,6 +135,7 @@ fn tokenize(text: &str) -> Vec<Token<'_>> {
     }
     if let Some(kind) = current_is_word {
         tokens.push(Token {
+            start,
             text: &text[start..],
             is_word: kind,
         });
@@ -145,75 +148,115 @@ fn tokenize(text: &str) -> Vec<Token<'_>> {
 /// "OpenAI", "type script" → "TypeScript"). Returns the text and how many
 /// spans changed.
 pub fn apply_vocabulary(text: &str, vocabulary: &[String]) -> (String, usize) {
-    let targets: Vec<(String, &str)> = vocabulary
-        .iter()
-        .map(|word| (squash(word), word.as_str()))
-        .filter(|(key, _)| key.chars().count() >= 2)
-        .collect();
-    if targets.is_empty() || text.is_empty() {
-        return (text.to_string(), 0);
+    if vocabulary.is_empty() {
+        return (text.to_owned(), 0);
     }
-    let tokens = tokenize(text);
-    let mut out = String::with_capacity(text.len());
-    let mut fixes = 0;
-    let mut index = 0;
-    while index < tokens.len() {
-        if !tokens[index].is_word {
-            out.push_str(tokens[index].text);
-            index += 1;
-            continue;
-        }
-        // Longest match first: up to 3 words joined by spaces/hyphens.
-        let mut matched = None;
-        for words in (1..=3).rev() {
-            let mut end = index;
-            let mut joined = String::new();
-            let mut ok = true;
-            for step in 0..words {
-                if step > 0 {
-                    let sep = tokens.get(end + 1);
-                    let next = tokens.get(end + 2);
-                    match (sep, next) {
-                        (Some(sep), Some(next))
-                            if !sep.is_word
-                                && next.is_word
-                                && sep.text.chars().all(|c| c == ' ' || c == '-') =>
-                        {
-                            end += 2;
-                        }
-                        _ => {
-                            ok = false;
-                            break;
-                        }
-                    }
-                }
-                joined.push_str(tokens[end].text);
-            }
-            if !ok {
+    let (replacement, n) = PreparedVocabulary::new(vocabulary).rewrite(text);
+    (replacement.unwrap_or_else(|| text.to_owned()), n)
+}
+
+/// Compile on the collection worker, not when the speaker releases the key.
+/// A short transcript typically mentions only one or two terms. Delay copying
+/// its untouched bytes until there is an actual replacement.
+pub struct PreparedVocabulary {
+    spellings: std::collections::HashMap<String, String>,
+    ascii_starts: [bool; 128],
+    longest: usize,
+}
+
+impl PreparedVocabulary {
+    pub fn new(words: &[String]) -> Self {
+        let mut out = Self {
+            spellings: Default::default(),
+            ascii_starts: [false; 128],
+            longest: 0,
+        };
+        for word in words {
+            let key = squash(word);
+            if key.chars().count() < 2 {
                 continue;
             }
-            let key = squash(&joined);
-            if let Some((_, spelling)) = targets.iter().find(|(target, _)| *target == key) {
-                matched = Some((end, *spelling));
-                break;
+            let first = key.as_bytes()[0];
+            if first.is_ascii() {
+                out.ascii_starts[first as usize] = true;
             }
+            out.longest = out.longest.max(key.len());
+            out.spellings.entry(key).or_insert_with(|| word.clone());
         }
-        match matched {
-            Some((end, spelling)) => {
-                let original: String = tokens[index..=end].iter().map(|t| t.text).collect();
-                if original != spelling {
+        out
+    }
+
+    pub fn rewrite(&self, text: &str) -> (Option<String>, usize) {
+        if self.spellings.is_empty() || text.is_empty() {
+            return (None, 0);
+        }
+        let tokens = tokenize(text);
+        let (mut index, mut copied, mut fixes) = (0, 0, 0);
+        let mut joined = String::new();
+        let mut out = String::new();
+        while let Some(token) = tokens.get(index) {
+            let first = token.text.as_bytes()[0];
+            if !token.is_word
+                || (first.is_ascii_alphanumeric()
+                    && !self.ascii_starts[first.to_ascii_lowercase() as usize])
+            {
+                index += 1;
+                continue;
+            }
+            joined.clear();
+            let mut best = None;
+            for count in 0..3 {
+                let end = index + count * 2;
+                let Some(next) = tokens.get(end) else {
+                    break;
+                };
+                if !next.is_word
+                    || (count != 0 && !tokens[end - 1].text.bytes().all(|b| b == b' ' || b == b'-'))
+                {
+                    break;
+                }
+                if next.text.is_ascii() {
+                    joined.extend(
+                        next.text
+                            .bytes()
+                            .filter(u8::is_ascii_alphanumeric)
+                            .map(|b| b.to_ascii_lowercase() as char),
+                    );
+                } else {
+                    joined.extend(
+                        next.text
+                            .chars()
+                            .filter(|c| c.is_alphanumeric())
+                            .flat_map(char::to_lowercase),
+                    );
+                }
+                if let Some(spelling) = self.spellings.get(&joined) {
+                    best = Some((end, spelling));
+                }
+                if joined.len() >= self.longest {
+                    break;
+                }
+            }
+            if let Some((end, spelling)) = best {
+                let after = tokens[end].start + tokens[end].text.len();
+                if &text[token.start..after] != spelling {
+                    out.push_str(&text[copied..token.start]);
+                    out.push_str(spelling);
+                    copied = after;
                     fixes += 1;
                 }
-                out.push_str(spelling);
                 index = end + 1;
-            }
-            None => {
-                out.push_str(tokens[index].text);
+            } else {
                 index += 1;
             }
         }
+        if fixes == 0 {
+            (None, 0)
+        } else {
+            out.push_str(&text[copied..]);
+            (Some(out), fixes)
+        }
     }
-    (out, fixes)
 }
 
 /// A spelling hint for engines that accept one.

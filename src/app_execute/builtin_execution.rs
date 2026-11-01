@@ -4884,7 +4884,7 @@ impl ScriptListApp {
                 mut job,
             }) => {
                 let selection = job.take_selection();
-                let protected_take = self.one_window_host.cursor_voice.active.as_ref().filter(|s|s.generation==session_generation).and_then(|s|s.take.clone());
+                let protected_take = self.one_window_host.cursor_voice.active.as_mut().filter(|s|s.generation==session_generation).and_then(|s| { s.stop_started = Some(std::time::Instant::now()); s.take.clone() });
                 // This stop request is the new parity baseline. Shortcut
                 // presses that arrive after it will toggle the queued restart
                 // state rather than being silently ignored.
@@ -7079,6 +7079,7 @@ impl ScriptListApp {
                 (take.duration, when.format("%-I:%M %p").to_string())
             }),
             retry_running: DICTATION_RETRY_RUNNING.load(std::sync::atomic::Ordering::SeqCst),
+            screen_spelling: prefs.dictation.screen_spelling_mode(),
             vocabulary: prefs.dictation.vocabulary_words(),
             // Accessibility read only (never a simulated copy): text selected
             // in the app you came from.
@@ -7093,6 +7094,18 @@ impl ScriptListApp {
                 .map(|style| style.trim().to_lowercase())
                 .filter(|style| !style.is_empty())
                 .unwrap_or_else(|| "off".to_string()),
+        }
+    }
+
+    fn save_screen_spelling(&mut self, mode: &str, cx: &mut Context<Self>) {
+        let mut prefs = crate::config::load_user_preferences();
+        prefs.dictation.screen_spelling = Some(mode.into());
+        match crate::config::save_user_preferences(&prefs) {
+            Ok(()) => {
+                self.config.dictation = Some(prefs.dictation);
+                self.open_dictation_setup_prompt(cx);
+            }
+            Err(e) => self.notice_failed(format!("Couldn't save screen spelling: {e}"),cx),
         }
     }
 
@@ -7501,6 +7514,9 @@ impl ScriptListApp {
             }
             BUILTIN_DICTATION_SETUP_TEST_MIC => self.run_dictation_microphone_check(cx),
             BUILTIN_DICTATION_SETUP_RETRY_LAST => self.retry_last_dictation(cx),
+            "spelling-off" => self.save_screen_spelling("off", cx),
+            "spelling-ax" => self.save_screen_spelling("accessibility", cx),
+            "spelling-ocr" => self.save_screen_spelling("accessibilityAndOcr", cx),
             BUILTIN_DICTATION_SETUP_ADD_WORD => self.add_selected_vocabulary_word(cx),
             BUILTIN_DICTATION_SETUP_GRANT_ACCESSIBILITY => {
                 self.execute_permissions_wizard_grant(

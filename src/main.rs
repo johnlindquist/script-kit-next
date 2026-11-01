@@ -59,6 +59,8 @@ mod design_evaluation;
 mod designs;
 mod dev_marker;
 mod dictation;
+#[cfg(feature = "ocr")]
+pub use script_kit_gpui::ocr;
 mod editor;
 mod effects;
 #[allow(dead_code)] // Public API in lib.rs; binary only uses ErrorSeverity currently
@@ -480,7 +482,7 @@ mod tests {
 
         let events = crate::hotkeys::process_main_hotkey_physical_event(
             crate::hotkeys::MainHotkeyPhysicalEvent {
-                native_press:false,
+                native_press: false,
                 phase: crate::hotkeys::MainHotkeyPhase::KeyDown,
                 correlation_id: "test:implicit-hide-rearm".to_string(),
                 at: std::time::Instant::now(),

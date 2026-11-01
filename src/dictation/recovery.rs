@@ -108,11 +108,11 @@ impl TakeId {
         ensure!(open(&self.db)?.execute("UPDATE take SET raw=?,draft=?,state='ready',rev=rev+1 WHERE id=? AND state IN ('interrupted','processing')",params![raw,text,self.id])?==1,"Recording was cancelled, expired or forgotten");
         Ok(())
     }
-    pub fn dispatching(&self) -> Result<()> {
+    pub fn dispatching_with_spelling(&self, spelling: Option<&str>) -> Result<()> {
         ensure!(
             open(&self.db)?.execute(
-                "UPDATE take SET state='delivery unknown' WHERE id=? AND state='ready'",
-                [&self.id]
+                "UPDATE take SET state='delivery unknown',draft=coalesce(?,draft) WHERE id=? AND state='ready'",
+                params![spelling,&self.id]
             )? == 1,
             "Recording is no longer ready"
         );
@@ -183,11 +183,11 @@ impl TakeId {
         );
         Ok(())
     }
-    pub fn withheld(&self) -> Result<()> {
+    pub fn withheld_with_original(&self, original: Option<&str>) -> Result<()> {
         ensure!(
             open(&self.db)?.execute(
-                "UPDATE take SET state='withheld' WHERE id=? AND state='delivery unknown'",
-                [&self.id]
+                "UPDATE take SET state='withheld',draft=coalesce(?,draft) WHERE id=? AND state='delivery unknown'",
+                params![original,&self.id]
             )? == 1,
             "No dispatch in progress"
         );
@@ -324,9 +324,11 @@ mod tests {
         let a = TakeId::begin_at(db.clone()).unwrap();
         let b = TakeId::begin_at(db).unwrap();
         a.ready("raw A", "A").unwrap();
-        a.dispatching().unwrap();
+        a.dispatching_with_spelling(Some("OpenAI")).unwrap();
+        assert_eq!(a.get().unwrap().draft.as_deref(), Some("OpenAI"));
         assert_eq!(a.get().unwrap().state, "delivery unknown");
-        a.withheld().unwrap();
+        a.withheld_with_original(Some("open ai")).unwrap();
+        assert_eq!(a.get().unwrap().draft.as_deref(), Some("open ai"));
         a.finish().unwrap();
         assert!(a.get().unwrap().expires.is_none());
         a.add_candidate("1").unwrap();

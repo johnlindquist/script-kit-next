@@ -152,6 +152,8 @@ pub struct DictationSetupExtras {
     pub last_take: Option<(std::time::Duration, String)>,
     /// A retry of the newest recording is transcribing now.
     pub retry_running: bool,
+    /// Configured local context source for cursor dictation.
+    pub screen_spelling: &'static str,
     /// Words in `dictation.vocabulary`.
     pub vocabulary: Vec<String>,
     /// Text selected in the app you came from, if it could be a word to add.
@@ -170,6 +172,7 @@ impl Default for DictationSetupExtras {
             last_take: None,
             retry_running: false,
             vocabulary: Vec::new(),
+            screen_spelling: crate::config::DictationPreferences::default().screen_spelling_mode(),
             selected_word: None,
             cleanup_style: "off".to_string(),
         }
@@ -245,6 +248,38 @@ pub fn dictation_setup_extra_rows(
         });
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let mode = extras.screen_spelling;
+        let enabled = matches!(mode, "accessibility" | "accessibilityAndOcr");
+        if mode != "accessibility" {
+            rows.push(DictationSetupRow {
+                name: "Use visible text for screen spelling".into(),
+                value: "spelling-ax",
+                description: "Read names in the original window while you speak. No screenshots."
+                    .into(),
+            });
+        }
+        #[cfg(feature = "ocr")]
+        if mode != "accessibilityAndOcr" {
+            rows.push(DictationSetupRow {
+                name: "Use visible text and window OCR for screen spelling".into(), value: "spelling-ocr",
+                description: "If Accessibility has no useful text, read an image of that window locally. Needs Screen Recording permission.".into(),
+            });
+        }
+        if enabled {
+            rows.push(DictationSetupRow {
+                name: "Turn off screen spelling".into(),
+                value: "spelling-off",
+                description: if mode == "accessibility" {
+                    "Currently using visible Accessibility text"
+                } else {
+                    "Currently using visible text and local window OCR"
+                }
+                .into(),
+            });
+        }
+    }
     let count = extras.vocabulary.len();
     let words_label = if count == 1 {
         "1 word".to_string()
@@ -394,6 +429,37 @@ mod tests {
             },
             hotkey_status: DictationHotkeyStatus::Disabled,
             ready: true,
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn screen_spelling_defaults_to_text_only_and_respects_overrides() {
+        for (json, expected) in [
+            (r#"{"saveHistory":false}"#, "accessibility"),
+            (r#"{"screenSpelling":"off"}"#, "off"),
+            (
+                r#"{"screenSpelling":"accessibilityAndOcr"}"#,
+                "accessibilityAndOcr",
+            ),
+            (r#"{"screenSpelling":"typo"}"#, "off"),
+        ] {
+            let prefs: crate::config::DictationPreferences = serde_json::from_str(json).unwrap();
+            let mode = prefs.screen_spelling_mode();
+            assert_eq!(mode, expected);
+            let extras = DictationSetupExtras {
+                screen_spelling: mode,
+                ..Default::default()
+            };
+            let rows = dictation_setup_extra_rows(&ready_state(), &extras);
+            assert_eq!(
+                rows.iter().any(|r| r.value == "spelling-off"),
+                expected != "off"
+            );
+            assert_eq!(
+                rows.iter().any(|r| r.value == "spelling-ax"),
+                expected != "accessibility"
+            );
         }
     }
 

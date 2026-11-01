@@ -92,6 +92,22 @@ extern "C" {}
 ///
 #[cfg(target_os = "macos")]
 pub fn extract_text_from_rgba(width: u32, height: u32, rgba_data: &[u8]) -> Result<String> {
+    extract_text_with_level(width, height, rgba_data, 1)
+}
+
+/// Accurate recognition for session spelling clues; the clipboard keeps its original fast level.
+#[cfg(target_os = "macos")]
+pub fn extract_dictation_text(width: u32, height: u32, rgba_data: &[u8]) -> Result<String> {
+    extract_text_with_level(width, height, rgba_data, 0)
+}
+
+#[cfg(target_os = "macos")]
+fn extract_text_with_level(
+    width: u32,
+    height: u32,
+    rgba_data: &[u8],
+    level: i64,
+) -> Result<String> {
     let expected_size = (width as usize) * (height as usize) * 4;
     if rgba_data.len() != expected_size {
         return Err(anyhow!(
@@ -112,7 +128,7 @@ pub fn extract_text_from_rgba(width: u32, height: u32, rgba_data: &[u8]) -> Resu
         "Starting OCR text extraction"
     );
 
-    unsafe { extract_text_vision(width, height, rgba_data) }
+    unsafe { extract_text_vision(width, height, rgba_data, level) }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -198,7 +214,12 @@ fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
 
 /// Internal Vision framework implementation
 #[cfg(target_os = "macos")]
-unsafe fn extract_text_vision(width: u32, height: u32, rgba_data: &[u8]) -> Result<String> {
+unsafe fn extract_text_vision(
+    width: u32,
+    height: u32,
+    rgba_data: &[u8],
+    level: i64,
+) -> Result<String> {
     let width_usize = width as usize;
     let height_usize = height as usize;
     let bytes_per_row = width_usize * 4;
@@ -247,7 +268,7 @@ unsafe fn extract_text_vision(width: u32, height: u32, rgba_data: &[u8]) -> Resu
     }
 
     // Now use Vision framework via objc
-    let result = perform_ocr_on_cgimage(cg_image);
+    let result = perform_ocr_on_cgimage(cg_image, level);
 
     // Release CGImage
     CGImageRelease(cg_image);
@@ -257,7 +278,7 @@ unsafe fn extract_text_vision(width: u32, height: u32, rgba_data: &[u8]) -> Resu
 
 /// Perform OCR using Vision framework on a CGImage
 #[cfg(target_os = "macos")]
-unsafe fn perform_ocr_on_cgimage(cg_image: CGImageRef) -> Result<String> {
+unsafe fn perform_ocr_on_cgimage(cg_image: CGImageRef, level: i64) -> Result<String> {
     // Create VNImageRequestHandler with CGImage
     // VNImageRequestHandler initWithCGImage:options:
     let handler_alloc: id = msg_send![class!(VNImageRequestHandler), alloc];
@@ -279,8 +300,8 @@ unsafe fn perform_ocr_on_cgimage(cg_image: CGImageRef) -> Result<String> {
         return Err(anyhow!("Failed to create VNRecognizeTextRequest"));
     }
 
-    // Configure recognition level to accurate (1 = VNRequestTextRecognitionLevelAccurate)
-    let _: () = msg_send![text_request, setRecognitionLevel: 1i64];
+    // Vision declares accurate = 0, fast = 1.
+    let _: () = msg_send![text_request, setRecognitionLevel: level];
 
     // Enable language correction for better results
     let _: () = msg_send![text_request, setUsesLanguageCorrection: true];

@@ -16,6 +16,8 @@
 //! to call them without conditional compilation at the call site.
 
 pub mod accessibility;
+#[cfg(target_os = "macos")]
+pub(crate) mod dictation_spelling;
 mod display;
 #[cfg(target_os = "macos")]
 pub(crate) mod glass_button_host;

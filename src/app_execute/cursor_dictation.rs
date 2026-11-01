@@ -7,6 +7,8 @@ use sk_one_window::cursor_dictation::Route as CursorRoute;
 pub(crate) struct CursorHost {
     active: Option<CursorCapture>,
     retired: Option<u64>,
+    spelling_result: Option<crate::dictation::screen_spelling::Receipt>,
+    stop_to_delivery_ms: Option<u64>,
     saved_draft: Option<String>,
     pub(crate) reviewing: Option<String>,
     paste_anchor: Option<(
@@ -32,6 +34,8 @@ struct CursorCapture {
     journal_failed: std::sync::Arc<std::sync::atomic::AtomicBool>,
     revoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
     partial: String,
+    spelling: Option<crate::dictation::screen_spelling::Session>,
+    stop_started: Option<std::time::Instant>,
     anchor: CursorAnchor,
     selection: crate::dictation::DictationTargetSelection,
 }
@@ -158,7 +162,7 @@ impl CursorField {
 impl ScriptListApp {
     pub(crate) fn cursor_voice_state(&self) -> serde_json::Value {
         let host = &self.one_window_host.cursor_voice;
-        serde_json::json!({"active":host.active.is_some(),"generation":host.active.as_ref().map(|s|s.generation),"route":host.active.as_ref().map(|s|match s.route{CursorRoute::Original=>"original",CursorRoute::Kit=>"kit",CursorRoute::Markdown=>"markdown"}),"switchShortcut":host.active.as_ref().and_then(|s|s.keys.switch_label.as_deref()),"switchUnavailable":host.active.as_ref().is_some_and(|s|s.keys.switch_unavailable),"cancelAvailable":host.active.as_ref().is_some_and(|s|s.keys.cancel_available),"stopping":host.active.as_ref().is_some_and(|s|s.stopped),"draftAvailable":host.saved_draft.is_some()})
+        serde_json::json!({"screenSpelling":{"mode":self.config.get_dictation_preferences().screen_spelling_mode(),"capture":host.active.as_ref().and_then(|s|s.spelling.as_ref()).map(|s|s.status()),"lastDelivery":host.spelling_result,"stopToVerifiedDeliveryMs":host.stop_to_delivery_ms},"active":host.active.is_some(),"generation":host.active.as_ref().map(|s|s.generation),"route":host.active.as_ref().map(|s|match s.route{CursorRoute::Original=>"original",CursorRoute::Kit=>"kit",CursorRoute::Markdown=>"markdown"}),"switchShortcut":host.active.as_ref().and_then(|s|s.keys.switch_label.as_deref()),"switchUnavailable":host.active.as_ref().is_some_and(|s|s.keys.switch_unavailable),"cancelAvailable":host.active.as_ref().is_some_and(|s|s.keys.cancel_available),"stopping":host.active.as_ref().is_some_and(|s|s.stopped),"draftAvailable":host.saved_draft.is_some()})
     }
     fn shared_cursor_prompt(&self) -> bool {
         matches!(
@@ -531,6 +535,36 @@ impl ScriptListApp {
             crate::dictation::set_dictation_session_selection(selection.clone());
             generation
         };
+        let mut spelling = None;
+        #[cfg(target_os = "macos")]
+        let mode = prefs.screen_spelling_mode();
+        #[cfg(target_os = "macos")]
+        if !kit && fixture.is_none() && mode != "off" {
+            if let (CursorAnchor::External(Some(field)), Some(window), Some(bundle)) = (
+                &anchor,
+                selection.destination.external_window_id(),
+                selection.icon_identity.as_deref(),
+            ) {
+                if matches!(&selection.destination, crate::dictation::FrozenDictationDestination::ExternalApp {pid,..} if *pid == field.pid)
+                {
+                    let owner = crate::dictation::screen_spelling::Owner {
+                        generation,
+                        pid: field.pid,
+                        window,
+                    };
+                    spelling = crate::platform::dictation_spelling::start(
+                        owner,
+                        &field.element,
+                        bundle,
+                        &selection.display_label,
+                        mode,
+                        prefs.vocabulary_words(),
+                    );
+                }
+            }
+        }
+        self.one_window_host.cursor_voice.spelling_result = None;
+        self.one_window_host.cursor_voice.stop_to_delivery_ms = None;
         let keys = ListeningKeys::install(
             generation,
             held,
@@ -557,6 +591,8 @@ impl ScriptListApp {
             journal_failed,
             revoked: Default::default(),
             partial: String::new(),
+            spelling,
+            stop_started: None,
             anchor,
             selection,
         });
@@ -671,6 +707,7 @@ impl ScriptListApp {
         else {
             return false;
         };
+        s.spelling.take(); // Never reuse window evidence after a destination switch.
         s.route.toggle_kit();
         cx.notify();
         true
@@ -739,14 +776,47 @@ impl ScriptListApp {
                 h.update(cx, |_, window, cx| {
                     app.update(cx, |app, cx| {
                         app.drain_cursor_controls(cx);
-                        let Some(capture) = app.take_cursor(request.session_generation) else {
+                        let Some(mut capture) = app.take_cursor(request.session_generation) else {
                             return;
                         };
                         let original = capture.route == CursorRoute::Original;
                         let take = capture.take.clone();
                         let save = capture.history_allowed && timing.record_history;
+                        // The optional model has already returned. Only the final, local paste
+                        // can see a screen spelling. The normal frozen-field checks still run
+                        // immediately before paste, including on a late window/field switch.
+                        let mut replacement = None;
+                        if let (
+                            true,
+                            Some(session),
+                            Some(window),
+                            crate::dictation::FrozenDictationDestination::ExternalApp {
+                                pid, ..
+                            },
+                        ) = (
+                            original,
+                            capture.spelling.take(),
+                            request.selection.destination.external_window_id(),
+                            &request.selection.destination,
+                        ) {
+                            let owner = crate::dictation::screen_spelling::Owner {
+                                generation: request.session_generation,
+                                pid: *pid,
+                                window,
+                            };
+                            let (text, receipt) = session.finish(owner, request.transcript.text());
+                            app.one_window_host.cursor_voice.spelling_result = Some(receipt);
+                            replacement = text;
+                        }
+                        let words = replacement.as_deref().unwrap_or(request.transcript.text());
                         if let Some(t) = &take {
-                            if t.dispatching().is_err() {
+                            if t.dispatching_with_spelling(replacement.as_deref()).is_err() {
+                                if let Some(r) =
+                                    &mut app.one_window_host.cursor_voice.spelling_result
+                                {
+                                    r.status = "withheld";
+                                    r.changes = 0;
+                                }
                                 app.one_window_host.cursor_voice.saved_draft =
                                     Some(request.transcript.text().into());
                                 app.notice_failed(
@@ -756,12 +826,15 @@ impl ScriptListApp {
                                 return;
                             }
                         }
-                        match app.finish_cursor_words(capture, &request, window, cx) {
+                        let stop_started = capture.stop_started;
+                        match app.finish_cursor_words(capture, &request, words, window, cx) {
                             Ok(target) => {
+                                app.one_window_host.cursor_voice.stop_to_delivery_ms =
+                                    stop_started.map(|t| t.elapsed().as_millis() as u64);
                                 if save {
                                     if let Err(e) = app.keep_finished_cursor(
                                         take.as_ref(),
-                                        request.transcript.text(),
+                                        words,
                                         target,
                                         timing.audio_duration,
                                     ) {
@@ -781,7 +854,7 @@ impl ScriptListApp {
                                         request.delivery_id,
                                         request.session_generation,
                                         &selection,
-                                        request.transcript.text(),
+                                        words,
                                         timing.audio_duration,
                                         target,
                                         target.destination(),
@@ -793,15 +866,35 @@ impl ScriptListApp {
                             }
                             Err(error) => {
                                 let unknown = error.is::<CursorDispatchUnknown>();
+                                if let Some(r) =
+                                    &mut app.one_window_host.cursor_voice.spelling_result
+                                {
+                                    r.status = if unknown {
+                                        "deliveryUnknown"
+                                    } else {
+                                        "withheld"
+                                    };
+                                    if !unknown {
+                                        r.changes = 0;
+                                    }
+                                }
                                 if !unknown {
                                     if let Some(t) = &take {
-                                        let _ = t.withheld();
+                                        let _ = t.withheld_with_original(
+                                            replacement.as_ref().map(|_| request.transcript.text()),
+                                        );
                                     }
                                 }
                                 app.one_window_host.cursor_voice.saved_id =
                                     take.as_ref().map(|t| t.id.clone());
-                                app.one_window_host.cursor_voice.saved_draft =
-                                    Some(request.transcript.text().into());
+                                app.one_window_host.cursor_voice.saved_draft = Some(
+                                    if unknown {
+                                        words
+                                    } else {
+                                        request.transcript.text()
+                                    }
+                                    .into(),
+                                );
                                 app.notice_failed(
                                     if unknown {
                                         "Delivery unknown · check the field before pasting again"
@@ -839,6 +932,7 @@ impl ScriptListApp {
             if s.stopped {
                 return false;
             }
+            s.spelling.take();
             s.route = CursorRoute::Markdown;
             cx.notify();
             return true;
@@ -902,11 +996,11 @@ impl ScriptListApp {
         &mut self,
         s: CursorCapture,
         request: &crate::dictation::DictationDeliveryRequest,
+        words: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<crate::dictation::DictationTarget> {
         use crate::dictation::DictationTarget as T;
-        let words = request.transcript.text();
         if s.route == CursorRoute::Markdown {
             anyhow::ensure!(
                 self.prepare_shortcut_launcher(cx),

@@ -1721,6 +1721,8 @@ export interface DictationPreferences {
   keepRecordings?: boolean;
   /** Start contextual dictation in editable Kit input. Explicit Today or app routes win. */
   startInKit?: boolean;
+  /** Local spelling clues for external cursor dictation. Defaults to "accessibility" (no screenshots). */
+  screenSpelling?: "off" | "accessibility" | "accessibilityAndOcr";
   /** Active-recording shortcut only, e.g. "Shift+Escape", "Alt+F12", or "off". */
   switchShortcut?: string;
 

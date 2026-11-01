@@ -172,6 +172,7 @@ export default {
   // Runtime preferences also live here:
   // theme: { presetId: "nord" },
   // dictation: {
+  //   screenSpelling: "accessibility", // default; "off" disables, "accessibilityAndOcr" also allows window OCR
   //   selectedDeviceId: "usb-mic",
   //   // Where transcripts go when the global shortcut starts dictation:
   //   // - "sticky" (default): the last destination picked via an overlay

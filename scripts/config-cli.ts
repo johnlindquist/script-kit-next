@@ -111,6 +111,7 @@ interface ThemeSelectionPreferences {
 }
 
 interface DictationPreferences {
+  screenSpelling?: "off" | "accessibility" | "accessibilityAndOcr";
   selectedDeviceId?: string;
   model?: string;
   language?: string;
@@ -463,7 +464,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
   theme: undefined,
   animation: undefined,
   designs: undefined,
-  dictation: undefined,
+  dictation: { screenSpelling: "accessibility" },
   ai: undefined,
   windowManagement: undefined,
   effects: undefined,
@@ -796,6 +797,12 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "string | undefined",
     default: undefined,
     description: "Window entry fade (sharp_presence or fixed_frame; retired ids load as sharp_presence)"
+  },
+  {
+    key: "dictation.screenSpelling",
+    type: '"off" | "accessibility" | "accessibilityAndOcr"',
+    default: DEFAULTS.dictation!.screenSpelling,
+    description: "Local spelling clues from the original external dictation window; optional OCR requires Screen Recording"
   },
   {
     key: "dictation.selectedDeviceId",
@@ -1323,6 +1330,10 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
     if (errors.length > 0) {
       return { valid: false, error: errors.map((e) => e.message).join('; ') };
     }
+  }
+
+  if (key === 'dictation.screenSpelling' && !['off','accessibility','accessibilityAndOcr'].includes(String(value))) {
+    return { valid: false, error: 'Choose off, accessibility or accessibilityAndOcr' };
   }
 
   if (key === 'hotkey.modifiers') {
@@ -1940,7 +1951,7 @@ async function cmdGet(key?: string): Promise<void> {
       });
     } else {
       // Return full config merged with defaults
-      const merged = { ...DEFAULTS, ...config };
+      const merged = { ...DEFAULTS, ...config, dictation: { ...DEFAULTS.dictation, ...config.dictation } };
       success({
         path: CONFIG_PATH,
         config: merged

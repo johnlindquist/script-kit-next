@@ -903,6 +903,10 @@ pub struct ThemeSelectionPreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DictationPreferences {
+    /// Local spelling clues for external cursor dictation. Omitted means
+    /// Accessibility text only; window OCR requires an explicit choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_spelling: Option<String>,
     /// Start contextual dictation in editable Kit input rather than at the captured cursor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_in_kit: Option<bool>,
@@ -1011,6 +1015,14 @@ pub enum DictationTargetMode {
 impl DictationPreferences {
     pub const DEFAULT_SILENCE_RMS: f32 = 0.01;
     pub const DEFAULT_MAX_DURATION_SECS: u64 = 600;
+
+    pub fn screen_spelling_mode(&self) -> &'static str {
+        match self.screen_spelling.as_deref() {
+            None | Some("accessibility") => "accessibility",
+            Some("accessibilityAndOcr") => "accessibilityAndOcr",
+            _ => "off", // Includes unknown values: never expand capture on a typo.
+        }
+    }
 
     /// Whether transcripts should be persisted to dictation history.
     pub fn save_history_enabled(&self) -> bool {

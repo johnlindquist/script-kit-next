@@ -74,6 +74,16 @@ fn should_track_git_head(
 }
 
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        let source = "src/platform/dictation_spelling.m";
+        println!("cargo:rerun-if-changed={source}");
+        cc::Build::new()
+            .file(source)
+            .flag("-fobjc-arc")
+            .flag("-fblocks")
+            .compile("dictation_spelling");
+        println!("cargo:rustc-link-lib=framework=NaturalLanguage");
+    }
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".to_string());
     let github_sha = std::env::var("GITHUB_SHA").ok();
 

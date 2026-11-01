@@ -18,6 +18,7 @@ mod mic_check;
 pub mod polish;
 pub mod recovery;
 mod runtime;
+pub mod screen_spelling;
 mod setup;
 pub mod takes;
 mod transcription;
@@ -48,9 +49,9 @@ pub use device::{
 pub use history::{
     build_history_entry, delete_history_entry, delete_history_held_title,
     format_history_duration_ms, format_history_timestamp, get_history_entry,
-    hydrate_dictation_resource_from_history, load_history, load_history_result,
-    record_dictation_history, record_entry, keep_reviewed, root_dictation_history_query_is_eligible, search_history,
-    search_root_dictation_history, search_root_dictation_history_cached,
+    hydrate_dictation_resource_from_history, keep_reviewed, load_history, load_history_result,
+    record_dictation_history, record_entry, root_dictation_history_query_is_eligible,
+    search_history, search_root_dictation_history, search_root_dictation_history_cached,
     search_root_dictation_history_direct, seed_owned_dictation_history, DictationHistoryEntry,
     DictationHistorySearchField, DictationHistorySearchHit, RootDictationHistorySearchHit,
     RootDictationHistorySectionOptions, DICTATION_HISTORY_ENTRY_VERSION,
@@ -68,20 +69,21 @@ pub use mic_check::{
     MicrophoneCheck, MicrophoneLevel, MICROPHONE_CHECK_DURATION,
 };
 pub use runtime::{
-    start_protected_recording, abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
-    claim_dictation_delivery, current_dictation_phase, cycle_dictation_target,
-    delivery_receipt_generation, dictation_auto_stop_due, dictation_delivery_was_claimed,
-    dictation_elapsed, dictation_stop_target, dictation_target_generation, finalize_progress,
-    discard_private_partial, current_capture_generation, finish_stop_capture, get_active_dictation_device, get_dictation_target,
-    get_dictation_target_selection, is_dictation_busy, is_dictation_recording,
-    is_dictation_stopping, last_delivery_receipt, last_partial_transcript, last_stop_receipt,
-    last_wrong_target_refusal, maybe_unload_transcriber, next_dictation_delivery_id,
-    pending_dictation_device_label, record_delivery_receipt, record_wrong_target_refusal,
-    redacted_transcript_fingerprint, resolve_final_or_partial_transcript,
-    set_dictation_session_selection, set_dictation_session_target, set_dictation_target_cycle,
-    set_pending_dictation_device_label, shutdown_transcriber, snapshot_live_state,
-    toggle_dictation, transcribe_captured_audio, BeginStopCapture, DictationStopJob,
-    DictationStopReason, DictationTranscriptResolution,
+    abort_dictation, automation_state, begin_stop_capture, can_cycle_dictation_target,
+    claim_dictation_delivery, current_capture_generation, current_dictation_phase,
+    cycle_dictation_target, delivery_receipt_generation, dictation_auto_stop_due,
+    dictation_delivery_was_claimed, dictation_elapsed, dictation_stop_target,
+    dictation_target_generation, discard_private_partial, finalize_progress, finish_stop_capture,
+    get_active_dictation_device, get_dictation_target, get_dictation_target_selection,
+    is_dictation_busy, is_dictation_recording, is_dictation_stopping, last_delivery_receipt,
+    last_partial_transcript, last_stop_receipt, last_wrong_target_refusal,
+    maybe_unload_transcriber, next_dictation_delivery_id, pending_dictation_device_label,
+    record_delivery_receipt, record_wrong_target_refusal, redacted_transcript_fingerprint,
+    resolve_final_or_partial_transcript, set_dictation_session_selection,
+    set_dictation_session_target, set_dictation_target_cycle, set_pending_dictation_device_label,
+    shutdown_transcriber, snapshot_live_state, start_protected_recording, toggle_dictation,
+    transcribe_captured_audio, BeginStopCapture, DictationStopJob, DictationStopReason,
+    DictationTranscriptResolution,
 };
 pub(crate) use runtime::{
     clear_dictation_recovery_work, clear_dictation_return_origin, dictation_pipeline_failure_state,
