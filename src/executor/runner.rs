@@ -777,7 +777,7 @@ fn runtime_attempts(path: &Path, path_str: &str, argv: &[String]) -> Vec<Runtime
                         sdk_str,
                         path_str.to_string(),
                     ],
-                    &argv,
+                    argv,
                 ),
             });
         }
@@ -786,7 +786,7 @@ fn runtime_attempts(path: &Path, path_str: &str, argv: &[String]) -> Vec<Runtime
             name: "bun",
             label: "bun without preload".to_string(),
             cmd: bun_path,
-            args: with_script_argv(vec!["run".to_string(), path_str.to_string()], &argv),
+            args: with_script_argv(vec!["run".to_string(), path_str.to_string()], argv),
         });
     }
 

@@ -29,7 +29,7 @@ pub struct BuiltinMainInputCountLabelStyle {
     /// count baseline drifts.
     pub line_height_px: f32,
     /// The helper sets no weight: gpui's default `FontWeight::NORMAL` (400).
-    /// The label must NOT inherit the search input's 430 — that weight
+    /// The label must NOT inherit the search input's weight — it
     /// belongs to the input body, not the shell's trailing children.
     pub font_weight: gpui::FontWeight,
     /// Right inset — the SAME `MainMenuSearchTokens.text_inset_x` authority
@@ -77,7 +77,9 @@ mod builtin_main_input_count_label_contract {
 
     #[test]
     fn count_label_typography_is_text_sm_with_default_line_height_and_weight() {
-        let (def, chrome) = stock_inputs();
+        let (mut def, chrome) = stock_inputs();
+        // A custom input weight must not leak into the count, even when the stock weights coincide.
+        def.search.font_weight = gpui::FontWeight::BOLD;
         let style = resolved_builtin_main_input_count_label_style(def, &chrome);
         assert_eq!(style.font_size_px, 14.0);
         assert_eq!(

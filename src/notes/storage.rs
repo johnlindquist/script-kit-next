@@ -887,20 +887,20 @@ fn give_duplicates_their_own_ids(
         .map(|(index, (_, (note, _, _)))| (note.id, index))
         .collect();
     let mut unwritable = Vec::new();
-    for index in 0..loaded.len() {
-        let id = loaded[index].1 .0.id;
+    for (index, (path, item)) in loaded.iter_mut().enumerate() {
+        let id = item.0.id;
         match holders.get(&id) {
             None => {
                 holders.insert(id, index);
             }
             Some(&holder) if holder == index => {}
-            Some(_) => match give_note_file_its_own_id(substrate, &loaded[index].0) {
+            Some(_) => match give_note_file_its_own_id(substrate, path) {
                 Ok(reloaded) => {
                     holders.insert(reloaded.0.id, index);
-                    loaded[index].1 = reloaded;
+                    *item = reloaded;
                 }
                 Err(error) => {
-                    warn!(path = %loaded[index].0.display(), %error, "Could not give a copied note its own id");
+                    warn!(path = %path.display(), %error, "Could not give a copied note its own id");
                     unwritable.push(index);
                 }
             },

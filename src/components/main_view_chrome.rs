@@ -698,6 +698,7 @@ impl MainViewHeaderChrome {
 
     /// The launcher keeps the same total header/scroll inset, but puts the input first and
     /// joins the 38 pt subject band directly to the first section underneath it.
+    #[allow(dead_code, reason = "the binary launcher installs the subject band")]
     pub(crate) fn tabbed(def: MainMenuThemeDef, band: AnyElement, input: AnyElement) -> Self {
         Self {
             tab_band: Some((

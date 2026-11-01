@@ -9,11 +9,10 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 fn candidate(request: &str) -> Option<(&str, String)> {
-    static LITERAL: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"“([^“”\r\n]+)”|‘([^‘’\r\n]+)’|"([^"\r\n]+)"|(?:^|[\s:=])'([^'\r\n]+)'"#)
-            .expect("filename literal regex")
+    static LITERAL: LazyLock<Option<Regex>> = LazyLock::new(|| {
+        Regex::new(r#"“([^“”\r\n]+)”|‘([^‘’\r\n]+)’|"([^"\r\n]+)"|(?:^|[\s:=])'([^'\r\n]+)'"#).ok()
     });
-    let mut parts = LITERAL.captures_iter(request);
+    let mut parts = LITERAL.as_ref()?.captures_iter(request);
     let c = parts.next()?;
     if parts.next().is_some() {
         return None;

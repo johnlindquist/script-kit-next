@@ -3,6 +3,10 @@
 //! and dynamic shortcut registration/unregistration utilities.
 //! This module depends on `config`, `scripts`, `shortcuts`, and `logging`, and is used by app startup/reload flows.
 
+#[allow(
+    dead_code,
+    reason = "listening keys are installed and released by the binary cursor-dictation host"
+)]
 pub(crate) mod dictation_keys;
 pub mod gesture;
 
@@ -1381,6 +1385,10 @@ pub fn rearm_main_gesture_for_unfocused_window() -> bool {
         .unwrap_or(false)
 }
 
+#[allow(
+    dead_code,
+    reason = "the binary main-window key handler commits typing"
+)]
 pub(crate) fn commit_main_gesture_typing() {
     if let Ok(mut classifier) = MAIN_GESTURE_CLASSIFIER.lock() {
         classifier.commit_typing();

@@ -46,8 +46,9 @@ struct Check {
 }
 fn note_id(owner: &str, key: Uuid) -> NoteId {
     let digest = Sha256::digest(format!("quiet-note-v1\0{owner}\0{key}"));
-    let id = Uuid::from_bytes(digest[..16].try_into().expect("sha256 prefix"));
-    NoteId::parse(&id.to_string()).expect("valid UUID")
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    NoteId(Uuid::from_bytes(bytes))
 }
 pub(super) fn quiet(name: &str, args: Value, owner: &str) -> Result<Value, &'static str> {
     let (key, body) = if name == SAVE {

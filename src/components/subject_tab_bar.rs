@@ -41,13 +41,14 @@ impl TabItem {
         e
     }
 }
+type PickSubject = Rc<dyn Fn(&str, &mut gpui::Window, &mut gpui::App)>;
 pub(crate) fn render(
     theme: &Theme,
     def: MainMenuThemeDef,
     items: Vec<TabItem>,
     cycle: bool,
     reveal: bool,
-    pick: Rc<dyn Fn(&str, &mut gpui::Window, &mut gpui::App)>,
+    pick: PickSubject,
 ) -> AnyElement {
     let rule = rgba((theme.colors.text.primary << 8) | def.shell.divider_alpha);
     let panel = panel_color(theme);

@@ -118,8 +118,10 @@ pub fn decode_wav(bytes: &[u8]) -> anyhow::Result<CapturedAudioChunk> {
         "unsupported WAV format"
     );
     let samples: Vec<f32> = bytes[44..]
-        .chunks_exact(2)
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f32 / i16::MAX as f32)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&pair| i16::from_le_bytes(pair) as f32 / i16::MAX as f32)
         .collect();
     let duration = Duration::from_secs_f64(samples.len() as f64 / sample_rate_hz as f64);
     Ok(CapturedAudioChunk {

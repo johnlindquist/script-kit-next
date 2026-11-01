@@ -828,13 +828,16 @@ fn test_builtin_descriptions_use_clear_action_phrasing() {
         .iter()
         .find(|e| e.id == "builtin/open-notes")
         .unwrap();
-    assert_eq!(notes.description, "Open today's note under the input");
+    assert_eq!(
+        notes.description,
+        "Every note and day page, pinned notes first"
+    );
 
     let quick_capture = entries
         .iter()
         .find(|e| e.id == "builtin/quick-capture")
         .unwrap();
-    assert_eq!(quick_capture.description, "Add a line to today's note");
+    assert_eq!(quick_capture.description, "Open today's page to write");
 
     let file_search = entries
         .iter()

@@ -98,7 +98,28 @@ pub(super) fn definitions() -> Vec<ToolDefinition> {
     let string = || json!({"type":"string"});
     let id = || json!({"type":"string","format":"uuid"});
     let body = || json!({"type":"string","minLength":1,"maxLength":65536});
-    [("available","Register your own named live local Herdr terminal.",json!({"name":string(),"session":string(),"core":string(),"terminal":string(),"createdMs":{"type":"integer"},"pid":{"type":"integer"}})),("away","Stop accepting new handoffs and close pending grants.",json!({})),("targets","List only recipients you are explicitly allowed to send to.",json!({})),("send","Share only the supplied text with one selected registration. A notification is not a reply.",json!({"target":id(),"requestId":id(),"body":body()})),("status","Observe your original request. A response is an editable draft, not a paste.",json!({"requestId":id()})),("cancel","Revoke future reading or replying. Cannot recall text already read.",json!({"requestId":id()})),("take","Read the frozen text only as the designated recipient.",json!({"id":id()})),("reply","Return one draft. Does not open a window or execute it.",json!({"id":id(),"body":body()}))].into_iter().map(|(v,d,p)|{let required=p.as_object().unwrap().keys().cloned().collect::<Vec<_>>();ToolDefinition{name:format!("kit/handoff_{v}"),description:d.into(),input_schema:json!({"type":"object","additionalProperties":false,"required":required,"properties":p})}}).collect()
+    let tool = |verb: &str, description: &str, fields: Vec<(&str, Value)>| {
+        let properties: serde_json::Map<String, Value> = fields
+            .into_iter()
+            .map(|(name, schema)| (name.to_owned(), schema))
+            .collect();
+        let required: Vec<_> = properties.keys().collect();
+        ToolDefinition {
+            name: format!("kit/handoff_{verb}"),
+            description: description.into(),
+            input_schema: json!({"type":"object","additionalProperties":false,"required":required,"properties":properties}),
+        }
+    };
+    vec![
+        tool("available", "Register your own named live local Herdr terminal.", vec![("name", string()), ("session", string()), ("core", string()), ("terminal", string()), ("createdMs", json!({"type":"integer"})), ("pid", json!({"type":"integer"}))]),
+        tool("away", "Stop accepting new handoffs and close pending grants.", vec![]),
+        tool("targets", "List only recipients you are explicitly allowed to send to.", vec![]),
+        tool("send", "Share only the supplied text with one selected registration. A notification is not a reply.", vec![("target", id()), ("requestId", id()), ("body", body())]),
+        tool("status", "Observe your original request. A response is an editable draft, not a paste.", vec![("requestId", id())]),
+        tool("cancel", "Revoke future reading or replying. Cannot recall text already read.", vec![("requestId", id())]),
+        tool("take", "Read the frozen text only as the designated recipient.", vec![("id", id())]),
+        tool("reply", "Return one draft. Does not open a window or execute it.", vec![("id", id()), ("body", body())]),
+    ]
 }
 fn authorized(p: &Peer) -> bool {
     #[cfg(feature = "owned-ui-evaluation")]

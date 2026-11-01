@@ -858,6 +858,10 @@ impl EditorPrompt {
 
     /// A local review can return to its owner on the same submit/cancel routes as the
     /// keyboard, accessible controls, and footer. Keep the original prompt receipt intact.
+    #[allow(
+        dead_code,
+        reason = "the binary handoff editor observes completion without an SDK caller"
+    )]
     pub(crate) fn observe_local_finish(&mut self, finish: async_channel::Sender<()>) {
         let original = self.on_submit.clone();
         self.on_submit = std::sync::Arc::new(move |id, value| {

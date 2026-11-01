@@ -349,6 +349,10 @@ pub(crate) fn named_tab_program(app: &str, query: &str) -> Option<String> {
     ))
 }
 
+#[allow(
+    dead_code,
+    reason = "the binary intent launcher dispatches named tab focus"
+)]
 pub(crate) fn focus_named_tab(app: &str, query: &str) -> Result<()> {
     anyhow::ensure!(
         !crate::runtime_policy::is_owned_evaluation(),

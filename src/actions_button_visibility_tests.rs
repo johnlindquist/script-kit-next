@@ -313,11 +313,8 @@ mod tests {
             .expect("Failed to read src/components/launcher_ask_ai_hint.rs");
 
         // Agent button is part of the standard native footer buttons
-        let standard_fn = footer_content
-            .find("fn standard_main_window_footer_buttons")
-            .expect("standard_main_window_footer_buttons must exist");
         let standard_section =
-            &footer_content[standard_fn..footer_content.len().min(standard_fn + 2500)];
+            function_body(&footer_content, "fn standard_main_window_footer_buttons");
         assert!(
             standard_section.contains("FooterAction::Ai") && standard_section.contains("\"Agent\""),
             "Agent button should be in the standard native footer buttons"

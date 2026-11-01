@@ -64,6 +64,10 @@ pub mod section_divider;
 pub mod shortcut_recorder;
 #[allow(dead_code, reason = "the binary's ScriptListApp and Day Page draw it")]
 pub(crate) mod staged_actions;
+#[allow(
+    dead_code,
+    reason = "drawn by the binary launcher; its height is shared by library chrome"
+)]
 pub(crate) mod subject_tab_bar;
 pub mod text_input;
 pub mod unified_list_item;

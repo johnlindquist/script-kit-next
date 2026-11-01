@@ -574,10 +574,11 @@ mod tests {
         assert_eq!(value["meta"]["effectiveProfile"], "minimal");
         assert_eq!(value["meta"]["status"], "partial");
         assert_eq!(value["meta"]["durationMs"], 12);
-        // minimal() enables frontmostApp, browserUrl, focusedWindow, and (since
-        // 19db0e0e5, "Enable screenshots in @here (minimal) ... profiles")
-        // screenshot — 4 fields total.
-        assert_eq!(value["meta"]["enabledFieldCount"], 4);
+        // MCP profiles expose metadata only unless the caller explicitly requests pixels.
+        assert_eq!(value["meta"]["enabledFieldCount"], 3);
+        assert!(value["meta"]["fieldStatuses"].as_array().unwrap().iter().any(|s|
+            s["field"] == "screenshot" && s["state"] == "disabled"
+        ));
         assert_eq!(value["meta"]["warningCount"], 1);
         assert_eq!(value["meta"]["fieldStatuses"][0]["field"], "selectedText");
         assert_eq!(value["meta"]["fieldStatuses"][0]["state"], "disabled");

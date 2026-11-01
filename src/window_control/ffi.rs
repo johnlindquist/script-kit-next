@@ -1,3 +1,4 @@
+pub(super) use core_foundation::base::CFEqual;
 use std::ffi::c_void;
 
 pub(super) type AXUIElementRef = *const c_void;
@@ -18,7 +19,6 @@ pub(super) const kCFNumberSInt32Type: i32 = 3;
 extern "C" {
     pub(super) fn CFRelease(cf: *const c_void);
     pub(super) fn CFRetain(cf: *const c_void) -> *const c_void;
-    pub(super) fn CFEqual(cf1: CFTypeRef, cf2: CFTypeRef) -> bool;
 }
 
 #[link(name = "ApplicationServices", kind = "framework")]

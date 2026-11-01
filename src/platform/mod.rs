@@ -17,6 +17,10 @@
 
 pub mod accessibility;
 #[cfg(target_os = "macos")]
+#[allow(
+    dead_code,
+    reason = "the binary starts window spelling after cursor microphone admission"
+)]
 pub(crate) mod dictation_spelling;
 mod display;
 #[cfg(target_os = "macos")]

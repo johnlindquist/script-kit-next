@@ -106,6 +106,7 @@ pub(crate) fn normalize_chunk(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn run_processor(
     raw_rx: mpsc::Receiver<RawAudioChunk>,
     event_tx: async_channel::Sender<DictationCaptureEvent>,

@@ -27,9 +27,10 @@ pub mod action_id {
     pub const CLOSE: &str = "close";
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum WebcamPhase {
     /// The camera preview; ↵ takes the photo.
+    #[default]
     Live,
     /// Counting down to the shot; `remaining` is the number on screen.
     Countdown { remaining: u8 },
@@ -70,12 +71,6 @@ pub struct WebcamActionRow {
 pub struct WebcamSession {
     phase: WebcamPhase,
     generation: u64,
-}
-
-impl Default for WebcamPhase {
-    fn default() -> Self {
-        Self::Live
-    }
 }
 
 impl WebcamSession {

@@ -1384,12 +1384,12 @@ fn opens_web_address(
 /// A named existing tab is neither an app launch nor a menu command. Resolve only explicit
 /// focus/switch requests against a known browser; never send the browser's tab inventory to Jev.
 pub fn named_tab_plan(request: &str, browser: &str) -> Option<Plan> {
-    static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    static NAMED: std::sync::LazyLock<Option<regex::Regex>> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"(?i)^(?:focus(?: on)?|switch to|go to)\s+(?:the\s+)?(.+?)\s+tab[.!]?$")
-            .expect("fixed tab grammar")
+            .ok()
     });
     let app = crate::browser_tabs::named_tab_browser(browser)?;
-    let cap = NAMED.captures(request.trim())?;
+    let cap = NAMED.as_ref()?.captures(request.trim())?;
     let query = cap
         .get(1)?
         .as_str()

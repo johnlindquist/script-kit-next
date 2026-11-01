@@ -230,9 +230,10 @@ pub(super) fn collect_staged_system_windows() -> Result<Vec<StagedWindow>> {
                     // registry allocates the final non-rebinding legacy ID.
                     let base_legacy_id = ((pid as u32) << 16) | (j as u32);
                     let window_ref = ax_window as AXUIElementRef;
-                    let is_focused =
-                        focused_window.is_some_and(|focused| CFEqual(window_ref as _, focused));
-                    let is_main = main_window.is_some_and(|main| CFEqual(window_ref as _, main));
+                    let is_focused = focused_window
+                        .is_some_and(|focused| CFEqual(window_ref as _, focused) != 0);
+                    let is_main =
+                        main_window.is_some_and(|main| CFEqual(window_ref as _, main) != 0);
                     let is_minimized = batch_minimized.unwrap_or_else(|| {
                         get_window_bool_attribute(window_ref, "AXMinimized").unwrap_or(false)
                     });

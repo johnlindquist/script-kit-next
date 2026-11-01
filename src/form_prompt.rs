@@ -308,10 +308,7 @@ impl FormPromptState {
     pub fn collect_values(&self, cx: &App) -> String {
         match self.output_mode {
             FormPromptOutputMode::ObjectByName | FormPromptOutputMode::Preset => {
-                let values = self.fields.iter().map(|(field_def, entity)| {
-                    (field_def.name.clone(), Self::field_value(entity, cx))
-                });
-                Self::build_values_json(values)
+                Self::build_values_json(self.named_values(cx))
             }
             FormPromptOutputMode::ArrayByOrder => {
                 let values: Vec<String> = self
@@ -324,6 +321,7 @@ impl FormPromptState {
         }
     }
 
+    #[cfg(any(test, feature = "owned-ui-evaluation"))]
     pub(crate) fn visible_validation_message(&self, cx: &App) -> Option<&'static str> {
         self.fields.iter().find_map(|(_, entity)| match entity {
             FormFieldEntity::TextField(field) => field.read(cx).visible_submit_hint(),

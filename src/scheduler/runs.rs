@@ -85,9 +85,9 @@ impl RunOutcome {
 }
 
 fn duration_words(secs: u64) -> String {
-    if secs >= 3600 && secs % 3600 == 0 {
+    if secs >= 3600 && secs.is_multiple_of(3600) {
         format!("{} h", secs / 3600)
-    } else if secs >= 60 && secs % 60 == 0 {
+    } else if secs >= 60 && secs.is_multiple_of(60) {
         format!("{} min", secs / 60)
     } else {
         format!("{secs} s")
@@ -272,7 +272,7 @@ fn record_finished(path: &Path, record: RunRecord) -> u32 {
 
 /// Whether a failure streak of `streak` deserves a notification.
 pub fn should_notify_failure(streak: u32) -> bool {
-    streak == 1 || streak == 3 || streak == PAUSE_AFTER_FAILURES || streak % 10 == 0
+    streak == 1 || streak == 3 || streak == PAUSE_AFTER_FAILURES || streak.is_multiple_of(10)
 }
 
 /// The failure notification for a run.

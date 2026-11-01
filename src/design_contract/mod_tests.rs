@@ -724,7 +724,8 @@ mod tests {
         assert_eq!(length("agentChat.block.headerGap"), 4.0);
         // Embedded default composer aliases the canonical main-menu search.
         assert_eq!(length("agentChat.composer.fontSize"), 20.0);
-        assert_eq!(length("agentChat.composer.lineHeight"), 26.0);
+        let search_height = length("mainMenu.search.height");
+        assert_eq!(length("agentChat.composer.lineHeight"), search_height);
         assert_eq!(length("agentChat.send.size"), 24.0);
         assert_eq!(length("agentChat.send.radius"), 6.0);
         {
@@ -812,7 +813,7 @@ mod tests {
 
         // Resolved typography/geometry through the shared app helpers.
         assert_eq!(length("resolved.agentChat.markdown.bodyLineHeight"), 23.0);
-        assert_eq!(length("resolved.agentChat.composer.singleLineHeight"), 26.0);
+        assert_eq!(length("resolved.agentChat.composer.singleLineHeight"), search_height);
         assert_eq!(length("resolved.framework.textSmFontSize"), 14.0);
         for id in [
             "resolved.agentChat.transcript.turnDivider",
@@ -995,9 +996,10 @@ mod tests {
         assert!(css.contains("--sk-agent-chat-md-body-font-size: 14px;"));
         assert!(css.contains("--sk-agent-chat-md-body-line-height: 23px;"));
         assert!(css.contains("--sk-agent-chat-composer-font-size: 20px;"));
-        assert!(css.contains("--sk-agent-chat-composer-font-weight: 430;"));
-        assert!(css.contains("--sk-agent-chat-composer-line-height: 26px;"));
-        assert!(css.contains("--sk-agent-chat-composer-single-line-height: 26px;"));
+        let search_weight = crate::designs::MainMenuThemeVariant::InfoBarBase.base_def().search.font_weight.0;
+        assert!(css.contains(&format!("--sk-agent-chat-composer-font-weight: {search_weight};")));
+        assert!(css.contains(&format!("--sk-agent-chat-composer-line-height: {search_height}px;")));
+        assert!(css.contains(&format!("--sk-agent-chat-composer-single-line-height: {search_height}px;")));
         assert!(css.contains("--sk-agent-chat-thought-header-opacity: 0.75;"));
         assert!(css.contains("--sk-agent-chat-tool-header-opacity: 0.75;"));
         assert!(css.contains("--sk-agent-chat-tool-status-complete: rgb(0 255 0);"));

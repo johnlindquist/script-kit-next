@@ -252,7 +252,7 @@ fn ax_refs_equal(previous: &CachedAxRef, staged: &CachedAxRef) -> bool {
         return true;
     }
     // SAFETY: both pointers are live retained CF objects owned by CachedAxRef.
-    unsafe { CFEqual(previous.ptr_usize() as _, staged.ptr_usize() as _) }
+    unsafe { CFEqual(previous.ptr_usize() as _, staged.ptr_usize() as _) != 0 }
 }
 
 /// Atomically publish a staged observation set.

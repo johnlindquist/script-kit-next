@@ -365,7 +365,7 @@ pub(crate) fn order_open_with_apps(
             is_default: false,
         });
     }
-    rest.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    rest.sort_by_key(|app| app.name.to_lowercase());
     let mut ordered = Vec::with_capacity(rest.len() + 1);
     if let Some(default_app) = default_app {
         ordered.push(OpenWithApp {

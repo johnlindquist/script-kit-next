@@ -522,8 +522,10 @@ pub async fn handle_tools_call_with_runtime(
         computer_runtime,
         None,
         None,
-        legacy_all_scopes(),
-        None,
+        CallerAccess {
+            token_scopes: legacy_all_scopes(),
+            desktop_principal: None,
+        },
         uuid::Uuid::new_v4().to_string(),
     )
     .await
@@ -554,11 +556,18 @@ pub async fn handle_tools_call_with_runtime_context(
         computer_runtime,
         notes_bridge,
         kit_runtime_bridge.as_deref(),
-        token_scopes,
-        runtime_context.and_then(|ctx| ctx.desktop_principal.clone()),
+        CallerAccess {
+            token_scopes,
+            desktop_principal: runtime_context.and_then(|ctx| ctx.desktop_principal.clone()),
+        },
         trace_id,
     )
     .await
+}
+
+struct CallerAccess {
+    token_scopes: Vec<String>,
+    desktop_principal: Option<String>,
 }
 
 async fn handle_tools_call_with_runtime_parts(
@@ -567,10 +576,13 @@ async fn handle_tools_call_with_runtime_parts(
     computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
     notes_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
     kit_runtime_bridge: Option<&(dyn mcp_kit_tools::McpKitRuntimeBridge + Send + Sync)>,
-    token_scopes: Vec<String>,
-    desktop_principal: Option<String>,
+    access: CallerAccess,
     trace_id: String,
 ) -> JsonRpcResponse {
+    let CallerAccess {
+        token_scopes,
+        desktop_principal,
+    } = access;
     // Validate params
     let params = match request.params.as_object() {
         Some(p) => p,

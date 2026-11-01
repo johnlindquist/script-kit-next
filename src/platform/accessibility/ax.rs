@@ -128,7 +128,6 @@ extern "C" {
 #[link(name = "CoreFoundation", kind = "framework")]
 extern "C" {
     fn CFRelease(cf: CFTypeRef);
-    fn CFEqual(a: CFTypeRef, b: CFTypeRef) -> u8;
     fn CFRetain(cf: CFTypeRef) -> CFTypeRef;
     fn CFGetTypeID(cf: CFTypeRef) -> u64;
     fn CFStringGetTypeID() -> u64;
@@ -167,8 +166,12 @@ impl OwnedAxElement {
         Ok(Self { ptr })
     }
 
+    #[allow(
+        dead_code,
+        reason = "the binary revalidates the captured cursor field before delivery"
+    )]
     pub(crate) fn same_element(&self, other: &Self) -> bool {
-        unsafe { CFEqual(self.ptr.cast(), other.ptr.cast()) != 0 }
+        unsafe { core_foundation::base::CFEqual(self.ptr.cast(), other.ptr.cast()) != 0 }
     }
 
     pub(crate) fn as_ptr(&self) -> AXUIElementRef {
