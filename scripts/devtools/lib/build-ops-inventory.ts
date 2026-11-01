@@ -8,7 +8,7 @@ import { managedStorageRoot, trustedManagedRootLink } from "../../agentic/manage
 
 export interface AllocationObservation {
   present: boolean; complete: boolean; logicalBytes: number; allocatedBytes: number;
-  entries: number; linksNotFollowed: number; errors: string[];
+  entries: number; linksNotFollowed: number; errors: string[]; priorAllocatedBytes?: number;
 }
 export function allocation(path: string, excluded: readonly string[] = [], seen = new Set<string>()): AllocationObservation {
   return scanAllocation(path, excluded, seen);
@@ -27,7 +27,7 @@ function protectedOutputRoot(child: string): boolean {
 function scanAllocation(path: string, excluded: readonly string[], seen: Set<string>, expectedDevice?: number, protectOutputs = false): AllocationObservation {
   const result: AllocationObservation = { present: false, complete: true, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [] };
   const started = performance.now();
-  let device = expectedDevice, work = 0;
+  let device = expectedDevice, work = 0, priorAllocatedBytes = 0;
   const added: string[] = []; // Undo only identities this walk inserted after a directory checkpoint.
   const checkTime = () => { if (performance.now() - started > ALLOCATION_TIMEOUT_MS) throw new Error("inventory_time_limit"); };
   const charge = () => { if (++work > ALLOCATION_ENTRY_LIMIT) throw new Error("inventory_entry_limit"); checkTime(); };
@@ -42,23 +42,25 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       if (!stat.isDirectory()) result.logicalBytes += Number(stat.size);
     }
   };
-  // false means ONLY that the direct, enumerated regular file vanished before its first lstat.
-  const visit = (current: string, child: string, depth: number, listed?: Dirent): boolean => {
+  // Only the authoritative managed walk knows the exact compiler deps scope.
+  const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false): boolean => {
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
     charge();
     if (depth > 256) throw new Error("inventory_depth_limit");
+    const compilerDeps = protectOutputs && child === "pools/agent-debug/debug/deps";
     let stat: Stats;
     try { stat = lstatSync(current); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         if (!child) return true; // Absent scan root, not a missing enumerated child.
-        if (listed?.isFile()) return false;
+        if (listed?.isFile() || compilerDirectory) return false;
       }
       throw error;
     }
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
+    if (compilerDirectory && !stat.isDirectory()) throw new Error("inventory_directory_changed");
     if (stat.isSymbolicLink()) {
       account(stat);
       result.linksNotFollowed++;
@@ -74,7 +76,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       if (!now.isDirectory() || now.dev !== stat.dev || now.ino !== stat.ino) throw new Error("inventory_directory_changed");
       return now;
     };
-    let vanished: string | undefined;
+    let vanished: string | undefined, confirmAbsence = false;
     for (;;) {
       account(stat);
       const directory = opendirSync(current);
@@ -83,13 +85,26 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
         while ((entry = directory.readSync()) !== null) {
           // We have no inode witness for that name. Do not accept a replacement (even a link).
           if (entry.name === vanished) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
-          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry)) break;
+          if (!visit(join(current, entry.name), child ? `${child}/${entry.name}` : entry.name, depth + 1, entry, compilerDeps && entry.isDirectory())) break;
         }
-        sameDirectory(); checkTime();
+        if (!entry && confirmAbsence) {
+          charge();
+          try { lstatSync(join(current, vanished!)); throw new Error(`inventory_unstable_directory: ${current}/${vanished}`); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        }
+        try { sameDirectory(); }
+        catch (error) {
+          // Only a first, empty enumeration reached EOF without unresolved child work.
+          if (compilerDirectory && !entry && !vanished && result.entries === entries + 1 && (error as NodeJS.ErrnoException).code === "ENOENT") return false;
+          throw error;
+        }
+        checkTime();
         if (!entry) return true; // Only an enumeration that reached EOF can commit.
         if (vanished !== undefined) throw new Error(`inventory_unstable_directory: ${current}/${entry.name}`);
         vanished = entry.name;
+        confirmAbsence = compilerDeps && entry.isDirectory();
       } finally { directory.closeSync(); }
+      priorAllocatedBytes = Math.max(priorAllocatedBytes, result.allocatedBytes);
       Object.assign(result, { entries, logicalBytes, allocatedBytes, linksNotFollowed });
       while (added.length > mark) seen.delete(added.pop()!);
       charge(); // Rolled-back visits and this reopen still cost work against the original deadline.
@@ -98,6 +113,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
   };
   try { visit(path, "", 0); }
   catch (error) { result.complete = false; result.errors.push(String(error)); }
+  if (priorAllocatedBytes > result.allocatedBytes) result.priorAllocatedBytes = priorAllocatedBytes;
   return result;
 }
 
@@ -291,17 +307,18 @@ function resourcePolicy(root: string): ResourcePolicy {
   catch { return { targetAgentBudgetBytes: 0, minimumFreeBytes: 0, conflict: true }; }
 }
 
-function resourceObservation(policy: ResourcePolicy, allocated: (Pick<AllocationObservation, "complete" | "allocatedBytes"> & Partial<Pick<AllocationObservation, "errors">>) | null, available: number | null, phase: string, reserveBytes = 0): BuildResourceObservation {
+function resourceObservation(policy: ResourcePolicy, allocated: (Pick<AllocationObservation, "complete" | "allocatedBytes"> & Partial<Pick<AllocationObservation, "errors" | "priorAllocatedBytes">>) | null, available: number | null, phase: string, reserveBytes = 0): BuildResourceObservation {
   const validReserve = Number.isSafeInteger(reserveBytes) && reserveBytes >= 0;
   const validAvailable = available !== null && Number.isSafeInteger(available) && available >= 0;
   const failureCodes: string[] = [];
   if (policy.conflict || !validReserve) failureCodes.push("resource_policy_conflict");
   const reserve = validReserve ? reserveBytes : 0;
-  if (policy.targetAgentBudgetBytes !== null && allocated && allocated.allocatedBytes > policy.targetAgentBudgetBytes - reserve) failureCodes.push("resource_budget_exceeded");
+  const observedBytes = Math.max(allocated?.allocatedBytes ?? 0, allocated?.priorAllocatedBytes ?? 0);
+  if (policy.targetAgentBudgetBytes !== null && allocated && observedBytes > policy.targetAgentBudgetBytes - reserve) failureCodes.push("resource_budget_exceeded");
   if (validAvailable && available - reserve < policy.minimumFreeBytes) failureCodes.push("resource_free_space_below_floor");
   const complete = allocated?.complete === true && validAvailable;
   if (!complete) failureCodes.push("resource_observation_incomplete");
-  return { phase, complete, targetAgentAllocatedBytes: allocated?.allocatedBytes ?? 0,
+  return { phase, complete, targetAgentAllocatedBytes: failureCodes.includes("resource_budget_exceeded") ? observedBytes : allocated?.allocatedBytes ?? 0,
     availableBytes: validAvailable ? available : null, reserveBytes: reserve,
     targetAgentBudgetBytes: policy.targetAgentBudgetBytes, minimumFreeBytes: policy.minimumFreeBytes,
     withinLimits: failureCodes.length === 0, failureCodes, errors: allocated?.errors,
@@ -477,11 +494,12 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
         const sample = message.allocation;
         if (!sample || typeof sample.complete !== "boolean" || !Array.isArray(sample.errors)
           || sample.complete !== (sample.errors.length === 0) || !sample.errors.every(error => typeof error === "string")
-          || !Number.isSafeInteger(sample.allocatedBytes) || sample.allocatedBytes < 0) {
+          || !Number.isSafeInteger(sample.allocatedBytes) || sample.allocatedBytes < 0
+          || (sample.priorAllocatedBytes !== undefined && (!Number.isSafeInteger(sample.priorAllocatedBytes) || sample.priorAllocatedBytes < 0))) {
           failedAllocation(["inventory_worker_protocol"]); return;
         }
         allocated = sample; summary.sampleCount++;
-        summary.maximumSampledAllocatedBytes = Math.max(summary.maximumSampledAllocatedBytes ?? sample.allocatedBytes, sample.allocatedBytes);
+        summary.maximumSampledAllocatedBytes = Math.max(summary.maximumSampledAllocatedBytes ?? sample.allocatedBytes, sample.allocatedBytes, sample.priorAllocatedBytes ?? 0);
         if (finalPair && sample.complete && message.id >= finalPair.nextScanId) finalPair.allocation = true;
         check();
         if (stopped) return;

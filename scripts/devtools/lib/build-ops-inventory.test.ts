@@ -177,6 +177,70 @@ function beforeStat(effect: (path: string) => void): void {
   restore.push(() => spy.mockRestore());
 }
 
+const compilerDeps = "target-agent/pools/agent-debug/debug/deps";
+for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "boundary replacement"] as const) test(`enumerated compiler directory: ${stage}`, () => {
+  const root = fixture(), deps = join(root, stage === "unknown scope" ? "target-agent/unknown" : compilerDeps);
+  const target = join(deps, "arbitrary-name"); fs.mkdirSync(target, { recursive: true });
+  if (stage === "nonempty EOF") file(target, "payload");
+  const keep = file(deps, "stable"); fs.linkSync(keep, join(deps, "alias"));
+  let visits = 0, moved = false;
+  beforeStat(path => {
+    if (path !== target) return;
+    visits++;
+    if (!moved && visits === (stage.endsWith("EOF") ? 2 : 1)) {
+      moved = true; fs.renameSync(target, join(root, "outside")); file(deps, "late");
+    } else if (moved && stage === "boundary replacement") fs.symlinkSync(join(root, "outside"), target);
+  });
+  observedVolume(2 * GiB);
+  if (stage === "initial" || stage === "empty EOF") {
+    const recovered = requireBuildAdmission(root);
+    expect(recovered).toEqual(requireBuildAdmission(root));
+    expect(recovered.targetAgentAllocatedBytes).toBe(allocation(join(root, "target-agent")).allocatedBytes);
+  } else expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_observation_incomplete");
+  expect(moved).toBe(true);
+});
+
+for (const kind of ["deps root", "nested directory", "dangling symlink", "second disappearance"] as const) test(`compiler directory replay refuses ${kind}`, () => {
+  const root = fixture(), deps = join(root, compilerDeps);
+  const target = kind === "deps root" ? deps : join(deps, kind === "nested directory" ? "sub/child" : "sub");
+  fs.mkdirSync(dirname(target), { recursive: true });
+  if (kind === "dangling symlink") fs.symlinkSync(join(root, "missing"), target); else fs.mkdirSync(target);
+  let moved = 0;
+  beforeStat(path => {
+    if ((!moved && path === target) || (kind === "second disappearance" && moved === 1 && path === join(deps, "late"))) {
+      fs.renameSync(path, join(root, `outside-${++moved}`));
+      if (kind === "second disappearance" && moved === 1) fs.mkdirSync(join(deps, "late"));
+    }
+  });
+  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_observation_incomplete");
+  expect(moved).toBe(kind === "second disappearance" ? 2 : 1);
+});
+
+for (const failedReplay of [false, true]) test(`a directory replay cannot erase observed over-cap bytes (failed=${failedReplay})`, () => {
+  const root = fixture(), deps = join(root, compilerDeps);
+  for (const name of ["one", "two"]) file(join(deps, name), "payload");
+  const dirs = [join(deps, "one"), join(deps, "two")], visited = new Set<string>();
+  let moved = false, validations = 0;
+  beforeStat(path => {
+    if (moved && path === deps && ++validations === 2 && failedReplay) throw Object.assign(new Error("EACCES"), { code: "EACCES" });
+    if (moved || !dirs.includes(path)) return;
+    visited.add(path);
+    if (visited.size === 2) {
+      moved = true;
+      for (const [i, dir] of dirs.entries()) fs.renameSync(dir, join(root, `moved-${i}`));
+    }
+  });
+  observedVolume(2 * GiB);
+  // Managed directories can themselves own blocks: use the unchanged empty tree as baseline.
+  const empty = fixture(); fs.mkdirSync(join(empty, compilerDeps), { recursive: true });
+  const baseline = allocation(join(empty, "target-agent")).allocatedBytes;
+  const denied = refusal(() => requireBuildAdmission(root, { reserveBytes: GiB - baseline }));
+  expect(moved).toBe(true);
+  expect(denied.code).toBe("resource_budget_exceeded");
+  expect(denied.observation.complete).toBe(!failedReplay);
+  expect(denied.observation.targetAgentAllocatedBytes).toBeGreaterThan(allocation(join(root, "target-agent")).allocatedBytes);
+});
+
 test("one vanished object re-enumerates only its directory and commits exactly the clean rescan", () => {
   const root = fixture(), tree = join(root, "target-agent"), deps = join(tree, "debug/deps");
   const seed = file(root, "outside/seed"), stable = file(deps, "nested/keep");
@@ -448,6 +512,14 @@ for (const error of ["ENOENT", "Error: inventory_directory_changed", "Error: inv
   expect((await guard.stop()).trigger?.errors).toEqual([error]);
 });
 
+test("worker refuses an over-cap partial observation even when replay completes smaller", async () => {
+  const f = guardFixture(), guard = f.start();
+  f.worker.answer({ ...sample(0), priorAllocatedBytes: GiB + 1 }); await microtasks();
+  const trigger = (await guard.stop()).trigger;
+  expect(trigger?.targetAgentAllocatedBytes).toBe(GiB + 1);
+  expect(trigger?.failureCodes[0]).toBe("resource_budget_exceeded");
+});
+
 test("a transient-looking partial scan already above budget records an immediate terminal trigger", async () => {
   const f = guardFixture(), guard = f.start(); f.worker.answer(sample(GiB + 1, ["ESTALE"]));
   const summary = await guard.stop();
@@ -580,7 +652,7 @@ for (const value of ["0", "-1", "disabled", "60001"]) test(`invalid free-space d
 });
 
 test("the real request-owned worker scans a tiny fixture and closes its thread", async () => {
-  const root = fixture(); file(root, "target-agent/unknown/payload");
+  const root = fixture(); file(root, "target-agent/unknown/payload"); file(root, `${compilerDeps}/live-directory/payload`);
   const expected = allocation(join(root, "target-agent")).allocatedBytes;
   const OriginalWorker = workerThreads.Worker, received = Promise.withResolvers<void>();
   const constructor = spyOn(workerMockBoundary, "Worker").mockImplementation(function (filename: string | URL, options?: workerThreads.WorkerOptions) {
