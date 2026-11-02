@@ -1,0 +1,235 @@
+name: Release compiler proof
+
+# The optional fresh Mac lives inside this job boundary. A skipped recovery is
+# not a skipped ancestor of the caller's signing job (actions/runner#2205).
+on:
+  workflow_call:
+    outputs:
+      primary-evidence:
+        value: ${{ jobs.validate-proof-contracts.outputs.evidence }}
+      recovery-key:
+        value: ${{ jobs.validate-proof-contracts.outputs.recovery-key }}
+      recovered-evidence:
+        value: ${{ jobs.recover-proof-contracts.outputs.evidence }}
+
+# workflow_call does not inherit workflow-level env from its caller.
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "2"
+  RUST_TEST_THREADS: "2"
+  CMAKE_BUILD_PARALLEL_LEVEL: "1"
+  SDK_TEST_CONCURRENCY: "2"
+  # Incremental Rust units bypass sccache; release runners reuse remote cache.
+  CARGO_INCREMENTAL: "0"
+  SCRIPT_KIT_NONINTERACTIVE: "1"
+  SCRIPT_KIT_ALLOW_SCREEN_TAKEOVER: "0"
+  SCRIPT_KIT_ALLOW_NATIVE_INPUT: "0"
+  SCRIPT_KIT_ALLOW_SCREEN_CAPTURE: "0"
+  SCRIPT_KIT_ALLOW_VISIBLE_PROBES: "0"
+  SCRIPT_KIT_ALLOW_LIVE_AI: "0"
+  SCRIPT_KIT_ALLOW_ISOLATED_APP_LAUNCH: "0"
+  SCRIPT_KIT_REQUIRE_CLEAN_SOURCE: "1"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-proof-contracts:
+    name: Validate headless proof and consistency contracts
+    runs-on: macos-15
+    outputs:
+      evidence: ${{ steps.evidence.outputs.artifact-id }}
+      recovery-key: ${{ steps.handoff.outputs.key }}
+    steps: &compiler_proof
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+      # Fetch the named tag so a move/deletion between runners is visible;
+      # do not execute anything from the checkout until the immutable SHA matches.
+      - name: Pin the fetched tag to the release event
+        run: |
+          test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse --verify "$GITHUB_REF^{commit}")" = "$GITHUB_SHA"
+      - name: Install root-pinned Rust toolchain
+        run: bash scripts/install-root-rust-toolchain.sh
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      # rust-cache reports false for both misses and prefix matches. Only
+      # restore the normal compiler cache on an exact lookup. On a miss its
+      # post action can still seed the normal dependency cache for later runs.
+      - id: normal
+        if: github.job == 'validate-proof-contracts'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          workspaces: ". -> target-agent/pools/agent-debug"
+          lookup-only: true
+      - id: warm
+        if: steps.normal.outputs.cache-hit == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          workspaces: ". -> target-agent/pools/agent-debug"
+          save-if: false
+      - id: start
+        env:
+          NORMAL_CACHE: ${{ steps.normal.outputs.cache-hit }}
+          NORMAL_MATCH: ${{ steps.warm.outputs.cache-hit }}
+        run: bun scripts/release-proof-recovery.ts start
+      - id: restore
+        if: github.job == 'recover-proof-contracts'
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.RECOVERY_KEY }}
+          path: &handoff_paths |
+            target-agent/pools/agent-debug/debug
+            .test-output/release-proof-refusal.json
+          fail-on-cache-miss: true
+      - name: Require the exact newly produced compiler cache before retrying
+        if: github.job == 'recover-proof-contracts'
+        env:
+          EXPECTED_KEY: ${{ env.RECOVERY_KEY }}
+          PRIMARY_KEY: ${{ steps.restore.outputs.cache-primary-key }}
+          MATCHED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+          HIT: ${{ steps.restore.outputs.cache-hit }}
+        run: bun scripts/release-proof-recovery.ts restored
+      - name: Exercise macOS deployment-floor checks on Mach-O headers
+        run: python3 -B scripts/test_macos_deployment.py
+      - name: Build the application under test
+        id: compiler
+        shell: bash
+        env:
+          COLD: ${{ steps.start.outputs.cold }}
+          CARGO_BUILD_JOBS: "1"
+          CARGO_TERM_COLOR: never
+          SCRIPT_KIT_AGENT_TIMEOUT_MS: "3600000"
+        run: |
+          set -euo pipefail
+          mkdir -p .test-output
+          if SCRIPT_KIT_AGENT_RESULT_PATH=.test-output/release-unit-result.json \
+            bash scripts/agentic/agent-cargo.sh test --locked --lib theme::alpha::alpha_byte_tests:: 2>&1 | tee "$RUNNER_TEMP/release-unit.log"; then
+            check_measurement() {
+              jq -e --argjson count "$2" '.status == "succeeded" and .exitCode == 0 and
+                .passedTests == $count and .failedTests == 0 and .cleanup.closed == true and
+                .cleanup.survivors == [] and .resources.monitoring.complete == true and
+                .resources.monitoring.workerClosed == true and .resources.refusal == null' "$1" >/dev/null
+            }
+            check_measurement .test-output/release-unit-result.json 6
+            SCRIPT_KIT_AGENT_RESULT_PATH=.test-output/release-doc-result.json \
+              bash scripts/agentic/agent-cargo.sh test --locked --doc --package script-kit-gpui theme::alpha::
+            check_measurement .test-output/release-doc-result.json 3
+            echo state=passed >> "$GITHUB_OUTPUT"
+          else
+            codes=("${PIPESTATUS[@]}")
+            test "${codes[1]}" = 0
+            if [[ "${codes[0]}" != 75 || "$GITHUB_JOB" != validate-proof-contracts ]]; then exit "${codes[0]}"; fi
+            bun scripts/release-proof-recovery.ts defer "${codes[0]}"
+          fi
+      - name: Preserve the failed measurement (never pass evidence)
+        if: steps.compiler.outputs.cache-key != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-proof-refusal-${{ github.run_attempt }}
+          path: .test-output/release-proof-refusal.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - id: before_save
+        if: steps.compiler.outputs.cache-key != ''
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ steps.compiler.outputs.cache-key }}
+          path: *handoff_paths
+          lookup-only: true
+      - if: steps.compiler.outputs.cache-key != ''
+        env:
+          EXPECTED_KEY: ${{ steps.compiler.outputs.cache-key }}
+          PRIMARY_KEY: ${{ steps.before_save.outputs.cache-primary-key }}
+          MATCHED_KEY: ${{ steps.before_save.outputs.cache-matched-key }}
+          HIT: ${{ steps.before_save.outputs.cache-hit }}
+        run: bun scripts/release-proof-recovery.ts miss
+      - if: steps.compiler.outputs.cache-key != ''
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.compiler.outputs.cache-key }}
+          path: *handoff_paths
+      # save@v4 can warn and exit zero without saving anything.
+      - id: after_save
+        if: steps.compiler.outputs.cache-key != ''
+        uses: actions/cache/restore@v4
+        with:
+          key: ${{ steps.compiler.outputs.cache-key }}
+          path: *handoff_paths
+          lookup-only: true
+          fail-on-cache-miss: true
+      - id: handoff
+        if: steps.compiler.outputs.cache-key != ''
+        env:
+          EXPECTED_KEY: ${{ steps.compiler.outputs.cache-key }}
+          PRIMARY_KEY: ${{ steps.after_save.outputs.cache-primary-key }}
+          MATCHED_KEY: ${{ steps.after_save.outputs.cache-matched-key }}
+          HIT: ${{ steps.after_save.outputs.cache-hit }}
+        run: |
+          bun scripts/release-proof-recovery.ts hit
+          echo "key=$EXPECTED_KEY" >> "$GITHUB_OUTPUT"
+      - name: Verify bounded proof recovery, installed settings, shortcut tools and exact tab adapter
+        if: &proof_passed steps.compiler.outputs.state == 'passed'
+        run: bun test ./scripts/release-proof-recovery.test.ts ./scripts/config-cli.test.ts ./scripts/config-installed.test.ts ./scripts/devtools/focus-named-tab.test.ts
+      - name: Execute safe proof-contract behavior
+        if: *proof_passed
+        env:
+          SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/release-proof-evidence/proof-contracts.json
+          SCRIPT_KIT_VERIFY_TEST_LOG: ${{ runner.temp }}/proof-contracts.log
+        run: bash scripts/verify.sh --skip-bundle --only proof-contracts
+      - name: Validate tracked static consistency catalog
+        if: *proof_passed
+        env:
+          SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/release-proof-evidence/consistency-catalog.json
+        run: bash scripts/verify.sh --skip-bundle --only consistency-catalog
+      - name: Build the exact non-GUI design token exporter
+        if: *proof_passed
+        env:
+          CARGO_BUILD_JOBS: "1"
+        run: |
+          mkdir -p .test-output/release
+          bun scripts/devtools/devtools.ts build-ops act exporter-build \
+            --timeout-ms 3600000 \
+            --artifact-out .test-output/release/exporter.reference.json
+      - name: Prove generated design JSON and CSS match the authoritative exporter
+        if: *proof_passed
+        run: |
+          bun scripts/devtools/generated-byte-compare.ts \
+            --artifact .test-output/release/exporter.reference.json \
+            --source-policy clean-exact-head \
+            --out .test-output/release/generated-byte-compare.json
+          cp .test-output/release/generated-byte-compare.json \
+            "$RUNNER_TEMP/release-proof-evidence/generated-design-contracts-proof.json"
+          bun scripts/release-evidence.ts gate \
+            --gate generated-design-contracts \
+            --class UNIT_BEHAVIOR \
+            --source-sha "$GITHUB_SHA" \
+            --result "$RUNNER_TEMP/release-proof-evidence/generated-design-contracts-proof.json" \
+            --output "$RUNNER_TEMP/release-proof-evidence/generated-design-contracts.json"
+      - name: Upload headless proof and static-inventory receipts
+        if: *proof_passed
+        id: evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-proof-evidence
+          path: ${{ runner.temp }}/release-proof-evidence/*.json
+          if-no-files-found: error
+
+  recover-proof-contracts:
+    name: Recover the complete proof on one fresh Mac
+    runs-on: macos-15
+    needs: validate-proof-contracts
+    if: needs.validate-proof-contracts.outputs.recovery-key != ''
+    env:
+      RECOVERY_KEY: ${{ needs.validate-proof-contracts.outputs.recovery-key }}
+    outputs:
+      evidence: ${{ steps.evidence.outputs.artifact-id }}
+    steps: *compiler_proof

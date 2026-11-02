@@ -3226,13 +3226,16 @@ describe("nonintrusive executed Rust verification", () => {
 });
 
 describe("nonintrusive CI release ownership and publication graph", () => {
-  function workflow(name: "ci" | "release" | "perf-gates"): {
+  function workflow(name: "ci" | "release" | "perf-gates" | "release-compiler-proof"): {
     env: Record<string, string>;
     jobs: Record<string, {
       "runs-on": string;
+      uses?: string;
+      if?: string;
+      outputs?: Record<string, string>;
       needs?: string | string[];
       env?: Record<string, string>;
-      steps?: Array<{ name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; "continue-on-error"?: boolean | string }>;
+      steps?: Array<{ id?: string; name?: string; uses?: string; with?: Record<string, unknown>; run?: string; if?: string; env?: Record<string, string>; "continue-on-error"?: boolean | string }>;
     }>;
   } {
     return Bun.YAML.parse(readFileSync(
@@ -3303,7 +3306,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
   });
 
   test("every workflow refuses visible probes, screen takeover, live AI, and local app launch", () => {
-    for (const name of ["ci", "release", "perf-gates"] as const) {
+    for (const name of ["ci", "release", "perf-gates", "release-compiler-proof"] as const) {
       const definition = workflow(name);
       expect(definition.env.SCRIPT_KIT_NONINTERACTIVE).toBe("1");
       for (const unsafeFlag of [
@@ -3321,7 +3324,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
 
   test("only the two owned hidden-frame CI commands consume immutable artifacts without launch opt-ins", () => {
     const ownedFrames: Array<{ workflow: string; job: string; step: string; artifact: string }> = [];
-    for (const name of ["ci", "release", "perf-gates"] as const) {
+    for (const name of ["ci", "release", "perf-gates", "release-compiler-proof"] as const) {
       const workflowDefinition = workflow(name);
       for (const [job, definition] of Object.entries(workflowDefinition.jobs)) {
         const steps = definition.steps ?? [];
@@ -3372,8 +3375,18 @@ describe("nonintrusive CI release ownership and publication graph", () => {
   });
 
   test("macOS proof job executes real platform fixtures without hidden skips", () => {
-    const proof = workflow("release").jobs["validate-proof-contracts"];
+    const caller = workflow("release");
+    const call = caller.jobs["validate-proof-contracts"];
+    expect(call.uses).toBe("./.github/workflows/release-compiler-proof.yml");
+    expect(call.needs).toBe("validate-version");
+    const called = workflow("release-compiler-proof");
+    expect(called.env).toMatchObject(caller.env); // workflow_call does not inherit them
+    const proof = called.jobs["validate-proof-contracts"], recovery = called.jobs["recover-proof-contracts"];
     expect(proof["runs-on"]).toBe("macos-15");
+    expect(recovery["runs-on"]).toBe(proof["runs-on"]);
+    expect(recovery.needs).toBe("validate-proof-contracts");
+    expect(recovery.if).toBe("needs.validate-proof-contracts.outputs.recovery-key != ''");
+    expect(recovery.steps).toEqual(proof.steps);
     const steps = proof.steps ?? [];
     const installIndex = steps.findIndex((step) =>
       step.run === "bash scripts/install-root-rust-toolchain.sh");
@@ -3384,10 +3397,16 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     expect(bunIndex).toBeGreaterThanOrEqual(0);
     expect(proofIndex).toBeGreaterThan(installIndex);
     expect(proofIndex).toBeGreaterThan(bunIndex);
-    for (const index of [installIndex, bunIndex, proofIndex]) {
-      expect(steps[index]?.if).toBeUndefined();
-      expect(steps[index]?.["continue-on-error"]).not.toBe(true);
-    }
+    for (const index of [installIndex, bunIndex]) expect(steps[index]?.if).toBeUndefined();
+    expect(steps.every(s => s["continue-on-error"] === undefined)).toBe(true);
+    const afterCompiler = "steps.compiler.outputs.state == 'passed'";
+    expect(steps[proofIndex]?.if).toBe(afterCompiler);
+    const evidence = steps.findIndex(s => s.id === "evidence");
+    expect(evidence).toBeGreaterThan(proofIndex);
+    expect(steps.slice(proofIndex, evidence + 1).every(s => s.if === afterCompiler)).toBe(true);
+    expect(proof.outputs?.evidence).toBe("${{ steps.evidence.outputs.artifact-id }}");
+    expect(recovery.outputs?.evidence).toBe(proof.outputs?.evidence);
+    expect(steps[evidence].with?.["if-no-files-found"]).toBe("error");
   });
 
   test("publication keeps packaged readiness advisory and always uploads its scorecard", () => {
@@ -3418,7 +3437,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
 
   test("authoritative exporter proof survives proof, signing, scorecard, and publication jobs", () => {
     const release = workflow("release");
-    const proofSteps = release.jobs["validate-proof-contracts"].steps ?? [];
+    const proofSteps = workflow("release-compiler-proof").jobs["validate-proof-contracts"].steps ?? [];
     const producer = proofSteps.find((step) =>
       step.name === "Prove generated design JSON and CSS match the authoritative exporter");
     expect(producer?.run).toContain("release-proof-evidence/generated-design-contracts-proof.json");
