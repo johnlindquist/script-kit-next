@@ -8,6 +8,8 @@ export interface OwnedProcessOptions {
   env: Record<string, string>;
   timeoutMs: number;
   maxOutputBytes: number;
+  /** Explicit per-launch capability, never a request to signal a supplied PID. */
+  compilerSampling?: boolean;
   ownedNative?: {
     launchNonce: string;
     binarySha256: string;
@@ -16,7 +18,13 @@ export interface OwnedProcessOptions {
     task?: { repositoryRoot: string; recordPath: string; identity: { id: string; generation: string }; helperExecutable: string };
   };
 }
+export interface CompilerSampling {
+  /** False only after the supervisor proved that the owned group has closed. */
+  hold(budgetMs: number): Promise<boolean>;
+  release(): Promise<void>;
+}
 export interface OwnedProcess {
+  readonly compilerSampling?: CompilerSampling;
   readonly pid: number;
   readonly supervisorPid: number;
   readonly identity: OwnedProcessIdentity;
@@ -107,6 +115,7 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
     || !Number.isSafeInteger(options.maxOutputBytes) || options.maxOutputBytes < 1 || options.maxOutputBytes > 268_435_456) {
     throw new Error("invalid_owned_process_options");
   }
+  if (options.compilerSampling !== undefined && (typeof options.compilerSampling !== "boolean" || (options.compilerSampling && options.ownedNative))) throw new Error("compiler_pause_protocol");
   if (options.ownedNative && (
     !/^[a-f0-9-]{36}$/.test(options.ownedNative.launchNonce) ||
     [options.ownedNative.binarySha256, options.ownedNative.manifestSha256, options.ownedNative.policySha256].some(value => !/^[a-f0-9]{64}$/.test(value)) ||
@@ -126,6 +135,11 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
     cwd: options.cwd, env: options.env, detached: true, stdio: ["pipe", "pipe", "pipe"],
   });
   let identity: OwnedProcessIdentity | undefined;
+  let sampleClock = 0, receivedClock = 0, seq = 0, held = false, cleanEnd = false;
+  let samplePending: { expected: "sample-held" | "sample-released"; done: PromiseWithResolvers<boolean> } | undefined;
+  const sampleFailed = (code: string) => {
+    if (samplePending) { samplePending.done.reject(new Error(code)); samplePending = undefined; }
+  };
   let observedCleanup: OwnedCleanup | undefined;
   let nativeLifecycle: NativeLifecycleObservation | null = null;
   let protocolFailure: string | undefined;
@@ -157,6 +171,7 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
   };
   const fail = (message: string) => {
     protocolFailure ??= message;
+    sampleFailed("compiler_pause_protocol");
     discardingOutput = true;
     cancel(); resume(); finishOutput(new Error(message));
     resolveStarted(undefined); resolveExited(70);
@@ -185,8 +200,19 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
             || ["processStartTime", "processInstanceId", "supervisorStartTime", "sessionGeneration"].some(key => typeof event.identity[key] !== "string" || !event.identity[key])) {
             throw new Error("supervisor_identity_invalid");
           }
+          if (options.compilerSampling) {
+            if (!Number.isSafeInteger(event.sampleClockMs) || event.sampleClockMs < 0) throw new Error("compiler_pause_protocol");
+            // The native timestamp precedes receipt. This anchor can only shorten
+            // the original scan deadline; no shared JS/Python clock epoch assumed.
+            sampleClock = event.sampleClockMs; receivedClock = performance.now();
+          }
           identity = Object.freeze(event.identity);
           resolveStarted(identity);
+        } else if (event.event === "sample-held" || event.event === "sample-released") {
+          if (!identity || !options.compilerSampling || !samplePending || event.event !== samplePending.expected ||
+              event.generation !== identity.sessionGeneration || event.seq !== seq || observedCleanup) throw new Error("compiler_pause_protocol");
+          held = event.event === "sample-held";
+          const pending = samplePending; samplePending = undefined; pending.done.resolve(true);
         } else if (event.event === "output") {
           if (!identity || observedCleanup || !["stdout", "stderr"].includes(event.channel)
             || typeof event.data !== "string" || event.data.length > 87_384
@@ -210,6 +236,11 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
               throw new Error("supervisor_native_closure_unproved");
           }
           observedCleanup = event.cleanup;
+          cleanEnd = event.cleanup.closed === true && event.cleanup.processGroupExited === true &&
+            event.cleanup.survivors?.length === 0 && event.cleanup.failureCodes?.length === 0;
+          if (samplePending?.expected === "sample-held" && cleanEnd && !held) {
+            const pending = samplePending; samplePending = undefined; pending.done.resolve(false);
+          } else sampleFailed(supervisorFailureCodes.find(code => ["compiler_pause_deadline", "compiler_pause_identity", "compiler_pause_already_stopped"].includes(code)) ?? "compiler_pause_unconfirmed");
           finishOutput(); resolveExited(event.exitCode);
         } else throw new Error("supervisor_event_invalid");
       }
@@ -249,7 +280,23 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
     const cleanup = await close();
     throw Object.assign(new Error(protocolFailure ?? "owned_process_start_failed"), { cleanup });
   }
+  const sampleCommand = async (begin: boolean, budgetMs = 0): Promise<boolean> => {
+    if (!options.compilerSampling || samplePending || begin === held || protocolFailure) throw new Error("compiler_pause_protocol");
+    if (observedCleanup) {
+      if (begin && cleanEnd) return false;
+      throw new Error("compiler_pause_unconfirmed");
+    }
+    if (child.stdin!.destroyed || child.stdin!.writableEnded) throw new Error("compiler_pause_unconfirmed");
+    if (begin && (!Number.isSafeInteger(budgetMs) || budgetMs < 1 || budgetMs > 8000)) throw new Error("compiler_pause_deadline");
+    const done = Promise.withResolvers<boolean>();
+    samplePending = { expected: begin ? "sample-held" : "sample-released", done };
+    const command = begin ? { event: "sample-hold", seq: ++seq, untilMs: Math.floor(sampleClock + performance.now() - receivedClock + budgetMs) } : { event: "sample-release", seq };
+    try { child.stdin!.write(JSON.stringify({ ...command, generation: actual.sessionGeneration }) + "\n"); }
+    catch { sampleFailed("compiler_pause_protocol"); }
+    return done.promise;
+  };
   return {
+    ...(options.compilerSampling ? { compilerSampling: { hold: (ms: number) => sampleCommand(true, ms), release: async () => { await sampleCommand(false); } } } : {}),
     pid: actual.pid, supervisorPid: actual.supervisorPid, identity: actual,
     stdout: streams[0]!, stderr: streams[1]!, exited, close,
     get observedReceivedOutputBytes() { return outputBytes; },

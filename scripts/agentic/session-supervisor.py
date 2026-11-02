@@ -9,6 +9,7 @@ import json
 import os
 import selectors
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -117,6 +118,55 @@ def validate_native_lifecycle(value, identity, expected):
     return value
 
 
+# The witness lives in the compiler's private session but a different group:
+# SIGSTOP cannot freeze it, and its own session pins the group id against reuse.
+# Its sole authority is that session's leader group, never a transmitted PID.
+WATCH_FINISH = (1 << 64) - 1
+
+
+def compiler_pause_witness(fd, gate_fd):
+    wire = socket.socket(fileno=fd)
+    group = os.getsid(0)
+    if group != os.getppid():
+        os._exit(70)
+    os.setpgid(0, 0)
+    for inherited in (0, 1, 2, gate_fd):
+        os.close(inherited)
+    until = 0
+    try:
+        wire.sendall(b"R")
+        while True:
+            frame = bytearray()
+            while len(frame) < 8:
+                left = (until - time.monotonic_ns()) / 1e9 if until else None
+                if left is not None and left <= 0:
+                    raise TimeoutError()
+                wire.settimeout(left)
+                chunk = wire.recv(8 - len(frame))
+                if not chunk:
+                    raise EOFError()
+                frame.extend(chunk)
+            limit = int.from_bytes(frame, "big")
+            now = time.monotonic_ns()
+            if until and now >= until:
+                raise TimeoutError()
+            if limit == WATCH_FINISH:
+                os._exit(0)  # Only sent after the supervisor observed group exit.
+            if limit == 0 and until:
+                until = 0
+            elif not until and now < limit <= now + 8_000_000_000:
+                until = limit
+            else:
+                raise ValueError("compiler_pause_protocol")
+            wire.sendall(b"A")
+    except BaseException:
+        try:
+            os.killpg(group, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        os._exit(70)
+
+
 def request_owned():
     child = None
     selector = selectors.DefaultSelector()
@@ -142,6 +192,20 @@ def request_owned():
     owner_lost = False
     owner_pid = os.getppid()
     task_bound = False
+    sampling = False
+    sample_seq = 0
+    sample_until = 0.0
+    held_members = None
+    witness = None
+
+    def watch_limit(value):
+        remaining = sample_until - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("compiler_pause_deadline")
+        witness.settimeout(min(1, remaining))
+        witness.sendall(value.to_bytes(8, "big"))
+        if witness.recv(1) != b"A":
+            raise RuntimeError("compiler_pause_unconfirmed")
 
     def task_bridge(operation, **payload):
         task = owned_native.get("task") if owned_native else None
@@ -295,6 +359,87 @@ def request_owned():
         if input_ended and not pending_input:
             close_input()
 
+    def sample_states():
+        left = sample_until - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("compiler_pause_deadline")
+        # No argv, paths or environment are observed. Session/group id is the
+        # unreaped child we spawned with start_new_session, never a caller PID.
+        ps = subprocess.run(["/bin/ps", "-axo", "pid=,pgid=,stat="], capture_output=True,
+                            text=True, timeout=min(1.0, left), check=True)
+        members = {}
+        for line in ps.stdout.splitlines():
+            pid, group, state = line.split()
+            if int(group) == child.pid and not state.startswith("Z"):
+                members[int(pid)] = state.startswith("T")
+        return members
+
+    def signal_owned_session(sig):
+        # Popen is the supervisor's own direct child. No other thread waits it;
+        # while held we do not poll/reap it, so its PID cannot be recycled.
+        if child.returncode is not None or os.getpgid(child.pid) != child.pid or os.getsid(child.pid) != child.pid:
+            raise ValueError("compiler_pause_identity")
+        os.killpg(child.pid, sig)
+
+    def sample_control(command):
+        nonlocal sample_seq, sample_until, held_members
+        event, seq = command["event"], command.get("seq")
+        if (not sampling or command.get("generation") != generation or type(seq) is not int
+            or set(command) != ({"event", "seq", "generation", "untilMs"} if event == "sample-hold" else {"event", "seq", "generation"})):
+            raise ValueError("compiler_pause_protocol")
+        if event == "sample-hold":
+            if held_members is not None or seq != sample_seq + 1 or type(command["untilMs"]) is not int:
+                raise ValueError("compiler_pause_protocol")
+            sample_seq = seq
+            now = time.monotonic()
+            sample_until = min(command["untilMs"] / 1000, now + 8, deadline)
+            if sample_until <= now:
+                raise TimeoutError("compiler_pause_deadline")
+            if child.poll() is not None:
+                # Only the terminal frame can prove the entire group is closed.
+                return
+            before = sample_states()
+            if child.pid not in before:
+                if child.poll() is not None:
+                    return
+                raise ValueError("compiler_pause_identity")
+            if any(before.values()):
+                raise ValueError("compiler_pause_already_stopped")
+            watch_limit(int(sample_until * 1e9))
+            held_members = set()  # Cleanup has authority even if acknowledgement fails.
+            signal_owned_session(signal.SIGSTOP)
+            while True:
+                if cancelled or os.getppid() != owner_pid:
+                    raise EOFError("request_owner_disappeared")
+                members = sample_states()
+                if not members and child.poll() is not None:
+                    held_members = None
+                    return  # Clean terminal frame (not an empty ps result) resolves the hold.
+                if child.pid in members and all(members.values()):
+                    if set(members) == held_members:
+                        break
+                    held_members = set(members)
+                else:
+                    held_members = set()
+                time.sleep(min(.005, max(0, sample_until - time.monotonic())))
+            reply = "sample-held"
+        else:
+            if not held_members or seq != sample_seq:
+                raise ValueError("compiler_pause_protocol")
+            members = sample_states()
+            if set(members) != held_members or not all(members.values()):
+                raise ValueError("compiler_pause_identity")
+            if time.monotonic() >= sample_until:
+                raise TimeoutError("compiler_pause_deadline")
+            signal_owned_session(signal.SIGCONT)
+            watch_limit(0)
+            held_members = None
+            reply = "sample-released"
+        # Share the ordinary framed output queue: a partially written output
+        # frame must never be interleaved with a pause acknowledgement.
+        pending.extend(encode({"event": reply, "generation": generation, "seq": seq}))
+        flush_output()
+
     def read_control():
         nonlocal input_ended
         data = os.read(0, 65536)
@@ -309,7 +454,9 @@ def request_owned():
             del control[:newline + 1]
             if command.get("event") == "close":
                 raise EOFError("request_closed")
-            if command.get("event") == "stdin-end" and not input_ended:
+            if command.get("event") in ("sample-hold", "sample-release"):
+                sample_control(command)
+            elif command.get("event") == "stdin-end" and not input_ended:
                 input_ended = True
             elif command.get("event") == "stdin" and not input_ended:
                 payload = command.get("data")
@@ -354,6 +501,9 @@ def request_owned():
             or type(maximum) is not int or not 1 <= maximum <= 268435456):
             raise ValueError("invalid_owned_process_options")
         owned_native = spec.get("ownedNative")
+        sampling = spec.get("compilerSampling", False)
+        if type(sampling) is not bool or (sampling and owned_native is not None):
+            raise ValueError("compiler_pause_protocol")
         if owned_native is not None:
             if (not isinstance(owned_native, dict) or env.get("SCRIPT_KIT_OWNED_EVALUATION") != "1"
                 or len(argv) < 2 or argv[-1] != "--owned-ui-evaluation"
@@ -366,19 +516,31 @@ def request_owned():
                      "SCRIPT_KIT_AGENTIC_SESSION_GENERATION": generation,
                      "SCRIPT_KIT_SESSION_GENERATION": generation}
         gate_read, gate_write = os.pipe()
+        peer = None
         try:
-            child = subprocess.Popen([sys.executable, "-I", "-S", "-B", __file__, "--exec-child", str(gate_read), *argv],
+            boot, fds = ["--exec-child", str(gate_read)], (gate_read,)
+            if sampling:
+                witness, peer = socket.socketpair()
+                boot, fds = ["--exec-sampled-child", str(gate_read), str(peer.fileno())], (gate_read, peer.fileno())
+            child = subprocess.Popen([sys.executable, "-I", "-S", "-B", __file__, *boot, *argv],
                 cwd=cwd, env=child_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, start_new_session=True, pass_fds=(gate_read,))
+                stderr=subprocess.PIPE, start_new_session=True, pass_fds=fds)
+            if peer is not None:
+                peer.close()
+                witness.settimeout(2)
+                if witness.recv(1) != b"R":
+                    raise RuntimeError("compiler_pause_witness_start_failed")
             os.close(gate_read)
             gate_read = None
             identity = identity_for(child, instance, generation)
             if owned_native and owned_native.get("task"):
                 task_bridge("native-task-bind", processIdentity=identity)
                 task_bound = True
-            emit({"event": "started", "identity": identity})
+            emit({"event": "started", "identity": identity, **({"sampleClockMs": time.monotonic_ns() // 1000000} if sampling else {})})
             os.write(gate_write, b"1")
         finally:
+            if peer is not None:
+                peer.close()
             if gate_read is not None:
                 os.close(gate_read)
             os.close(gate_write)
@@ -393,14 +555,17 @@ def request_owned():
         while True:
             if cancelled or time.monotonic() >= deadline:
                 raise TimeoutError(cancelled or "process_timeout")
-            for key, _ in selector.select(0.02):
+            if held_members is not None and time.monotonic() >= sample_until:
+                raise TimeoutError("compiler_pause_deadline")
+            wait = max(0, min(0.02, sample_until - time.monotonic())) if held_members is not None else 0.02
+            for key, _ in selector.select(wait):
                 if key.data == "lifetime":
                     read_control()
                 elif type(key.data) is int:
                     capture_source(key)
             flush_input()
             flush_output()
-            if child.poll() is not None:
+            if held_members is None and child.poll() is not None:
                 drain_deadline = drain_deadline or time.monotonic() + 1
                 if not source_open and not pending:
                     break
@@ -411,6 +576,15 @@ def request_owned():
         if str(error) == "request_owner_disappeared":
             detach_output()
     finally:
+        if held_members is not None:
+            # Never let a dead/stalled owner strand a suspended compiler or resume
+            # writes under an unverified scan. Kill only the still-pinned group.
+            try:
+                signal_owned_session(signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except (OSError, ValueError):
+                failures.append("compiler_pause_cleanup_unproved")
         close_input()
         if owned_native and configured:
             # The same supervisor keeps draining child stdout after owner death.
@@ -428,6 +602,24 @@ def request_owned():
                     detach_output()
         exited, group_exited, survivors, reap_failures = reap_group(child)
         failures.extend(reap_failures)
+        if witness is not None:
+            try:
+                witness.settimeout(1)
+                if group_exited:
+                    try:
+                        witness.sendall(WATCH_FINISH.to_bytes(8, "big"))
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # A witness that fired has already exited.
+                else:
+                    witness.shutdown(socket.SHUT_WR)
+                # The witness never gives up its descriptor until _exit().
+                if witness.recv(1) != b"":
+                    raise RuntimeError("compiler_pause_witness_unclosed")
+            except (OSError, RuntimeError):
+                failures.append("compiler_pause_witness_unclosed")
+                survivors.append({"kind": "compiler-pause-witness", "identity": generation, "observation": "unknown"})
+            finally:
+                witness.close()
         deadline = time.monotonic() + 0.5
         while configured and (source_open or pending) and time.monotonic() < deadline:
             for key, _ in selector.select(0.02):
@@ -809,8 +1001,14 @@ def main():
         return check_session(sys.argv[2])
     if sys.argv[1:2] == ["--stop-session"]:
         return stop_session(sys.argv[2])
-    if sys.argv[1:2] == ["--exec-child"]:
+    if sys.argv[1:2] in (["--exec-child"], ["--exec-sampled-child"]):
         fd = int(sys.argv[2])
+        if sys.argv[1] == "--exec-sampled-child":
+            wire_fd = int(sys.argv.pop(3))
+            if os.fork() == 0:
+                compiler_pause_witness(wire_fd, fd)
+                os._exit(70)
+            os.close(wire_fd)
         if os.read(fd, 1) != b"1":
             return 70
         os.close(fd)

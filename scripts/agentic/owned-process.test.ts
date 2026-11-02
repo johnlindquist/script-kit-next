@@ -42,6 +42,91 @@ test("framed transport preserves binary stdin EOF and keeps child control-lookin
     expect(await child.close()).toMatchObject({ closed: true, processExited: true, processGroupExited: true, streamsDrained: true, failureCodes: [] });
   }
 }, 10000);
+test("compiler sampling stops only the owned group and resumes it through the same handle", async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "owned-compiler-sample-"))); paths.push(root);
+  const childPid = join(root, "worker");
+  const script = "import sys,subprocess,pathlib; c=subprocess.Popen([sys.executable,'-I','-S','-B','-c','import time; time.sleep(30)']); pathlib.Path(sys.argv[1]).write_text(str(c.pid)); print(input(),flush=True); c.terminate(); c.wait()";
+  const child = await spawnOwnedProcess({ ...options(["python3", "-I", "-S", "-B", "-c", script, childPid], 8000), compilerSampling: true });
+  const neighbor = await spawnOwnedProcess(options(["/bin/cat"], 8000));
+  try {
+    for (let i=0; i<100 && !existsSync(childPid); i++) await Bun.sleep(10);
+    const worker = Number(readFileSync(childPid, "utf8")); expect(worker).toBeGreaterThan(1);
+    expect(neighbor.compilerSampling).toBeUndefined();
+    const channel = child.compilerSampling!;
+    await expect(channel.release()).rejects.toThrow("compiler_pause_protocol");
+    expect(await channel.hold(3000)).toBe(true);
+    for (const pid of [child.pid, worker]) {
+      expect(spawnSync("/bin/ps", ["-p", String(pid), "-o", "stat="], { encoding: "utf8" }).stdout.trim()).toMatch(/^T/);
+    }
+    await expect(channel.hold(3000)).rejects.toThrow("compiler_pause_protocol");
+    neighbor.stdin.write("unaffected"); neighbor.stdin.end();
+    expect(await new Response(neighbor.stdout).text()).toBe("unaffected");
+    child.stdin.write("continued\n");
+    await channel.release();
+    expect(await new Response(child.stdout).text()).toBe("continued\n");
+    expect(await child.exited).toBe(0);
+    expect(await channel.hold(3000)).toBe(false); // Positive terminal closure, not an ESRCH guess.
+    expect(absent(worker)).toBe(true);
+  } finally { expect((await child.close()).closed).toBe(true); expect((await neighbor.close()).closed).toBe(true); }
+}, 12000);
+
+test("the supervisor enforces the pause deadline even when JS cannot service its timers", async () => {
+  const child = await spawnOwnedProcess({ ...options(["/bin/sleep", "30"], 5000), compilerSampling: true });
+  try {
+    expect(await child.compilerSampling!.hold(600)).toBe(true);
+    Bun.sleepSync(850);
+    expect(await child.exited).not.toBe(0);
+    expect(await child.close()).toMatchObject({ closed: true, processGroupExited: true, survivors: [], failureCodes: ["compiler_pause_deadline"] });
+    expect(absent(child.pid)).toBe(true);
+  } finally { await child.close(); }
+}, 8000);
+
+test("an unresponsive native supervisor cannot extend the compiler pause", async () => {
+  const child = await spawnOwnedProcess({ ...options(["/bin/sleep", "30"], 6000), compilerSampling: true });
+  let suspended = false;
+  try {
+    expect(await child.compilerSampling!.hold(700)).toBe(true);
+    process.kill(child.supervisorPid, "SIGSTOP"); suspended = true;
+    const state = () => spawnSync("/bin/ps", ["-p", String(child.pid), "-o", "stat="], { encoding: "utf8" }).stdout.trim();
+    const deadline = performance.now() + 1900;
+    while (!state().startsWith("Z") && performance.now() < deadline) await Bun.sleep(20);
+    expect(state()).toMatch(/^Z/); // Exited, still pinned by its stopped parent; not merely stopped.
+    process.kill(child.supervisorPid, "SIGCONT"); suspended = false;
+    expect(await child.exited).not.toBe(0);
+    expect(await child.close()).toMatchObject({ closed: true, survivors: [] });
+  } finally { if (suspended) process.kill(child.supervisorPid, "SIGCONT"); await child.close(); }
+}, 9000);
+
+test("loss of the native supervisor cannot strand a stopped compiler", async () => {
+  const child = await spawnOwnedProcess({ ...options(["/bin/sleep", "30"], 6000), compilerSampling: true });
+  const drained = Promise.allSettled([new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  try {
+    expect(await child.compilerSampling!.hold(2500)).toBe(true);
+    const members = spawnSync("/bin/ps", ["-axo", "pid=,ppid=,pgid="], { encoding: "utf8" }).stdout.trim().split("\n").map(line => line.trim().split(/\s+/).map(Number));
+    const witnesses = members.filter(([pid,parent,group]) => parent === child.pid && group === pid && group !== child.pid);
+    expect(witnesses).toHaveLength(1);
+    process.kill(child.supervisorPid, "SIGKILL"); // This handle's direct, still-live supervisor, not a process-name match.
+    expect((await child.close()).closed).toBe(false); // A lost supervisor cannot attest closure.
+    const witness = witnesses[0]![0]!;
+    for (let i=0; i<120 && (!absent(child.pid) || !absent(witness)); i++) await Bun.sleep(20);
+    expect(absent(child.pid)).toBe(true); expect(absent(witness)).toBe(true);
+    await drained;
+  } finally { await child.close(); }
+}, 9000);
+
+test("an abruptly exiting sampling owner does not strand its held group", async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "sample-owner-loss-"))); paths.push(root);
+  const controller = join(root, "owner.ts"), info = join(root, "identity.json");
+  writeFileSync(controller, `import {spawnOwnedProcess} from ${JSON.stringify(resolve(import.meta.dir, "owned-process.ts"))};
+const c=await spawnOwnedProcess({argv:['/bin/sleep','30'],env:process.env,cwd:process.cwd(),timeoutMs:10000,maxOutputBytes:4096,compilerSampling:true});
+if(!await c.compilerSampling.hold(3000))throw Error('not held'); await Bun.write(${JSON.stringify(info)},JSON.stringify(c.identity)); process.exit(42);`);
+  const owner = Bun.spawn([process.execPath, controller], {cwd:root, stdout:"ignore", stderr:"pipe"});
+  expect(await owner.exited).toBe(42);
+  const ident = JSON.parse(readFileSync(info, "utf8"));
+  for (let i=0; i<150 && (!absent(ident.pid) || !absent(ident.supervisorPid)); i++) await Bun.sleep(20);
+  expect(absent(ident.pid)).toBe(true); expect(absent(ident.supervisorPid)).toBe(true);
+}, 9000);
+
 test("short-lived children retain output and control across synchronous task registration", async () => {
   for (let iteration = 0; iteration < 3; iteration++) {
     const child = await spawnOwnedProcess(options(["/bin/sh", "-c", `printf 'completed-${iteration}\\n'; exit 23`]));

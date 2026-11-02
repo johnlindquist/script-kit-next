@@ -704,6 +704,11 @@ function buildResourceChecks(root: string, activeProfile: () => ManagedCompilerP
       maximumSampledAllocatedBytes: prior.maximumSampledAllocatedBytes === null ? summary.maximumSampledAllocatedBytes : summary.maximumSampledAllocatedBytes === null ? prior.maximumSampledAllocatedBytes : Math.max(prior.maximumSampledAllocatedBytes, summary.maximumSampledAllocatedBytes),
       minimumSampledAvailableBytes: prior.minimumSampledAvailableBytes === null ? summary.minimumSampledAvailableBytes : summary.minimumSampledAvailableBytes === null ? prior.minimumSampledAvailableBytes : Math.min(prior.minimumSampledAvailableBytes, summary.minimumSampledAvailableBytes),
       complete: prior.complete && summary.complete, workerClosed: prior.workerClosed !== false && summary.workerClosed !== false, workerThreadId: summary.workerThreadId ?? prior.workerThreadId, trigger: prior.trigger ?? summary.trigger } : summary;
+    if (prior?.compilerPauses && summary.compilerPauses) {
+      const a = prior.compilerPauses, b = summary.compilerPauses;
+      resources.monitoring.compilerPauses = { held: a.held + b.held, resumed: a.resumed + b.resumed, afterExit: a.afterExit + b.afterExit,
+        freeSamplesWhileHeld: a.freeSamplesWhileHeld + b.freeSamplesWhileHeld, maxElapsedMs: Math.max(a.maxElapsedMs, b.maxElapsedMs) };
+    }
     resources.refusal ||= summary.trigger;
   };
   return { resources, check, monitor };
@@ -869,9 +874,15 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
     const normalized = normalizeCompilerPolicy(root, args);
     const { compatibility, profile } = normalized;
     activeProfile = profile === "release" ? "release" : "debug";
+    const samplingMode = process.env.SCRIPT_KIT_AGENT_OWNED_COMPILER_SAMPLE ?? "0";
+    const compilerSampling = samplingMode === "1";
+    if (!["0", "1"].includes(samplingMode) || (compilerSampling &&
+      (process.platform !== "darwin" || !wantsArtifact || kind !== "application" || profile !== "release" || args[0] !== "build"))) {
+      throw new Error("compiler_sampling_requires_managed_release_app");
+    }
     if (wantsArtifact && kind === "spotlight-demo" && profile !== "dev") throw new Error("artifact_producer_mismatch");
     const cache = selectCompilerCache(root, rustcPath, normalized);
-    const requestedPolicy = { args, pool: "agent-debug", compilerWorkers: Number(process.env.CARGO_BUILD_JOBS), testWorkers: Number(process.env.RUST_TEST_THREADS), cachePolicy: process.env.SCRIPT_KIT_AGENT_USE_SCCACHE || "auto", loadLimitPercent: process.env.SCRIPT_KIT_AGENT_MAX_SYSTEM_LOAD_PERCENT || null };
+    const requestedPolicy = { args, pool: "agent-debug", ...(compilerSampling ? { compilerSampling: "owned-pause-v1" } : {}), compilerWorkers: Number(process.env.CARGO_BUILD_JOBS), testWorkers: Number(process.env.RUST_TEST_THREADS), cachePolicy: process.env.SCRIPT_KIT_AGENT_USE_SCCACHE || "auto", loadLimitPercent: process.env.SCRIPT_KIT_AGENT_MAX_SYSTEM_LOAD_PERCENT || null };
     const source = observeSource();
     if (!registeredInputs.length && (profile === "release" || process.env.SCRIPT_KIT_TRACK_GIT_HEAD === "1") && source.repositoryDirty) refuse("source_stale", "release requires clean source");
     const ledgerPath = join(root, "target-agent/pools/agent-debug/.executable-provenance.json");
@@ -898,7 +909,7 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
       cacheLease("reserve-child", lockPath, [String(process.pid), generation]);
       cleanup = { ...cleanup, processExited: false, processGroupExited: false, streamsDrained: false, closed: false,
         survivors: [{ kind: "process-group", identity: "unobserved", observation: "unknown" }], failureCodes: ["compiler_start_unproved"] };
-      const child = await spawnOwnedProcess({ argv: [toolchain.cargoPath, ...cargoArgs], cwd: root, env,
+      const child = await spawnOwnedProcess({ argv: [toolchain.cargoPath, ...cargoArgs], cwd: root, env, ...(compilerSampling ? { compilerSampling: true } : {}),
         timeoutMs: Number(process.env.SCRIPT_KIT_AGENT_TIMEOUT_MS || 1_800_000), maxOutputBytes: 64 * 1024 * 1024 }).catch(error => {
           if (error && typeof error === "object" && "cleanup" in error && error.cleanup) cleanup = error.cleanup as OwnedCleanup;
           resourceCheck("post-cargo");
@@ -935,7 +946,8 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
         } finally { reader.releaseLock(); }
       };
       try {
-        guard = startBuildResourceGuard(root, error => { resourceFailure ||= error; resources.refusal ||= error.observation; void child.close().catch(() => {}); }, preflight, activeProfile);
+        if (compilerSampling && !child.compilerSampling) throw new Error("compiler_pause_protocol");
+        guard = startBuildResourceGuard(root, error => { resourceFailure ||= error; resources.refusal ||= error.observation; void child.close().catch(() => {}); }, preflight, activeProfile, child.compilerSampling);
         cacheLease("bind", lockPath, [String(process.pid), generation, JSON.stringify(child.identity)]);
         updateManagedTask(task!, { ownedProcesses: [...readManagedTask(task!.recordPath, task!.identity).ownedProcesses, child.identity] });
         await Promise.all([consume(child.stdout, "stdout"), consume(child.stderr, "stderr")]);

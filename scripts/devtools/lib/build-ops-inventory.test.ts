@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import * as workerThreads from "node:worker_threads";
 import { allocation, allocationRefusalClass, buildStorage, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "./build-ops-inventory.ts";
 import type { AllocationObservation, BuildResourceObservation, BuildResourceSummary } from "./build-ops-inventory.ts";
+import type { CompilerSampling } from "../../agentic/owned-process.ts";
 import { registerManagedStorageRoute } from "../../agentic/managed-storage.ts";
 
 // Bun spies invoke constructor bodies as functions; this view preserves the actual module property.
@@ -780,8 +781,39 @@ function guardFixture(root = fixture()) {
     }
     throw new Error("unbounded fixture timers");
   };
-  return { root, worker, refusals, timers, free, advance, start: (initial?: BuildResourceObservation) => startBuildResourceGuard(root, error => refusals.push(error), initial) };
+  return { root, worker, refusals, timers, free, advance, start: (initial?: BuildResourceObservation, sampler?: CompilerSampling) => startBuildResourceGuard(root, error => refusals.push(error), initial, "debug", sampler) };
 }
+
+test("a held scan waits for both acknowledgements and keeps independent free-space sampling", async () => {
+  const g = guardFixture(), held = Promise.withResolvers<boolean>(), resumed = Promise.withResolvers<void>();
+  let holds = 0, releases = 0;
+  const guard = g.start(undefined, { hold: () => ++holds === 1 ? held.promise : Promise.resolve(false), release: () => { releases++; return resumed.promise; } });
+  await g.advance(100); expect(g.worker.requests).toEqual([]);
+  held.resolve(true); await g.advance(1050); expect(g.worker.requests).toEqual([1]);
+  g.worker.answer(sample(4096)); await microtasks(); expect(releases).toBe(1);
+  const done = guard.stop(); await microtasks(); expect(g.worker.requests).toEqual([1]);
+  resumed.resolve(); await microtasks(); expect(g.worker.requests).toEqual([1, 2]);
+  g.worker.answer(sample(4096));
+  const summary = await done;
+  expect(summary).toMatchObject({ complete: true, workerClosed: true, trigger: null, compilerPauses: { held: 1, resumed: 1, afterExit: 1 } });
+  expect(summary.compilerPauses?.freeSamplesWhileHeld).toBeGreaterThan(0); // A closing pair may also sample while release is pending.
+});
+
+for (const reason of ["timeout", "incomplete", "budget", "free", "resume", "identity"] as const) test(`held compiler sampling refuses ${reason} without a second walk`, async () => {
+  process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "1";
+  const g = guardFixture(), never = Promise.withResolvers<boolean>(); let runs = 0;
+  const guard = g.start(undefined, { hold: async () => { runs++; if (reason === "identity") throw new Error("compiler_pause_identity"); return reason === "timeout" ? never.promise : true; },
+    release: async () => { if (reason === "resume") throw new Error("compiler_pause_unconfirmed"); } });
+  await g.advance(20);
+  if (reason === "timeout") await g.advance(8000);
+  else if (reason === "free") { g.free.mockResolvedValue(volume(GiB - 1)); await g.advance(1000); }
+  else if (reason !== "identity") g.worker.answer(reason === "budget" ? sample(2 * GiB) : reason === "incomplete" ? sample(1,["EAGAIN: fixture"]) : sample(42));
+  await microtasks();
+  const result = await guard.stop(); expect(result.complete).toBe(false); expect(result.workerClosed).toBe(true); expect(runs).toBe(1);
+  expect(result.trigger?.failureCodes).toContain(reason === "budget" ? "resource_budget_exceeded" : reason === "free" ? "resource_free_space_below_floor" : "resource_observation_incomplete");
+  expect(g.worker.requests.length).toBe(reason === "identity" || reason === "timeout" ? 0 : 1);
+  expect(result.compilerPauses?.resumed).toBe(0); expect(g.refusals).toHaveLength(1);
+});
 
 test("an uncapped guard refuses when its pinned external route becomes local storage", async () => {
   const f = externalFixture(8192), g = guardFixture(f.root); observedVolume(2 * GiB);

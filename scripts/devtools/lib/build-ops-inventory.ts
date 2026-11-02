@@ -4,6 +4,7 @@ import * as fsPromises from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import * as workerThreads from "node:worker_threads";
+import type { CompilerSampling } from "../../agentic/owned-process.ts";
 import { managedStorageRoot, trustedManagedRootLink } from "../../agentic/managed-storage.ts";
 
 export interface AllocationObservation {
@@ -454,6 +455,7 @@ export interface BuildResourceObservation {
 // Explicit vocabulary from the scanner, not free-form filesystem or compiler messages.
 // Only these atoms may cross the diagnostic privacy boundary, even on a failed release.
 const inventoryFacts = new Set([
+  "compiler_pause_deadline", "compiler_pause_protocol", "compiler_pause_identity", "compiler_pause_already_stopped", "compiler_pause_unconfirmed",
   "inventory_probe_missing", "inventory_probe_duplicate", "inventory_probe_type_changed",
   "inventory_unstable_directory:reappeared", "inventory_unstable_directory:repeated_loss",
   "inventory_unstable_replay_scope", "inventory_unstable_replay_scope:membership", "inventory_unstable_replay_scope:entry",
@@ -514,6 +516,7 @@ export interface BuildResourceSummary {
   workerThreadId?: number;
   callbackFailed?: boolean;
   initialObservationIncluded?: boolean;
+  compilerPauses?: { held: number; resumed: number; afterExit: number; freeSamplesWhileHeld: number; maxElapsedMs: number };
 }
 
 export interface BuildResourceReport {
@@ -579,7 +582,7 @@ if (!workerThreads.isMainThread && workerThreads.workerData?.role === ALLOCATION
   });
 }
 
-export function startBuildResourceGuard(root: string, onRefusal: (error: BuildResourceError) => void, initialObservation?: BuildResourceObservation, profile: ManagedCompilerProfile = "debug"): { stop(): Promise<BuildResourceSummary> } {
+export function startBuildResourceGuard(root: string, onRefusal: (error: BuildResourceError) => void, initialObservation?: BuildResourceObservation, profile: ManagedCompilerProfile = "debug", sampler?: CompilerSampling): { stop(): Promise<BuildResourceSummary> } {
   const freeSampleTimeoutMs = positiveLimit("SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", 2_000, 1, 60_000);
   const policy = resourcePolicy(root);
   const validInitial = initialObservation != null && initialObservation.complete === true && initialObservation.withinLimits === true
@@ -595,6 +598,8 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   const summary: BuildResourceSummary = { sampleCount: initial ? 1 : 0, maximumSampledAllocatedBytes: initial?.allocatedBytes ?? null,
     minimumSampledAvailableBytes: initial ? initialObservation!.availableBytes : null,
     complete: true, trigger: null, transientFailureCount: 0, workerClosed: true, callbackFailed: false, initialObservationIncluded: initial !== null };
+  const pauses = sampler ? summary.compilerPauses = { held: 0, resumed: 0, afterExit: 0, freeSamplesWhileHeld: 0, maxElapsedMs: 0 } : undefined;
+  let held = false, dispatched = false, scanLimit = 0;
   const timers = new Set<NodeJS.Timeout>();
   let stopped = false, stopPromise: Promise<BuildResourceSummary> | undefined;
   let worker: workerThreads.Worker | undefined, workerExited = false;
@@ -674,9 +679,20 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   const scan = (): void => {
     if (stopped || pendingScan || finalPair?.allocation || !worker) return;
     pendingScan = ++scanId; scanStarted = performance.now();
-    scanDeadline = later(() => { pendingScan = 0; failedAllocation(["inventory_time_limit"]); }, remaining(ALLOCATION_TIMEOUT_MS + 1_000));
-    try { worker.postMessage(pendingScan); }
-    catch (error) { cancel(scanDeadline); pendingScan = 0; failedAllocation([String(error)]); }
+    const id = pendingScan;
+    scanLimit = remaining(sampler ? Math.min(8_000, ALLOCATION_TIMEOUT_MS) : ALLOCATION_TIMEOUT_MS + 1_000);
+    dispatched = false;
+    const fail = (error: unknown) => { if (!stopped && pendingScan === id) { cancel(scanDeadline); pendingScan = 0; failedAllocation([String(error)]); } };
+    scanDeadline = later(() => fail(sampler ? "compiler_pause_deadline" : "inventory_time_limit"), scanLimit);
+    const dispatch = (frozen: boolean) => {
+      if (stopped || pendingScan !== id) return;
+      if (sampler && performance.now() - scanStarted >= scanLimit) { fail("compiler_pause_deadline"); return; }
+      held = frozen;
+      if (pauses) { if (frozen) pauses.held++; else pauses.afterExit++; }
+      try { dispatched = true; worker!.postMessage(id); } catch (error) { fail(error); }
+    };
+    if (sampler) void sampler.hold(Math.floor(scanLimit)).then(dispatch, fail);
+    else dispatch(false);
   };
   const sampleFree = (): void => {
     if (stopped || pendingFree || finalPair?.free) return;
@@ -689,7 +705,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     const failed = (error: unknown): void => {
       if (stopped || settled) return;
       settled = true; cancel(deadline); pendingFree = false; available = null; availableError = String(error); summary.sampleCount++;
-      if (!finalPair && transient([String(error)], true) && freeFailures++ === 0) {
+      if (!sampler && !finalPair && transient([String(error)], true) && freeFailures++ === 0) {
         summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(sampleFree, 250);
       } else check(true);
     };
@@ -704,6 +720,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
         catch (error) { failed(error); return; }
         settled = true; cancel(deadline); pendingFree = false; freeFailures = 0; available = bytes; availableError = undefined; summary.sampleCount++;
         summary.minimumSampledAvailableBytes = Math.min(summary.minimumSampledAvailableBytes ?? bytes, bytes);
+        if (held && pauses) pauses.freeSamplesWhileHeld++;
         if (requestedFor) requestedFor.free = true;
         check();
         if (finalPair) sampleFree(); // Replace a result that was already in flight at stop.
@@ -726,8 +743,9 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
       worker.once("online", captureThreadId);
       worker.on("message", (message: { id?: number; allocation?: AllocationObservation }) => {
         if (stopped) return;
-        if (!pendingScan || message?.id !== pendingScan) { failedAllocation(["inventory_worker_protocol"]); return; }
-        cancel(scanDeadline); pendingScan = 0;
+        if (!dispatched || !pendingScan || message?.id !== pendingScan) { failedAllocation(["inventory_worker_protocol"]); return; }
+        dispatched = false;
+        const id = pendingScan;
         const sample = message.allocation;
         if (!sample || typeof sample.complete !== "boolean" || !Array.isArray(sample.errors)
           || sample.complete !== (sample.errors.length === 0) || !sample.errors.every(error => typeof error === "string")
@@ -737,31 +755,44 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
         }
         allocated = sample; summary.sampleCount++;
         summary.maximumSampledAllocatedBytes = Math.max(summary.maximumSampledAllocatedBytes ?? sample.allocatedBytes, sample.allocatedBytes, sample.priorAllocatedBytes ?? 0);
-        if (finalPair && sample.complete && message.id >= finalPair.nextScanId) finalPair.allocation = true;
-        check();
+        // Preserve an observed breach immediately, even if the subsequent resume
+        // would fail. An incomplete held observation never authorizes a retry.
+        check(!!sampler && !sample.complete);
         if (stopped) return;
-        if (!finalPair && !sample.complete && transient(sample.errors) && scanFailures++ === 0) {
-          summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(scan, 250); return;
-        }
-        if (!sample.complete) { check(true); return; }
-        scanFailures = 0;
-        if (finalPair) scan(); // An older in-flight result cannot settle the final pair.
-        else if (!stopped) later(scan, Math.max(0, 10_000 - (performance.now() - scanStarted)));
+        const finish = () => {
+          if (stopped || pendingScan !== id) return;
+          if (sampler && performance.now() - scanStarted >= scanLimit) { failedAllocation(["compiler_pause_deadline"]); return; }
+          if (held && pauses) { pauses.resumed++; pauses.maxElapsedMs = Math.max(pauses.maxElapsedMs, Math.ceil(performance.now() - scanStarted)); }
+          held = false; cancel(scanDeadline); pendingScan = 0;
+          if (finalPair && sample.complete && id >= finalPair.nextScanId) finalPair.allocation = true;
+          check();
+          if (stopped) return;
+          if (!sampler && !finalPair && !sample.complete && transient(sample.errors) && scanFailures++ === 0) {
+            summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(scan, 250); return;
+          }
+          if (!sample.complete) { check(true); return; }
+          scanFailures = 0;
+          if (finalPair) scan(); // An older in-flight result cannot settle the final pair.
+          else later(scan, Math.max(0, 10_000 - (performance.now() - scanStarted)));
+        };
+        if (held && sampler) void sampler.release().then(finish, error => { if (!stopped) failedAllocation([String(error)]); });
+        else finish();
       });
       worker.on("error", error => { if (!stopped) failedAllocation([String(error)]); });
       worker.on("exit", () => {
         workerExited = true; summary.workerClosed = true;
         if (!stopped) failedAllocation(["inventory_worker_exited"]);
       });
-      scan(); sampleFree();
+      if (sampler) queueMicrotask(scan); else scan();
+      sampleFree();
     } catch (error) {
       queueMicrotask(() => { if (!stopped) failedAllocation([String(error)]); });
     }
   }
   const stop = (): Promise<BuildResourceSummary> => {
     if (finalPair) return finalPair.done.promise;
-    if (stopped || (!scanFailures && !freeFailures)) return close();
-    // Only a still-pending transient gets a closing sample. Both halves must start
+    if (stopped || (!sampler && !scanFailures && !freeFailures)) return close();
+    // Held builds also require a closing pair after compiler closure. Both halves must start
     // afresh and pass normal checks/deadlines; neither preflight nor a partial scan counts.
     finalPair = { started: performance.now(), nextScanId: scanId + 1, allocation: false, free: false, done: Promise.withResolvers<BuildResourceSummary>() };
     scan(); sampleFree();
