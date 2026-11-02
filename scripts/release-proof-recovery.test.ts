@@ -22,7 +22,7 @@ function fixture() {
   const cleanup = { closed: true, resourcesAcquired: true, processExited: true, processGroupExited: true, streamsDrained: true,
     logWriterClosed: true, ownedWindowsClosed: null, referencesFinalized: true, survivors: [], failureCodes: [] };
   const identity = { id: `build-${crypto.randomUUID()}`, generation: crypto.randomUUID(), revision: 5, kind: "build-job" };
-  const record = { identity, result, cleanup, state: "closed", effectiveConfiguration: { requestedPolicy: { args: ["test", "--locked", "--lib", "theme::alpha::alpha_byte_tests::"] } },
+  const record = { identity, result, cleanup, state: "closed", effectiveConfiguration: { requestedPolicy: { args: ["test", "--locked", "--lib", "--package", "sk-color", "alpha::alpha_byte_tests::"] } },
     source: { gitHead: origin.sha, repositoryDirty: false, compilerDirty: false } };
   const receipt = { ...result, task: identity, cleanup };
   return { receipt, record, resources, classify: (job = primary, cold = "true", status = "75", log = compiling) => classifyColdRefusal(receipt, record, origin, job, cold, status, log) };
@@ -158,8 +158,10 @@ test("real compiler-step shell preserves exits, requires both measurements and n
 
 test("the real release aggregate admits only an uploaded complete proof from the selected path", () => {
   const aggregate = yaml("release").jobs["validate-release-gates"].steps[0];
-  const run = (proof: string, first: string, key: string, recovered: string) => spawnSync("bash", ["-ec", aggregate.run.replace(/\$\{\{ needs\['([^']+)'\]\.result \}\}/g, (_: string, job: string) => job === primary ? proof : "success")],
-    { env: { PRIMARY_EVIDENCE: first, RECOVERY_KEY: key, RECOVERED_EVIDENCE: recovered } }).status;
+  const run = (proof: string, first: string, key: string, recovered: string, design = "73", build = "success") => spawnSync("bash", ["-ec", aggregate.run.replace(/\$\{\{ needs\['([^']+)'\]\.result \}\}/g, (_: string, job: string) => job === primary ? proof : job === "build-macos-app" ? build : "success")],
+    { env: { PRIMARY_EVIDENCE: first, RECOVERY_KEY: key, RECOVERED_EVIDENCE: recovered, DESIGN_ID: design } }).status;
+  expect(run("success", "101", "", "", "", "success")).not.toBe(0);
+  expect(run("success", "101", "", "", "73", "failure")).not.toBe(0);
   expect(run("success", "101", "", "")).toBe(0); expect(run("success", "", "scoped", "102")).toBe(0);
   for (const [proof, first, key, recovered] of [["skipped", "", "scoped", ""], ["cancelled", "", "scoped", "102"], ["failure", "101", "", ""],
     ["success", "", "scoped", ""], ["success", "101", "scoped", ""], ["success", "101", "scoped", "102"], ["success", "", "", ""], ["success", "", "", "102"]]) expect(run(proof, first, key, recovered)).not.toBe(0);

@@ -202,6 +202,9 @@ require_clean_source_identity() {
     scripts/devtools/generated-byte-compare.ts
     scripts/devtools/generated-byte-compare.test.ts
     src/theme/alpha.rs
+    crates/sk-color/Cargo.toml
+    crates/sk-color/src/lib.rs
+    crates/sk-color/src/alpha.rs
     scripts/devtools/alpha-byte-contract.test.ts
     scripts/devtools/glass-entry-motion-contract.test.ts
     scripts/devtools/glass-lifecycle-filmstrip.test.ts

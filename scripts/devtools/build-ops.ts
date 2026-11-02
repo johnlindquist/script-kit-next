@@ -456,7 +456,14 @@ export async function runBuildOps(argv: string[]): Promise<void> {
             }
           }
           if (options.features) additions.push("--features", String(options.features));
-          if (options.profile) { if (args.includes("--profile")) throw new Error("action_owns_profile"); additions.push("--profile", String(options.profile)); }
+          if (options.profile) {
+            const fixed = args.indexOf("--profile");
+            // Keep the standalone exporter's cheap test profile. On a release runner
+            // share the app's already-built library/feature set; only the exporter links.
+            if (subject === "exporter-build" && options.profile === "release" && fixed >= 0 && args[fixed + 1] === "test") args[fixed + 1] = "release";
+            else if (fixed >= 0) throw new Error("action_owns_profile");
+            else additions.push("--profile", String(options.profile));
+          }
           if (options.filter) { if (args[0] !== "test" || !/^[A-Za-z_][A-Za-z0-9_:]*$/.test(String(options.filter))) throw new Error("invalid_reviewed_test_filter"); additions.push(String(options.filter)); }
           args.splice(separator, 0, ...additions);
           if (step.action === "lib-test") {

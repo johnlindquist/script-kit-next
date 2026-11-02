@@ -53,9 +53,9 @@ jobs:
               .resources.refusal == null
             ' "$1" > /dev/null
           }
-          bash scripts/agentic/agent-cargo.sh test --locked --lib theme::alpha::alpha_byte_tests:: > "$RUNNER_TEMP/unit.json"
+          bash scripts/agentic/agent-cargo.sh test --locked --lib --package sk-color alpha::alpha_byte_tests:: > "$RUNNER_TEMP/unit.json"
           check "$RUNNER_TEMP/unit.json" 6
-          bash scripts/agentic/agent-cargo.sh test --locked --doc --package script-kit-gpui theme::alpha:: > "$RUNNER_TEMP/doc.json"
+          bash scripts/agentic/agent-cargo.sh test --locked --doc --package sk-color alpha:: > "$RUNNER_TEMP/doc.json"
           check "$RUNNER_TEMP/doc.json" 3
       - name: Record the observed result, including refusals
         if: always()

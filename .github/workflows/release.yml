@@ -232,12 +232,14 @@ jobs:
       - validate-proof-contracts
       - validate-sdk-types
       - validate-sdk-tests
+      - build-macos-app
     steps:
       - name: Fail closed if any release gate failed
         env:
           PRIMARY_EVIDENCE: ${{ needs.validate-proof-contracts.outputs.primary-evidence }}
           RECOVERY_KEY: ${{ needs.validate-proof-contracts.outputs.recovery-key }}
           RECOVERED_EVIDENCE: ${{ needs.validate-proof-contracts.outputs.recovered-evidence }}
+          DESIGN_ID: ${{ needs.build-macos-app.outputs.design_id }}
         run: |
           test "${{ needs['validate-version'].result }}" = "success"
           test "${{ needs['validate-fmt'].result }}" = "success"
@@ -252,6 +254,8 @@ jobs:
           fi
           test "${{ needs['validate-sdk-types'].result }}" = "success"
           test "${{ needs['validate-sdk-tests'].result }}" = "success"
+          test "${{ needs['build-macos-app'].result }}" = "success"
+          [[ "$DESIGN_ID" =~ ^[1-9][0-9]*$ ]]
 
   build-macos-app:
     name: Build unsigned macOS app
@@ -259,6 +263,7 @@ jobs:
     needs: validate-version
     outputs:
       unsigned_id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+      design_id: ${{ steps.upload-design.outputs.artifact-id }}
       compile_receipt_sha: ${{ steps.seal-compile.outputs.digest }}
     env:
       # The managed builder qualifies sccache itself; it is a cache, not a semantic compiler wrapper.
@@ -327,6 +332,38 @@ jobs:
           [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           jq -r '"Compile receipt: `" + $digest + "`\n\nUnsigned executable: `" + .manifest.binarySha256 + "`\n\nProgram payload: `" + .payloadSha256 + "`"' --arg digest "$DIGEST" artifacts/unsigned-transfer/release-compile.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the exact exporter using the compiled release library
+        env:
+          CARGO_BUILD_JOBS: "1"
+        run: |
+          mkdir -p .test-output/release
+          bun scripts/devtools/devtools.ts build-ops act exporter-build --profile release --features owned-ui-evaluation \
+            --timeout-ms 3600000 \
+            --artifact-out .test-output/release/exporter.reference.json
+      - name: Prove generated design JSON and CSS match the authoritative exporter
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-design-evidence"
+          bun scripts/devtools/generated-byte-compare.ts \
+            --artifact .test-output/release/exporter.reference.json \
+            --source-policy clean-exact-head \
+            --out .test-output/release/generated-byte-compare.json
+          cp .test-output/release/generated-byte-compare.json \
+            "$RUNNER_TEMP/release-design-evidence/generated-design-contracts-proof.json"
+          bun scripts/release-evidence.ts gate \
+            --gate generated-design-contracts \
+            --class UNIT_BEHAVIOR \
+            --source-sha "$GITHUB_SHA" \
+            --result "$RUNNER_TEMP/release-design-evidence/generated-design-contracts-proof.json" \
+            --output "$RUNNER_TEMP/release-design-evidence/generated-design-contracts.json"
+      - name: Upload verified generated-design evidence
+        id: upload-design
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-design-evidence
+          path: ${{ runner.temp }}/release-design-evidence/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload unsigned app bundle
         id: upload-unsigned
@@ -414,14 +451,22 @@ jobs:
       - name: Require exact producer outputs
         env:
           PROOF_ID: ${{ needs.validate-release-gates.outputs.proof_id }}
+          DESIGN_ID: ${{ needs.build-macos-app.outputs.design_id }}
           UNSIGNED_ID: ${{ needs.build-macos-app.outputs.unsigned_id }}
         run: |
-          [[ "$PROOF_ID" =~ ^[1-9][0-9]*$ && "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$DESIGN_ID" =~ ^[1-9][0-9]*$ && "$PROOF_ID" =~ ^[1-9][0-9]*$ && "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
 
       - name: Download executed Rust gate evidence
         uses: actions/download-artifact@v4
         with:
           name: release-rust-evidence
+          path: ${{ runner.temp }}/release-evidence
+
+      - name: Download exact generated-design gate evidence
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.build-macos-app.outputs.design_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/release-evidence
 
       - name: Download DevTools and static-catalog gate evidence

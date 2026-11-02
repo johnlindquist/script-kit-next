@@ -282,6 +282,29 @@ test("compiler replay measures concurrent fingerprint outputs and their hardlink
   expect(recovered.targetAgentAllocatedBytes).toBe(allocation(tree).allocatedBytes);
 });
 
+for (const event of ["replace", "grow", "grow-over-cap"] as const) test(`tagged probe comparison keeps ${event} fail-closed with distinguishing evidence`, () => {
+  const root = fixture(), tree = join(root, "target-agent"), witness = join(tree, "witness");
+  fs.mkdirSync(join(root, compilerDeps), { recursive: true }); fs.writeFileSync(witness, "old");
+  observedVolume(2*GiB); const open = fs.opendirSync.bind(fs); let passes = 0;
+  const spy = spyOn(fs,"opendirSync").mockImplementation(((path: fs.PathLike) => {
+    if (String(path) !== tree) return open(path);
+    if (++passes === 2) {
+      if (event === "replace") { fs.renameSync(witness,join(root,"removed")); fs.writeFileSync(witness,"new"); }
+      else fs.appendFileSync(witness,Buffer.alloc(256*1024,97));
+    }
+    const dir=open(path), rows:fs.Dirent[]=[]; let e;
+    while ((e=dir.readSync())!==null) rows.push(e);
+    rows.sort((a,b)=>Number(b.name==="witness")-Number(a.name==="witness"));
+    return { readSync:()=>rows.shift()??null,closeSync:()=>dir.closeSync() } as fs.Dir;
+  }) as typeof fs.opendirSync); restore.push(()=>spy.mockRestore());
+  const error = refusal(()=>requireBuildAdmission(root,{reserveBytes:event==="grow-over-cap"?GiB-128*1024:0}));
+  expect(error.observation.complete).toBe(false);expect(error.observation.failureCodes).toContain("resource_observation_incomplete");
+  const code=allocationRefusalClass(error.observation);
+  if(event==="grow-over-cap") {expect(error.code).toBe("resource_budget_exceeded");expect(code).toBe("disk-limit");}
+  else if(event==="replace") expect(code).toStartWith("identity-or-route-refused:descent:inode");
+  else expect(code).toStartWith("same-inode-metadata-refused:descent:");
+});
+
 test("a probed sibling cannot be replaced by a cheaper namesake after moving into measured compiler output", () => {
   const root = fixture(), tree = join(root, "target-agent"), deps = join(root, compilerDeps);
   const prior = join(tree, "probed-first"), gone = join(deps, "gone");
@@ -326,7 +349,8 @@ for (const fault of ["missing", "replacement"] as const) test(`compiler-first pa
   restore.push(() => spy.mockRestore());
   const denied = refusal(() => requireBuildAdmission(root));
   expect(denied.code).toBe("resource_observation_incomplete");
-  expect(denied.observation.errors).toContain(`Error: inventory_probe_${fault === "missing" ? "missing" : "identity"}`);
+  if (fault === "missing") expect(denied.observation.errors).toContain("Error: inventory_probe_missing");
+  else expect(allocationRefusalClass(denied.observation)).toStartWith("identity-or-route-refused:route:inode");
   expect(fs.existsSync(payload)).toBe(false);
 });
 

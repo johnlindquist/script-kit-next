@@ -154,6 +154,17 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     }
   };
   // Only the authoritative managed walk knows the exact compiler deps scope.
+  // A replacement and same-inode metadata drift both still stop the scan. Distinguish
+  // the observed fields without exposing paths; a witnessed budget breach stays recorded.
+  const requireSameProbe = (before: Stats, now: Stats, at: "descent" | "route") => {
+    const fields = [before.dev !== now.dev && "device", before.ino !== now.ino && "inode",
+      (before.mode & 0o170000) !== (now.mode & 0o170000) && "type", before.blocks !== now.blocks && "blocks",
+      !before.isDirectory() && before.size !== now.size && "size"].filter(Boolean);
+    if (fields.length) {
+      if (seen instanceof Map) { retainMeasured(before, 0); if (now.dev === before.dev) retainMeasured(now, 0); }
+      throw new Error("inventory_probe_identity:" + at + ":" + fields.join("+"));
+    }
+  };
   const visit = (current: string, child: string, depth: number, listed?: Dirent, compilerDirectory = false, expected?: Stats, members?: Map<string, Stats>): boolean => {
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
     charge();
@@ -169,8 +180,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       }
       throw error;
     }
-    if (expected && (stat.dev !== expected.dev || stat.ino !== expected.ino || (stat.mode & 0o170000) !== (expected.mode & 0o170000)
-      || stat.blocks !== expected.blocks || (!expected.isDirectory() && stat.size !== expected.size))) throw new Error("inventory_probe_identity");
+    if (expected) requireSameProbe(expected, stat, "descent");
     if (!child) result.present = true;
     device ??= Number(stat.dev);
     if (Number(stat.dev) !== device) throw new Error("inventory_unexpected_mount");
@@ -247,7 +257,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
             if (!probed) throw new Error("inventory_probe_duplicate");
             charge();
             const now = lstatSync(join(current, entry.name));
-            if (!now.isDirectory() || now.dev !== first.dev || now.ino !== first.ino || now.blocks !== first.blocks) throw new Error("inventory_probe_identity");
+            requireSameProbe(first, now, "route");
             continue;
           }
           // We have no inode witness for that name. Do not accept a replacement (even a link).
@@ -448,6 +458,8 @@ export function allocationRefusalClass(observation: BuildResourceObservation): s
   if (observation.failureCodes.length !== 1 || observation.failureCodes[0] !== "resource_observation_incomplete" || observation.errors?.length !== 1) return "unclassified";
   const error = observation.errors[0]!;
   if (error === "Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn") return "deps-confirmation-churn";
+  const probe = /^Error: inventory_probe_identity:(descent|route):((?:device|inode|type|blocks|size)(?:\+(?:device|inode|type|blocks|size))*)$/.exec(error);
+  if (probe) return (/(device|inode|type)/.test(probe[2]!) ? "identity-or-route-refused" : "same-inode-metadata-refused") + ":" + probe[1] + ":" + probe[2];
   if (["Error: inventory_probe_identity", "Error: inventory_directory_changed", "Error: inventory_storage_route_changed", "Error: inventory_unexpected_mount"].includes(error) || error.startsWith("Error: inventory_unstable_replay_scope:identity:") || error.startsWith("Error: inventory_output_symlink")) return "identity-or-route-refused";
   if (/^(?:Error: )?ENOENT:/.test(error)) return "entry-not-found";
   if (error === "Error: inventory_entry_limit" || error === "Error: inventory_time_limit") return "scan-limit";

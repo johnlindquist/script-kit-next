@@ -76,5 +76,5 @@ test("the unprivileged build seals one binary; the signer verifies that producer
   expect(JSON.stringify(build)).not.toContain("secrets.");expect(sink.some((s:string)=>s.includes("build-ops act app-build") || s.includes("cargo bundle"))).toBe(false);
   const at=(part:string)=>{const i=sink.findIndex((s:string)=>s.includes(part));expect(i).toBeGreaterThanOrEqual(0);return i;};
   expect(at("release-compile.ts verify-executable")).toBeLessThan(at("security import"));expect(at("release-compile.ts verify-signed-payload")).toBeLessThan(at("notarytool submit"));
-  expect(sign.env.EXPECTED_COMPILE_RECEIPT).toBe("${{ needs.build-macos-app.outputs.compile_receipt_sha }}");expect(sign.steps.map(s=>s.with?.['artifact-ids']).filter(Boolean)).toEqual(["${{ needs.validate-release-gates.outputs.proof_id }}","${{ needs.build-macos-app.outputs.unsigned_id }}"]);
+  expect(sign.env.EXPECTED_COMPILE_RECEIPT).toBe("${{ needs.build-macos-app.outputs.compile_receipt_sha }}");expect(sign.steps.map(s=>s.with?.['artifact-ids']).filter(Boolean)).toEqual(["${{ needs.build-macos-app.outputs.design_id }}","${{ needs.validate-release-gates.outputs.proof_id }}","${{ needs.build-macos-app.outputs.unsigned_id }}"]);
 });

@@ -3437,11 +3437,12 @@ describe("nonintrusive CI release ownership and publication graph", () => {
 
   test("authoritative exporter proof survives proof, signing, scorecard, and publication jobs", () => {
     const release = workflow("release");
-    const proofSteps = workflow("release-compiler-proof").jobs["validate-proof-contracts"].steps ?? [];
+    const proofSteps = release.jobs["build-macos-app"].steps ?? [];
+    expect(proofSteps.find(step => step.run?.includes("act exporter-build"))?.run).toContain("--profile release --features owned-ui-evaluation");
     const producer = proofSteps.find((step) =>
       step.name === "Prove generated design JSON and CSS match the authoritative exporter");
-    expect(producer?.run).toContain("release-proof-evidence/generated-design-contracts-proof.json");
-    expect(producer?.run).toContain("--result \"$RUNNER_TEMP/release-proof-evidence/generated-design-contracts-proof.json\"");
+    expect(producer?.run).toContain("release-design-evidence/generated-design-contracts-proof.json");
+    expect(producer?.run).toContain("--result \"$RUNNER_TEMP/release-design-evidence/generated-design-contracts-proof.json\"");
 
     const signingSteps = release.jobs["sign-notarize-macos"].steps ?? [];
     for (const stepName of [

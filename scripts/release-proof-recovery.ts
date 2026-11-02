@@ -14,7 +14,7 @@ const incomplete = "resource_observation_incomplete";
 const GiB = 1024 ** 3;
 const maxHandoffBytes = 40 * GiB, minimumHostedFree = 25 * GiB;
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}";
-const unitArgs = ["test", "--locked", "--lib", "theme::alpha::alpha_byte_tests::"];
+const unitArgs = ["test", "--locked", "--lib", "--package", "sk-color", "alpha::alpha_byte_tests::"];
 const pool = "target-agent/pools/agent-debug";
 const marker = ".test-output/release-proof-refusal.json";
 function markerBytes(): Buffer {
