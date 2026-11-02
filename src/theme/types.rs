@@ -190,10 +190,7 @@ pub const LIGHT_ROW_HOVER_OPACITY: f32 = 0.04;
 
 include!("types_opacity_defaults.rs");
 
-/// Convert 0.0–1.0 opacity to u32 alpha (0x00–0xFF) for rgba bit-packing.
-pub fn opacity_to_alpha(opacity: f32) -> u32 {
-    (opacity.clamp(0.0, 1.0) * 255.0) as u32
-}
+pub use sk_color::alpha::opacity_to_alpha;
 
 impl Default for BackgroundOpacity {
     fn default() -> Self {

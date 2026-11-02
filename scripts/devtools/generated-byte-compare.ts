@@ -39,6 +39,11 @@ export const GENERATED_BYTE_COMPARE_SOURCE_PATHS = [
   "src/design_contract/bundle_prompts.rs",
   "src/components/conversation_style.rs",
   "src/theme/alpha.rs",
+  "src/theme/types.rs",
+  "crates/sk-color/src/alpha.rs",
+  "crates/sk-color/src/lib.rs",
+  "crates/sk-color/Cargo.toml",
+  "Cargo.lock",
   "src/ui/chrome/tokens.rs",
 ] as const;
 

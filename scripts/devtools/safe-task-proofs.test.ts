@@ -203,6 +203,11 @@ describe("catalog-bound offline consistency task proofs", () => {
     ).toBe(0);
     const alpha = observedProof("GOV-003");
     for (const path of [
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates/sk-color/Cargo.toml",
+      "crates/sk-color/src/lib.rs",
+      "crates/sk-color/src/alpha.rs",
       "src/theme/alpha.rs",
       "src/theme/types.rs",
       "scripts/agentic/agent-cargo.sh",
@@ -223,6 +228,12 @@ describe("catalog-bound offline consistency task proofs", () => {
     expect(
       prepareValidatedReceipt("devtools.consistency.safe-task-proof", alpha).exitCode,
     ).toBe(0);
+
+    const unrelated = observedProof("GEO-001");
+    expect(prepareValidatedReceipt("devtools.consistency.safe-task-proof", {
+      ...alpha, testRun: unrelated.testRun, testCommand: unrelated.testCommand,
+      sourceFingerprints: { ...alpha.sourceFingerprints, ...unrelated.sourceFingerprints },
+    }).exitCode).not.toBe(0);
 
     const conflicts = observedProof("GOV-005");
     expect(conflicts.productionSources).toEqual([
@@ -307,6 +318,7 @@ describe("catalog-bound offline consistency task proofs", () => {
       [workflow, alpha, "scripts/agentic/agent-cargo.sh"],
       [workflow, alpha, "scripts/agentic/build-artifact.ts"],
       [workflow, alpha, "rust-toolchain.toml"],
+      [workflow, alpha, "crates/sk-color/src/alpha.rs"],
     ] as const) {
       const forged = {
         ...candidate,

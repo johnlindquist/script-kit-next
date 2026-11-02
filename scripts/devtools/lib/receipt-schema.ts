@@ -14,7 +14,7 @@ import {
   type ReceiptPrivacyMode,
 } from "./privacy.ts";
 import { classifyReceiptEvidence } from "./evidence-class.ts";
-import { taskProofPolicy } from "./task-proof-policy.ts";
+import { AUTHORED_ALPHA_PROOF_SOURCES, taskProofPolicy } from "./task-proof-policy.ts";
 import { evidenceIntersectionRatio, isValidEvidenceRect } from "./geometry-evidence.ts";
 import {
   WORKFLOW_TASK_PRIMITIVE_ID,
@@ -968,10 +968,7 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
               path.startsWith("scripts/devtools/") ||
               path.startsWith("crates/sk-protocol/src/") ||
               path.startsWith("design/mockups/generated/") ||
-              (taskId === "GOV-003" &&
-                (path === "scripts/agentic/agent-cargo.sh" ||
-                  path === "scripts/agentic/build-artifact.ts" ||
-                  path === "rust-toolchain.toml")) ||
+              (taskId === "GOV-003" && AUTHORED_ALPHA_PROOF_SOURCES.includes(path)) ||
               (taskId === "GOV-006" &&
                 (path === reviewedWorkflowOwner || path === "scripts/agentic/compiler-input-paths.txt"))
             ) ||
@@ -1003,13 +1000,10 @@ export const receiptSchemaRegistry: ReceiptSchemaDefinition[] = [
                 "scripts/devtools/facade-migrations.test.ts",
               )
             )) ||
-          (taskId === "GOV-003" && [
-            "src/theme/alpha.rs",
-            "src/theme/types.rs",
-            "scripts/agentic/agent-cargo.sh",
-            "scripts/agentic/build-artifact.ts",
-            "rust-toolchain.toml",
-          ].some((path) => !productionSources.includes(path))) ||
+          (taskId === "GOV-003" && (
+            AUTHORED_ALPHA_PROOF_SOURCES.some((path) => !productionSources.includes(path)) ||
+            !suiteFiles.includes("scripts/devtools/alpha-byte-contract.test.ts")
+          )) ||
           (taskId === "GOV-005" &&
             !productionSources.includes("design/mockups/generated/tokens.json")) ||
           (taskId === "GOV-006" && (

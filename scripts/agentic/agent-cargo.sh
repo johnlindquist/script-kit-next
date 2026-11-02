@@ -94,6 +94,7 @@ done
 
 if [[ "$noninteractive_mode" == "1" ]]; then
   cargo_subcommand="${requested_args[0]:-}"
+  reviewed_color_contract=0
   for (( owner_index=1; owner_index<${#requested_args[@]}; owner_index++ )); do
     owner_argument="${requested_args[$owner_index]}"
     selected_package=""
@@ -127,6 +128,19 @@ if [[ "$noninteractive_mode" == "1" ]]; then
         test|nextest|run)
           case "$selected_package" in
             script-kit-gpui|sk-clipboard|sk-one-window|sk-protocol|sk-storage) ;;
+            sk-color)
+              # Only these two alpha contracts are reviewed; do not authorize
+              # blanket package tests, doctests or extra harness arguments.
+              if (( ${#requested_args[@]} == 6 )) \
+                && [[ "$cargo_subcommand" == "test" && "${requested_args[1]}" == "--locked" \
+                   && "${requested_args[3]}" == "--package" && "${requested_args[4]}" == "sk-color" ]] \
+                && { [[ "${requested_args[2]}" == "--lib" && "${requested_args[5]}" == "alpha::alpha_byte_tests::" ]] \
+                  || [[ "${requested_args[2]}" == "--doc" && "${requested_args[5]}" == "alpha::" ]]; }; then
+                reviewed_color_contract=1
+              else
+                worker_failure "noninteractive agent Cargo refuses unreviewed sk-color test or command; use its exact locked alpha contract"
+              fi
+              ;;
             gpui_macos|gpui-component)
               # These exact byte-only/TestAppContext contracts are reviewed, not
               # the vendor packages' other tests, binaries, or documentation.
@@ -200,6 +214,9 @@ if [[ "$noninteractive_mode" == "1" ]]; then
         package_name=""
         feature_selection=""
         case "$argument" in
+          theme::alpha::alpha_byte_tests::)
+            worker_failure "noninteractive agent Cargo refuses retired application alpha test filter; use the sk-color unit contract"
+            ;;
           --doc|--doc=*)
             requested_doctests=1
             ;;
@@ -239,7 +256,7 @@ if [[ "$noninteractive_mode" == "1" ]]; then
 
         if [[ -n "$package_name" ]]; then
           case "$package_name" in
-            sk-clipboard|sk-one-window|sk-protocol|sk-storage) reviewed_domain_target=1 ;;
+            sk-clipboard|sk-color|sk-one-window|sk-protocol|sk-storage) reviewed_domain_target=1 ;;
             *) unreviewed_package=1 ;;
           esac
         fi
@@ -256,17 +273,8 @@ if [[ "$noninteractive_mode" == "1" ]]; then
 
       # Only these production compile_fail examples are reviewed. Do not admit
       # general doctest discovery: documentation examples may launch real apps.
-      if (( requested_doctests == 1 )); then
-        if (( ${#requested_args[@]} != 6 )) \
-          || [[ "${requested_args[0]}" != "test" \
-             || "${requested_args[1]}" != "--locked" \
-             || "${requested_args[2]}" != "--doc" \
-             || "${requested_args[3]}" != "--package" \
-             || "${requested_args[4]}" != "script-kit-gpui" \
-             || "${requested_args[5]}" != "theme::alpha::" ]]; then
-          worker_failure "noninteractive agent Cargo refuses unreviewed doctests; requires exact test --locked --doc --package script-kit-gpui theme::alpha::"
-        fi
-        reviewed_app_target=1
+      if (( requested_doctests == 1 && reviewed_color_contract == 0 )); then
+        worker_failure "noninteractive agent Cargo refuses unreviewed doctests; requires exact test --locked --doc --package sk-color alpha::"
       fi
 
       # The launcher exists only in the binary crate. Its headless Enter-button

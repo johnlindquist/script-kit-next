@@ -8,6 +8,10 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 
 ## App-independent domain ownership
 
+- `crates/sk-color/src/alpha.rs` owns authored alpha bytes, normalized opacity
+  quantization, RGB packing, and their unit and compile-fail contracts.
+  `src/theme/alpha.rs` and `src/theme/types.rs` preserve the app imports.
+
 - `crates/sk-protocol/src/ascii_search.rs` owns shared ASCII case folding,
   word-boundary/exact matching, fuzzy subsequence indices, and their pure
   launcher-search regressions. `src/scripts/search/ascii.rs` preserves every

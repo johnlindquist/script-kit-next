@@ -69,10 +69,10 @@ function runCargoContract(args: string[]) {
 
 beforeAll(() => {
   unitRun = runCargoContract([
-    "test", "--locked", "--lib", "theme::alpha::alpha_byte_tests::",
+    "test", "--locked", "--lib", "--package", "sk-color", "alpha::alpha_byte_tests::",
   ]);
   compilerRun = runCargoContract([
-    "test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::",
+    "test", "--locked", "--doc", "--package", "sk-color", "alpha::",
   ]);
 }, 1_320_000);
 
@@ -80,7 +80,7 @@ describe("real production authored-alpha unit and compiler contracts", () => {
   test("canonical Cargo executes every current production AlphaByte behavior test", () => {
     expect(unitRun.result.passedTests).toBe(productionTests.length);
     for (const name of productionTests) {
-      expect(unitRun.output).toContain(`theme::alpha::alpha_byte_tests::${name} ... ok`);
+      expect(unitRun.output.split(/\r?\n/)).toContain(`test alpha::alpha_byte_tests::${name} ... ok`);
     }
     expect(unitRun.output).toContain(`${productionTests.length} passed; 0 failed; 0 ignored`);
     expect(compilerRun.result.passedTests).toBe(3);
@@ -88,14 +88,14 @@ describe("real production authored-alpha unit and compiler contracts", () => {
   });
 
   test("a raw normalized float cannot compile through the typed packer", () => {
-    expect(compilerRun.output).toMatch(/theme::alpha::pack_rgb_alpha \(line \d+\) - compile fail \.\.\. ok/);
+    expect(compilerRun.output).toMatch(/ - alpha::pack_rgb_alpha \(line \d+\) - compile fail \.\.\. ok$/m);
   });
 
   test("the authored-byte constructor cannot accept a floating opacity", () => {
-    expect(compilerRun.output).toMatch(/theme::alpha::AlphaByte::authored \(line \d+\) - compile fail \.\.\. ok/);
+    expect(compilerRun.output).toMatch(/ - alpha::AlphaByte::authored \(line \d+\) - compile fail \.\.\. ok$/m);
   });
 
   test("private tuple storage cannot bypass explicit unit constructors", () => {
-    expect(compilerRun.output).toMatch(/theme::alpha::AlphaByte \(line \d+\) - compile fail \.\.\. ok/);
+    expect(compilerRun.output).toMatch(/ - alpha::AlphaByte \(line \d+\) - compile fail \.\.\. ok$/m);
   });
 });

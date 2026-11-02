@@ -3,6 +3,7 @@ members = [
     ".",
     "crates/ghost-llm-helper",
     "crates/sk-clipboard",
+    "crates/sk-color",
     "crates/sk-one-window",
     "crates/sk-protocol",
     "crates/sk-storage",
@@ -78,6 +79,7 @@ test = false  # Standalone visual proof-of-concept, no test surface
 
 [dependencies]
 sk-clipboard = { path = "crates/sk-clipboard" }
+sk-color = { path = "crates/sk-color" }
 sk-one-window = { path = "crates/sk-one-window" }
 sk-protocol = { path = "crates/sk-protocol" }
 sk-storage = { path = "crates/sk-storage" }

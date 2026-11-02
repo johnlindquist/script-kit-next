@@ -13,6 +13,21 @@ export interface TaskProofPolicy {
   provesRuntimeBehavior: boolean;
 }
 
+// GOV-003 compares the two shipped quantizers, not copies in a fixture. Bind
+// the dependency, implementations, compatibility exports and compiler owner.
+export const AUTHORED_ALPHA_PROOF_SOURCES: readonly string[] = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "crates/sk-color/Cargo.toml",
+  "crates/sk-color/src/lib.rs",
+  "crates/sk-color/src/alpha.rs",
+  "src/theme/alpha.rs",
+  "src/theme/types.rs",
+  "scripts/agentic/agent-cargo.sh",
+  "scripts/agentic/build-artifact.ts",
+  "rust-toolchain.toml",
+];
+
 const runtimeClasses = [
   "RUNTIME_HIDDEN",
   "RUNTIME_VISIBLE",

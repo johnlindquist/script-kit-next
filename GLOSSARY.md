@@ -8,6 +8,11 @@ There is one window, and you tell it what should happen. The input at the top ne
 
 ## App-independent domain crates
 
+- **Authored alpha and RGB packing:** [sk-color](crates/sk-color/src/alpha.rs)
+  owns `AlphaByte`, the typed RGB packer, and `opacity_to_alpha`. The app keeps
+  its [theme alpha](src/theme/alpha.rs) and [theme types](src/theme/types.rs)
+  imports; the unit and compile-fail tests need no GUI dependencies.
+
 - **ASCII and fuzzy launcher matching:**
   [crates/sk-protocol/src/ascii_search.rs](crates/sk-protocol/src/ascii_search.rs)
   owns allocation-free ASCII case folding, word boundaries, exact names,

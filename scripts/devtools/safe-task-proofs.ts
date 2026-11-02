@@ -13,7 +13,7 @@ import {
   parseTaskCatalog,
 } from "./consistency.ts";
 import { emitValidatedReceipt, RECEIPT_SCHEMA_VERSION } from "./lib/receipt-schema.ts";
-import { taskProofPolicy } from "./lib/task-proof-policy.ts";
+import { AUTHORED_ALPHA_PROOF_SOURCES, taskProofPolicy } from "./lib/task-proof-policy.ts";
 import {
   inspectCurrentStateOwnership,
   REQUIRED_STATE_OWNERSHIP_PATHS,
@@ -123,13 +123,7 @@ export const SAFE_TASK_SPECS: readonly SafeTaskSpec[] = [
     evidenceClass: "UNIT_BEHAVIOR",
     testFiles: ["scripts/devtools/alpha-byte-contract.test.ts"],
     requiresCompiler: true,
-    productionSources: [
-      "src/theme/alpha.rs",
-      "src/theme/types.rs",
-      "scripts/agentic/agent-cargo.sh",
-      "scripts/agentic/build-artifact.ts",
-      "rust-toolchain.toml",
-    ],
+    productionSources: [...AUTHORED_ALPHA_PROOF_SOURCES],
   },
   {
     taskId: "GOV-004",
@@ -309,10 +303,7 @@ export function runSafeTaskProof(
       !(path.startsWith("src/") || path.startsWith("scripts/devtools/") ||
         path.startsWith("crates/sk-protocol/src/") ||
         path.startsWith("design/mockups/generated/") ||
-        (taskId === "GOV-003" &&
-          (path === "scripts/agentic/agent-cargo.sh" ||
-            path === "scripts/agentic/build-artifact.ts" ||
-            path === "rust-toolchain.toml")) ||
+        (taskId === "GOV-003" && AUTHORED_ALPHA_PROOF_SOURCES.includes(path)) ||
         (taskId === "GOV-006" &&
           (path === reviewedWorkflowOwner || path === "scripts/agentic/compiler-input-paths.txt"))) ||
       path.includes("..")

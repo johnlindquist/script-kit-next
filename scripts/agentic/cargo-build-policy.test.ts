@@ -911,28 +911,47 @@ process.exit(child.exitCode);
     expect(existsSync(workspace.capture)).toBe(false);
   });
 
+  const alphaUnit = ["test", "--locked", "--lib", "--package", "sk-color", "alpha::alpha_byte_tests::"];
+  const alphaDocs = ["test", "--locked", "--doc", "--package", "sk-color", "alpha::"];
+  function alphaPolicy(root: string, args: string[]) {
+    return run("agent-cargo.sh", args, {
+      PATH: process.env.PATH,
+      SCRIPT_KIT_NONINTERACTIVE: "1",
+      SCRIPT_KIT_AGENT_POLICY_ONLY: "1",
+      SCRIPT_KIT_REPO_ROOT: root,
+    });
+  }
+
+  test.each([alphaUnit, alphaDocs].map(args => [args] as const))("admits exact authored-alpha contract %j", (args) => {
+    const root = temporaryDirectory("script-kit-alpha-policy-");
+    const result = alphaPolicy(root, args);
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ passive: true, pool: "agent-debug" });
+    expect(existsSync(join(root, "target-agent"))).toBe(false);
+  });
+
   test.each([
     ["test", "--doc"],
     ["test", "--doc", "--lib"],
     ["test", "--doc", "-p", "sk-protocol"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "other::alpha::"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--", "other"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--", "--ignored"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--lib"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--workspace"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "-p", "sk-storage"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--all-targets"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--features", "system-tests"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::", "--no-run"],
-    ["nextest", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::"],
-  ].map(args => [args] as const))("refuses unreviewed doctest expansion %j before Cargo runs", (args) => {
-    const workspace = fixture();
-    const result = run("agent-cargo.sh", args, workspace.env);
-  
+    ["test", "--package", "sk-color"],
+    ["test", "--locked", "--lib", "theme::alpha::alpha_byte_tests::"],
+    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::"],
+    ...[alphaUnit, alphaDocs].flatMap(args => [
+      args.slice(0, -1),
+      args.filter(value => value !== "--locked"),
+      [...args.slice(0, -1), "other::alpha::"],
+      ["nextest", ...args.slice(1)],
+      ...[["--", "other"], ["--", "--ignored"], ["--lib"], ["--workspace"],
+        ["-p", "sk-storage"], ["--all-targets"], ["--features", "system-tests"], ["--no-run"],
+      ].map(extra => [...args, ...extra]),
+    ]),
+  ].map(args => [args] as const))("refuses unreviewed authored-alpha or doctest selection %j before Cargo runs", (args) => {
+    const root = temporaryDirectory("script-kit-alpha-policy-");
+    const result = alphaPolicy(root, args);
     expect(result.status).toBe(64);
     expect(result.stderr).toContain("noninteractive agent Cargo");
-    expect(existsSync(workspace.capture)).toBe(false);
+    expect(existsSync(join(root, "target-agent"))).toBe(false);
   });
 
   test.each([
@@ -967,7 +986,6 @@ process.exit(child.exitCode);
   test.each([
     ["test", "--locked", "--lib"],
     ["test", "--locked", "--test", "protocol_batch"],
-    ["test", "--locked", "--doc", "--package", "script-kit-gpui", "theme::alpha::"],
     ["test", "-p", "sk-protocol"],
     ["test", "--package=sk-storage"],
     ["nextest", "run", "--lib"],

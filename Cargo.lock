@@ -7813,6 +7813,7 @@ dependencies = [
  "sha2",
  "shellexpand 2.1.2",
  "sk-clipboard",
+ "sk-color",
  "sk-one-window",
  "sk-protocol",
  "sk-storage",
@@ -8215,6 +8216,10 @@ version = "0.1.0"
 dependencies = [
  "strum 0.26.3",
 ]
+
+[[package]]
+name = "sk-color"
+version = "0.1.0"
 
 [[package]]
 name = "sk-one-window"
