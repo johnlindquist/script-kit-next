@@ -67,26 +67,26 @@ pub(crate) fn mount_main_fixture(
                 icon: "text-cursor".into(),
                 ..Subject::default()
             };
-            let now = app.one_window_clock();
-            app.one_window.handle(
-                now,
+            // Seed through the real host: discarding the reducer's WakeAt leaves
+            // the observed Enter guard armed until a later input advances the clock.
+            app.one_window_handle(
                 Event::Notice(sk_one_window::notice::Notice::new(
                     "check",
                     "Added reminder: call mom",
                 )),
+                cx,
             );
-            app.one_window.handle(
-                now,
-                Event::Subjects(TabsEvent::Open {
+            app.change_subjects(
+                TabsEvent::Open {
                     window: Some(window_source(win, 65_000)),
                     copy: copy_source("https://github.com/script-kit/app/pull/412", 40_000)
                         .map(Box::new),
-                }),
+                },
+                cx,
             );
             let mut selected = selection_source(selection, text);
             selected.age_ms = 6_000;
-            app.one_window
-                .handle(now, Event::Subjects(TabsEvent::Observe(selected)));
+            app.change_subjects(TabsEvent::Observe(selected), cx);
             prepare_launcher_files(app, root)?;
             AppView::ScriptList
         }

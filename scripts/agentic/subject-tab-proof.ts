@@ -43,16 +43,31 @@ try {
   const theme=(await state()).targetIdentity.themeRevision;
   await client.applyTheme(theme,[{tokenId:'theme.colors.background.main',value:0xf9f9f9},{tokenId:'theme.colors.background.searchBox',value:0xffffff}]);
   await client.frame(target);await frame('light');
+  // Atomic inspection does not advance owned GPUI timers. Pump actual frames
+  // until this same Enter target is ready; never repeat an ambiguous keypress.
+  const waitEnter=async(view:string|null,label:string)=>{
+    const until=performance.now()+2500;
+    let id:string|undefined;
+    do {
+      const {oneWindow:w}=await state();
+      assert.equal(w.view ?? null,view);assert.equal(w.enter.label,label);
+      assert.ok(typeof w.enter.id==='string' && w.enter.id.length>0);
+      id ??= w.enter.id;assert.equal(w.enter.id,id);
+      if(!w.enterArmed)return;
+      await Bun.sleep(30);await client.frame(target);
+    } while(performance.now()<until);
+    throw Error('Enter did not become ready for '+label);
+  };
   // Read the complete selection, then copy it via Return. The clipboard is the evaluator's local sink.
-  await key('down');await key('down');await key('enter');await Bun.sleep(450);await key('enter');
+  await key('down');await key('down');await waitEnter(null,'Read');await key('enter');
+  await waitEnter('answer','Copy “TypeError: Cannot read properties of undefined”');await key('enter');
   const copied=await state();assert.equal(copied.copySink?.text,'TypeError: Cannot read properties of undefined');assert.equal(copied.copySink?.receipt.destination,'ownedProcessLocal');receipts.copy=copied.copySink;
   // Return to the launcher before changing the tab. ⌘V must select, not stage, the duplicate selection.
   if ((await state()).oneWindow.view) await key('escape');
   await client.act(target,{type:'select',semanticId:tabs[2].semanticId,submit:false});await key('v',['cmd']);
   assert.equal(await page(),'Selected text');assert.ok(!(await state()).oneWindow.staged);
   await key('down');
-  for(let i=0;i<30 && (await state()).oneWindow.enterArmed;i++) await Bun.sleep(40);
-  const ready=(await state()).oneWindow;assert.equal(ready.enter.label,'Add to note');assert.ok(!ready.enterArmed);
+  await waitEnter(null,'Add to note');
   const selected=(await client.query(target,'elements')).elements.find((e:any)=>e.role==='row'&&e.selected);
   assert.equal(selected.text,'Add selection to today’s note');
   // Ages tick in the real panel. Re-inspect only after a proven pre-dispatch refusal;
