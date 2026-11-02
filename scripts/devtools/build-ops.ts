@@ -11,7 +11,7 @@ import { spawnOwnedProcess } from "../agentic/owned-process.ts";
 import type { OwnedProcess } from "../agentic/owned-process.ts";
 import { boundedObservation, unknownOwnedCleanup } from "./driver.ts";
 import { aggregateCleanup } from "./lib/story-contract.ts";
-import { BuildResourceError, buildDependencies, buildLimits, buildStorage } from "./lib/build-ops-inventory.ts";
+import { allocationRefusalClass, BuildResourceError, buildDependencies, buildLimits, buildStorage } from "./lib/build-ops-inventory.ts";
 import type { BuildResourceReport } from "./lib/build-ops-inventory.ts";
 import { finishReceipt, startClock } from "./lib/client.ts";
 import { emitValidatedReceipt } from "./lib/receipt-schema.ts";
@@ -370,7 +370,16 @@ function annotateBuildResult(value: unknown, key = ""): unknown {
   if (key === "recordSnapshot") return diagnostic(annotateBuildResult(value));
   if (key === "error" || key === "errors" || key === "targetAgentErrors" || key === "reason" || key === "finalizationErrors") return diagnostic(value);
   if (Array.isArray(value)) return value.map(entry => annotateBuildResult(entry));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([field, entry]) => [field, annotateBuildResult(entry, field)]));
+  if (value && typeof value === "object") {
+    const fields = Object.fromEntries(Object.entries(value)
+      .filter(([field]) => key !== "resources" || field !== "refusalClass")
+      .map(([field, entry]) => [field, annotateBuildResult(entry, field)]));
+    if (key === "resources" && "scope" in value && value.scope === "target-agent" &&
+        "measurement" in value && value.measurement === "allocated-blocks" && "refusal" in value && value.refusal != null) {
+      fields.refusalClass = productStatic(allocationRefusalClass(value.refusal));
+    }
+    return fields;
+  }
   return value;
 }
 

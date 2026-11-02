@@ -954,10 +954,32 @@ for (const complete of [true, false]) test(`resource refusal requires an authori
     expect(receipt.cleanup.closed).toBe(true);
     if (complete) {
       expect(receipt.buildOps.result.failureCode).toBe("resource_budget_exceeded");
-      expect(receipt.buildOps.result.resources?.hardQuota).toBe(false);
+      expect(receipt.buildOps.result.resources).toMatchObject({ hardQuota: false, refusalClass: "disk-limit" });
       expect(receipt.buildOps.result.artifact).toBeUndefined();
     } else expect(receipt.buildOps).toBeUndefined();
   } finally { spawn.mockRestore(); await child.close(); }
+});
+
+for (const [label, error, category] of [
+  ["filesystem", "Error: EACCES: lstat /private-fixture-path", "filesystem:EACCES"],
+  ["unknown", "Error: unknown private-fixture-path", "unclassified"],
+  ["already redacted", { redacted: true }, "unclassified"],
+] as const) test(`query of a retained refusal derives its public class without changing the record: ${label}`, async () => {
+  const f = fixture(), id = "retained-failure";
+  const claim = claimOutput(validateOutputTarget({ repoRoot: f.root, candidate: join(f.root, ".test-output/managed-tasks", id), kind: "directory", probeId: "retained-failure" }), id);
+  const task = beginManagedTask(claim, "build-job", []);
+  const policy = { scope: "target-agent", measurement: "allocated-blocks", hardQuota: false, automaticEviction: false };
+  const refusal = { ...policy, phase: "in-build", complete: false, withinLimits: false, failureCodes: ["resource_observation_incomplete"], errors: [error] };
+  updateManagedTask(task, { result: { status: "failed", resources: { ...policy, refusal, refusalClass: "private-forged-label" } } });
+  finalizeManagedTask(task, emptyOwnedCleanup());
+  const before = readFileSync(task.recordPath);
+  const receipt = await captureBuildReceipt(f, ["query", "job", "--id", id, "--generation", task.identity.generation]);
+  expect(receipt.pass).toBe(true); // The read succeeded; the recorded build did not.
+  expect(receipt.buildOps.result).toMatchObject({ task: { state: "closed", result: { status: "failed", resources: { refusalClass: category } } } });
+  expect(JSON.stringify(receipt)).not.toContain("private-fixture-path");
+  expect(JSON.stringify(receipt)).not.toContain("private-forged-label");
+  expect(readFileSync(task.recordPath)).toEqual(before);
+  expect(existsSync(f.invocations)).toBe(false);
 });
 
 test("facade prune requires an exact selection and leaves unselected outputs intact", async () => {

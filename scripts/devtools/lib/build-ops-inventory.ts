@@ -456,7 +456,8 @@ export interface BuildResourceObservation {
 const inventoryFacts = new Set([
   "inventory_probe_missing", "inventory_probe_duplicate", "inventory_probe_type_changed",
   "inventory_unstable_directory:reappeared", "inventory_unstable_directory:repeated_loss",
-  "inventory_unstable_replay_scope:entry", "inventory_output_not_directory", "inventory_repository_not_directory",
+  "inventory_unstable_replay_scope", "inventory_unstable_replay_scope:membership", "inventory_unstable_replay_scope:entry",
+  "inventory_output_not_directory", "inventory_repository_not_directory",
   "inventory_invalid_allocation", "inventory_invalid_available", "inventory_missing_allocation_witness",
   "inventory_unknown_compiler_profile", "inventory_free_space_time_limit", "inventory_worker_protocol",
   "inventory_worker_exited", "inventory_depth_limit", "inventory_time_limit", "inventory_entry_limit",
@@ -465,19 +466,31 @@ const inventoryScopes = new Set(["root", "pools", "pool", "profile", "deps", "de
 
 /** Public diagnostic for a failed sample. Never print the raw filesystem error
  * or infer recovery eligibility from this lossy summary. */
-export function allocationRefusalClass(observation: BuildResourceObservation): string {
+export function allocationRefusalClass(value: unknown): string {
+  // Readback also projects older retained records, without trusting a supplied
+  // class, interpreting a redaction fingerprint, or modifying the observation.
+  if (!value || typeof value !== "object") return "unclassified";
+  const observation = value as Partial<BuildResourceObservation>;
+  if (observation.scope !== "target-agent" || observation.measurement !== "allocated-blocks" || observation.withinLimits !== false || !Array.isArray(observation.failureCodes)) return "unclassified";
   if (observation.failureCodes.includes("resource_budget_exceeded") || observation.failureCodes.includes("resource_free_space_below_floor")) return "disk-limit";
-  if (observation.failureCodes.length !== 1 || observation.failureCodes[0] !== "resource_observation_incomplete" || observation.errors?.length !== 1) return "unclassified";
-  const error = observation.errors[0]!;
+  if (observation.failureCodes.length !== 1 || observation.failureCodes[0] !== "resource_observation_incomplete" || !Array.isArray(observation.errors) || observation.errors.length !== 1) return "unclassified";
+  const error = observation.errors[0];
+  if (typeof error !== "string") return "unclassified";
   if (error === "Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn") return "deps-confirmation-churn";
-  const probe = /^Error: inventory_probe_identity:(descent|route):((?:device|inode|type|blocks|size)(?:\+(?:device|inode|type|blocks|size))*)$/.exec(error);
-  if (probe) return (/(device|inode|type)/.test(probe[2]!) ? "identity-or-route-refused" : "same-inode-metadata-refused") + ":" + probe[1] + ":" + probe[2];
+  const probe = /^Error: inventory_probe_identity:(descent|route):((?:device|inode|type|blocks|size)(?:\+(?:device|inode|type|blocks|size)){0,4})$/.exec(error);
+  if (probe && probe[0] === error) {
+    const fields = probe[2]!.split("+");
+    if (["device", "inode", "type", "blocks", "size"].filter(k => fields.includes(k)).join("+") === probe[2]) {
+      const identityChanged = fields.some(k => k === "device" || k === "inode" || k === "type");
+      return [identityChanged ? "identity-or-route-refused" : "same-inode-metadata-refused", probe[1], probe[2]].join(":");
+    }
+  }
   if (["Error: inventory_probe_identity", "Error: inventory_directory_changed", "Error: inventory_storage_route_changed", "Error: inventory_unexpected_mount"].includes(error) || error.startsWith("Error: inventory_unstable_replay_scope:identity:") || error.startsWith("Error: inventory_output_symlink")) return "identity-or-route-refused";
   if (/^(?:Error: )?ENOENT:/.test(error)) return "entry-not-found";
   if (error === "Error: inventory_entry_limit" || error === "Error: inventory_time_limit") return "scan-limit";
   const atom = error.replace(/^Error: /, "");
   if (inventoryFacts.has(atom)) return atom;
-  const scope = /^inventory_unstable_replay_scope:(entry|membership):at=([a-z-]+):replay=([a-z-]+):([a-z+-]+)$/.exec(atom);
+  const scope = /^inventory_unstable_replay_scope:(entry|membership):at=([a-z-]{1,16}):replay=([a-z-]{1,16}):([a-z+-]{1,32})$/.exec(atom);
   if (scope && scope[0] === atom && inventoryScopes.has(scope[2]!) && inventoryScopes.has(scope[3]!)) {
     const detail = scope[4]!;
     const stamps = ["ctime", "mtime", "links", "size"].filter(k => detail.split("+").includes(k)).join("+");

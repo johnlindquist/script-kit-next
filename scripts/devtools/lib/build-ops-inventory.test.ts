@@ -190,6 +190,9 @@ test("public allocation refusal never leaks paths or mistakes a pathname for a r
   expect(reason("Error: inventory_unstable_replay_scope:entry:at=private-project:replay=deps:changed-witness")).toBe("unclassified");
   expect(reason("Error: inventory_unstable_directory:repeated_loss /private/secret")).toBe("unclassified");
   expect(reason("inventory_worker_protocol")).toBe("inventory_worker_protocol");
+  expect(reason("Error: inventory_unstable_replay_scope")).toBe("inventory_unstable_replay_scope");
+  expect(reason("Error: inventory_probe_identity:route:inode+inode")).toBe("unclassified");
+  expect(reason("Error: inventory_probe_identity:route:size+inode")).toBe("unclassified");
 });
 
 const compilerDeps = "target-agent/pools/agent-debug/debug/deps";
