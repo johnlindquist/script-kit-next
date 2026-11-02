@@ -11,7 +11,7 @@ import {
 	finalizeManagedTask,
 	emptyOwnedCleanup,
 } from "./artifact-lifecycle";
-import { DriverLifecycleError } from "../devtools/driver";
+import { DriverCommandRefused, DriverLifecycleError } from "../devtools/driver";
 const [refPath, dest, mode = "reply"] = process.argv.slice(2);
 assert(["cancel", "reply"].includes(mode));
 assert(refPath && dest);
@@ -86,6 +86,9 @@ try {
 	// menus select the observed row by its semantic identity and check the next view.
 	const choose = async (label?: string, index = 0, count?: number) => {
 		await Bun.sleep(430);
+		await c.frame(t);
+		const initial = await state();
+		const baseline = initial.targetIdentity;
 		const rows = (await c.query(t, "elements")).elements.filter(
 			(x: any) => x.role === "row" && x.selectable,
 		);
@@ -97,11 +100,33 @@ try {
 			match && (match.text === undefined || !label || match.text === label),
 			"Expected " + label + ", got " + match?.text,
 		);
-		await c.act(t, {
-			type: "select",
-			semanticId: match.semanticId,
-			submit: true,
-		});
+		// An age or presentation tick can invalidate a bound row before delivery.
+		// Only re-observe after that explicit pre-dispatch refusal. Never choose a
+		// replacement by index, and never repeat an unknown or accepted submission.
+		for (let tries = 0; ; tries++) {
+			const fresh = await state();
+			const bound = fresh.targetIdentity;
+			assert.equal(fresh.oneWindow?.view, initial.oneWindow?.view);
+			assert.equal(fresh.inputValue, initial.inputValue);
+			for (const k of [
+				"windowId", "windowGeneration", "appViewVariant", "targetGeneration",
+				"surfaceGeneration", "dataGeneration", "themeRevision",
+			]) assert.equal(bound[k], baseline[k], k);
+			const current = (await c.query(t, "elements")).elements.filter(
+				(x: any) => x.role === "row" && x.selectable,
+			);
+			if (count !== undefined) assert.equal(current.length, count);
+			const same = current.filter((x: any) => x.semanticId === match.semanticId);
+			assert.equal(same.length, 1, "The original handoff row must still be unique");
+			assert.equal(same[0].text, match.text);
+			try {
+				await c.act(t, { type: "select", semanticId: match.semanticId, submit: true }, bound);
+				break;
+			} catch (error) {
+				if (!(error instanceof DriverCommandRefused) || error.code !== "stale_target_identity" || tries >= 3) throw error;
+				await c.frame(t);
+			}
+		}
 	};
 	await control("handoffRecipient");
 	await key("space");
