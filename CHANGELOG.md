@@ -1,8 +1,8 @@
 # Script Kit changelog
 
-## 0.1.23 · Reliability
+## 0.1.24 · Reliability
 
-[Release notes and installation checks](docs/releases/v0.1.23.md). Kit checks the selected browser tab or window before acting, preserves personal files on upgrade, and distinguishes unconfirmed microphone or Accessibility access from a working input device or cursor.
+[Release notes and installation checks](docs/releases/v0.1.24.md). Kit checks the selected browser tab or window before acting, preserves personal files on upgrade, and distinguishes unconfirmed microphone or Accessibility access from a working input device or cursor.
 
 ## October 15–31, 2026 · One window, clearer targets
 
