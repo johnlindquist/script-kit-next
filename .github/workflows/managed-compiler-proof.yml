@@ -1,4 +1,4 @@
-name: Cold managed compiler proof
+name: Unsigned managed compiler qualification
 
 on:
   push:
@@ -12,20 +12,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  cold-proof:
-    name: Exercise the release compiler guard on a fresh Mac
+  unsigned-compiler:
+    if: github.run_attempt == '1'
+    name: Test owned compiler pauses on one Mac
     runs-on: macos-15
-    timeout-minutes: 80
+    timeout-minutes: 90
     env:
       CARGO_BUILD_JOBS: "1"
       CMAKE_BUILD_PARALLEL_LEVEL: "1"
-      RUST_TEST_THREADS: "2"
+      RUST_TEST_THREADS: "1"
       CARGO_INCREMENTAL: "0"
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
       SCRIPT_KIT_REQUIRE_CLEAN_SOURCE: "1"
       SCRIPT_KIT_NONINTERACTIVE: "1"
-      SCRIPT_KIT_AGENT_TIMEOUT_MS: "3600000"
+      SCRIPT_KIT_ALLOW_SCREEN_TAKEOVER: "0"
+      SCRIPT_KIT_ALLOW_NATIVE_INPUT: "0"
+      SCRIPT_KIT_ALLOW_SCREEN_CAPTURE: "0"
+      SCRIPT_KIT_ALLOW_VISIBLE_PROBES: "0"
+      SCRIPT_KIT_ALLOW_LIVE_AI: "0"
+      SCRIPT_KIT_ALLOW_ISOLATED_APP_LAUNCH: "0"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,32 +41,42 @@ jobs:
         with:
           bun-version-file: .bun-version
       - uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Check source identity and the cold managed pool
+      - name: Verify the exact source and empty managed pool
         run: |
+          test "$(uname -m)" = arm64
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           test ! -e target-agent && test ! -L target-agent
-      - name: Exercise the release unit and compiler contracts
+          mkdir -p .test-output/compiler-qualification "$RUNNER_TEMP/owned-pause-evidence"
+      - name: Compile the real release executable once, without signing
+        env:
+          SCRIPT_KIT_AGENT_OWNED_COMPILER_SAMPLE: "1"
         run: |
-          set -euo pipefail
-          check() {
-            jq -e --argjson tests "$2" '
-              .status == "succeeded" and .exitCode == 0 and
-              .passedTests == $tests and .failedTests == 0 and
-              .cleanup.closed and (.cleanup.survivors == []) and
-              .resources.monitoring.complete and .resources.monitoring.workerClosed and
-              .resources.refusal == null
-            ' "$1" > /dev/null
-          }
-          bash scripts/agentic/agent-cargo.sh test --locked --lib --package sk-color alpha::alpha_byte_tests:: > "$RUNNER_TEMP/unit.json"
-          check "$RUNNER_TEMP/unit.json" 6
-          bash scripts/agentic/agent-cargo.sh test --locked --doc --package sk-color alpha:: > "$RUNNER_TEMP/doc.json"
-          check "$RUNNER_TEMP/doc.json" 3
-      - name: Record the observed result, including refusals
+          bun scripts/devtools/devtools.ts build-ops act app-build \
+            --profile release --features owned-ui-evaluation --timeout-ms 4920000 \
+            --artifact-out .test-output/compiler-qualification/app.reference.json > "$RUNNER_TEMP/owned-pause-build.json"
+      - name: Verify the executable, exact compiler task and all sampling limits
+        run: |
+          bash scripts/verify-unsigned-compiler-sample.sh "$GITHUB_SHA" "$RUNNER_TEMP/owned-pause-build.json" \
+            .test-output/compiler-qualification/app.reference.json "$RUNNER_TEMP/owned-pause-evidence"
+      - name: Record the result without publishing private compiler diagnostics
         if: always()
         run: |
-          for p in "$RUNNER_TEMP/unit.json" "$RUNNER_TEMP/doc.json"; do
-            if test -s "$p"; then
-              jq -c '{status,exitCode,passedTests,failedTests,closed:.cleanup.closed,samples:.resources.monitoring.sampleCount,workerClosed:.resources.monitoring.workerClosed,errors:.resources.refusal.errors}' "$p"
-            fi
-          done
+          mkdir -p "$RUNNER_TEMP/owned-pause-evidence"
+          if test -s "$RUNNER_TEMP/owned-pause-build.json"; then
+            jq --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" '{sha:$sha,run:$run,pass,disposition,
+              status:.buildOps.result.status,closed:.cleanup.closed,refusalClass:.buildOps.result.resources.refusalClass,
+              phase:.buildOps.result.resources.refusal.phase,codes:.buildOps.result.resources.refusal.failureCodes,
+              monitoring:(.buildOps.result.resources.monitoring | {sampleCount,complete,workerClosed,compilerPauses,
+                minimumSampledAvailableBytes,maximumSampledAllocatedBytes})}' "$RUNNER_TEMP/owned-pause-build.json" > "$RUNNER_TEMP/owned-pause-evidence/result.json"
+          else
+            jq -n --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" '{sha:$sha,run:$run,status:"compiler-receipt-unavailable"}' > "$RUNNER_TEMP/owned-pause-evidence/result.json"
+          fi
+          jq -c . "$RUNNER_TEMP/owned-pause-evidence/result.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unsigned-compiler-observation
+          path: ${{ runner.temp }}/owned-pause-evidence
+          retention-days: 5
+          if-no-files-found: error
