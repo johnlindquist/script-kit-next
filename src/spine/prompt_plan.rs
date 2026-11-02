@@ -56,6 +56,7 @@ pub(crate) struct SpinePromptWarning {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SpinePromptPlanBlockReason {
     NoPromptBuilderSegments,
+    IncompleteFileReference,
     Capture,
     ListFilter,
     ModeExit,
@@ -143,21 +144,22 @@ pub(crate) fn build_spine_prompt_plan_with_aliases(
                     push_context_part_dedup(&mut plan, part);
                 } else if let Some(part) = mention_aliases.get(&text) {
                     push_context_part_dedup(&mut plan, part.clone());
-                } else if text.starts_with("@file:") {
-                    let path = text.strip_prefix("@file:").unwrap_or("").trim();
+                } else if let Some(raw_path) = text.strip_prefix("@file:") {
+                    if crate::ai::context_mentions::quoted_file_span(&text)
+                        .is_some_and(|(_, closed)| !closed)
+                    {
+                        plan.blocked_reason =
+                            Some(SpinePromptPlanBlockReason::IncompleteFileReference);
+                        continue;
+                    }
+                    let path = crate::ai::context_mentions::unescape_quoted_path(raw_path.trim());
                     if !path.is_empty() {
-                        let label = std::path::Path::new(path)
+                        let label = std::path::Path::new(&path)
                             .file_name()
                             .and_then(|n| n.to_str())
-                            .unwrap_or(path)
+                            .unwrap_or(&path)
                             .to_string();
-                        push_context_part_dedup(
-                            &mut plan,
-                            AiContextPart::FilePath {
-                                path: path.to_string(),
-                                label,
-                            },
-                        );
+                        push_context_part_dedup(&mut plan, AiContextPart::FilePath { path, label });
                     }
                 } else if let SpineSegmentResolution::Resolved { id, label, source } =
                     &segment.resolution
@@ -366,6 +368,25 @@ mod tests {
         assert!(plan.context_parts.iter().any(|p| p.label() == "Selection"));
         // Styles are not profiles — the plan must not pretend they are.
         assert!(plan.selected_profile.is_none());
+    }
+
+    #[test]
+    fn quoted_file_names_keep_spaces_unicode_and_sigils_inside_the_attachment() {
+        let path = r#"/tmp/Résumé |work /draft "one".txt"#;
+        let token = crate::ai::context_mentions::format_inline_file_token(path);
+        let plan = build_spine_prompt_plan(&parse_spine(&format!("{token} summarize")));
+        assert!(plan.should_submit_to_chat());
+        assert!(
+            matches!(plan.context_parts.as_slice(), [AiContextPart::FilePath {path: actual, ..}] if actual == path)
+        );
+        assert!(plan.selected_profile.is_none() && plan.slash_commands.is_empty());
+        assert_eq!(plan.free_text_tail, "summarize");
+        let incomplete = build_spine_prompt_plan(&parse_spine("|creative @file:\"/tmp/brief note"));
+        assert_eq!(
+            incomplete.blocked_reason,
+            Some(SpinePromptPlanBlockReason::IncompleteFileReference)
+        );
+        assert!(!incomplete.should_submit_to_chat());
     }
 
     #[test]

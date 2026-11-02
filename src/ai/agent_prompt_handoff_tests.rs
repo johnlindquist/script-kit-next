@@ -755,13 +755,12 @@ print('https://gist.github.com/fake/private-gist')
     #[test]
     fn handoff_compiler_matches_spine_submit_plan_for_prompt_builder_inputs() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
-        let file_path = temp_dir.path().join("brief.txt");
+        let file_path = temp_dir.path().join(r#"brief "résumé".txt"#);
         std::fs::write(&file_path, "briefing contents").expect("write fixture file");
-        let file_input = format!("@file:{} summarize", file_path.to_string_lossy());
-        let profile_file_input = format!(
-            "|creative /rewrite @file:{} make it useful",
-            file_path.to_string_lossy()
-        );
+        let token =
+            crate::ai::context_mentions::format_inline_file_token(file_path.to_str().unwrap());
+        let file_input = format!("{token} summarize");
+        let profile_file_input = format!("|creative /rewrite {token} make it useful");
         let cases = [
             (
                 "/rewrite make this concise",
@@ -890,7 +889,9 @@ print('https://gist.github.com/fake/private-gist')
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let file_path = temp_dir.path().join("brief.txt");
         std::fs::write(&file_path, "briefing contents").expect("write fixture file");
-        let file_input = format!("@file:{} summarize this", file_path.to_string_lossy());
+        let token =
+            crate::ai::context_mentions::format_inline_file_token(file_path.to_str().unwrap());
+        let file_input = format!("{token} summarize this");
         let cases = [
             (
                 "free text fallback",

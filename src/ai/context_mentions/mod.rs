@@ -89,6 +89,37 @@ fn trim_inline_token_trailing_punctuation(token: &str) -> &str {
     token.trim_end_matches([',', '.', ';', ':', ')', ']', '}'])
 }
 
+/// Consume a quoted body, including its closing quote. The inline editor measures
+/// characters; the launcher's segment ranges measure UTF-8 bytes.
+fn quoted_width(quote: char, body: impl Iterator<Item = (char, usize)>) -> (usize, bool) {
+    let mut width = 0;
+    let mut escaped = false;
+    for (ch, units) in body {
+        width += units;
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else if ch == quote {
+            return (width, true);
+        }
+    }
+    (width, false)
+}
+
+/// The byte span and completion state of a canonical quoted file mention at
+/// the start of a launcher segment. Never resolves a file while typing.
+pub(crate) fn quoted_file_span(input: &str) -> Option<(usize, bool)> {
+    const PREFIX: &str = "@file:";
+    let mut chars = input.strip_prefix(PREFIX)?.chars();
+    let quote = chars.next()?;
+    if !matches!(quote, '"' | '\'') {
+        return None;
+    }
+    let (body, closed) = quoted_width(quote, chars.map(|c| (c, c.len_utf8())));
+    Some((PREFIX.len() + 1 + body, closed))
+}
+
 /// Scan a single inline token starting at `start` (which must be `@`).
 /// Handles quoted `@word:"..."` / `@word:'...'` tokens (any prefix, not just
 /// `@file:`) that may contain spaces and escape sequences.
@@ -116,26 +147,8 @@ fn scan_inline_token(chars: &[char], start: usize) -> (String, usize) {
         // Check if char after colon is a quote
         if let Some(&quote) = chars.get(cp + 1) {
             if quote == '"' || quote == '\'' {
-                let mut i = cp + 2;
-                let mut escaped = false;
-                while i < chars.len() {
-                    let ch = chars[i];
-                    if escaped {
-                        escaped = false;
-                        i += 1;
-                        continue;
-                    }
-                    if ch == '\\' {
-                        escaped = true;
-                        i += 1;
-                        continue;
-                    }
-                    if ch == quote {
-                        i += 1; // consume closing quote
-                        break;
-                    }
-                    i += 1;
-                }
+                let (width, _) = quoted_width(quote, chars[cp + 2..].iter().map(|&c| (c, 1)));
+                let i = cp + 2 + width;
                 return (chars[start..i].iter().collect(), i);
             }
         }
@@ -150,7 +163,7 @@ fn scan_inline_token(chars: &[char], start: usize) -> (String, usize) {
 }
 
 /// Strip outer quotes and unescape `\\`, `\"`, `\'` inside a quoted path.
-fn unescape_quoted_path(path: &str) -> String {
+pub(crate) fn unescape_quoted_path(path: &str) -> String {
     let bytes = path.as_bytes();
     if bytes.len() >= 2
         && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')

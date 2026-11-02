@@ -161,7 +161,7 @@ fn is_prompt_builder_segment(seg: &SpineSegment) -> bool {
 /// Split the input into segments at sigil boundaries.
 ///
 /// Prompt-builder sigils (`@`, `/`, `|`, `.`) claim only the sigil + the
-/// immediately following whitespace-delimited word.  Greedy sigils (`;`, `:`)
+/// immediately following word (or whole quoted file token). Greedy sigils (`;`, `:`)
 /// consume until the next boundary-sigil or end of input.  Everything else is
 /// free text.  Segments do NOT include inter-segment whitespace.
 fn split_segments(input: &str) -> Vec<SpineSegment> {
@@ -188,15 +188,17 @@ fn split_segments(input: &str) -> Vec<SpineSegment> {
         let is_greedy_sigil = (ch == CAPTURE_SIGIL || ch == FILTER_SIGIL) && at_boundary;
 
         if is_prompt_sigil {
-            // Prompt-builder sigil: claim sigil + one word (up to next space)
             let seg_start = pos;
-            pos += ch_len;
-            // Consume non-space chars (the value word)
-            while pos < len && bytes[pos] != b' ' {
-                let Some(next_ch) = char_at(input, pos) else {
-                    break;
-                };
-                pos += next_ch.len_utf8();
+            if let Some((width, _)) = crate::ai::context_mentions::quoted_file_span(&input[pos..]) {
+                pos += width;
+            } else {
+                pos += ch_len;
+                while pos < len && bytes[pos] != b' ' {
+                    let Some(next_ch) = char_at(input, pos) else {
+                        break;
+                    };
+                    pos += next_ch.len_utf8();
+                }
             }
             let raw = input[seg_start..pos].to_string();
             let rest = &input[seg_start + ch_len..pos];

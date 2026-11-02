@@ -30,7 +30,7 @@ A small set of symbols says part of a sentence exactly, turning the input into a
 >:dev @file:README.md /rewrite .concise explain the setup section
 ```
 
-- **`@` context mentions** — `@selection`, `@clipboard`, `@file:notes.md`. The `@type:query` form sub-searches inside one source. Available sub-search prefixes include `file`, `project`, `clipboard`, `browser-history`, `notes`, `history` (Agent Chat history), `scripts`, `scriptlets`, `skills`, `dictation`, and `calendar`.
+- **`@` context mentions** — `@selection`, `@clipboard`, `@file:notes.md`. To attach a path containing spaces, quote it: `@file:"/tmp/team brief.md" summarize`. Close the quote before submitting, or pick the file from the list. The `@type:query` form sub-searches inside one source. Available sub-search prefixes include `file`, `project`, `clipboard`, `browser-history`, `notes`, `history` (Agent Chat history), `scripts`, `scriptlets`, `skills`, `dictation`, and `calendar`.
 - **`/` slash commands** — pick a command from the slash catalog.
 - **`.` styles** — built-in styles are `.professional`, `.concise`, `.friendly`, `.direct`; user-defined styles extend the catalog.
 - **`|` profiles** — switch which AI profile handles the prompt.

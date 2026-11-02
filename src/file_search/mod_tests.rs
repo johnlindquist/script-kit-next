@@ -709,26 +709,15 @@ mod tests {
 
     #[test]
     fn root_directory_browse_source_key_ignores_child_fragments() {
-        let root =
-            std::env::temp_dir().join(format!("script-kit-root-source-key-{}", std::process::id()));
-        let nested = root.join("nested");
-        std::fs::create_dir_all(&nested).expect("create temp root directory");
-
-        let base = format!("{}/", nested.display());
-        let with_fragment = format!("{base}al");
-
-        let base_key = root_directory_browse_source_key(&base);
-        let fragment_key = root_directory_browse_source_key(&with_fragment);
+        // A visibly non-hidden spelling, even when the host puts TMPDIR under
+        // a dot directory. Parsing checks the directory, not its contents.
+        let base_key = root_directory_browse_source_key("./");
+        let fragment_key = root_directory_browse_source_key("./al");
 
         assert_eq!(base_key, fragment_key);
         // parse_directory_path keeps the directory slash-terminated so all
         // providers compare the same normalized key.
-        assert_eq!(
-            base_key,
-            Some((format!("{}/", nested.to_string_lossy()), false))
-        );
-
-        std::fs::remove_dir_all(root).ok();
+        assert_eq!(base_key, Some(("./".to_string(), false)));
     }
 
     #[test]

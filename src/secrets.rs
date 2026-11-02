@@ -775,6 +775,9 @@ mod tests {
             .unwrap()
             .write_all(b"stale")
             .unwrap();
+        // An owner-only process umask also narrows mode at creation. This fake
+        // stale file (inside the private temp directory) must actually be loose.
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         OpenOptions::new()
             .write(true)
             .create(true)
