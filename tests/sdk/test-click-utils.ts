@@ -152,8 +152,11 @@ export async function simulateClick(
  * const screenshot = await captureAndSave('after-click');
  * ```
  */
-export async function waitForRender(ms: number = 100): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export async function waitForRender(
+  ms: number = 100,
+  schedule: (ready: () => void, delay: number) => void = setTimeout,
+): Promise<void> {
+  return new Promise((resolve) => schedule(resolve, ms));
 }
 
 /**
@@ -396,11 +399,17 @@ if (require.main === module) {
     logTestResult('click-utils-wait', 'running');
     const start2 = Date.now();
     try {
-      const waitStart = Date.now();
-      await waitForRender(100);
-      const elapsed = Date.now() - waitStart;
+      // Test the requested delay and the actual callback, not when the OS next schedules Bun.
+      const delays: number[] = [];
+      let fired = false;
+      const waitStart = performance.now();
+      await waitForRender(100, (ready, delay) => {
+        delays.push(delay);
+        setTimeout(() => { fired = true; ready(); }, delay);
+      });
+      const elapsed = Math.round(performance.now() - waitStart);
 
-      if (elapsed >= 90 && elapsed <= 200) {
+      if (delays.length === 1 && delays[0] === 100 && fired && elapsed >= 90) {
         logTestResult('click-utils-wait', 'pass', {
           duration_ms: Date.now() - start2,
           result: `Waited ${elapsed}ms`,
@@ -408,7 +417,7 @@ if (require.main === module) {
       } else {
         logTestResult('click-utils-wait', 'fail', {
           duration_ms: Date.now() - start2,
-          error: `Expected ~100ms, got ${elapsed}ms`,
+          error: `Expected one completed 100ms timer; requested ${delays.join(",")}, fired ${fired}, elapsed ${elapsed}ms`,
         });
       }
     } catch (err) {

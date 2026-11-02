@@ -3389,7 +3389,13 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     const caller = workflow("release");
     const call = caller.jobs["validate-proof-contracts"];
     expect(call.uses).toBe("./.github/workflows/release-compiler-proof.yml");
-    expect(call.needs).toBe("validate-version");
+    // The quick gates still depend on version; a red SDK must not start a compiler or sidecar.
+    const fast = ["validate-fmt", "validate-sdk-types", "validate-sdk-tests"];
+    for (const name of fast) expect(caller.jobs[name].needs).toBe("validate-version");
+    for (const name of ["validate-check", "validate-clippy", "validate-tests", "validate-proof-contracts", "build-macos-app", "build-goose-sidecar"]) {
+      expect(caller.jobs[name].needs).toEqual(fast);
+      expect(caller.jobs[name].if).toBeUndefined(); // needs must enforce success
+    }
     const called = workflow("release-compiler-proof");
     expect(called.env).toMatchObject(caller.env); // workflow_call does not inherit them
     const proof = called.jobs["validate-proof-contracts"], recovery = called.jobs["recover-proof-contracts"];

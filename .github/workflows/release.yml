@@ -59,7 +59,7 @@ jobs:
   validate-check:
     name: Validate release check
     runs-on: macos-15
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -84,7 +84,7 @@ jobs:
   validate-clippy:
     name: Validate release clippy
     runs-on: macos-15
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -109,7 +109,7 @@ jobs:
   validate-tests:
     name: Execute release Rust behavior
     runs-on: macos-15
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
@@ -173,7 +173,7 @@ jobs:
           if-no-files-found: error
 
   validate-proof-contracts:
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     uses: ./.github/workflows/release-compiler-proof.yml
 
   validate-sdk-types:
@@ -206,10 +206,27 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
       - name: Validate SDK tests
+        id: sdk
         env:
           SCRIPT_KIT_SDK_TEST_RECEIPT: ${{ runner.temp }}/sdk-tests-summary.json
           SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/release-sdk-evidence/sdk-tests.json
         run: bash scripts/verify.sh --skip-bundle --only sdk-tests
+      # Never upload raw SDK results. A failing job keeps its diagnosis, not a passing receipt.
+      - name: Locate failing SDK cases
+        if: ${{ failure() && steps.sdk.outcome == 'failure' }}
+        env:
+          DIAGNOSTIC_TAG_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bun scripts/diagnostics/sdk-case-report.ts "$RUNNER_TEMP/sdk-tests-summary.json" | tee "$RUNNER_TEMP/sdk-case-report.json"
+      - name: Keep SDK failure locations
+        if: ${{ failure() && steps.sdk.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sdk-diagnostic-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-case-report.json
+          retention-days: 5
+          if-no-files-found: error
       - name: Upload complete SDK behavior receipt
         uses: actions/upload-artifact@v4
         with:
@@ -260,7 +277,7 @@ jobs:
   build-macos-app:
     name: Build unsigned macOS app
     runs-on: macos-15
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     outputs:
       unsigned_id: ${{ steps.upload-unsigned.outputs.artifact-id }}
       design_id: ${{ steps.upload-design.outputs.artifact-id }}
@@ -378,7 +395,7 @@ jobs:
   build-goose-sidecar:
     name: Build goose sidecar
     runs-on: macos-15
-    needs: validate-version
+    needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
