@@ -515,10 +515,11 @@ pub(crate) fn fixture_answer() -> Result<Value, &'static str> {
         .ok_or("no_notification")?;
     let ss = ["handoff:receive:workshop".into()];
     let taken = call("kit/handoff_take", "owned-fixture", &ss, json!({"id":id}))?;
+    let body = taken["body"].as_str().ok_or("invalid_body")?;
     call(
         "kit/handoff_reply",
         "owned-fixture",
         &ss,
-        json!({"id":id,"body":format!("Draft: {}",taken["body"].as_str().unwrap())}),
+        json!({"id":id,"body":format!("Draft: {body}")}),
     )
 }
