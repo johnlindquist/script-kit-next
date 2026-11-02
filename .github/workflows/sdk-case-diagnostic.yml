@@ -1,0 +1,68 @@
+name: Isolated SDK case diagnostic
+
+on:
+  push:
+    branches: [qa/sdk-case-v0.1.27]
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-case:
+    if: github.run_attempt == '1'
+    name: Identify SDK cases on one Mac
+    runs-on: macos-15
+    timeout-minutes: 5
+    env:
+      DIAGNOSTIC_TAG_SHA: 05af2b2c0f406e56819924ea627667b0b870693b
+      SCRIPT_KIT_NONINTERACTIVE: "1"
+      SCRIPT_KIT_REQUIRE_CLEAN_SOURCE: "1"
+      SCRIPT_KIT_ALLOW_SCREEN_TAKEOVER: "0"
+      SCRIPT_KIT_ALLOW_NATIVE_INPUT: "0"
+      SCRIPT_KIT_ALLOW_SCREEN_CAPTURE: "0"
+      SCRIPT_KIT_ALLOW_VISIBLE_PROBES: "0"
+      SCRIPT_KIT_ALLOW_LIVE_AI: "0"
+      SCRIPT_KIT_ALLOW_ISOLATED_APP_LAUNCH: "0"
+      SDK_TEST_CONCURRENCY: "2"
+      CARGO_BUILD_JOBS: "1"
+      RUST_TEST_THREADS: "1"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Bind the SDK implementation, tests, dependencies and runner to the tag source
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          git merge-base --is-ancestor "$DIAGNOSTIC_TAG_SHA" HEAD
+          git diff --exit-code "$DIAGNOSTIC_TAG_SHA" HEAD -- . \
+            ':(exclude).github/workflows/sdk-case-diagnostic.yml' \
+            ':(exclude)scripts/diagnostics/sdk-case-report.ts' \
+            ':(exclude)scripts/release-evidence.ts' \
+            ':(exclude)scripts/release-evidence.test.ts' \
+            ':(exclude)docs/guides/release-pipeline.md'
+      - name: Install frozen JS dependencies
+        run: bun install --frozen-lockfile
+      - name: Execute the complete SDK suite once
+        env:
+          SCRIPT_KIT_SDK_TEST_RECEIPT: ${{ runner.temp }}/sdk-raw.json
+          SCRIPT_KIT_VERIFY_RECEIPT: ${{ runner.temp }}/diagnostic-sdk-gate.json
+        run: bash scripts/verify.sh --skip-bundle --only sdk-tests
+      - name: Project privacy-safe case locations
+        if: always()
+        run: |
+          set -euo pipefail
+          bun scripts/diagnostics/sdk-case-report.ts "$RUNNER_TEMP/sdk-raw.json" | tee "$RUNNER_TEMP/sdk-case-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sdk-case-diagnostic
+          path: ${{ runner.temp }}/sdk-case-report.json
+          if-no-files-found: error
+          retention-days: 5
