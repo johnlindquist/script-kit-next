@@ -992,6 +992,17 @@ describe("fail-closed release evidence", () => {
     })).toThrow("cannot skip behavior coverage");
   });
 
+  test("a failed SDK summary locates reviewed terminal cases without publishing raw output", () => {
+    const { root } = makeFixture(), resultPath = join(root, "sdk-failure.json");
+    json(resultPath, { total_passed: 1, total_failed: 2, total_skipped: 0, files: [
+      { file: "../../private-filename", tests: [{ status: "fail", error: "private-token" }] },
+      { file: "test-mcp-client.ts", tests: [{ status: "running" }, { status: "pass" },
+        { status: "running" }, { status: "fail", test: "private-test-name", error: "private-token" }] },
+    ] });
+    expect(() => buildGateReceipt({ gateId: "sdk-tests", evidenceClass: "SDK_BEHAVIOR", sourceSha: SOURCE_SHA,
+      repositoryRoot: root, resultPath })).toThrow(/^SDK gate contains failing tests: test-mcp-client\.ts#2$/);
+  });
+
   test("SDK release proof rejects totals-only and incomplete reviewed script coverage", () => {
     const fixture = makeFixture();
     const resultPath = join(fixture.root, "forged-sdk.json");

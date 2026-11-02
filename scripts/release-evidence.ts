@@ -989,11 +989,39 @@ function requireGateId(value: string): asserts value is GateId {
   requireCondition(Object.hasOwn(REQUIRED_GATE_CLASSES, value), `unknown release gate: ${value}`);
 }
 
+// Failure stops publication before the passing receipt can be uploaded. Keep a
+// usable locator in the job log without echoing supplied paths, test names or errors.
+function sdkFailureLocations(root: string, files: unknown): string {
+  if (!Array.isArray(files)) return "";
+  let reviewed: Set<string>;
+  try {
+    reviewed = new Set(readdirSync(join(root, "tests/sdk"), { withFileTypes: true })
+      .filter(entry => entry.isFile() && /^test-[a-zA-Z0-9_-]{1,80}\.ts$/.test(entry.name) &&
+        !SDK_SYSTEM_INPUT_TESTS.some(blocked => blocked === entry.name)).map(entry => entry.name));
+  } catch { return ""; } // Missing inventory cannot relax the failure or disclose a local path.
+  const locations = new Set<string>();
+  for (const file of files.slice(0, 256)) {
+    if (!reviewed.has(file?.file) || !Array.isArray(file.tests)) continue;
+    let terminal = 0;
+    for (const outcome of file.tests.slice(0, 2048)) {
+      if (!["pass", "fail", "skip"].includes(outcome?.status)) continue;
+      terminal++;
+      if (outcome.status === "fail") locations.add(file.file + "#" + terminal);
+      if (locations.size === 8) break;
+    }
+    if (locations.size === 8) break;
+  }
+  return locations.size ? ": " + [...locations].join(", ") : "";
+}
+
 function sdkSuiteSummary(
   path: string,
   repositoryRoot = process.cwd(),
 ): { passed: number; failed: number; skipped: number } {
   const result = readJson(path);
+  if (Number.isSafeInteger(result.total_failed) && result.total_failed > 0) {
+    throw new Error("SDK gate contains failing tests" + sdkFailureLocations(repositoryRoot, result.files));
+  }
   requireCondition(Number.isInteger(result.total_passed) && result.total_passed > 0,
     "SDK gate must contain at least one passing behavior test");
   requireCondition(result.total_failed === 0, "SDK gate contains failing tests");
