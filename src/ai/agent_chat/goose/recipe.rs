@@ -4,9 +4,8 @@
 //! `session/new` `_meta.recipeDeeplink` (URL-safe base64 of the recipe JSON,
 //! no padding). The recipe carries the profile's instructions, its exact tool
 //! surface, and the provider/model to start with. When a recipe declares
-//! extensions, goose loads only those plus explicitly enabled builtins, so a
-//! locked-down profile gets exactly the tools listed here and nothing from the
-//! user's own goose configuration.
+//! extensions, goose may add its configured default Developer. The runtime
+//! reconciles the real session inventory before accepting it or sending text.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::{json, Value};

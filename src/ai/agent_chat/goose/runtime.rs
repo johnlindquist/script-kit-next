@@ -38,6 +38,8 @@ use super::protocol::{
     AcpLine, GooseLaunchSpec,
 };
 use super::recipe::recipe_deeplink;
+
+mod session_tools;
 use super::sign_in::{self, LeaderLease, SignInRole};
 
 const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -704,6 +706,7 @@ async fn ensure_session<'a>(
                 ),
             ));
         };
+        session_tools::verify(connection, &spec.recipe, &created, session_id).await?;
         connection.shared.lock().session_id = Some(session_id.to_string());
         let mut state = SessionState {
             session_id: session_id.to_string(),
@@ -1320,6 +1323,7 @@ async fn fork_before(
             ),
         ));
     };
+    session_tools::verify(connection, &spec.recipe, &forked, session_id).await?;
     {
         let mut shared = connection.shared.lock();
         shared.session_id = Some(session_id.to_string());

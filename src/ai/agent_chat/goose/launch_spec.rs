@@ -68,15 +68,29 @@ pub(crate) fn goose_process_env(root: &Path) -> HashMap<String, String> {
     env
 }
 
-/// goose adds its `developer` extension to every session unless config turns
-/// it off. Profiles opt in through their recipe instead, so a locked-down
-/// profile never inherits shell or file-write tools.
+/// Seed a new engine root without replacing existing settings. The effective
+/// tool boundary is the running session, not a comment in this file.
 pub(crate) fn ensure_goose_root(root: &Path) -> std::io::Result<()> {
     let config_dir = root.join("config");
     std::fs::create_dir_all(&config_dir)?;
+    use std::io::{Error, ErrorKind, Write as _};
+    if !std::fs::symlink_metadata(&config_dir)?.is_dir() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Invalid engine config directory",
+        ));
+    }
     let config_path = config_dir.join("config.yaml");
-    let existing = std::fs::read_to_string(&config_path).unwrap_or_default();
-    if existing.contains("script-kit-managed: developer-disabled") {
+    let existing = || match std::fs::symlink_metadata(&config_path) {
+        Ok(meta) if meta.is_file() => Ok(true),
+        Ok(_) => Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Invalid engine config file",
+        )),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err),
+    };
+    if existing()? {
         return Ok(());
     }
     let managed = "# script-kit-managed: developer-disabled\n\
@@ -88,7 +102,14 @@ extensions:\n\
 \x20   description: ''\n\
 \x20   display_name: Developer\n\
 \x20   bundled: true\n";
-    std::fs::write(config_path, managed)
+    let mut tmp = tempfile::NamedTempFile::new_in(config_dir)?;
+    tmp.write_all(managed.as_bytes())?;
+    tmp.as_file().sync_data()?;
+    match tmp.persist_noclobber(&config_path) {
+        Ok(_) => Ok(()),
+        Err(err) if err.error.kind() == ErrorKind::AlreadyExists && existing()? => Ok(()),
+        Err(err) => Err(err.error),
+    }
 }
 
 /// goose runs subagents without approvals, so outside full access a
@@ -243,8 +264,9 @@ mod tests {
         let config = std::fs::read_to_string(temp.path().join("config/config.yaml")).unwrap();
         assert!(config.contains("enabled: false"));
         // User edits after the first write are preserved.
-        let edited = format!("{config}\nGOOSE_PROVIDER: ollama\n");
-        std::fs::write(temp.path().join("config/config.yaml"), &edited).unwrap();
+        // An engine-managed rewrite may drop comments or enable its own defaults.
+        let edited = "GOOSE_PROVIDER: ollama\nextensions:\n  developer:\n    enabled: true\n";
+        std::fs::write(temp.path().join("config/config.yaml"), edited).unwrap();
         ensure_goose_root(temp.path()).unwrap();
         assert_eq!(
             std::fs::read_to_string(temp.path().join("config/config.yaml")).unwrap(),

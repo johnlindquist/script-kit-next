@@ -94,6 +94,7 @@ const toolCall = process.env.MOCK_GOOSE_TOOL_CALL;
 let provider = "chatgpt_codex";
 let model = "gpt-5.4";
 let sessionCounter = 0;
+const developerBySession = new Map<string, string[]>();
 
 function write(message: unknown): void {
 	process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -172,11 +173,25 @@ async function handle(message: Record<string, unknown>): Promise<void> {
 						}))
 					: null,
 			});
+			const sessionId = `mock-session-${sessionCounter}`;
+			const extensions = Array.isArray(recipe?.extensions) ? recipe.extensions : [];
+			const developer = extensions.find((entry) => entry.name === "developer");
+			developerBySession.set(sessionId, developer?.available_tools ?? []);
 			write({
-				jsonrpc: "2.0",
-				id,
-				result: { sessionId: `mock-session-${sessionCounter}`, configOptions: configOptions() },
+				jsonrpc: "2.0", id,
+				result: { sessionId, configOptions: configOptions(), _meta: {
+					extensionResults: extensions.map((entry) => ({name: entry.name, success: true})),
+				} },
 			});
+			return;
+		}
+		case "_goose/unstable/tools/list": {
+			const names = developerBySession.get(String(params.sessionId));
+			if (!names || params.extensionName !== "developer") {
+				write({ jsonrpc: "2.0", id, error: {code: -32602, message: "Unsupported inventory"} });
+			} else {
+				write({ jsonrpc: "2.0", id, result: {tools: names.map((name) => ({name}))} });
+			}
 			return;
 		}
 		case "session/set_config_option": {
