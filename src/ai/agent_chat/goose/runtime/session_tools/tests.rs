@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 /// Feed the real ACP handshake replies over its request channel. Observe when a
 /// session actually becomes eligible for warm acquisition or a first prompt.
-async fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<String>) {
+fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<String>) {
     let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut connection = Connection {
         shared: std::sync::Arc::new(parking_lot::Mutex::new(Shared::default())),
@@ -27,6 +27,7 @@ async fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool,
         drop(connection);
         ready
     };
+    let remaining: Vec<String> = remaining.iter().map(|s| (*s).to_owned()).collect();
     let engine = async move {
         let mut methods = Vec::new();
         while let Some(request) = out_rx.recv().await {
@@ -65,13 +66,21 @@ async fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool,
         }
         methods
     };
-    tokio::join!(client, engine)
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async move {
+            let peer = tokio::spawn(engine);
+            let ready = client.await;
+            (ready, peer.await.unwrap())
+        })
 }
 
-#[tokio::test]
-async fn restrict_the_actual_session_without_removing_an_explicit_shell_grant() {
+#[test]
+fn restrict_the_actual_session_without_removing_an_explicit_shell_grant() {
     let loaded = json!([{"name":"developer","success":true}]);
-    let (ready, calls) = handshake(json!([]), loaded.clone(), &[]).await;
+    let (ready, calls) = handshake(json!([]), loaded.clone(), &[]);
     assert!(ready);
     assert_eq!(
         calls,
@@ -84,20 +93,19 @@ async fn restrict_the_actual_session_without_removing_an_explicit_shell_grant() 
         ]
     );
     let shell = json!([{"name":"developer","available_tools":["shell"]}]);
-    let (ready, calls) = handshake(shell.clone(), loaded.clone(), &["shell"]).await;
+    let (ready, calls) = handshake(shell.clone(), loaded.clone(), &["shell"]);
     assert!(ready);
     assert!(!calls.iter().any(|x| x.ends_with("/remove")));
-    assert!(!handshake(shell, loaded, &["shell", "write"]).await.0);
+    assert!(!handshake(shell, loaded, &["shell", "write"]).0);
 }
 
-#[tokio::test]
-async fn no_ready_session_if_a_reported_removal_did_not_remove_the_tools() {
+#[test]
+fn no_ready_session_if_a_reported_removal_did_not_remove_the_tools() {
     let (ready, calls) = handshake(
         json!([]),
         json!([{"name":"developer","success":true}]),
         &["write"],
-    )
-    .await;
+    );
     assert!(!ready);
     assert_eq!(
         calls.last().map(String::as_str),
@@ -105,17 +113,17 @@ async fn no_ready_session_if_a_reported_removal_did_not_remove_the_tools() {
     );
 }
 
-#[tokio::test]
-async fn absent_or_unexpected_inventory_is_not_an_empty_grant() {
+#[test]
+fn absent_or_unexpected_inventory_is_not_an_empty_grant() {
     for bad in [
         Value::Null,
         json!([{"name":"ambient","success":true}]),
         json!([{"name":"scriptkit"}]),
         json!([]),
     ] {
-        let (ready, calls) = handshake(json!([{"name":"scriptkit"}]), bad, &[]).await;
+        let (ready, calls) = handshake(json!([{"name":"scriptkit"}]), bad, &[]);
         assert!(!ready);
         assert_eq!(calls, ["initialize", "session/new"]);
     }
-    assert!(handshake(json!([]), json!([]), &[]).await.0);
+    assert!(handshake(json!([]), json!([]), &[]).0);
 }
