@@ -365,13 +365,31 @@ def request_owned():
             raise TimeoutError("compiler_pause_deadline")
         # No argv, paths or environment are observed. Session/group id is the
         # unreaped child we spawned with start_new_session, never a caller PID.
-        ps = subprocess.run(["/bin/ps", "-axo", "pid=,pgid=,stat="], capture_output=True,
-                            text=True, timeout=min(1.0, left), check=True)
+        # Darwin ps -g reads the selected process group, without launching a
+        # machine-wide walk or separating PID discovery from state readback.
+        # The other POSIX test hosts select this private session, then its group.
+        darwin = sys.platform == "darwin"
+        read_by = min(sample_until, time.monotonic() + 1.0)
+        try:
+            ps = subprocess.run(["/bin/ps", "-g" if darwin else "-s", str(child.pid), "-o", "pid=,pgid=,stat="],
+                                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "COMMAND_MODE": "unix2003"},
+                                capture_output=True, text=True, timeout=min(1.0, left))
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("compiler_pause_observation_timeout") from None
+        if time.monotonic() >= read_by:
+            raise TimeoutError("compiler_pause_observation_timeout")
+        if ps.returncode and not (ps.returncode == 1 and not ps.stdout.strip() and not ps.stderr.strip()):
+            raise RuntimeError("compiler_pause_observation_invalid")
         members = {}
         for line in ps.stdout.splitlines():
-            pid, group, state = line.split()
-            if int(group) == child.pid and not state.startswith("Z"):
-                members[int(pid)] = state.startswith("T")
+            fields = line.split()
+            if len(fields) != 3 or not fields[0].isdigit() or not fields[1].isdigit():
+                raise RuntimeError("compiler_pause_observation_invalid")
+            pid, group, state = int(fields[0]), int(fields[1]), fields[2]
+            if (darwin and group != child.pid) or pid < 1 or pid in members:
+                raise RuntimeError("compiler_pause_identity")
+            if group == child.pid and not state.startswith("Z"):
+                members[pid] = state.startswith("T")
         return members
 
     def signal_owned_session(sig):

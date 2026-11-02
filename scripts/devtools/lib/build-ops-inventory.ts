@@ -456,6 +456,7 @@ export interface BuildResourceObservation {
 // Only these atoms may cross the diagnostic privacy boundary, even on a failed release.
 const inventoryFacts = new Set([
   "compiler_pause_deadline", "compiler_pause_protocol", "compiler_pause_identity", "compiler_pause_already_stopped", "compiler_pause_unconfirmed",
+  "compiler_pause_observation_timeout", "compiler_pause_observation_invalid",
   "inventory_probe_missing", "inventory_probe_duplicate", "inventory_probe_type_changed",
   "inventory_unstable_directory:reappeared", "inventory_unstable_directory:repeated_loss",
   "inventory_unstable_replay_scope", "inventory_unstable_replay_scope:membership", "inventory_unstable_replay_scope:entry",

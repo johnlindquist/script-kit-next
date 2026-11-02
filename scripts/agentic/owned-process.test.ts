@@ -121,7 +121,8 @@ test("an abruptly exiting sampling owner does not strand its held group", async 
 const c=await spawnOwnedProcess({argv:['/bin/sleep','30'],env:process.env,cwd:process.cwd(),timeoutMs:10000,maxOutputBytes:4096,compilerSampling:true});
 if(!await c.compilerSampling.hold(3000))throw Error('not held'); await Bun.write(${JSON.stringify(info)},JSON.stringify(c.identity)); process.exit(42);`);
   const owner = Bun.spawn([process.execPath, controller], {cwd:root, stdout:"ignore", stderr:"pipe"});
-  expect(await owner.exited).toBe(42);
+  const [status, diagnostic] = await Promise.all([owner.exited, new Response(owner.stderr).text()]);
+  if (status !== 42) throw new Error(`fixture owner failed before the crash boundary (${status}): ${diagnostic.slice(-1200)}`);
   const ident = JSON.parse(readFileSync(info, "utf8"));
   for (let i=0; i<150 && (!absent(ident.pid) || !absent(ident.supervisorPid)); i++) await Bun.sleep(20);
   expect(absent(ident.pid)).toBe(true); expect(absent(ident.supervisorPid)).toBe(true);

@@ -240,7 +240,7 @@ export async function spawnOwnedProcess(options: OwnedProcessOptions): Promise<O
             event.cleanup.survivors?.length === 0 && event.cleanup.failureCodes?.length === 0;
           if (samplePending?.expected === "sample-held" && cleanEnd && !held) {
             const pending = samplePending; samplePending = undefined; pending.done.resolve(false);
-          } else sampleFailed(supervisorFailureCodes.find(code => ["compiler_pause_deadline", "compiler_pause_identity", "compiler_pause_already_stopped"].includes(code)) ?? "compiler_pause_unconfirmed");
+          } else sampleFailed(supervisorFailureCodes.find(code => ["compiler_pause_deadline", "compiler_pause_identity", "compiler_pause_already_stopped", "compiler_pause_observation_timeout", "compiler_pause_observation_invalid"].includes(code)) ?? "compiler_pause_unconfirmed");
           finishOutput(); resolveExited(event.exitCode);
         } else throw new Error("supervisor_event_invalid");
       }
