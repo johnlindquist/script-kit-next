@@ -425,6 +425,8 @@ The owned launcher keeps `SCRIPT_KIT_NONINTERACTIVE=1` and unsafe opt-ins at `0`
 
 #### Discover and build immutable artifacts
 
+For version tags, see the [macOS release pipeline](docs/guides/release-pipeline.md): the unprivileged builder packages one exact executable, and the signing runner verifies it rather than rebuilding it.
+
 Each verification run gets a fresh output parent; leave reference files and evaluation output directories nonexistent until their owning command creates them. **A new evidence directory does not require new binaries.** Reuse independently verified current references and build only the artifact kinds the run needs.
 
 ```bash

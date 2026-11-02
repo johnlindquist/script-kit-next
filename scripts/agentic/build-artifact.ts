@@ -4,12 +4,13 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, closeSync, constants, copyFileSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readlinkSync, readSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Stats } from "node:fs";
 import { atomicManagedJson, beginManagedTask, bindSupervisorTask, cacheLease, canonicalJson, claimOutput, emptyOwnedCleanup, finalizeManagedTask, finalizeSupervisorTask, isRetiredManagedArtifact, managedTaskRecordPath, readManagedTask, readOwnedJson, registerManagedArtifactReference, registerManagedPublicationIntent, updateManagedPublicationIntent, updateManagedTask, validateOutputTarget, withManagedMetadata } from "./artifact-lifecycle.ts";
 import type { ManagedTask, OwnedCleanup, OwnedProcessIdentity, TaskIdentity } from "./artifact-lifecycle.ts";
 import { spawnOwnedProcess } from "./owned-process.ts";
 import { trustedManagedRootLink } from "./managed-storage.ts";
+import { githubReleaseRun, isVerifiedReleaseCompile, readReleaseReceiptBytes, verifyReleaseCompile, type ReleaseRun, type VerifiedReleaseCompile } from "./release-compile-contract.ts";
 import { BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "../devtools/lib/build-ops-inventory.ts";
 import type { BuildResourceObservation, BuildResourceReport, BuildResourceSummary } from "../devtools/lib/build-ops-inventory.ts";
 
@@ -51,8 +52,8 @@ export interface ArtifactManifestV3 {
   readonly effectiveConfigurationSha256: Sha256; readonly requiresExactGitHead: boolean;
   readonly publication: { readonly owner: "scripts/agentic/agent-cargo.sh"; readonly pool: "agent-debug";
     readonly leaseGeneration: string; readonly buildTask: TaskIdentity; readonly immutable: true; readonly exportedWhileLeaseHeld: true; };
-  readonly derivation?: { readonly input: ArtifactReference; readonly transformation: "signed-and-stapled-bundle";
-    readonly attestationSha256: Sha256; readonly bundleTreeSha256: Sha256; };
+  readonly derivation?: { readonly transformation: "signed-and-stapled-bundle"; readonly attestationSha256: Sha256; readonly bundleTreeSha256: Sha256 } &
+    ({ readonly input: ArtifactReference; readonly releaseCompile?: never } | { readonly input?: never; readonly releaseCompile: { sha256: Sha256; producer: ReleaseRun } });
 }
 export interface ArtifactExpectation {
   readonly kind: ArtifactKind; readonly packageName: string; readonly targetName: string;
@@ -485,6 +486,35 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+// A fresh signer checkout may have another absolute path. Remap only the two
+// Cargo config filenames inside the exact checkout; their order/content and
+// every external config, wrapper, environment hash and compiler remain pinned.
+function releaseCompatibility(c: CompilerCompatibility, checkout: string) {
+  return { ...c, configs: c.configs.map(([path, digest]) => [
+    path === join(checkout, ".cargo/config") ? "checkout:.cargo/config" : path === join(checkout, ".cargo/config.toml") ? "checkout:.cargo/config.toml" : path, digest]) };
+}
+function verifyCompileContext(root: string, m: ArtifactManifestV3, policy: ArtifactExpectation["sourcePolicy"], portable = false): void {
+  const current = observeArtifactSource(root);
+  if (current.compilerInputSha256 !== m.source.compilerInputSha256 || current.compilerInputOwnerSha256 !== m.source.compilerInputOwnerSha256) refuse("source_stale", "reviewed worktree bytes differ");
+  if ((m.requiresExactGitHead || policy === "clean-exact-head") && (current.gitHead !== m.source.gitHead || current.repositoryDirty || m.source.repositoryDirty)) refuse("source_stale", "clean exact source head required");
+  const requested = m.effectiveConfiguration.requestedPolicy as Record<string, unknown>;
+  const args = requested.args === undefined ? [] : requested.args;
+  if (!Array.isArray(args) || !args.every(value => typeof value === "string")) refuse("manifest_invalid", "invalid recorded compiler arguments");
+  const here = compilerCompatibility(root, args), recorded = m.effectiveConfiguration.compatibility as CompilerCompatibility;
+  const same = portable ? fingerprint(releaseCompatibility(here, realpathSync(root))) === fingerprint(releaseCompatibility(recorded,
+    fileURLToPath(m.target.packageId.slice("path+".length).split("#")[0]!))) : fingerprint(here) === fingerprint(recorded);
+  if (!same) refuse("configuration_stale", "current compiler configuration differs");
+  const currentToolchain = observeToolchain(root);
+  if (["channel", "rustcVerboseVersion", "cargoVersion", "rustcSha256", "cargoSha256"].some(key => currentToolchain[key as keyof typeof currentToolchain] !== m.toolchain[key as keyof typeof m.toolchain])) refuse("toolchain_mismatch", "actual pinned compiler bytes differ");
+}
+
+/** A release handoff can authorize only signing, never a generic local build or launch. */
+export function receiveReleaseCompile(root: string, path: string, digest: string, consumer: ReleaseRun): VerifiedReleaseCompile {
+  const input = verifyReleaseCompile(readReleaseReceiptBytes(canonicalArtifactPath(root, relative(root, resolve(path)))), digest, consumer);
+  verifyCompileContext(root, input.receipt.manifest, "clean-exact-head", true);
+  return input;
+}
+
 export function verifyImmutableArtifact(repositoryRoot: string, reference: ArtifactReference, expected: ArtifactExpectation): VerifiedArtifact {
   const verificationKey = `${repositoryRoot}:${reference?.manifestPath}:${reference?.manifestSha256}`;
   if (verificationStack.has(verificationKey) || verificationStack.size >= 8) refuse("manifest_invalid", "cyclic or excessive artifact derivation");
@@ -528,28 +558,30 @@ export function verifyImmutableArtifact(repositoryRoot: string, reference: Artif
         || task.identity.revision <= m.publication.buildTask.revision || !Array.isArray(refs)
         || !refs.some(ref => canonicalJson(ref) === canonicalJson(reference))
         || fingerprint(task.source) !== fingerprint(m.source)
+        || (m.derivation?.releaseCompile && task.result.releaseCompileSha256 !== m.derivation.releaseCompile.sha256)
         || fingerprint(task.effectiveConfiguration) !== m.effectiveConfigurationSha256) refuse("publication_not_finalized", "publication task not successfully finalized");
     } catch (error) { if (error instanceof ArtifactVerificationError) throw error; refuse("publication_not_finalized", "matching build task unavailable"); }
     if (m.derivation) {
       if (m.derivation.transformation !== "signed-and-stapled-bundle" || !isHash(m.derivation.attestationSha256) || !isHash(m.derivation.bundleTreeSha256)) refuse("manifest_invalid", "invalid signed bundle derivation");
-      const input = verifyImmutableArtifact(root, m.derivation.input, { ...expected, sourcePolicy: "recorded-content" });
       const bundle = join(dirname(manifestPath), "Script Kit.app");
-      if (input.manifest.derivation || bundleTreeHash(bundle, true) !== m.derivation.bundleTreeSha256 || input.manifest.source.compilerInputSha256 !== m.source.compilerInputSha256
-        || unsignedMachOPayloadSha256(input.executablePath) !== unsignedMachOPayloadSha256(executablePath)) refuse("binary_hash_mismatch", "signed bundle/input identity differs");
+      let original: ArtifactManifestV3, payload: Sha256;
+      if (m.derivation.releaseCompile) {
+        if (m.derivation.input !== undefined) refuse("manifest_invalid", "ambiguous signed input");
+        const h = m.derivation.releaseCompile;
+        const sealed = verifyReleaseCompile(readReleaseReceiptBytes(join(dirname(manifestPath), "release-compile.json")), h.sha256, h.producer);
+        if (canonicalJson(sealed.receipt.producer) !== canonicalJson(h.producer)) refuse("manifest_invalid", "signed producer identity differs");
+        original = sealed.receipt.manifest; payload = sealed.receipt.payloadSha256;
+      } else {
+        const input = verifyImmutableArtifact(root, m.derivation.input, { ...expected, sourcePolicy: "recorded-content" });
+        original = input.manifest; payload = unsignedMachOPayloadSha256(input.executablePath);
+      }
+      if (original.derivation || bundleTreeHash(bundle, true) !== m.derivation.bundleTreeSha256 || canonicalJson(original.source) !== canonicalJson(m.source)
+        || original.effectiveConfigurationSha256 !== m.effectiveConfigurationSha256 || canonicalJson(original.toolchain) !== canonicalJson(m.toolchain)
+        || canonicalJson(original.target) !== canonicalJson(m.target) || payload !== unsignedMachOPayloadSha256(executablePath)) refuse("binary_hash_mismatch", "signed bundle/input identity differs");
       const attestation = join(dirname(manifestPath), "release-attestation.json");
       if (hashArtifactFile(attestation) !== m.derivation.attestationSha256) refuse("manifest_hash_mismatch", "release attestation differs");
     }
-    if (expected.sourcePolicy !== "recorded-content") {
-      const current = observeArtifactSource(root);
-      if (current.compilerInputSha256 !== m.source.compilerInputSha256 || current.compilerInputOwnerSha256 !== m.source.compilerInputOwnerSha256) refuse("source_stale", "reviewed worktree bytes differ");
-      if ((m.requiresExactGitHead || expected.sourcePolicy === "clean-exact-head") && (current.gitHead !== m.source.gitHead || current.repositoryDirty || m.source.repositoryDirty)) refuse("source_stale", "clean exact source head required");
-      const requested = m.effectiveConfiguration.requestedPolicy as Record<string, unknown>;
-      const args = requested.args === undefined ? [] : requested.args;
-      if (!Array.isArray(args) || !args.every(value => typeof value === "string")) refuse("manifest_invalid", "invalid recorded compiler arguments");
-      if (fingerprint(compilerCompatibility(root, args)) !== fingerprint(m.effectiveConfiguration.compatibility)) refuse("configuration_stale", "current compiler configuration differs");
-      const currentToolchain = observeToolchain(root);
-      if (["channel", "rustcVerboseVersion", "cargoVersion", "rustcSha256", "cargoSha256"].some(key => currentToolchain[key as keyof typeof currentToolchain] !== m.toolchain[key as keyof typeof m.toolchain])) refuse("toolchain_mismatch", "actual pinned compiler bytes differ");
-    }
+    if (expected.sourcePolicy !== "recorded-content") verifyCompileContext(root, m, expected.sourcePolicy, !!m.derivation?.releaseCompile);
     const verified = deepFreeze({ reference: { ...reference }, manifest, executablePath,
       binary: { path: m.binaryPath, sha256: m.binarySha256, sizeBytes: m.sizeBytes, sourceCommit: m.source.gitHead, sourceDirty: m.source.repositoryDirty, manifestPath: reference.manifestPath, manifestSha256: reference.manifestSha256 } });
     verifiedArtifacts.add(verified);
@@ -1084,16 +1116,27 @@ function publicationCopyReservation(path: string): number {
   return bytes;
 }
 
-export async function publishSignedBundle(root: string, task: ManagedTask, inputReference: ArtifactReference, bundle: string, attestationPath: string, leaseGeneration: string,
+export async function publishSignedBundle(root: string, task: ManagedTask, inputReference: ArtifactReference | VerifiedReleaseCompile, bundle: string, attestationPath: string, leaseGeneration: string,
   resourceCheck = (phase: string, reserveBytes = 0): BuildResourceObservation => requireBuildAdmission(root, { phase, reserveBytes }), monitor?: (summary: BuildResourceSummary) => void): Promise<{ reference: ArtifactReference; cleanup: OwnedCleanup }> {
-  const input = verifyImmutableArtifact(root, inputReference, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" });
+  const lookup = () => {
+    if (isVerifiedReleaseCompile(inputReference)) {
+      // A locally constructed comparison is not signing authority. The dependent
+      // job supplies this digest independently of the artifact and any CLI input.
+      verifyReleaseCompile(inputReference.bytes, process.env.EXPECTED_COMPILE_RECEIPT || "", githubReleaseRun("sign-notarize-macos"));
+      verifyCompileContext(root, inputReference.receipt.manifest, "clean-exact-head", true);
+      return { manifest: inputReference.receipt.manifest, payload: inputReference.receipt.payloadSha256 };
+    }
+    const local = verifyImmutableArtifact(root, inputReference, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" });
+    return { manifest: local.manifest, payload: unsignedMachOPayloadSha256(local.executablePath) };
+  };
+  const input = lookup();
   const signedExecutable = join(bundle, "Contents/MacOS/script-kit-gpui"), attestation = readOwnedJson(attestationPath);
   const signedHash = hashArtifactFile(signedExecutable), treeHash = bundleTreeHash(bundle);
   if (attestation.sourceSha !== input.manifest.source.gitHead || attestation.binarySha256 !== signedHash
     || attestation.sidecarSha256 !== hashArtifactFile(join(bundle, "Contents/MacOS/goose"))
     || !isHash(attestation.notarizedArchiveSha256) || !/^[A-Z0-9]{10}$/.test(attestation.teamIdentifier)
     || attestation.hardenedRuntime !== true || attestation.stapled !== true || attestation.gatekeeperAccepted !== true
-    || unsignedMachOPayloadSha256(input.executablePath) !== unsignedMachOPayloadSha256(signedExecutable)) refuse("binary_hash_mismatch", "signed bundle is not the attested compiler artifact derivation");
+    || input.payload !== unsignedMachOPayloadSha256(signedExecutable)) refuse("binary_hash_mismatch", "signed bundle is not the attested compiler artifact derivation");
   const leasePath = join(root, "target-agent/.locks/pool-agent-debug.lock/lease.json");
   const requireLease = () => { const lease = readOwnedJson(leasePath); if (lease.pid !== process.pid || lease.generation !== leaseGeneration) refuse("publication_not_finalized", "signed publication requires wrapper lease"); };
   const parent = canonicalArtifactPath(root, "target-agent/artifacts"), artifactId = `artifact-${randomUUID()}`;
@@ -1148,15 +1191,17 @@ export async function publishSignedBundle(root: string, task: ManagedTask, input
     const reference = withManagedMetadata(root, () => {
       requireLease();
       copyFileSync(attestationPath, join(staging, "release-attestation.json"), constants.COPYFILE_EXCL);
+      if (isVerifiedReleaseCompile(inputReference)) writeFileSync(join(staging, "release-compile.json"), inputReference.bytes, { flag: "wx", mode: 0o400 });
       const copiedExecutable = join(copiedBundle, "Contents/MacOS/script-kit-gpui"), attestationSha256 = hashArtifactFile(attestationPath);
       if (hashArtifactFile(copiedExecutable) !== signedHash || bundleTreeHash(copiedBundle) !== treeHash || bundleTreeHash(bundle) !== treeHash
         || hashArtifactFile(join(staging, "release-attestation.json")) !== attestationSha256) refuse("binary_hash_mismatch", "bundle changed during immutable copy");
       const manifest: ArtifactManifestV3 = { ...input.manifest, artifactId,
         binaryPath: `target-agent/artifacts/${artifactId}/Script Kit.app/Contents/MacOS/script-kit-gpui`, binarySha256: signedHash, sizeBytes: lstatSync(copiedExecutable).size,
         publication: { owner: "scripts/agentic/agent-cargo.sh", pool: "agent-debug", leaseGeneration, buildTask: task.identity, immutable: true, exportedWhileLeaseHeld: true },
-        derivation: { input: inputReference, transformation: "signed-and-stapled-bundle", attestationSha256, bundleTreeSha256: treeHash } };
+        derivation: { ...(isVerifiedReleaseCompile(inputReference) ? { releaseCompile: { sha256: inputReference.sha256, producer: inputReference.receipt.producer } } : { input: inputReference }),
+          transformation: "signed-and-stapled-bundle", attestationSha256, bundleTreeSha256: treeHash } };
       writeFileSync(join(staging, "manifest.json"), `${canonicalJson(manifest)}\n`, { flag: "wx", mode: 0o400 });
-      verifyImmutableArtifact(root, inputReference, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" });
+      lookup();
       const seal = (path: string): void => {
         const stat = lstatSync(path);
         if (stat.isDirectory()) { for (const name of readdirSync(path)) seal(join(path, name)); chmodSync(path, 0o500); }
@@ -1187,21 +1232,25 @@ async function runSignedBundlePublication(root: string, args: string[], lockPath
     const flags = new Map<string, string>();
     for (let index = 1; index < args.length; index += 2) {
       const key = args[index]!, value = args[index + 1];
-      if (!["--input", "--bundle", "--attestation"].includes(key) || !value || flags.has(key)) throw new Error("invalid_bundle_publication_arguments");
+      if (!["--input", "--release-input", "--expected-input-sha256", "--bundle", "--attestation"].includes(key) || !value || flags.has(key)) throw new Error("invalid_bundle_publication_arguments");
       flags.set(key, value);
     }
-    if (flags.size !== 3) throw new Error("signed_bundle_requires_input_bundle_attestation");
-    const input = readOwnedJson(resolve(flags.get("--input")!)) as unknown as ArtifactReference;
-    const artifact = verifyImmutableArtifact(root, input, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" });
+    const local = flags.has("--input");
+    if (!flags.has("--bundle") || !flags.has("--attestation") || (local ? flags.size !== 3 :
+      flags.size !== 4 || !flags.has("--release-input") || !flags.has("--expected-input-sha256"))) throw new Error("signed_bundle_requires_unambiguous_input");
+    const input = local ? readOwnedJson(resolve(flags.get("--input")!)) as unknown as ArtifactReference :
+      receiveReleaseCompile(root, flags.get("--release-input")!, flags.get("--expected-input-sha256")!, githubReleaseRun("sign-notarize-macos"));
+    const manifest = isVerifiedReleaseCompile(input) ? input.receipt.manifest : verifyImmutableArtifact(root, input, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" }).manifest;
     const id = `build-${randomUUID()}`;
     const claim = claimOutput(validateOutputTarget({ repoRoot: root, candidate: join(root, ".test-output/managed-tasks", id), kind: "directory", probeId: "signed-bundle" }), id);
-    task = beginManagedTask(claim, "build-job", [input]);
+    task = beginManagedTask(claim, "build-job", isVerifiedReleaseCompile(input) ? [] : [input]);
     resourceCheck("preflight");
-    updateManagedTask(task, { state: "running", source: artifact.manifest.source, effectiveConfiguration: artifact.manifest.effectiveConfiguration });
+    updateManagedTask(task, { state: "running", source: manifest.source, effectiveConfiguration: manifest.effectiveConfiguration });
     const published = await publishSignedBundle(root, task, input, realpathSync(flags.get("--bundle")!), resolve(flags.get("--attestation")!), generation, resourceCheck, monitor);
     const reference = published.reference;
     cleanup = published.cleanup;
-    result = { status: "succeeded", artifacts: [reference], artifact: reference };
+    result = { status: "succeeded", artifacts: [reference], artifact: reference,
+      ...(isVerifiedReleaseCompile(input) ? { releaseCompileSha256: input.sha256 } : {}) };
     status = 0;
   } catch (error) {
     if (error instanceof BuildResourceError) { status = error.exitCode; resources.refusal ||= error.observation; }

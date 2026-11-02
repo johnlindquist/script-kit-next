@@ -100,6 +100,12 @@ require_clean_source_identity() {
     src/installation_check.rs
     scripts/verify.sh
     scripts/verify-macos-bundle.sh
+    scripts/agentic/build-artifact.ts
+    scripts/agentic/artifact-lifecycle.ts
+    scripts/devtools/build-ops.ts
+    scripts/agentic/release-compile-contract.ts
+    scripts/agentic/release-compile.ts
+    scripts/agentic/release-compile.test.ts
     scripts/verify_macos_deployment.py
     scripts/test_macos_deployment.py
     scripts/release-stapler.sh
@@ -599,6 +605,7 @@ run_phase() {
         ./scripts/devtools/glass-entry-motion-contract.test.ts \
         ./scripts/devtools/glass-lifecycle-filmstrip.test.ts \
         ./scripts/devtools/rapid-toggle-stress.test.ts \
+        ./scripts/agentic/release-compile.test.ts \
         ./scripts/agentic/cargo-build-policy.test.ts \
         ./scripts/agentic/human-development-shell.test.ts \
         ./scripts/agentic/artifact-lifecycle.test.ts \

@@ -38,6 +38,7 @@ export const BUILD_ACTIONS: Readonly<Record<string, readonly string[]>> = Object
 const compilerInputOwner = "scripts/agentic/compiler-input-paths.txt";
 // Exact reviewed owners only. New scripts need a reviewed contract, never a guessed test name.
 const noncompilerContracts = [
+  { owners: ["scripts/agentic/release-compile-contract.ts", "scripts/agentic/release-compile.ts"], tests: ["scripts/agentic/release-compile.test.ts"] },
   { owners: ["scripts/devtools/build-ops.ts", "scripts/agentic/build-artifact.ts", "scripts/agentic/build-artifact-fixture.ts", "scripts/agent-check.sh"], tests: ["scripts/devtools/build-ops.test.ts"] },
   { owners: ["scripts/agentic/artifact-lifecycle.ts"], tests: ["scripts/agentic/artifact-lifecycle.test.ts"] },
   { owners: ["scripts/agentic/owned-process.ts", "scripts/agentic/session-supervisor.py"], tests: ["scripts/agentic/owned-process.test.ts", "scripts/agentic/session-stop-ownership.test.ts"] },
@@ -129,7 +130,7 @@ export function routeChanged(paths: readonly string[], quick = false, root = res
 interface Options { positional: string[]; quick: boolean; [key: string]: string | string[] | boolean; }
 function parseOptions(args: string[]): Options {
   const options: Options = { positional: [], quick: false };
-  const values = new Set(["features", "profile", "filter", "artifact-out", "reference", "task", "id", "generation", "after-revision", "expect-revision", "timeout-ms", "lock", "expect", "bundle", "attestation", "input"]);
+  const values = new Set(["features", "profile", "filter", "artifact-out", "reference", "task", "id", "generation", "after-revision", "expect-revision", "timeout-ms", "lock", "expect", "bundle", "attestation", "input", "release-input", "expected-input-sha256"]);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--") { options.positional.push(...args.slice(i + 1)); break; }
@@ -447,7 +448,9 @@ export async function runBuildOps(argv: string[]): Promise<void> {
           const separator = args.indexOf("--") < 0 ? args.length : args.indexOf("--");
           const additions = [];
           if (subject === "publish-signed-bundle") {
-            for (const name of ["input", "bundle", "attestation"]) {
+            if (options.input && (options["release-input"] || options["expected-input-sha256"])) throw new Error("ambiguous_signed_bundle_input");
+            const inputs = options.input ? ["input"] : ["release-input", "expected-input-sha256"];
+            for (const name of [...inputs, "bundle", "attestation"]) {
               if (!options[name]) throw new Error(`signed_bundle_requires_${name}`);
               additions.push(`--${name}`, String(options[name]));
             }

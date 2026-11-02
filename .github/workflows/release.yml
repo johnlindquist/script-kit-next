@@ -314,9 +314,12 @@ jobs:
     name: Build unsigned macOS app
     runs-on: macos-15
     needs: validate-version
+    outputs:
+      unsigned_id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+      compile_receipt_sha: ${{ steps.seal-compile.outputs.digest }}
     env:
+      # The managed builder qualifies sccache itself; it is a cache, not a semantic compiler wrapper.
       SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -332,9 +335,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "macos-release"
-          cache-targets: false
+          shared-key: "macos-managed-release"
+          workspaces: ". -> target-agent/pools/agent-debug"
           cache-all-crates: true
+          cache-on-failure: true
 
       - name: Cache cargo-bundle
         id: cache-cargo-bundle
@@ -350,19 +354,43 @@ jobs:
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
 
-      - name: Build release bundle
-        run: cargo bundle --release --bin script-kit-gpui --features owned-ui-evaluation
-
-      - name: Zip unsigned app bundle
+      - name: Compile the release application once (unprivileged)
+        env:
+          CARGO_BUILD_JOBS: "1"
+          SCRIPT_KIT_AGENT_TIMEOUT_MS: "5400000"
         run: |
-          cd target/release/bundle/osx
-          /usr/bin/ditto -c -k --keepParent "Script Kit.app" "$RUNNER_TEMP/Script-Kit-unsigned-app.zip"
+          mkdir -p .test-output/release
+          bun scripts/devtools/devtools.ts build-ops act app-build \
+            --profile release --features owned-ui-evaluation --timeout-ms 5400000 \
+            --artifact-out .test-output/release/compile.reference.json
+
+      - name: Bundle the verified executable without invoking cargo build
+        run: |
+          BIN="$(bun scripts/agentic/build-artifact.ts verify-reference "$PWD" .test-output/release/compile.reference.json)"
+          mkdir -p target/release
+          install -m 0755 "$BIN" target/release/script-kit-gpui
+          CARGO_BUNDLE_SKIP_BUILD=1 cargo bundle --release --bin script-kit-gpui --features owned-ui-evaluation
+
+      - name: Seal exact compile and unsigned ZIP for the signing runner
+        id: seal-compile
+        run: |
+          set -euo pipefail
+          APP="target/release/bundle/osx/Script Kit.app"
+          mkdir -p artifacts/unsigned-transfer
+          ZIP=artifacts/unsigned-transfer/Script-Kit-unsigned-app.zip
+          /usr/bin/ditto -c -k --keepParent "$APP" "$ZIP"
+          DIGEST="$(bun scripts/agentic/release-compile.ts seal .test-output/release/compile.reference.json \
+            "$APP/Contents/MacOS/script-kit-gpui" "$ZIP" artifacts/unsigned-transfer/release-compile.json)"
+          [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Upload unsigned app bundle
+        id: upload-unsigned
         uses: actions/upload-artifact@v4
         with:
           name: macos-unsigned-app
-          path: ${{ runner.temp }}/Script-Kit-unsigned-app.zip
+          path: artifacts/unsigned-transfer/
+          if-no-files-found: error
           retention-days: 1
 
   build-goose-sidecar:
@@ -421,6 +449,8 @@ jobs:
   sign-notarize-macos:
     name: Sign and notarize macOS app
     runs-on: macos-15
+    env:
+      EXPECTED_COMPILE_RECEIPT: ${{ needs.build-macos-app.outputs.compile_receipt_sha }}
     needs:
       - validate-release-gates
       - build-macos-app
@@ -436,13 +466,7 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "macos-release"
-          workspaces: ". -> target-agent/pools/agent-debug"
-          cache-all-crates: true
-          cache-on-failure: true
-
+      # Verify the pinned toolchain, without restoring any compiler target, task registry or lease.
       - name: Download executed Rust gate evidence
         uses: actions/download-artifact@v4
         with:
@@ -461,16 +485,26 @@ jobs:
           name: release-sdk-evidence
           path: ${{ runner.temp }}/release-evidence
 
-      - name: Download unsigned app bundle
+      - name: Require exact producer outputs
+        env:
+          UNSIGNED_ID: ${{ needs.build-macos-app.outputs.unsigned_id }}
+        run: |
+          [[ "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
+
+      - name: Download the producer's exact unsigned artifact
         uses: actions/download-artifact@v4
         with:
-          name: macos-unsigned-app
+          artifact-ids: ${{ needs.build-macos-app.outputs.unsigned_id }}
+          merge-multiple: true
           path: artifacts/app
 
-      - name: Restore unsigned app bundle
+      - name: Verify transfer before extracting the unsigned app
         run: |
-          mkdir -p target/release/bundle/osx
-          /usr/bin/ditto -x -k artifacts/app/Script-Kit-unsigned-app.zip target/release/bundle/osx
+          ZIP=artifacts/app/Script-Kit-unsigned-app.zip
+          bun scripts/agentic/release-compile.ts verify-zip artifacts/app/release-compile.json "$EXPECTED_COMPILE_RECEIPT" "$ZIP"
+          python3 -B scripts/devtools/lib/installed-release-archive.py "$ZIP"
+          mkdir -p target/release/bundle/osx .test-output/release
+          /usr/bin/ditto -x -k "$ZIP" target/release/bundle/osx
 
       - name: Download goose sidecar
         uses: actions/download-artifact@v4
@@ -484,26 +518,14 @@ jobs:
           /usr/bin/ditto -x -k artifacts/goose/goose-sidecar.zip target/goose-sidecar
           chmod 0755 target/goose-sidecar/goose
 
-      - name: Build and install the exact pre-sign compile artifact
-        env:
-          CARGO_BUILD_JOBS: "1"
-          SCRIPT_KIT_AGENT_TIMEOUT_MS: "5400000"
-        run: |
-          mkdir -p .test-output/release
-          bun scripts/devtools/devtools.ts build-ops act app-build \
-            --profile release --features owned-ui-evaluation \
-            --timeout-ms 5400000 \
-            --artifact-out .test-output/release/compile.reference.json
-          COMPILE_BINARY="$(bun scripts/agentic/build-artifact.ts verify-reference "$PWD" .test-output/release/compile.reference.json)"
-          cp "$COMPILE_BINARY" "target/release/bundle/osx/Script Kit.app/Contents/MacOS/script-kit-gpui"
-          chmod 0755 "target/release/bundle/osx/Script Kit.app/Contents/MacOS/script-kit-gpui"
-
       - name: Install goose sidecar into bundle
         run: bash scripts/install-goose-sidecar-into-bundle.sh
 
       - name: Verify bundled macOS app contents
         run: |
-          bash scripts/verify-macos-bundle.sh
+          APP="target/release/bundle/osx/Script Kit.app"
+          EXPECTED="$(bun scripts/agentic/release-compile.ts verify-executable artifacts/app/release-compile.json "$EXPECTED_COMPILE_RECEIPT" "$APP/Contents/MacOS/script-kit-gpui")"
+          SCRIPT_KIT_EXPECTED_APP_SHA256="$EXPECTED" bash scripts/verify-macos-bundle.sh
           python3 -B scripts/verify_macos_deployment.py "target/release/bundle/osx/Script Kit.app"
 
       - name: Create temporary keychain
@@ -557,6 +579,7 @@ jobs:
           # Verify signature
           codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/script-kit-gpui"
           codesign --verify --verbose=4 "$APP_PATH"
+          bun scripts/agentic/release-compile.ts verify-signed-payload artifacts/app/release-compile.json "$EXPECTED_COMPILE_RECEIPT" "$APP_PATH/Contents/MacOS/script-kit-gpui"
 
       - name: Create zip for notarization
         run: |
@@ -608,7 +631,7 @@ jobs:
       - name: Publish immutable signed and stapled bundle derivation
         run: |
           bun scripts/devtools/devtools.ts build-ops act publish-signed-bundle \
-            --input .test-output/release/compile.reference.json \
+            --release-input artifacts/app/release-compile.json --expected-input-sha256 "$EXPECTED_COMPILE_RECEIPT" \
             --bundle "target/release/bundle/osx/Script Kit.app" \
             --attestation "$RUNNER_TEMP/distribution-security-attestation.json" \
             --artifact-out .test-output/release/signed.reference.json

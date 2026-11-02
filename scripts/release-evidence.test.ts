@@ -2751,8 +2751,9 @@ process.exit(${mode === "fail" ? 73 : 0});
       "test", "--isolate", "--timeout", "30000", "--reporter=junit", "--reporter-outfile",
     ]);
     const suites = result.call.args.slice(7);
-    expect(suites).toHaveLength(53);
-    expect(new Set(suites).size).toBe(53);
+    expect(suites).toHaveLength(54);
+    expect(new Set(suites).size).toBe(suites.length);
+    expect(suites).toContain("./scripts/agentic/release-compile.test.ts");
     expect(suites.every((suite) => suite.startsWith("./") && suite.endsWith(".test.ts"))).toBe(true);
     for (const file of result.reporter.files) expect(suites).toContain(`./${file}`);
     expect(result.call.existed).toBe(false);
@@ -3342,10 +3343,13 @@ describe("nonintrusive CI release ownership and publication graph", () => {
           expect(steps.slice(0, index).some((prior) =>
             prior.run?.includes(`build-ops act ${producer}`) &&
             prior.run.includes(`--artifact-out ${artifact}`))).toBe(true);
-          expect(steps.slice(0, index).some((prior) =>
-            prior.run?.includes("build-ops act app-build") &&
-            prior.run.includes("--features owned-ui-evaluation"))).toBe(true);
-          if (name === "release") expect(step.run).toContain("--packaged");
+          const compilerSteps = name === "release" ? workflowDefinition.jobs["build-macos-app"].steps ?? [] : steps.slice(0, index);
+          expect(compilerSteps.some((prior) => prior.run?.includes("build-ops act app-build") && prior.run.includes("--features owned-ui-evaluation"))).toBe(true);
+          if (name === "release") {
+            expect(step.run).toContain("--packaged");
+            expect(steps.some((prior) => prior.run?.includes("build-ops act app-build"))).toBe(false);
+            expect(steps.slice(0, index).some((prior) => prior.run?.includes("publish-signed-bundle") && prior.run.includes("--release-input") && prior.run.includes("--expected-input-sha256"))).toBe(true);
+          }
           ownedFrames.push({ workflow: name, job, step: step.name ?? "unnamed", artifact: artifact! });
         }
       }
