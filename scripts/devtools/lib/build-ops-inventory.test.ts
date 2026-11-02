@@ -186,6 +186,10 @@ test("public allocation refusal never leaks paths or mistakes a pathname for a r
   expect(reason(churn+"/private")).toBe("unclassified");
   expect(reason("Error: inventory_probe_identity")).toBe("identity-or-route-refused");
   expect(reason(churn,["resource_budget_exceeded","resource_observation_incomplete"])).toBe("disk-limit");
+  expect(reason("Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:ctime+links")).toBe("inventory-scope:membership:deps:deps:ctime+links");
+  expect(reason("Error: inventory_unstable_replay_scope:entry:at=private-project:replay=deps:changed-witness")).toBe("unclassified");
+  expect(reason("Error: inventory_unstable_directory:repeated_loss /private/secret")).toBe("unclassified");
+  expect(reason("inventory_worker_protocol")).toBe("inventory_worker_protocol");
 });
 
 const compilerDeps = "target-agent/pools/agent-debug/debug/deps";
@@ -617,6 +621,10 @@ for (const fault of ["replacement", "symlink", "reappeared-link", "permission", 
   expect(denied.code).toBe("resource_observation_incomplete");
   expect(denied.observation.complete).toBe(false);
   expect(denied.observation.errors!.join(" ")).toContain(fault === "churn" || fault === "reappeared-link" ? "inventory_unstable_directory" : fault === "permission" ? "EACCES" : "inventory_directory_changed");
+  const category = allocationRefusalClass(denied.observation);
+  if (fault === "churn") expect(category).toBe("inventory_unstable_directory:repeated_loss");
+  if (fault === "reappeared-link") expect(category).toBe("inventory_unstable_directory:reappeared");
+  if (fault === "permission") expect(category).toBe("filesystem:EACCES");
   expect(misses).toBe(fault === "churn" ? 2 : 1);
 });
 

@@ -451,6 +451,18 @@ export interface BuildResourceObservation {
   automaticEviction: false;
 }
 
+// Explicit vocabulary from the scanner, not free-form filesystem or compiler messages.
+// Only these atoms may cross the diagnostic privacy boundary, even on a failed release.
+const inventoryFacts = new Set([
+  "inventory_probe_missing", "inventory_probe_duplicate", "inventory_probe_type_changed",
+  "inventory_unstable_directory:reappeared", "inventory_unstable_directory:repeated_loss",
+  "inventory_unstable_replay_scope:entry", "inventory_output_not_directory", "inventory_repository_not_directory",
+  "inventory_invalid_allocation", "inventory_invalid_available", "inventory_missing_allocation_witness",
+  "inventory_unknown_compiler_profile", "inventory_free_space_time_limit", "inventory_worker_protocol",
+  "inventory_worker_exited", "inventory_depth_limit", "inventory_time_limit", "inventory_entry_limit",
+]);
+const inventoryScopes = new Set(["root", "pools", "pool", "profile", "deps", "deps-child", "fingerprint", "profile-other", "retained"]);
+
 /** Public diagnostic for a failed sample. Never print the raw filesystem error
  * or infer recovery eligibility from this lossy summary. */
 export function allocationRefusalClass(observation: BuildResourceObservation): string {
@@ -463,7 +475,19 @@ export function allocationRefusalClass(observation: BuildResourceObservation): s
   if (["Error: inventory_probe_identity", "Error: inventory_directory_changed", "Error: inventory_storage_route_changed", "Error: inventory_unexpected_mount"].includes(error) || error.startsWith("Error: inventory_unstable_replay_scope:identity:") || error.startsWith("Error: inventory_output_symlink")) return "identity-or-route-refused";
   if (/^(?:Error: )?ENOENT:/.test(error)) return "entry-not-found";
   if (error === "Error: inventory_entry_limit" || error === "Error: inventory_time_limit") return "scan-limit";
-  return "unclassified";
+  const atom = error.replace(/^Error: /, "");
+  if (inventoryFacts.has(atom)) return atom;
+  const scope = /^inventory_unstable_replay_scope:(entry|membership):at=([a-z-]+):replay=([a-z-]+):([a-z+-]+)$/.exec(atom);
+  if (scope && scope[0] === atom && inventoryScopes.has(scope[2]!) && inventoryScopes.has(scope[3]!)) {
+    const detail = scope[4]!;
+    const stamps = ["ctime", "mtime", "links", "size"].filter(k => detail.split("+").includes(k)).join("+");
+    if (scope[1] === "entry" ? detail === "changed-witness" : stamps === detail ||
+      ["blocks", "invalid-stamp", "confirmation-churn", "unseen-name-or-type", "missing-name"].includes(detail)) {
+      return ["inventory-scope", scope[1], scope[2], scope[3], detail].join(":");
+    }
+  }
+  const native = /^(?:Error: )?(EACCES|EPERM|EIO|ENOTDIR|ELOOP|ESTALE|EAGAIN|EBUSY|ENOSPC|EMFILE|ENFILE|ETIMEDOUT)(?=:|$)/.exec(error);
+  return native ? "filesystem:" + native[1] : "unclassified";
 }
 
 export interface BuildResourceSummary {
