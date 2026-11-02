@@ -7,7 +7,7 @@ import { artifactHash as hash, unsignedMachOPayloadSha256, type ArtifactManifest
 import { githubReleaseRun, readReleaseReceiptBytes, verifyReleaseCompile, type ReleaseCompileReceipt } from "./release-compile-contract";
 import { checkReleaseExecutable, checkReleaseZip, checkSignedPayload } from "./release-compile";
 
-const run = { repository:"johnlindquist/script-kit-next", tag:"v0.0.0", commit:"a".repeat(40), runId:"123", attempt:"1" };
+const run = { repository:"johnlindquist/script-kit-next", repositoryId:"456", tag:"v0.0.0", commit:"a".repeat(40), runId:"123", attempt:"1" };
 const id = `artifact-${crypto.randomUUID()}`, stamp = hash("fixture");
 const upstream = { kind:"build-job" as const, id:`build-${crypto.randomUUID()}`, generation:crypto.randomUUID(), revision:4 };
 const config = { requestedPolicy:{ args:["build","--locked","--profile","release"] }, compatibility:{} };
@@ -29,9 +29,9 @@ test("same run may promote a successful earlier attempt; not a future attempt, a
   const r=fixture(),bytes=canonicalJson(r)+"\n";
   expect(bind(r,{...run,attempt:"2"}).receipt.finalized.monitoredSamples).toBe(6);
   expect(()=>verifyReleaseCompile(bytes+" ",hash(bytes),run)).toThrow("digest");
-  for(const patch of [{attempt:"0"},{runId:"124"},{tag:"v0.0.1"},{commit:"b".repeat(40)},{repository:"another/repo"}]) expect(()=>bind(r,{...run,...patch})).toThrow();
+  for(const patch of [{attempt:"0"},{runId:"124"},{tag:"v0.0.1"},{commit:"b".repeat(40)},{repository:"another/repo"},{repositoryId:"457"}]) expect(()=>bind(r,{...run,...patch})).toThrow();
   expect(()=>bind({...r,producer:{...run,attempt:"2"}})).toThrow("wrong_run");
-  const env={GITHUB_ACTIONS:"true",GITHUB_REPOSITORY:run.repository,GITHUB_EVENT_NAME:"push",GITHUB_SHA:run.commit,GITHUB_REF_NAME:run.tag,GITHUB_REF:`refs/tags/${run.tag}`,GITHUB_JOB:"build-macos-app",GITHUB_WORKFLOW_REF:`${run.repository}/.github/workflows/release.yml@refs/tags/${run.tag}`,GITHUB_RUN_ID:run.runId,GITHUB_RUN_ATTEMPT:run.attempt};
+  const env={GITHUB_ACTIONS:"true",GITHUB_REPOSITORY:run.repository,GITHUB_REPOSITORY_ID:run.repositoryId,GITHUB_EVENT_NAME:"push",GITHUB_SHA:run.commit,GITHUB_REF_NAME:run.tag,GITHUB_REF:`refs/tags/${run.tag}`,GITHUB_JOB:"build-macos-app",GITHUB_WORKFLOW_REF:`${run.repository}/.github/workflows/release.yml@refs/tags/${run.tag}`,GITHUB_RUN_ID:run.runId,GITHUB_RUN_ATTEMPT:run.attempt};
   expect(githubReleaseRun("build-macos-app",env)).toEqual(run);
   const tag="v0.0.0-rc.2", ref="refs/tags/"+tag;
   expect(githubReleaseRun("build-macos-app",{...env,GITHUB_REF_NAME:tag,GITHUB_REF:ref,GITHUB_WORKFLOW_REF:run.repository+"/.github/workflows/release.yml@"+ref}).tag).toBe(tag);
@@ -76,5 +76,5 @@ test("the unprivileged build seals one binary; the signer verifies that producer
   expect(JSON.stringify(build)).not.toContain("secrets.");expect(sink.some((s:string)=>s.includes("build-ops act app-build") || s.includes("cargo bundle"))).toBe(false);
   const at=(part:string)=>{const i=sink.findIndex((s:string)=>s.includes(part));expect(i).toBeGreaterThanOrEqual(0);return i;};
   expect(at("release-compile.ts verify-executable")).toBeLessThan(at("security import"));expect(at("release-compile.ts verify-signed-payload")).toBeLessThan(at("notarytool submit"));
-  expect(sign.env.EXPECTED_COMPILE_RECEIPT).toBe("${{ needs.build-macos-app.outputs.compile_receipt_sha }}");expect(sign.steps.find((s:any)=>s.with?.['artifact-ids'])?.with['artifact-ids']).toBe("${{ needs.build-macos-app.outputs.unsigned_id }}");
+  expect(sign.env.EXPECTED_COMPILE_RECEIPT).toBe("${{ needs.build-macos-app.outputs.compile_receipt_sha }}");expect(sign.steps.map(s=>s.with?.['artifact-ids']).filter(Boolean)).toEqual(["${{ needs.validate-release-gates.outputs.proof_id }}","${{ needs.build-macos-app.outputs.unsigned_id }}"]);
 });

@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import * as workerThreads from "node:worker_threads";
-import { allocation, buildStorage, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "./build-ops-inventory.ts";
+import { allocation, allocationRefusalClass, buildStorage, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "./build-ops-inventory.ts";
 import type { AllocationObservation, BuildResourceObservation, BuildResourceSummary } from "./build-ops-inventory.ts";
 import { registerManagedStorageRoute } from "../../agentic/managed-storage.ts";
 
@@ -177,9 +177,20 @@ function beforeStat(effect: (path: string) => void): void {
   restore.push(() => spy.mockRestore());
 }
 
+test("public allocation refusal never leaks paths or mistakes a pathname for a recovery authorization", () => {
+  const root=fixture(); observedVolume(2*GiB); const base=requireBuildAdmission(root);
+  const reason=(error:string, codes=["resource_observation_incomplete"])=>allocationRefusalClass({...base,complete:false,withinLimits:false,errors:[error],failureCodes:codes});
+  const churn="Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn";
+  expect(reason(churn)).toBe("deps-confirmation-churn");
+  expect(reason("Error: ENOENT: lstat /private/user/"+churn)).toBe("entry-not-found");
+  expect(reason(churn+"/private")).toBe("unclassified");
+  expect(reason("Error: inventory_probe_identity")).toBe("identity-or-route-refused");
+  expect(reason(churn,["resource_budget_exceeded","resource_observation_incomplete"])).toBe("disk-limit");
+});
+
 const compilerDeps = "target-agent/pools/agent-debug/debug/deps";
-for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "boundary replacement"] as const) test(`enumerated compiler directory: ${stage}`, () => {
-  const root = fixture(), deps = join(root, stage === "unknown scope" ? "target-agent/unknown" : compilerDeps);
+for (const profile of ["debug", "release"] as const) for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "boundary replacement"] as const) test(`enumerated ${profile} compiler directory: ${stage}`, () => {
+  const root = fixture(), deps = join(root, stage === "unknown scope" ? "target-agent/unknown" : `target-agent/pools/agent-debug/${profile}/deps`);
   const target = join(deps, "arbitrary-name"); fs.mkdirSync(target, { recursive: true });
   if (stage === "nonempty EOF") file(target, "payload");
   const keep = file(deps, "stable"); fs.linkSync(keep, join(deps, "alias"));
@@ -193,11 +204,20 @@ for (const stage of ["initial", "empty EOF", "nonempty EOF", "unknown scope", "b
   });
   observedVolume(2 * GiB);
   if (stage === "initial" || stage === "empty EOF") {
-    const recovered = requireBuildAdmission(root);
-    expect(recovered).toEqual(requireBuildAdmission(root));
+    const recovered = requireBuildAdmission(root, { compilerProfile: profile });
+    expect(recovered).toEqual(requireBuildAdmission(root, { compilerProfile: profile }));
     expect(recovered.targetAgentAllocatedBytes).toBe(allocation(join(root, "target-agent")).allocatedBytes);
-  } else expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_observation_incomplete");
+  } else expect(refusal(() => requireBuildAdmission(root, { compilerProfile: profile })).code).toBe("resource_observation_incomplete");
   expect(moved).toBe(true);
+});
+
+for (const profile of ["debug","release"] as const) test(`the inactive profile remains an ordinary protected tree while ${profile} compiles`, () => {
+  const root = fixture(); observedVolume(2 * GiB);
+  const other = profile === "debug" ? "release" : "debug", transient = join(root, "target-agent/pools/agent-debug", other, "deps", "vanishing");
+  fs.mkdirSync(transient, { recursive: true }); let removed = false;
+  beforeStat(path => { if (!removed && path === transient) { fs.rmdirSync(path); removed = true; } });
+  expect(refusal(() => requireBuildAdmission(root, { compilerProfile: profile })).code).toBe("resource_observation_incomplete");
+  expect(removed).toBe(true);
 });
 
 for (const lostKind of ["directory", "file"] as const) test(`a lost compiler ${lostKind} cannot conceal a move into a previously measured part of the managed tree`, () => {

@@ -11,8 +11,8 @@ import type { ManagedTask, OwnedCleanup, OwnedProcessIdentity, TaskIdentity } fr
 import { spawnOwnedProcess } from "./owned-process.ts";
 import { trustedManagedRootLink } from "./managed-storage.ts";
 import { githubReleaseRun, isVerifiedReleaseCompile, readReleaseReceiptBytes, verifyReleaseCompile, type ReleaseRun, type VerifiedReleaseCompile } from "./release-compile-contract.ts";
-import { BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "../devtools/lib/build-ops-inventory.ts";
-import type { BuildResourceObservation, BuildResourceReport, BuildResourceSummary } from "../devtools/lib/build-ops-inventory.ts";
+import { allocationRefusalClass, BuildResourceError, requireBuildAdmission, startBuildResourceGuard } from "../devtools/lib/build-ops-inventory.ts";
+import type { BuildResourceObservation, BuildResourceReport, BuildResourceSummary, ManagedCompilerProfile } from "../devtools/lib/build-ops-inventory.ts";
 
 export type Sha256 = string;
 export type ArtifactKind = "application" | "rust-libtest" | "tool" | "spotlight-demo";
@@ -689,10 +689,10 @@ function renameDirectoryNoReplace(source: string, destination: string): void {
   command(dirname(source), ["python3", "-B", "-c", program, source, destination]);
 }
 
-function buildResourceChecks(root: string) {
+function buildResourceChecks(root: string, activeProfile: () => ManagedCompilerProfile = () => "debug") {
   const resources: BuildResourceReport = { scope: "target-agent", measurement: "allocated-blocks", hardQuota: false, automaticEviction: false, checks: [], monitoring: null, refusal: null };
   const check = (phase: string, reserveBytes = 0): BuildResourceObservation => {
-    try { const observation = requireBuildAdmission(root, { phase, reserveBytes }); if (resources.checks.length < 12) resources.checks.push(observation); return observation; }
+    try { const observation = requireBuildAdmission(root, { phase, reserveBytes, compilerProfile: activeProfile() }); if (resources.checks.length < 12) resources.checks.push(observation); return observation; }
     catch (error) {
       if (error instanceof BuildResourceError) { resources.refusal ||= error.observation; if (resources.checks.length < 12) resources.checks.push(error.observation); }
       throw error;
@@ -830,7 +830,8 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
   let logFd: number | undefined;
   let sourceMutation: { before: SourceIdentity; after: SourceIdentity } | undefined;
   const references: ArtifactReference[] = [];
-  const { resources, check: resourceCheck, monitor } = buildResourceChecks(root);
+  let activeProfile: ManagedCompilerProfile = "debug";
+  const { resources, check: resourceCheck, monitor } = buildResourceChecks(root, () => activeProfile);
   let artifactReused = false;
   try {
     // Admission is inside the same cleanup boundary as execution. Never use a
@@ -867,6 +868,7 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
     const { rustcPath, cargoPath: _cargoPath, host, ...toolchainRecord } = toolchain;
     const normalized = normalizeCompilerPolicy(root, args);
     const { compatibility, profile } = normalized;
+    activeProfile = profile === "release" ? "release" : "debug";
     if (wantsArtifact && kind === "spotlight-demo" && profile !== "dev") throw new Error("artifact_producer_mismatch");
     const cache = selectCompilerCache(root, rustcPath, normalized);
     const requestedPolicy = { args, pool: "agent-debug", compilerWorkers: Number(process.env.CARGO_BUILD_JOBS), testWorkers: Number(process.env.RUST_TEST_THREADS), cachePolicy: process.env.SCRIPT_KIT_AGENT_USE_SCCACHE || "auto", loadLimitPercent: process.env.SCRIPT_KIT_AGENT_MAX_SYSTEM_LOAD_PERCENT || null };
@@ -933,7 +935,7 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
         } finally { reader.releaseLock(); }
       };
       try {
-        guard = startBuildResourceGuard(root, error => { resourceFailure ||= error; resources.refusal ||= error.observation; void child.close().catch(() => {}); }, preflight);
+        guard = startBuildResourceGuard(root, error => { resourceFailure ||= error; resources.refusal ||= error.observation; void child.close().catch(() => {}); }, preflight, activeProfile);
         cacheLease("bind", lockPath, [String(process.pid), generation, JSON.stringify(child.identity)]);
         updateManagedTask(task!, { ownedProcesses: [...readManagedTask(task!.recordPath, task!.identity).ownedProcesses, child.identity] });
         await Promise.all([consume(child.stdout, "stdout"), consume(child.stderr, "stderr")]);
@@ -1013,6 +1015,7 @@ export async function runWrapperCargo(args: string[]): Promise<number> {
     result = { status: "failed", exitCode: status, artifacts: [], ...(sourceMutation ? { sourceMutation } : {}),
       ...(error instanceof BuildResourceError ? { failureCode: error.code, disposition: "BLOCKED_RESOURCE_BUDGET" } : error instanceof ArtifactVerificationError ? { failureCode: error.code, disposition: error.disposition } : { failureCode: String(error) }) };
     process.stderr.write(`AGENT_CARGO error: ${String(error)}\n`);
+    if (error instanceof BuildResourceError) process.stderr.write(`AGENT_CARGO allocation refusal: ${allocationRefusalClass(error.observation)}\n`);
   } finally {
     if (logFd !== undefined) {
       try { fsyncSync(logFd); }
@@ -1142,7 +1145,8 @@ export async function publishSignedBundle(root: string, task: ManagedTask, input
   const parent = canonicalArtifactPath(root, "target-agent/artifacts"), artifactId = `artifact-${randomUUID()}`;
   const staging = join(parent, `.pending-${artifactId}`), destination = join(parent, artifactId), copiedBundle = join(staging, "Script Kit.app");
   requireLease();
-  resourceCheck("pre-publication", publicationCopyReservation(bundle) + publicationCopyReservation(attestationPath));
+  const handoffBytes = isVerifiedReleaseCompile(inputReference) ? 4096 + Math.ceil(Buffer.byteLength(inputReference.bytes) / 4096) * 4096 : 0;
+  resourceCheck("pre-publication", publicationCopyReservation(bundle) + publicationCopyReservation(attestationPath) + handoffBytes);
   withManagedMetadata(root, () => {
     requireLease(); mkdirSync(parent, { recursive: true, mode: 0o700 }); mkdirSync(staging, { mode: 0o700 });
     const directory = lstatSync(staging);
@@ -1191,7 +1195,11 @@ export async function publishSignedBundle(root: string, task: ManagedTask, input
     const reference = withManagedMetadata(root, () => {
       requireLease();
       copyFileSync(attestationPath, join(staging, "release-attestation.json"), constants.COPYFILE_EXCL);
-      if (isVerifiedReleaseCompile(inputReference)) writeFileSync(join(staging, "release-compile.json"), inputReference.bytes, { flag: "wx", mode: 0o400 });
+      if (isVerifiedReleaseCompile(inputReference)) {
+        const copy = join(staging, "release-compile.json");
+        writeFileSync(copy, inputReference.bytes, { flag: "wx", mode: 0o400 });
+        if (artifactHash(readReleaseReceiptBytes(copy)) !== inputReference.sha256) refuse("manifest_hash_mismatch", "portable compile evidence changed during copy");
+      }
       const copiedExecutable = join(copiedBundle, "Contents/MacOS/script-kit-gpui"), attestationSha256 = hashArtifactFile(attestationPath);
       if (hashArtifactFile(copiedExecutable) !== signedHash || bundleTreeHash(copiedBundle) !== treeHash || bundleTreeHash(bundle) !== treeHash
         || hashArtifactFile(join(staging, "release-attestation.json")) !== attestationSha256) refuse("binary_hash_mismatch", "bundle changed during immutable copy");
@@ -1235,9 +1243,10 @@ async function runSignedBundlePublication(root: string, args: string[], lockPath
       if (!["--input", "--release-input", "--expected-input-sha256", "--bundle", "--attestation"].includes(key) || !value || flags.has(key)) throw new Error("invalid_bundle_publication_arguments");
       flags.set(key, value);
     }
-    const local = flags.has("--input");
-    if (!flags.has("--bundle") || !flags.has("--attestation") || (local ? flags.size !== 3 :
-      flags.size !== 4 || !flags.has("--release-input") || !flags.has("--expected-input-sha256"))) throw new Error("signed_bundle_requires_unambiguous_input");
+    const local = !flags.has("--release-input") && !flags.has("--expected-input-sha256");
+    if (local && (flags.size !== 3 || !flags.has("--input") || !flags.has("--bundle") || !flags.has("--attestation"))) throw new Error("signed_bundle_requires_input_bundle_attestation");
+    if (!local && (flags.size !== 4 || flags.has("--input") || !flags.has("--bundle") || !flags.has("--attestation") ||
+      !flags.has("--release-input") || !flags.has("--expected-input-sha256"))) throw new Error("signed_bundle_requires_unambiguous_input");
     const input = local ? readOwnedJson(resolve(flags.get("--input")!)) as unknown as ArtifactReference :
       receiveReleaseCompile(root, flags.get("--release-input")!, flags.get("--expected-input-sha256")!, githubReleaseRun("sign-notarize-macos"));
     const manifest = isVerifiedReleaseCompile(input) ? input.receipt.manifest : verifyImmutableArtifact(root, input, { ...applicationExpectation(), sourcePolicy: "clean-exact-head" }).manifest;

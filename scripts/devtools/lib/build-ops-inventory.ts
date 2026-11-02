@@ -19,10 +19,11 @@ export function allocation(path: string, excluded: readonly string[] = [], seen 
 const ALLOCATION_ENTRY_LIMIT = 250_000;
 const ALLOCATION_TIMEOUT_MS = positiveLimit("SCRIPT_KIT_AGENT_INVENTORY_TIMEOUT_MS", 8_000, 1, 300_000);
 
-const compilerRoute = new Map([
-  ["", "pools"], ["pools", "agent-debug"], ["pools/agent-debug", "debug"],
-  ["pools/agent-debug/debug", "deps"],
-]);
+export type ManagedCompilerProfile = "debug" | "release";
+function compilerRoute(profile: ManagedCompilerProfile) {
+  if (profile !== "debug" && profile !== "release") throw new Error("inventory_unknown_compiler_profile");
+  return new Map([["", "pools"], ["pools", "agent-debug"], ["pools/agent-debug", profile], [`pools/agent-debug/${profile}`, "deps"]]);
+}
 
 // Keep diagnostics useful on a hosted runner without logging user-chosen path names.
 function inventoryScope(root: string, dir: string): string {
@@ -55,7 +56,8 @@ function listedTypeMatches(entry: Dirent, stat: Stats): boolean {
   return entry.isFile() === stat.isFile() && entry.isDirectory() === stat.isDirectory() && entry.isSymbolicLink() === stat.isSymbolicLink();
 }
 
-function scanAllocation(path: string, excluded: readonly string[], seen: Set<string> | Map<string, number>, expectedDevice?: number, protectOutputs = false): AllocationObservation {
+function scanAllocation(path: string, excluded: readonly string[], seen: Set<string> | Map<string, number>, expectedDevice?: number, protectOutputs = false, profile: ManagedCompilerProfile = "debug"): AllocationObservation {
+  const route = compilerRoute(profile), depsPath = `pools/agent-debug/${profile}/deps`;
   const result: AllocationObservation = { present: false, complete: true, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors: [] };
   const started = performance.now();
   let device = expectedDevice, work = 0, priorAllocatedBytes = 0;
@@ -156,7 +158,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
     if (excluded.some(value => child === value || child.startsWith(value + "/"))) return true;
     charge();
     if (depth > 256) throw new Error("inventory_depth_limit");
-    const compilerDeps = protectOutputs && child === "pools/agent-debug/debug/deps";
+    const compilerDeps = protectOutputs && child === depsPath;
     let stat: Stats;
     try { stat = lstatSync(current); }
     catch (error) {
@@ -201,7 +203,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
       // Descend the known compiler route first. Probe only a verified real parent,
       // never a compound speculative path. Remember every name the probe exposed:
       // a fresh enumeration must actually encounter those entries, not infer them.
-      const preferred = protectOutputs ? compilerRoute.get(child) : undefined;
+      const preferred = protectOutputs ? route.get(child) : undefined;
       const witnessed = preferred && !vanished ? new Map<string, { entry: Dirent; stat: Stats }>() : undefined;
       let first: Stats | undefined;
       if (preferred && witnessed) {
@@ -290,7 +292,7 @@ function scanAllocation(path: string, excluded: readonly string[], seen: Set<str
   return result;
 }
 
-function targetAgentAllocation(root: string): AllocationObservation {
+function targetAgentAllocation(root: string, profile: ManagedCompilerProfile = "debug"): AllocationObservation {
   try {
     const stat = lstatSync(root);
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error("inventory_repository_not_directory");
@@ -300,7 +302,7 @@ function targetAgentAllocation(root: string): AllocationObservation {
     const path = storage === root ? join(root, "target-agent") : storage;
     const linked = existsSync(join(root, "target-agent")) && lstatSync(join(root, "target-agent")).isSymbolicLink();
     const expectedDevice = linked ? Number(lstatSync(storage).dev) : Number(stat.dev);
-    const observation = scanAllocation(path, [], new Map(), expectedDevice, true);
+    const observation = scanAllocation(path, [], new Map(), expectedDevice, true, profile);
     if (managedStorageRoot(root) !== storage) throw new Error("inventory_storage_route_changed");
     return observation;
   } catch (error) {
@@ -439,6 +441,19 @@ export interface BuildResourceObservation {
   automaticEviction: false;
 }
 
+/** Public diagnostic for a failed sample. Never print the raw filesystem error
+ * or infer recovery eligibility from this lossy summary. */
+export function allocationRefusalClass(observation: BuildResourceObservation): string {
+  if (observation.failureCodes.includes("resource_budget_exceeded") || observation.failureCodes.includes("resource_free_space_below_floor")) return "disk-limit";
+  if (observation.failureCodes.length !== 1 || observation.failureCodes[0] !== "resource_observation_incomplete" || observation.errors?.length !== 1) return "unclassified";
+  const error = observation.errors[0]!;
+  if (error === "Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn") return "deps-confirmation-churn";
+  if (["Error: inventory_probe_identity", "Error: inventory_directory_changed", "Error: inventory_storage_route_changed", "Error: inventory_unexpected_mount"].includes(error) || error.startsWith("Error: inventory_unstable_replay_scope:identity:") || error.startsWith("Error: inventory_output_symlink")) return "identity-or-route-refused";
+  if (/^(?:Error: )?ENOENT:/.test(error)) return "entry-not-found";
+  if (error === "Error: inventory_entry_limit" || error === "Error: inventory_time_limit") return "scan-limit";
+  return "unclassified";
+}
+
 export interface BuildResourceSummary {
   sampleCount: number;
   maximumSampledAllocatedBytes: number | null;
@@ -498,8 +513,8 @@ function resourceObservation(policy: ResourcePolicy, allocated: (Pick<Allocation
     scope: "target-agent", measurement: "allocated-blocks", hardQuota: false, automaticEviction: false };
 }
 
-export function requireBuildAdmission(root: string, options: { phase?: string; reserveBytes?: number } = {}): BuildResourceObservation {
-  const policy = resourcePolicy(root), allocated = targetAgentAllocation(root);
+export function requireBuildAdmission(root: string, options: { phase?: string; reserveBytes?: number; compilerProfile?: ManagedCompilerProfile } = {}): BuildResourceObservation {
+  const policy = resourcePolicy(root), allocated = targetAgentAllocation(root, options.compilerProfile);
   let available: number | null = null;
   try { available = managedAvailableBytes(root); } catch { /* Incomplete observations refuse below. */ }
   const observation = resourceObservation(policy, allocated, available, options.phase ?? "preflight", options.reserveBytes ?? 0);
@@ -511,11 +526,11 @@ const ALLOCATION_WORKER = "build-resource-allocation";
 // The request owns this worker and its only protocol. No process-wide watcher or persisted sample log.
 if (!workerThreads.isMainThread && workerThreads.workerData?.role === ALLOCATION_WORKER) {
   workerThreads.parentPort!.on("message", (id: number) => {
-    workerThreads.parentPort!.postMessage({ id, allocation: targetAgentAllocation(workerThreads.workerData.root) });
+    workerThreads.parentPort!.postMessage({ id, allocation: targetAgentAllocation(workerThreads.workerData.root, workerThreads.workerData.profile) });
   });
 }
 
-export function startBuildResourceGuard(root: string, onRefusal: (error: BuildResourceError) => void, initialObservation?: BuildResourceObservation): { stop(): Promise<BuildResourceSummary> } {
+export function startBuildResourceGuard(root: string, onRefusal: (error: BuildResourceError) => void, initialObservation?: BuildResourceObservation, profile: ManagedCompilerProfile = "debug"): { stop(): Promise<BuildResourceSummary> } {
   const freeSampleTimeoutMs = positiveLimit("SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", 2_000, 1, 60_000);
   const policy = resourcePolicy(root);
   const validInitial = initialObservation != null && initialObservation.complete === true && initialObservation.withinLimits === true
@@ -652,7 +667,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
     queueMicrotask(() => { if (!stopped) check(true); });
   } else {
     try {
-      worker = new workerThreads.Worker(new URL(import.meta.url), { workerData: { role: ALLOCATION_WORKER, root: resolve(root) } });
+      worker = new workerThreads.Worker(new URL(import.meta.url), { workerData: { role: ALLOCATION_WORKER, root: resolve(root), profile } });
       summary.workerClosed = false;
       const captureThreadId = (): void => {
         const threadId = worker!.threadId;

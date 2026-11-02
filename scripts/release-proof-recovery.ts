@@ -7,13 +7,25 @@ import { appendFileSync, lstatSync, readFileSync, readdirSync, realpathSync, wri
 import { join, resolve } from "node:path";
 import { readManagedTask, readOwnedJson } from "./agentic/artifact-lifecycle";
 import { hashArtifactFile } from "./agentic/build-artifact";
+import { readReleaseReceiptBytes } from "./agentic/release-compile-contract";
 
 const diagnostic = "Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn";
 const incomplete = "resource_observation_incomplete";
+const GiB = 1024 ** 3;
+const maxHandoffBytes = 40 * GiB, minimumHostedFree = 25 * GiB;
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}";
 const unitArgs = ["test", "--locked", "--lib", "theme::alpha::alpha_byte_tests::"];
 const pool = "target-agent/pools/agent-debug";
 const marker = ".test-output/release-proof-refusal.json";
+function markerBytes(): Buffer {
+  assert.equal(realpathSync(marker), resolve(marker));
+  return Buffer.from(readReleaseReceiptBytes(marker), "utf8");
+}
+function compileLog(temp: string): string {
+  const path=join(realpathSync(temp),"release-unit.log"), st=lstatSync(path);
+  assert(st.isFile() && st.nlink===1 && st.size>0 && st.size<=32*1024**2, "unsafe or unbounded compiler log");
+  return readFileSync(path,"utf8");
+}
 const natural = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 const positive = (v: unknown) => natural(v) && v > 0;
 type ObjectJson = Record<string, any>;
@@ -31,7 +43,7 @@ function event(): Origin {
 }
 
 export function classifyColdRefusal(receipt: ObjectJson, record: ObjectJson, origin: Origin, job: string, cold: string, code: string, log: string) {
-  assert(job === "validate-proof-contracts" && cold === "true" && code === "75");
+  assert(job === "validate-proof-contracts" && origin.attempt === "1" && cold === "true" && code === "75");
   const { status, exitCode, disposition, failureCode, artifacts, resources, cleanup, task } = receipt;
   assert(status === "failed" && exitCode === 75 && disposition === "BLOCKED_RESOURCE_BUDGET" && failureCode === incomplete);
   assert.deepEqual(artifacts, []);
@@ -47,8 +59,11 @@ export function classifyColdRefusal(receipt: ObjectJson, record: ObjectJson, ori
   assert.deepEqual(record.cleanup, cleanup);
   assert(record.source.gitHead === origin.sha && record.source.repositoryDirty === false && record.source.compilerDirty === false);
   assert.deepEqual(record.effectiveConfiguration.requestedPolicy.args, unitArgs);
+  // The guard calls child.close() on refusal. The real hosted refusal records
+  // request_closed even with a proven-dead group; no other close code qualifies.
+  const closedByGuard = cleanup.failureCodes?.length === 1 && cleanup.failureCodes[0] === "request_closed";
   assert.deepEqual(cleanup, { resourcesAcquired: true, processExited: true, processGroupExited: true, streamsDrained: true,
-    logWriterClosed: true, ownedWindowsClosed: null, referencesFinalized: true, closed: true, survivors: [], failureCodes: [] });
+    logWriterClosed: true, ownedWindowsClosed: null, referencesFinalized: true, closed: true, survivors: [], failureCodes: closedByGuard ? ["request_closed"] : [] });
   // The guard's closing error can supersede Cargo's exit. Only an unfinished
   // compile is eligible, never a harness that started or a compiler error.
   assert(/^\s*Compiling \S/m.test(log) && !/^\s*(?:error(?:\[|:)|Running (?:unittests|tests)|running \d+ tests?\b|test result:|test .* \.\.\. FAILED)/m.test(log));
@@ -62,7 +77,7 @@ export function classifyColdRefusal(receipt: ObjectJson, record: ObjectJson, ori
   // Hosted macOS uses the capped local pool. A null/unknown/zero cap (or a
   // changed policy), unobserved floor, or a prior peak breach cannot qualify.
   const { targetAgentBudgetBytes: budget, minimumFreeBytes: floor } = refusal;
-  assert(positive(budget) && positive(floor));
+  assert(positive(budget) && budget <= maxHandoffBytes && positive(floor) && floor >= minimumHostedFree);
   const checkBytes = (used: unknown, available: unknown) => assert(natural(used) && used <= budget && natural(available) && available >= floor);
   checkBytes(m.maximumSampledAllocatedBytes, m.minimumSampledAvailableBytes);
   for (const r of [...checks, refusal]) {
@@ -84,17 +99,36 @@ export function classifyColdRefusal(receipt: ObjectJson, record: ObjectJson, ori
 export function compilerCache(root = resolve(pool, "debug")) {
   assert.equal(realpathSync(root), root);
   const device = lstatSync(root).dev, digest = createHash("sha256");
-  let compiledCrates = 0;
+  let compiledCrates = 0, entries = 0, bytes = 0;
+  const links = new Map<string, { count: number; expected: number }>(), started = performance.now();
+  const scanned: { relative: string; identity: string; directory: boolean; executable: number }[] = [];
+  const stamp = (s: ReturnType<typeof lstatSync>) => [s!.dev,s!.ino,s!.nlink,s!.mode,s!.size,s!.mtimeMs,s!.ctimeMs].join(":");
+  const rootIdentity = stamp(lstatSync(root));
   const visit = (dir: string) => {
     for (const name of readdirSync(join(root, dir)).sort()) {
       const relative = join(dir, name), path = join(root, relative), stat = lstatSync(path);
       assert(stat.dev === device && (stat.isDirectory() || stat.isFile()), "unsafe compiler cache entry");
-      digest.update(JSON.stringify([relative, stat.mode & 0o111, stat.isFile() ? hashArtifactFile(path) : "directory"]) + "\n");
+      bytes += stat.isFile() ? stat.size : 0;
+      assert(++entries <= 250_000 && bytes <= maxHandoffBytes && performance.now() - started < 120_000, "compiler cache observation limit");
+      if (stat.isFile() && stat.nlink > 1) {
+        const key = stat.dev + ":" + stat.ino, entry = links.get(key) ?? { count: 0, expected: stat.nlink };
+        assert(entry.expected === stat.nlink, "compiler cache hardlink changed"); entry.count++; links.set(key, entry);
+      }
+      scanned.push({ relative, identity: stamp(stat), directory: stat.isDirectory(), executable: stat.mode & 0o111 });
       if (stat.isDirectory()) visit(relative);
       else if (/^deps\/lib[A-Za-z0-9_]+-[a-f0-9]+\.rlib$/.test(relative) && stat.size > 0) compiledCrates++;
     }
   };
   visit(""); assert(positive(compiledCrates), "no compiled crate in the managed cache");
+  assert([...links.values()].every(x => x.count === x.expected), "compiler cache links outside the handoff");
+  // Establish link containment before reading any file contents. Reject replacement
+  // or late membership changes, not just a different set after archive transfer.
+  for (const e of scanned) {
+    const path = join(root,e.relative);
+    assert(performance.now() - started < 120_000 && stamp(lstatSync(path)) === e.identity, "compiler cache changed");
+    digest.update(JSON.stringify([e.relative, e.executable, e.directory ? "directory" : hashArtifactFile(path)]) + "\n");
+  }
+  assert(stamp(lstatSync(root)) === rootIdentity && scanned.every(e => performance.now() - started < 120_000 && stamp(lstatSync(join(root,e.relative))) === e.identity), "compiler cache changed");
   return { sha256: digest.digest("hex"), compiledCrates };
 }
 export function handoffKey(origin: Origin, markerBytes: Buffer) {
@@ -127,16 +161,15 @@ if (import.meta.main) {
     assert.match(result.task.id, new RegExp(`^build-${uuid}$`));
     const path = resolve(".test-output/managed-tasks", result.task.id, "task.json");
     assert(path === result.recordPath && path === realpathSync(path));
-    const failed = classifyColdRefusal(result, readManagedTask(path, result.task), origin, env.GITHUB_JOB!, env.COLD!, process.argv[3]!, readFileSync(join(env.RUNNER_TEMP!, "release-unit.log"), "utf8"));
+    const failed = classifyColdRefusal(result, readManagedTask(path, result.task), origin, env.GITHUB_JOB!, env.COLD!, process.argv[3]!, compileLog(env.RUNNER_TEMP!));
     writeFileSync(marker, JSON.stringify({ ...failed, cache: compilerCache() }) + "\n", { flag: "wx" });
-    output("cache-key", handoffKey(origin, readFileSync(marker)));
+    output("cache-key", handoffKey(origin, markerBytes()));
     console.log("::warning::Primary compiler measurement FAILED (75); no proof evidence. Requesting one exact-cache recovery.");
   } else if (op === "miss" || op === "hit" || op === "restored") {
     exactCache(env.EXPECTED_KEY!, env.PRIMARY_KEY!, env.MATCHED_KEY!, env.HIT!, op === "miss" ? "miss" : "hit");
     if (op === "restored") {
       assert.equal(env.GITHUB_JOB, "recover-proof-contracts");
-      assert.equal(realpathSync(marker), resolve(marker));
-      verifyRestored(origin, env.EXPECTED_KEY!, readFileSync(marker), compilerCache());
+      verifyRestored(origin, env.EXPECTED_KEY!, markerBytes(), compilerCache());
     }
   } else throw Error("unknown recovery operation");
 }

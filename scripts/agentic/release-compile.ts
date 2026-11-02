@@ -22,6 +22,8 @@ export function checkReleaseExecutable(input: VerifiedReleaseCompile, exe: strin
 
 /** A signing operation can change signature bytes, not the program that goes to Apple. */
 export function checkSignedPayload(input: VerifiedReleaseCompile, executable: string): string {
+  const file = lstatSync(executable);
+  if (!file.isFile() || file.nlink !== 1 || file.size < 32 || file.size > 576 * 1024 ** 2) throw Error("release_compile_unsafe_signed_input");
   const actual = unsignedMachOPayloadSha256(executable);
   if (actual !== input.receipt.payloadSha256) throw Error("release_compile_signed_payload_mismatch");
   return actual;

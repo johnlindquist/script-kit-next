@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { classifyColdRefusal, compilerCache, exactCache, handoffKey, verifyRestored } from "./release-proof-recovery";
@@ -10,14 +10,14 @@ const primary = "validate-proof-contracts", recovery = "recover-proof-contracts"
 const compiling = "   Compiling example v0.1.0\n";
 function fixture() {
   const common = { scope: "target-agent", measurement: "allocated-blocks", hardQuota: false, automaticEviction: false };
-  const obs = { ...common, complete: true, withinLimits: true, targetAgentAllocatedBytes: 10, targetAgentBudgetBytes: 50,
-    availableBytes: 60, minimumFreeBytes: 25, reserveBytes: 0, failureCodes: [], errors: [] };
+  const obs = { ...common, complete: true, withinLimits: true, targetAgentAllocatedBytes: 10, targetAgentBudgetBytes: 40 * 1024 ** 3,
+    availableBytes: 60 * 1024 ** 3, minimumFreeBytes: 25 * 1024 ** 3, reserveBytes: 0, failureCodes: [], errors: [] };
   const failureCode = "resource_observation_incomplete";
   const refusal = { ...obs, phase: "in-build", complete: false, withinLimits: false, failureCodes: [failureCode],
     errors: ["Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:confirmation-churn"] };
   const resources = { ...common, refusal, checks: ["preflight", "pre-cargo", "post-cargo"].map(phase => ({ ...obs, phase })), monitoring: {
     trigger: refusal, complete: false, workerClosed: true, workerThreadId: 1, initialObservationIncluded: true,
-    sampleCount: 288, callbackFailed: false, transientFailureCount: 0, maximumSampledAllocatedBytes: 20, minimumSampledAvailableBytes: 51 } };
+    sampleCount: 288, callbackFailed: false, transientFailureCount: 0, maximumSampledAllocatedBytes: 20, minimumSampledAvailableBytes: 51 * 1024 ** 3 } };
   const result = { status: "failed", exitCode: 75, disposition: "BLOCKED_RESOURCE_BUDGET", failureCode, resources, artifacts: [] };
   const cleanup = { closed: true, resourcesAcquired: true, processExited: true, processGroupExited: true, streamsDrained: true,
     logWriterClosed: true, ownedWindowsClosed: null, referencesFinalized: true, survivors: [], failureCodes: [] };
@@ -31,6 +31,9 @@ function fixture() {
 test("only a closed cold compiler refusal is deferred; the saved measurement still failed", () => {
   const f = fixture();
   expect(f.classify()).toMatchObject({ status: "failed", exitCode: 75, resources: { monitoring: { complete: false } }, origin });
+  // Actual hosted abort: the guard requested shutdown and proved it completed.
+  Object.assign(f.receipt.cleanup,{failureCodes:["request_closed"]}); expect(f.classify().status).toBe("failed");
+  expect(()=>classifyColdRefusal(f.receipt,f.record,{...origin,attempt:"2"},primary,"true","75",compiling)).toThrow();
   for (const args of [[recovery], [primary, "false"], [primary, ""], [primary, "true", "1"], [primary, "true", "75", ""],
     [primary, "true", "75", compiling + "error[E1234]: compiler error"], [primary, "true", "75", compiling + "running 6 tests"],
     [primary, "true", "75", compiling + "test result: FAILED"]]) expect(() => f.classify(...args)).toThrow();
@@ -46,7 +49,8 @@ const ineligible: Record<string, (f: F) => void> = {
   "worker unclosed": f => { f.resources.monitoring.workerClosed = false; },
   "worker unknown": f => Reflect.deleteProperty(f.resources.monitoring, "workerClosed"),
   "sample absent": f => { f.resources.monitoring.sampleCount = 0; },
-  "past allocation breach": f => { f.resources.monitoring.maximumSampledAllocatedBytes = 51; },
+  "past allocation breach": f => { f.resources.monitoring.maximumSampledAllocatedBytes = f.resources.refusal.targetAgentBudgetBytes + 1; },
+  "unexpectedly loosened policy": f => { for (const x of [...f.resources.checks, f.resources.refusal]) x.minimumFreeBytes = 1; },
   "past space breach": f => { f.resources.monitoring.minimumSampledAvailableBytes = 24; },
   "inconsistent latest bytes": f => { f.resources.refusal.availableBytes = 0; },
   "bad post check": f => { f.resources.checks[2].withinLimits = false; },
@@ -55,6 +59,7 @@ const ineligible: Record<string, (f: F) => void> = {
   "dirty source": f => { f.record.source.repositoryDirty = true; },
   "another task": f => { f.receipt.task = { ...f.record.identity, generation: crypto.randomUUID() }; },
   "open owner": f => { f.record.state = "protected"; },
+  "extra close failure": f => Object.assign(f.receipt.cleanup,{failureCodes:["request_closed","worker_unclosed"]}),
   "open process group": f => { f.receipt.cleanup.processGroupExited = false; },
   "open stream": f => { f.receipt.cleanup.streamsDrained = false; },
   "survivor": f => Object.assign(f.receipt.cleanup, { survivors: [{ kind: "resource-monitor" }] }),
@@ -80,6 +85,8 @@ test("cache lookup and restore must be exact, unambiguous and from this release/
   for (const change of [{ sha: "0".repeat(40) }, { ref: "refs/tags/v0.1.25" }, { run: "124" }, { attempt: "2" }]) expect(() => verifyRestored({ ...origin, ...change }, key, bytes, cache)).toThrow();
   expect(() => verifyRestored(origin, key, Buffer.from(bytes.toString() + "\n"), cache)).toThrow();
   writeFileSync(join(root, "other"), "stale"); expect(() => verifyRestored(origin, key, bytes, compilerCache(root))).toThrow();
+  const sub=join(root,"separate-scope"); mkdirSync(sub); mkdirSync(join(sub,"deps"));
+  linkSync(path,join(sub,"deps/libalias-0001.rlib")); expect(()=>compilerCache(sub)).toThrow("links outside");
   symlinkSync(path, join(root, "alias")); expect(() => compilerCache(root)).toThrow("unsafe compiler cache entry");
 }));
 
@@ -104,6 +111,7 @@ test("two isolated fixture runners transfer only the exact failed measurement an
   mkdirSync(join(a, debug, "deps"), { recursive: true }); writeFileSync(join(a, debug, "deps/libcrate-1abc.rlib"), "compiled fixture");
   const defer = invoke(a, ["defer", "75"], { COLD: "true" }); expect(defer.status, defer.stderr).toBe(0);
   const key = readFileSync(join(root, "out"), "utf8").match(/^cache-key=(.+)$/m)![1];
+  expect(invoke(a, ["defer", "75"], { COLD: "true", GITHUB_RUN_ATTEMPT: "2" }).status).not.toBe(0);
   expect(invoke(b, ["start"]).status).toBe(0);
   const exact = { EXPECTED_KEY: key, PRIMARY_KEY: key, MATCHED_KEY: key, HIT: "true" };
   expect(invoke(b, ["restored"], exact).status).not.toBe(0);
@@ -113,7 +121,8 @@ test("two isolated fixture runners transfer only the exact failed measurement an
   const restored = invoke(b, ["restored"], exact); expect(restored.status, restored.stderr).toBe(0);
 }));
 
-const yaml = (file: string) => Bun.YAML.parse(readFileSync(join(import.meta.dir, `../.github/workflows/${file}.yml`), "utf8"));
+type ProofWorkflow = { jobs: Record<string, { steps: Array<{ name: string; id?: string; run: string; with: Record<string,string> }> }> };
+const yaml = (file: string) => Bun.YAML.parse(readFileSync(join(import.meta.dir, `../.github/workflows/${file}.yml`), "utf8")) as ProofWorkflow;
 const steps = yaml("release-compiler-proof").jobs[primary].steps;
 test("both runners validate the fetched tag and immutable HEAD before using repo code", () => scratch(root => {
   expect(steps[0].with.ref).toBe("${{ github.ref }}");
@@ -133,7 +142,7 @@ test("real compiler-step shell preserves exits, requires both measurements and n
   writeFileSync(join(root, "bun"), '#!/bin/sh\ntest "$*" = "scripts/release-proof-recovery.ts defer 75" || exit 97\necho checked >> "$GITHUB_OUTPUT"\nexit "$CLASSIFIER"', { mode: 0o700 });
   const drive = (job: string, unit: string, doc: string, classifier: string, count = "6") => {
     const output = join(root, "out"); writeFileSync(output, "");
-    const result = spawnSync("bash", ["-c", steps.find((s: any) => s.id === "compiler").run], { cwd: root,
+    const result = spawnSync("bash", ["-c", steps.find(s => s.id === "compiler")!.run], { cwd: root,
       env: { PATH: `${root}:${process.env.PATH}`, UNIT: unit, DOC: doc, COUNT: count, CLASSIFIER: classifier, GITHUB_JOB: job, RUNNER_TEMP: root, GITHUB_OUTPUT: output } });
     return [result.status, readFileSync(output, "utf8").trim()];
   };

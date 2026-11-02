@@ -220,6 +220,8 @@ jobs:
   validate-release-gates:
     name: Validate release gates
     runs-on: ubuntu-latest
+    outputs:
+      proof_id: ${{ needs.validate-proof-contracts.outputs.primary-evidence || needs.validate-proof-contracts.outputs.recovered-evidence }}
     if: ${{ always() }}
     needs:
       - validate-version
@@ -324,6 +326,7 @@ jobs:
             "$APP/Contents/MacOS/script-kit-gpui" "$ZIP" artifacts/unsigned-transfer/release-compile.json)"
           [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          jq -r '"Compile receipt: `" + $digest + "`\n\nUnsigned executable: `" + .manifest.binarySha256 + "`\n\nProgram payload: `" + .payloadSha256 + "`"' --arg digest "$DIGEST" artifacts/unsigned-transfer/release-compile.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload unsigned app bundle
         id: upload-unsigned
@@ -408,6 +411,13 @@ jobs:
           bun-version-file: .bun-version
 
       # Verify the pinned toolchain, without restoring any compiler target, task registry or lease.
+      - name: Require exact producer outputs
+        env:
+          PROOF_ID: ${{ needs.validate-release-gates.outputs.proof_id }}
+          UNSIGNED_ID: ${{ needs.build-macos-app.outputs.unsigned_id }}
+        run: |
+          [[ "$PROOF_ID" =~ ^[1-9][0-9]*$ && "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
+
       - name: Download executed Rust gate evidence
         uses: actions/download-artifact@v4
         with:
@@ -417,7 +427,8 @@ jobs:
       - name: Download DevTools and static-catalog gate evidence
         uses: actions/download-artifact@v4
         with:
-          name: release-proof-evidence
+          artifact-ids: ${{ needs.validate-release-gates.outputs.proof_id }}
+          merge-multiple: true
           path: ${{ runner.temp }}/release-evidence
 
       - name: Download complete SDK behavior gate evidence
@@ -425,12 +436,6 @@ jobs:
         with:
           name: release-sdk-evidence
           path: ${{ runner.temp }}/release-evidence
-
-      - name: Require exact producer outputs
-        env:
-          UNSIGNED_ID: ${{ needs.build-macos-app.outputs.unsigned_id }}
-        run: |
-          [[ "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
 
       - name: Download the producer's exact unsigned artifact
         uses: actions/download-artifact@v4

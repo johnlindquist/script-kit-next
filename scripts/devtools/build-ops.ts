@@ -449,7 +449,7 @@ export async function runBuildOps(argv: string[]): Promise<void> {
           const additions = [];
           if (subject === "publish-signed-bundle") {
             if (options.input && (options["release-input"] || options["expected-input-sha256"])) throw new Error("ambiguous_signed_bundle_input");
-            const inputs = options.input ? ["input"] : ["release-input", "expected-input-sha256"];
+            const inputs = options["release-input"] || options["expected-input-sha256"] ? ["release-input", "expected-input-sha256"] : ["input"];
             for (const name of [...inputs, "bundle", "attestation"]) {
               if (!options[name]) throw new Error(`signed_bundle_requires_${name}`);
               additions.push(`--${name}`, String(options[name]));

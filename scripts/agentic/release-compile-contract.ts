@@ -7,7 +7,6 @@ import { canonicalJson } from "./artifact-lifecycle";
 import type { ArtifactManifestV3, ArtifactReference } from "./build-artifact";
 import type { TaskIdentity } from "./artifact-lifecycle";
 
-const REPOSITORY = "johnlindquist/script-kit-next";
 const MAX_RECEIPT = 256 * 1024;
 const hash = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const sha = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
@@ -15,7 +14,7 @@ const positive = (v: unknown): v is string => typeof v === "string" && /^[1-9]\d
 const semver = (v: unknown): v is string => typeof v === "string" && /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(v);
 const check: (ok: unknown, reason: string) => asserts ok = (ok, reason) => { if (!ok) throw Error(`release_compile_${reason}`); };
 
-export interface ReleaseRun { repository: string; tag: string; commit: string; runId: string; attempt: string }
+export interface ReleaseRun { repository: string; repositoryId: string; tag: string; commit: string; runId: string; attempt: string }
 export interface ReleaseCompileReceipt {
   schemaVersion: 1; producer: ReleaseRun; reference: ArtifactReference; manifest: ArtifactManifestV3;
   finalized: { identity: TaskIdentity; closed: true; status: "succeeded"; monitoredSamples: number };
@@ -29,13 +28,13 @@ function freeze<T>(v: T): T {
   return v;
 }
 function validRun(r: ReleaseRun | undefined): boolean {
-  return !!r && r.repository === REPOSITORY && semver(r.tag) && typeof r.commit === "string" && /^[0-9a-f]{40}$/.test(r.commit) && positive(r.runId) && positive(r.attempt);
+  return !!r && typeof r.repository === "string" && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r.repository) && positive(r.repositoryId) && semver(r.tag) && typeof r.commit === "string" && /^[0-9a-f]{40}$/.test(r.commit) && positive(r.runId) && positive(r.attempt);
 }
 
 export function githubReleaseRun(job: "build-macos-app" | "sign-notarize-macos", env: NodeJS.ProcessEnv = process.env): ReleaseRun {
-  const r = { repository: env.GITHUB_REPOSITORY!, tag: env.GITHUB_REF_NAME!, commit: env.GITHUB_SHA!, runId: env.GITHUB_RUN_ID!, attempt: env.GITHUB_RUN_ATTEMPT! };
+  const r = { repository: env.GITHUB_REPOSITORY!, repositoryId: env.GITHUB_REPOSITORY_ID!, tag: env.GITHUB_REF_NAME!, commit: env.GITHUB_SHA!, runId: env.GITHUB_RUN_ID!, attempt: env.GITHUB_RUN_ATTEMPT! };
   check(validRun(r) && env.GITHUB_ACTIONS === "true" && env.GITHUB_EVENT_NAME === "push" && env.GITHUB_JOB === job &&
-    env.GITHUB_REF === `refs/tags/${r.tag}` && env.GITHUB_WORKFLOW_REF === `${REPOSITORY}/.github/workflows/release.yml@${env.GITHUB_REF}`, "wrong_workflow");
+    env.GITHUB_REF === `refs/tags/${r.tag}` && env.GITHUB_WORKFLOW_REF === `${r.repository}/.github/workflows/release.yml@${env.GITHUB_REF}`, "wrong_workflow");
   return r;
 }
 
@@ -61,7 +60,7 @@ export function readReleaseReceiptBytes(path: string): string {
 export function verifyReleaseCompile(bytes: string, expectedSha256: string, consumer: ReleaseRun): VerifiedReleaseCompile {
   check(Buffer.byteLength(bytes) <= MAX_RECEIPT && sha(expectedSha256) && hash(bytes) === expectedSha256, "receipt_digest");
   const x = JSON.parse(bytes) as ReleaseCompileReceipt;
-  check(x?.schemaVersion === 1 && validRun(consumer) && validRun(x.producer) && x.producer.repository === consumer.repository &&
+  check(x?.schemaVersion === 1 && validRun(consumer) && validRun(x.producer) && x.producer.repository === consumer.repository && x.producer.repositoryId === consumer.repositoryId &&
     x.producer.commit === consumer.commit && x.producer.tag === consumer.tag && x.producer.runId === consumer.runId &&
     Number(x.producer.attempt) <= Number(consumer.attempt), "wrong_run");
   const m = x.manifest, ref = x.reference, t = m?.publication?.buildTask, f = x.finalized;
