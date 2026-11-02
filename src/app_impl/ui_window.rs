@@ -1639,7 +1639,17 @@ impl ScriptListApp {
         &self,
         menu_def: crate::designs::MainMenuThemeDef,
     ) -> gpui::AnyElement {
-        let line=self.prompt_header_context().render(&self.theme, menu_def);
+        self.render_main_view_slot_line_with_pin(menu_def, self.is_pinned)
+    }
+
+    pub(crate) fn render_main_view_slot_line_with_pin(
+        &self,
+        menu_def: crate::designs::MainMenuThemeDef,
+        show_pin: bool,
+    ) -> gpui::AnyElement {
+        let mut header = self.prompt_header_context();
+        header.pinned = show_pin;
+        let line = header.render(&self.theme, menu_def);
         if let Some(s)=self.one_window_host.cursor_voice.active.as_ref().filter(|s|!s.stopped){
             let owner=s.app.clone();let generation=s.generation;
             return gpui::div().id("dictation-toggle-kit").debug_selector(|| "dictation-toggle-kit".to_owned()).role(gpui::Role::Button).aria_label("Switch dictation destination").child(line).on_click(move |_,_,cx|{let _=owner.update(cx,|app,cx|{if app.one_window_host.cursor_voice.active.as_ref().is_some_and(|s|s.generation==generation){app.toggle_cursor_kit(cx);}});}).into_any_element();

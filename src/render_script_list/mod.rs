@@ -2173,7 +2173,9 @@ impl ScriptListApp {
             self.render_search_input_with_ghost(cx).into_any_element()
         };
 
-        let input_body = if let Some(p) = self.one_window.subject_page().filter(|_| self.has_launcher_tabs()) {
+        let input_subject = self.one_window.subject_page().filter(|_| self.has_launcher_tabs());
+        let input_owns_pin = input_subject.is_some();
+        let input_body = if let Some(p) = input_subject {
             div().flex().flex_1().min_w(px(0.)).items_center().gap(px(menu_def.slot_line.gap_px))
                 .child(div().id(gpui::SharedString::from(format!("stage-subject:{}",p.id))).when(self.filter_text.is_empty(),|d| {let id=p.id.clone();d.cursor_pointer().role(gpui::Role::Button).aria_label("Stage this subject").on_click(cx.listener(move|app,_,window,cx|{if app.stage_tab_tile(&id,cx) {app.focus_main_filter(window,cx);}}))}).size(px(menu_def.slot_line.chip.height_px)).rounded(px(menu_def.slot_line.chip.radius_px)).border_1().border_color(rgba((self.theme.colors.text.primary<<8)|menu_def.slot_line.chip.offered_edge_alpha)).flex().items_center().justify_center().child(crate::one_window::slot_line::render_slot_icon(&p.source.icon,menu_def.slot_line.icon_size,self.theme.colors.text.primary)))
                 .child(div().min_w(px(0.)).flex_1().child(input_body)).when(self.is_pinned,|d|d.child(crate::one_window::slot_line::render_pinned(&self.theme,menu_def))).into_any_element()
@@ -2201,7 +2203,12 @@ impl ScriptListApp {
         );
 
         let header = if self.one_window.tabs_enabled() {
-            let band=if self.has_launcher_tabs() && !self.cursor_dictation_pending(){self.render_subject_bar(cx)}else{self.render_main_view_slot_line(menu_def)};
+            // The recording line can replace the tabs, but the pin is already beside the input.
+            let band = if self.has_launcher_tabs() && !self.cursor_dictation_pending() {
+                self.render_subject_bar(cx)
+            } else {
+                self.render_main_view_slot_line_with_pin(menu_def, self.is_pinned && !input_owns_pin)
+            };
             crate::components::main_view_chrome::MainViewHeaderChrome::tabbed(menu_def,band,input)
         } else {crate::components::main_view_chrome::MainViewHeaderChrome::canonical(menu_def,self.render_main_view_slot_line(menu_def),input)};
         let divider = crate::components::main_view_chrome::MainViewDividerChrome {

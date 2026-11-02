@@ -4,6 +4,8 @@
 
 [Release notes and installation checks](docs/releases/v0.1.28.md). Kit checks the selected browser tab or window before acting, preserves personal files on upgrade, and distinguishes unconfirmed microphone or Accessibility access from a working input device or cursor.
 
+New chats respect changes to a profile’s tool permissions and leave an earlier reply running. When you dictate into a pinned launcher, **Stays open** appears once beside the input.
+
 ## October 15–31, 2026 · One window, clearer targets
 
 **[Read the illustrated changelog](https://merry-flint-85wx.here.now/)** · [Offline edition](docs/changelog/2026-10/index.html) · [Try the sample desktops](https://proud-unity-7aj4.here.now/)
