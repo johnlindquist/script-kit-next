@@ -304,6 +304,7 @@ jobs:
 
       - name: Compile the release application once (unprivileged)
         env:
+          SCRIPT_KIT_AGENT_OWNED_COMPILER_SAMPLE: "1"
           CARGO_BUILD_JOBS: "1"
           SCRIPT_KIT_AGENT_TIMEOUT_MS: "5400000"
         run: |

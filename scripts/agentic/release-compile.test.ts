@@ -67,11 +67,15 @@ test("raw unsigned bytes, ZIP and post-sign program each have to match their own
 });
 
 test("the unprivileged build seals one binary; the signer verifies that producer before its keychain and Apple", () => {
-  type Job={ steps:Array<{run?:string;with?:Record<string,string>}>;env:Record<string,string> };
-  const {jobs}=Bun.YAML.parse(readFileSync(join(import.meta.dir,"../../.github/workflows/release.yml"),"utf8")) as {jobs:Record<string,Job>};
+  type Job={ steps:Array<{run?:string;with?:Record<string,string>;env?:Record<string,string>}>;env:Record<string,string> };
+  const {env,jobs}=Bun.YAML.parse(readFileSync(join(import.meta.dir,"../../.github/workflows/release.yml"),"utf8")) as {env?:Record<string,string>;jobs:Record<string,Job>};
   const build=jobs['build-macos-app']!,sign=jobs['sign-notarize-macos']!;const cmds=(job:Job)=>job.steps.map(s=>s.run??"");
   const source=cmds(build),sink=cmds(sign);
   expect(source.filter((s:string)=>s.includes("build-ops act app-build"))).toHaveLength(1);
+  const flag="SCRIPT_KIT_AGENT_OWNED_COMPILER_SAMPLE", producer=build.steps.find(step=>step.run?.includes("build-ops act app-build"));
+  expect(env?.[flag]).toBeUndefined();expect(Object.values(jobs).every(job=>job.env?.[flag]===undefined)).toBe(true);
+  expect(Object.values(jobs).flatMap(job=>job.steps??[]).filter(step=>step.env?.[flag]!==undefined)).toEqual([producer]);
+  expect(producer?.env?.[flag]).toBe("1");
   expect(source.find((s:string)=>s.includes("CARGO_BUNDLE_SKIP_BUILD"))).toContain('install -m 0755 "$BIN" target/release/script-kit-gpui');
   expect(JSON.stringify(build)).not.toContain("secrets.");expect(sink.some((s:string)=>s.includes("build-ops act app-build") || s.includes("cargo bundle"))).toBe(false);
   const at=(part:string)=>{const i=sink.findIndex((s:string)=>s.includes(part));expect(i).toBeGreaterThanOrEqual(0);return i;};

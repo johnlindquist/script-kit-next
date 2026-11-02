@@ -53,7 +53,7 @@ type_complexity = "allow"
 
 [package]
 name = "script-kit-gpui"
-version = "0.1.26"
+version = "0.1.27"
 edition = "2021"
 default-run = "script-kit-gpui"
 autobins = false
@@ -363,7 +363,7 @@ strip = "symbols"
 name = "Script Kit"
 identifier = "com.scriptkit.app"
 icon = ["assets/icon.png", "assets/icon@2x.png", "assets/icon.icns"]
-version = "0.1.26"
+version = "0.1.27"
 copyright = "Copyright (c) 2024 Script Kit. All rights reserved."
 category = "public.app-category.developer-tools"
 short_description = "Automation made simple"
