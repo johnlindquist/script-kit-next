@@ -89,6 +89,7 @@ require_clean_source_identity() {
   local -a required_source_owners=(
     .github/workflows/release.yml
     .github/workflows/release-compiler-proof.yml
+    scripts/diagnostics/sdk-case-report.ts
     scripts/release-proof-recovery.ts
     scripts/release-proof-recovery.test.ts
     .bun-version
