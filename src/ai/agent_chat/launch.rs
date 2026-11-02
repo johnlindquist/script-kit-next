@@ -11,7 +11,6 @@ use crate::ai::agent_chat::profiles::{
 };
 use crate::ai::agent_chat::runtime::AgentChatConnection;
 use crate::ai::agent_chat::ui::config::AgentChatModelEntry;
-use crate::ai::agent_chat::warm_key::launch_warm_key;
 use crate::ai::agent_chat::warm_session::{AgentChatWarmSessionManager, AgentChatWarmSessionSpec};
 use crate::config::{AgentChatBackend, AiPreferences};
 
@@ -23,7 +22,6 @@ static WARM_SESSION_MANAGER: OnceLock<AgentChatWarmSessionManager> = OnceLock::n
 pub(crate) struct AgentChatLaunch {
     pub profile: ResolvedAgentChatProfile,
     pub goose: GooseProfileLaunch,
-    pub warm_key: String,
     pub cwd: PathBuf,
     pub selected_model_id: Option<String>,
     pub available_models: Vec<AgentChatModelEntry>,
@@ -62,7 +60,6 @@ impl AgentChatLaunch {
             cwd.clone(),
             &crate::setup::get_kit_path(),
         );
-        let warm_key = launch_warm_key(&goose.spec);
         tracing::info!(
             target: "script_kit::agent_chat",
             event = "agent_chat_profile_launch_resolved",
@@ -70,7 +67,6 @@ impl AgentChatLaunch {
             profile_name = %profile.name,
             profile_source = ?profile.source,
             cwd = %cwd.display(),
-            warm_key = %warm_key,
             provider = ?goose.provider,
             model = ?goose.model,
             script_kit_tools = ?goose.tools.script_kit,
@@ -92,7 +88,6 @@ impl AgentChatLaunch {
         Ok(Self {
             profile,
             goose,
-            warm_key,
             cwd,
             selected_model_id,
             available_models,
@@ -100,12 +95,19 @@ impl AgentChatLaunch {
     }
 
     pub(crate) fn warm_spec(&self) -> AgentChatWarmSessionSpec {
-        let goose = self.goose.clone();
+        let goose = self.goose.bind();
         AgentChatWarmSessionSpec {
-            key: self.warm_key.clone(),
+            profile: self.profile.id.clone(),
+            key: goose.key(),
             cwd: self.cwd.clone(),
             factory: Arc::new(move || {
-                let runtime = GooseRuntime::spawn(goose.spec_for_spawn())?;
+                let spec = goose.spec_for_spawn()?;
+                let policy_id = spec.agent_policy_id.clone();
+                let runtime = GooseRuntime::spawn(spec).inspect_err(|_| {
+                    if let Some(id) = &policy_id {
+                        crate::mcp_agent_tools::unregister_policy(id);
+                    }
+                })?;
                 Ok(Arc::new(runtime) as Arc<dyn AgentChatConnection>)
             }),
         }
@@ -215,6 +217,16 @@ mod tests {
         }
     }
 
+    fn test_warm_key(launch: &AgentChatLaunch) -> String {
+        crate::ai::agent_chat::goose::bound_launch::BoundLaunch::from_snapshot(
+            &launch.goose,
+            Default::default(),
+            None,
+            &[],
+        )
+        .key()
+    }
+
     fn ai() -> AiPreferences {
         AiPreferences {
             goose_binary: Some("/tmp/test-goose".to_string()),
@@ -239,7 +251,7 @@ mod tests {
         assert_eq!(launch.cwd, PathBuf::from("/tmp/kit/agent-chat/brain"));
         assert_eq!(launch.goose.spec.command, PathBuf::from("/tmp/test-goose"));
         assert_eq!(launch.goose.spec.args, vec!["acp".to_string()]);
-        assert!(launch.warm_key.starts_with("goose-warm-v1:"));
+        assert!(test_warm_key(&launch).starts_with("goose-warm-v2:"));
     }
 
     #[test]
@@ -255,7 +267,7 @@ mod tests {
         assert_eq!(moved.profile.id, "script-kit");
         assert_eq!(moved.cwd, cwd);
         assert_eq!(moved.goose.spec.cwd, cwd);
-        assert_ne!(moved.warm_key, default.warm_key);
+        assert_ne!(test_warm_key(&moved), test_warm_key(&default));
     }
 
     #[test]

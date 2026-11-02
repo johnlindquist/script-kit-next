@@ -4,6 +4,7 @@
 
 pub(crate) mod auth_recovery;
 pub mod binary;
+pub(crate) mod bound_launch;
 pub(crate) mod events;
 pub(crate) mod launch_spec;
 #[cfg(test)]

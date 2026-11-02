@@ -261,7 +261,7 @@ impl McpServer {
             .set_nonblocking(true)
             .context("Failed to set non-blocking mode")?;
         // Agent sessions reach Script Kit tools through this server.
-        crate::mcp_agent_tools::set_endpoint(self.port, &self.token);
+        let agent_endpoint = crate::mcp_agent_tools::set_endpoint(self.port, &self.token);
 
         let running = self.running.clone();
         running.store(true, Ordering::SeqCst);
@@ -272,6 +272,7 @@ impl McpServer {
         let runtime_context = self.runtime_context.clone();
 
         let handle = thread::spawn(move || {
+            let _agent_endpoint = agent_endpoint;
             info!("MCP server started on port {}", port);
 
             while running.load(Ordering::SeqCst) {

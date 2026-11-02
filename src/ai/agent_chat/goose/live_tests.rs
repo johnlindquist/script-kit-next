@@ -239,7 +239,7 @@ fn live_goose_agent_features() {
     .unwrap();
 
     let launch = GooseProfileLaunch::from_profile(&profile, goose_binary(), cwd.clone(), &kit_path);
-    let mut spec = launch.spec_for_spawn();
+    let mut spec = launch.bind().spec_for_spawn().expect("bound profile");
     spec.env.insert("OLLAMA_HOST".into(), ollama_host);
     spec.thinking = None;
     let policy_id = spec

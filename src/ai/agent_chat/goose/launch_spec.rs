@@ -200,65 +200,20 @@ impl GooseProfileLaunch {
         }
     }
 
-    /// Finalize the spec for one goose process: register the Script Kit tool
-    /// policy for this session and point the recipe at the tools endpoint.
-    pub(crate) fn spec_for_spawn(&self) -> GooseLaunchSpec {
-        let mut spec = self.spec.clone();
-        spec.approval_mode = crate::ai::agent_chat::approval::AgentApprovalMode::current();
-        spec.env.insert(
-            "GOOSE_MODE".to_string(),
-            spec.approval_mode.goose_mode().to_string(),
-        );
-        let root = goose_root_from_env(&spec.env);
-        if let Err(error) = ensure_goose_root(&root) {
-            tracing::warn!(target: "script_kit::agent_chat", event = "goose_root_prepare_failed", %error);
-        }
-        if self.tools.platform.contains(&"summon") {
-            if let Err(error) = ensure_goose_permission_defaults(&root) {
-                tracing::warn!(target: "script_kit::agent_chat", event = "goose_permissions_prepare_failed", %error);
-            }
-        }
-        let endpoint = if self.tools.script_kit.is_empty() {
-            None
-        } else {
-            crate::mcp_agent_tools::endpoint().map(|endpoint| {
-                let policy_id = crate::mcp_agent_tools::register_policy(
-                    crate::mcp_agent_tools::AgentToolPolicy::from_profile(
-                        &self.profile,
-                        &self.tools.script_kit,
-                        &spec.cwd,
-                    ),
-                );
-                spec.agent_policy_id = Some(policy_id.clone());
-                super::recipe::ScriptKitToolsEndpoint {
-                    uri: endpoint.uri,
-                    bearer_token: endpoint.token,
-                    policy_id,
-                }
-            })
-        };
-        if !self.tools.script_kit.is_empty() && endpoint.is_none() {
-            tracing::warn!(
-                target: "script_kit::agent_chat",
-                event = "goose_script_kit_tools_unavailable",
-                profile_id = %self.profile.id,
-                "Script Kit MCP server is not running; session starts without Script Kit tools"
-            );
-        }
-        let user_mcp = if self.tools.user_mcp {
+    /// Bind all authority before looking for a warm session; the factory uses exactly
+    /// this snapshot. Resolving a profile for display never reads external server config.
+    pub(crate) fn bind(&self) -> super::bound_launch::BoundLaunch {
+        let mcp = if self.tools.user_mcp {
             super::recipe::user_mcp_extensions(&crate::config::load_config().get_mcp())
         } else {
             Vec::new()
         };
-        spec.recipe = build_recipe(RecipeInput {
-            profile: &self.profile,
-            provider: self.provider.as_deref(),
-            model: self.model.as_deref(),
-            tools: &self.tools,
-            endpoint: endpoint.as_ref(),
-            user_mcp: &user_mcp,
-        });
-        spec
+        super::bound_launch::BoundLaunch::from_snapshot(
+            self,
+            crate::ai::agent_chat::approval::AgentApprovalMode::current(),
+            crate::mcp_agent_tools::endpoint_generation(),
+            &mcp,
+        )
     }
 }
 

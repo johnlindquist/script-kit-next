@@ -131,6 +131,8 @@ The General, Brain, and Script Kit profiles give the model these tools. Text and
 | Your MCP servers | Every server under `mcp.servers` in `config.ts` | All three |
 | Subagents, skills, todo list | Hand work to a helper, load a skill from `~/.agents/skills` or `~/.claude/skills`, keep a task list | All three |
 
+Tool permissions belong to the chat that starts with them. After narrowing a profile, start a new chat to use the narrower permissions. An earlier chat keeps its original tools until you close it; starting the new chat does not cancel an answer already in progress.
+
 The model also reads `AGENTS.md` (and `.goosehints`) from the chat's working folder.
 
 ### Approvals

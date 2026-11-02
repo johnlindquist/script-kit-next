@@ -237,22 +237,26 @@ pub(crate) struct RecipeInput<'a> {
     pub user_mcp: &'a [Value],
 }
 
+/// Per-process policy id and bearer are attached only when actually spawning the engine.
+pub(super) fn script_kit_extension(endpoint: &ScriptKitToolsEndpoint) -> Value {
+    json!({
+        "type": "streamable_http",
+        "name": SCRIPT_KIT_TOOLS_EXTENSION,
+        "description": "Script Kit tools",
+        "uri": endpoint.uri,
+        "headers": {
+            "Authorization": format!("Bearer {}", endpoint.bearer_token),
+            AGENT_POLICY_HEADER: endpoint.policy_id,
+        },
+        "timeout": 300,
+    })
+}
+
 pub(crate) fn build_recipe(input: RecipeInput<'_>) -> Value {
     let mut extensions = Vec::new();
     if !input.tools.script_kit.is_empty() {
         if let Some(endpoint) = input.endpoint {
-            extensions.push(json!({
-                "type": "streamable_http",
-                "name": SCRIPT_KIT_TOOLS_EXTENSION,
-                "description": "Script Kit tools",
-                "uri": endpoint.uri,
-                "headers": {
-                    "Authorization": format!("Bearer {}", endpoint.bearer_token),
-                    AGENT_POLICY_HEADER: endpoint.policy_id,
-                },
-                // The endpoint lists only what the session's policy allows.
-                "timeout": 300,
-            }));
+            extensions.push(script_kit_extension(endpoint));
         }
     }
     for name in &input.tools.platform {

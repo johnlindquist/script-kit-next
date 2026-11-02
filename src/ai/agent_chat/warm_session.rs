@@ -27,6 +27,7 @@ where
 
 #[derive(Clone)]
 pub(crate) struct AgentChatWarmSessionSpec {
+    pub profile: String,
     pub key: String,
     pub cwd: PathBuf,
     pub factory: Arc<dyn AgentChatWarmRuntimeFactory>,
@@ -88,6 +89,15 @@ struct WarmSlot {
 }
 
 impl WarmSlot {
+    fn retired_snapshot(&self) -> AgentChatWarmSessionSnapshot {
+        AgentChatWarmSessionSnapshot {
+            key: self.spec.key.clone(),
+            generation: self.generation,
+            ui_thread_id: None,
+            state: AgentChatWarmSessionState::Empty,
+            failure: None,
+        }
+    }
     fn snapshot(&self) -> AgentChatWarmSessionSnapshot {
         AgentChatWarmSessionSnapshot {
             key: self.spec.key.clone(),
@@ -147,6 +157,7 @@ impl AgentChatWarmSessionManager {
         &self,
         spec: AgentChatWarmSessionSpec,
     ) -> Result<AgentChatWarmSessionSnapshot> {
+        self.retire_superseded_idle(&spec);
         self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
         let (generation, ui_thread_id) = {
             let mut inner = self.inner.lock();
@@ -177,9 +188,8 @@ impl AgentChatWarmSessionManager {
         let slot = self.prepare_slot_with_generation(spec, generation, ui_thread_id);
         let mut inner = self.inner.lock();
         let Some(current) = inner.slots.get(&slot.spec.key) else {
-            let snapshot = slot.snapshot();
-            inner.slots.insert(snapshot.key.clone(), slot);
-            return Ok(snapshot);
+            // Superseded during preparation. Never revive its authority.
+            return Ok(slot.retired_snapshot());
         };
         if current.generation != generation || current.state != AgentChatWarmSessionState::Preparing
         {
@@ -200,6 +210,7 @@ impl AgentChatWarmSessionManager {
         &self,
         spec: AgentChatWarmSessionSpec,
     ) -> Result<(AgentChatWarmSessionLease, AgentChatWarmAcquireOrigin)> {
+        self.retire_superseded_idle(&spec);
         self.cleanup_stale_acquired(DEFAULT_STALE_ACQUIRED_TTL);
         if let Some(lease) = self.acquire_warm_ready(&spec.key) {
             return Ok((lease, AgentChatWarmAcquireOrigin::Ready));
@@ -302,6 +313,7 @@ impl AgentChatWarmSessionManager {
         &self,
         spec: AgentChatWarmSessionSpec,
     ) -> Result<AgentChatWarmSessionSnapshot> {
+        self.retire_superseded_idle(&spec);
         let (snapshot, should_spawn) = {
             let mut inner = self.inner.lock();
             if let Some(slot) = inner.slots.get(&spec.key) {
@@ -634,51 +646,46 @@ impl AgentChatWarmSessionManager {
         self.inner.lock().slots.get(key).map(WarmSlot::snapshot)
     }
 
+    /// Drop only unused preparations for this profile and cwd. A conversation
+    /// that already owns its connection is not ours to cancel on a profile edit.
+    fn retire_superseded_idle(&self, next: &AgentChatWarmSessionSpec) {
+        let retired: Vec<_> = {
+            let mut inner = self.inner.lock();
+            inner
+                .slots
+                .extract_if(|k, s| {
+                    k != &next.key
+                        && s.spec.profile == next.profile
+                        && s.spec.cwd == next.cwd
+                        && s.state != AgentChatWarmSessionState::Acquired
+                })
+                .collect()
+        };
+        drop(retired); // engine shutdown outside the registry lock
+    }
     pub(crate) fn cleanup_stale_acquired(
         &self,
         ttl: Duration,
     ) -> Vec<AgentChatWarmSessionSnapshot> {
-        let now = Instant::now();
-        let stale = {
-            let inner = self.inner.lock();
+        let retired: Vec<_> = {
+            let mut inner = self.inner.lock();
             inner
                 .slots
-                .iter()
-                .filter_map(|(key, slot)| {
-                    if slot.state != AgentChatWarmSessionState::Acquired {
-                        return None;
-                    }
-                    let acquired_at = slot.acquired_at?;
-                    if now.duration_since(acquired_at) < ttl {
-                        return None;
-                    }
-                    let connection = slot.connection.as_ref()?.clone();
-                    let ui_thread_id = slot.ui_thread_id.clone()?;
-                    Some((
-                        key.clone(),
-                        slot.spec.clone(),
-                        AgentChatWarmSessionLease {
-                            key: key.clone(),
-                            generation: slot.generation,
-                            ui_thread_id,
-                            cwd: slot.spec.cwd.clone(),
-                            connection,
-                        },
-                    ))
+                .extract_if(|_, s| {
+                    s.state == AgentChatWarmSessionState::Acquired
+                        && s.acquired_at.is_some_and(|t| t.elapsed() >= ttl)
+                        && s.connection
+                            .as_ref()
+                            .is_some_and(|c| Arc::strong_count(c) == 1)
                 })
-                .collect::<Vec<_>>()
+                .collect()
         };
-
-        let mut snapshots = Vec::new();
-        for (key, spec, lease) in stale {
-            let _ = lease.connection.cancel_turn(lease.ui_thread_id.clone());
-            drop(lease);
-            let slot = self.prepare_new_slot(spec);
-            let snapshot = slot.snapshot();
-            self.inner.lock().slots.insert(key, slot);
-            snapshots.push(snapshot);
-        }
-        snapshots
+        // Age alone is not abandonment. A holder outside this registry can still be
+        // receiving a long answer. Do not cancel it or respawn an obsolete profile.
+        retired
+            .into_iter()
+            .map(|(_, s)| s.retired_snapshot())
+            .collect()
     }
 
     fn prepare_new_slot(&self, spec: AgentChatWarmSessionSpec) -> WarmSlot {
@@ -715,8 +722,6 @@ impl AgentChatWarmSessionManager {
     fn insert_prepared_slot_if_current(&self, slot: WarmSlot, generation: u64) {
         let mut inner = self.inner.lock();
         let Some(current) = inner.slots.get(&slot.spec.key) else {
-            let snapshot = slot.snapshot();
-            inner.slots.insert(snapshot.key.clone(), slot);
             return;
         };
         if current.generation != generation || current.state != AgentChatWarmSessionState::Preparing
@@ -1163,6 +1168,7 @@ mod tests {
 
     fn spec(factory: Arc<RecordingFactory>) -> AgentChatWarmSessionSpec {
         AgentChatWarmSessionSpec {
+            profile: "profile-a".into(),
             key: "key-a".to_string(),
             cwd: PathBuf::from("/tmp/a"),
             factory,
@@ -1173,10 +1179,59 @@ mod tests {
         factory: Arc<dyn AgentChatWarmRuntimeFactory>,
     ) -> AgentChatWarmSessionSpec {
         AgentChatWarmSessionSpec {
+            profile: "profile-a".into(),
             key: "key-a".to_string(),
             cwd: PathBuf::from("/tmp/a"),
             factory,
         }
+    }
+
+    #[test]
+    fn narrowing_one_profile_cannot_acquire_its_prepared_writers_connection() {
+        use crate::ai::agent_chat::goose::bound_launch::{tests::local_launch, BoundLaunch};
+        let writer = local_launch(&["read", "write"]);
+        let reader = local_launch(&["read"]);
+        // Kit grants are installed when spawning, so the pre-spawn recipe alone cannot distinguish these.
+        assert_eq!(writer.spec, reader.spec);
+        let key = |p| {
+            BoundLaunch::from_snapshot(p, Default::default(), Some(uuid::Uuid::nil()), &[]).key()
+        };
+        let manager = manager();
+        let full = Arc::new(RecordingFactory::default());
+        let narrow = Arc::new(RecordingFactory::default());
+        let mut first = spec(full.clone());
+        first.key = key(&writer);
+        let before = manager.prepare_warm(first).unwrap();
+        assert_eq!(before.state, AgentChatWarmSessionState::Ready);
+        let mut next = spec(narrow.clone());
+        next.key = key(&reader);
+        let (lease, origin) = manager.acquire_ready_or_spawn_cold(next).unwrap();
+        assert_eq!(
+            origin,
+            AgentChatWarmAcquireOrigin::ColdSpawned,
+            "a reader must not acquire the earlier writer"
+        );
+        assert_ne!(before.ui_thread_id.as_ref(), Some(&lease.ui_thread_id));
+        assert_eq!(narrow.spawned().len(), 1);
+        assert!(manager.snapshot(&before.key).is_none());
+    }
+    #[test]
+    fn superseded_preparation_cannot_revive_an_idle_writer() {
+        let manager = manager();
+        let (tx, started) = mpsc::channel();
+        let (allow, rx) = mpsc::channel();
+        let old = spec_with_factory(Arc::new(GatedPrepareFactory::new(tx, rx)));
+        let key = old.key.clone();
+        let copy = manager.clone();
+        let prep = thread::spawn(move || copy.prepare_warm(old).unwrap());
+        started.recv_timeout(Duration::from_secs(3)).unwrap();
+        let mut next = spec(Arc::new(RecordingFactory::default()));
+        next.key = "new-scope".into();
+        let (_, origin) = manager.acquire_ready_or_spawn_cold(next).unwrap();
+        allow.send(()).unwrap();
+        assert_eq!(prep.join().unwrap().state, AgentChatWarmSessionState::Empty);
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::ColdSpawned);
+        assert!(manager.snapshot(&key).is_none());
     }
 
     #[test]
@@ -1614,25 +1669,30 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_stale_acquired_cancels_and_prepares_replacement() {
+    fn a_long_running_leased_connection_is_not_cancelled_or_replaced_by_another_launch() {
         let manager = manager();
         let factory = Arc::new(RecordingFactory::default());
-
         manager.prepare_warm(spec(factory.clone())).unwrap();
         let lease = manager.acquire_warm("key-a").unwrap();
-        assert_eq!(lease.ui_thread_id, "thread-1");
         manager.mark_acquired_as_stale_for_test("key-a", Duration::from_secs(120));
-
-        let snapshots = manager.cleanup_stale_acquired(Duration::from_secs(60));
-
-        assert_eq!(snapshots.len(), 1);
-        assert_eq!(snapshots[0].state, AgentChatWarmSessionState::Ready);
-        assert_eq!(snapshots[0].generation, 2);
-        assert_eq!(factory.spawned()[0].cancel_calls(), vec!["thread-1"]);
+        let mut next = spec(Arc::new(RecordingFactory::default()));
+        next.key = "narrower".into();
+        let (_, origin) = manager.acquire_ready_or_spawn_cold(next).unwrap();
+        assert_eq!(origin, AgentChatWarmAcquireOrigin::ColdSpawned);
+        assert!(factory.spawned()[0].cancel_calls().is_empty());
         assert_eq!(
-            factory.spawned()[1].prepare_calls(),
-            vec![("thread-2".to_string(), PathBuf::from("/tmp/a"))]
+            manager.snapshot(&lease.key).unwrap().state,
+            AgentChatWarmSessionState::Acquired
         );
+        let observed = Arc::downgrade(&factory.spawned()[0]);
+        factory.spawned.lock().clear();
+        drop(lease);
+        let retired = manager.cleanup_stale_acquired(Duration::from_secs(60));
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0].state, AgentChatWarmSessionState::Empty);
+        assert!(observed.upgrade().is_none());
+        assert!(manager.snapshot("key-a").is_none());
+        assert!(factory.spawned().is_empty());
     }
 
     #[test]

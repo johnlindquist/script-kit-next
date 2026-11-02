@@ -1,80 +1,43 @@
-//! Identity of a warm goose session.
-//!
-//! Two launches may share a warm session only when every input that shapes
-//! the goose process and session is identical: binary, working directory,
-//! recipe (instructions, tools, provider, model), reasoning level, and
-//! session visibility.
+//! A process-local cache identity, not a credential. Bind the *effective* MCP policy
+//! as well as the recipe: Script Kit's tool list is not in the recipe until spawn.
+use crate::{ai::agent_chat::goose::GooseLaunchSpec, mcp_agent_tools::AgentToolPolicy};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use std::{path::PathBuf, sync::LazyLock};
+use uuid::Uuid;
 
-use crate::ai::agent_chat::goose::GooseLaunchSpec;
-
-pub(crate) fn launch_warm_key(spec: &GooseLaunchSpec) -> String {
-    format!(
-        "goose-warm-v1:{:016x}",
-        fnv1a64(normalized_material(spec).as_bytes())
-    )
+// External MCP definitions may contain headers and environment values. Neither they nor a
+// stable/dictionary-testable fingerprint of them should appear in logs or survive a process.
+static PROCESS_SALT: LazyLock<Uuid> = LazyLock::new(Uuid::new_v4);
+fn paths(roots: &Option<Vec<PathBuf>>) -> Option<Vec<&[u8]>> {
+    roots
+        .as_ref()
+        .map(|r| r.iter().map(|p| p.as_os_str().as_encoded_bytes()).collect())
 }
-
-pub(crate) fn normalized_material(spec: &GooseLaunchSpec) -> String {
-    [
-        format!(
-            "binary={}",
-            spec.command.to_string_lossy().trim().replace('\\', "/")
-        ),
-        format!("args={}", spec.args.join(" ")),
-        format!(
-            "cwd={}",
-            spec.cwd.to_string_lossy().trim().replace('\\', "/")
-        ),
-        // Recipes are built by one function in a fixed order, so equal
-        // recipes serialize identically.
-        format!("recipe={}", spec.recipe),
-        format!(
-            "thinking={}",
-            spec.thinking.as_deref().unwrap_or_default().trim()
-        ),
-        format!("hidden={}", spec.hidden_session),
-        format!(
-            "goose_root={}",
-            spec.env
-                .get("GOOSE_PATH_ROOT")
-                .map(String::as_str)
-                .unwrap_or_default()
-        ),
-    ]
-    .join("\n")
-}
-
-fn fnv1a64(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf29ce484222325;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    hash
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn warm_key_changes_with_cwd_or_recipe_but_not_with_credentials() {
-        let mut spec = GooseLaunchSpec::new("/tmp/goose", "/tmp/a");
-        spec.recipe = json!({"instructions": "one"});
-        let base = launch_warm_key(&spec);
-
-        let mut moved = spec.clone();
-        moved.cwd = "/tmp/b".into();
-        assert_ne!(launch_warm_key(&moved), base);
-
-        let mut rewritten = spec.clone();
-        rewritten.recipe = json!({"instructions": "two"});
-        assert_ne!(launch_warm_key(&rewritten), base);
-
-        let mut keyed = spec.clone();
-        keyed.env.insert("OPENAI_API_KEY".into(), "secret".into());
-        assert_eq!(launch_warm_key(&keyed), base);
-        assert!(!normalized_material(&keyed).contains("secret"));
-    }
+pub(crate) fn launch_warm_key(
+    spec: &GooseLaunchSpec,
+    profile: &str,
+    policy: &AgentToolPolicy,
+    endpoint: Option<Uuid>,
+) -> String {
+    let shape = json!({
+        "binary": spec.command.as_os_str().as_encoded_bytes(),
+        "args": spec.args,
+        "cwd": spec.cwd.as_os_str().as_encoded_bytes(),
+        "recipe": spec.recipe,
+        "thinking": spec.thinking,
+        "hidden": spec.hidden_session,
+        "gooseRoot": spec.env.get("GOOSE_PATH_ROOT"),
+        "approval": spec.approval_mode.id(),
+        "profile": profile,
+        "endpoint": endpoint,
+        "tools": policy.allowed_tools,
+        "readRoots": paths(&policy.read_roots),
+        "writeRoots": paths(&policy.write_roots),
+        "webBudget": policy.web_search_budget,
+    });
+    let mut hash = Sha256::new();
+    hash.update(PROCESS_SALT.as_bytes());
+    hash.update(shape.to_string().as_bytes());
+    format!("goose-warm-v2:{:x}", hash.finalize())
 }

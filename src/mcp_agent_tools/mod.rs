@@ -32,20 +32,38 @@ pub(crate) const AGENT_TOOLS_PATH: &str = "/mcp/agent";
 pub(crate) const POLICY_HEADER: &str = "x-script-kit-agent-policy";
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub(crate) struct AgentToolsEndpoint {
     pub uri: String,
     pub token: String,
+    pub generation: uuid::Uuid,
 }
 
 static ENDPOINT: LazyLock<RwLock<Option<AgentToolsEndpoint>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Record where the running MCP server accepts agent-tool requests.
-pub(crate) fn set_endpoint(port: u16, token: &str) {
+pub(crate) fn set_endpoint(port: u16, token: &str) -> EndpointRegistration {
+    let generation = uuid::Uuid::new_v4();
     *ENDPOINT.write() = Some(AgentToolsEndpoint {
         uri: format!("http://127.0.0.1:{port}{AGENT_TOOLS_PATH}"),
         token: token.to_string(),
+        generation,
     });
+    EndpointRegistration(generation)
+}
+/// Only the listener that installed this endpoint may retire it. A replacement may
+/// already be serving the same port; a cached process must not inherit its credential.
+pub(crate) struct EndpointRegistration(uuid::Uuid);
+impl Drop for EndpointRegistration {
+    fn drop(&mut self) {
+        let mut endpoint = ENDPOINT.write();
+        if endpoint.as_ref().is_some_and(|e| e.generation == self.0) {
+            *endpoint = None;
+        }
+    }
+}
+pub(crate) fn endpoint_generation() -> Option<uuid::Uuid> {
+    ENDPOINT.read().as_ref().map(|e| e.generation)
 }
 
 /// The agent-tools endpoint, when the MCP server is running.

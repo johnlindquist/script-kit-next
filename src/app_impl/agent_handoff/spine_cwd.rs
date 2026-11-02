@@ -101,12 +101,16 @@ impl ScriptListApp {
         ai_preferences: &crate::config::AiPreferences,
         source: &'static str,
     ) {
-        if !Self::agent_chat_hot_prewarm_enabled() {
+        if !Self::agent_chat_hot_prewarm_enabled()
+            || crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Provider)
+                .is_err()
+            || crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process).is_err()
+        {
             tracing::info!(
                 target: "script_kit::spine",
                 event = "prewarm_selected_agent_chat_profile_skipped",
                 source,
-                reason = "disabled_by_default",
+                reason = "disabled_or_not_permitted",
             );
             return;
         }
@@ -119,12 +123,14 @@ impl ScriptListApp {
         ) {
             Ok(agent_launch) => {
                 let manager = crate::ai::agent_chat::launch::warm_session_manager();
-                if let Err(error) = manager.prepare_warm_background(agent_launch.warm_spec()) {
+                let spec = agent_launch.warm_spec();
+                let warm_key = spec.key.clone();
+                if let Err(error) = manager.prepare_warm_background(spec) {
                     tracing::warn!(
                         target: "script_kit::spine",
                         event = "prewarm_selected_agent_chat_profile_failed",
                         source,
-                        warm_key = %agent_launch.warm_key,
+                        warm_key = %warm_key,
                         profile_id = %agent_launch.profile.id,
                         error = %error,
                     );
@@ -133,7 +139,7 @@ impl ScriptListApp {
                         target: "script_kit::spine",
                         event = "prewarm_selected_agent_chat_profile",
                         source,
-                        warm_key = %agent_launch.warm_key,
+                        warm_key = %warm_key,
                         profile_id = %agent_launch.profile.id,
                         cwd = %agent_launch.cwd.display(),
                     );
