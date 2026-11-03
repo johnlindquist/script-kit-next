@@ -116,6 +116,48 @@ describe("scoped credential destinations", () => {
     }
   }));
 
+  it("recognizes linked plugin script folders even when the grant names their outside location", () => fixture(async (root, priv, grant) => {
+    const { mkdirSync, readFileSync } = await import("node:fs");
+    const container = join(root, "plugins"), main = join(container, "main"), external = join(priv, "external");
+    const project = join(priv, "project"), secondary = join(project, "scripts"), sibling = join(priv, "external-private");
+    for (const path of [container, main, external, project, secondary, sibling]) mkdirSync(path, { mode: 0o700 });
+    symlinkSync(external, join(main, "scripts"), "dir"); symlinkSync(project, join(container, "work"), "dir");
+    writeFileSync(join(priv, "readme"), "not a plugin"); symlinkSync(join(priv, "readme"), join(container, "readme"));
+    for (const dir of [external, secondary]) {
+      const dest = join(dir, "reader.ts");
+      await expect(grant("reader", dest)).rejects.toThrow(/credential destination/i);
+      expect(existsSync(dest)).toBe(false); expect(existsSync(join(root, "agents/reader.json"))).toBe(false);
+    }
+    const program = "// Agent effect: Say hello\nconsole.log('hello')\n";
+    writeFileSync(join(external, "hello.ts"), program);
+    expect(await runCli(["inspect-command", "hello"], { SK_PATH: root, SCRIPT_KIT_MCP_SERVER_JSON: "" }))
+      .toMatchObject({ success: true, data: { source: program } });
+    await grant("reader", join(sibling, "reader.ts"));
+    expect(readFileSync(join(external, "hello.ts"), "utf8")).toBe(program);
+    expect(existsSync(join(root, "agents/reader.json"))).toBe(true);
+  }));
+
+  it("does not make an individual linked launcher script readable as an agent credential", () => fixture(async (root, priv, grant) => {
+    const { lstatSync, mkdirSync } = await import("node:fs");
+    const scripts = join(root, "plugins/work/scripts"), dest = join(priv, "note-reader");
+    mkdirSync(scripts, { recursive: true, mode: 0o700 });
+    symlinkSync(dest, join(priv, "alias")); symlinkSync(join(priv, "alias"), join(scripts, "linked.js"));
+    await expect(grant("reader", dest)).rejects.toThrow(/credential destination/i);
+    expect(existsSync(dest)).toBe(false); expect(existsSync(join(root, "agents/reader.json"))).toBe(false);
+    expect(lstatSync(join(scripts, "linked.js")).isSymbolicLink()).toBe(true);
+    await grant("reader", join(priv, "unlinked"));
+    expect(existsSync(join(scripts, "linked.js"))).toBe(false);
+  }));
+
+  it("refuses an unreadable script catalog without issuing or replacing anything", () => fixture(async (root, priv, grant) => {
+    const { lstatSync, mkdirSync } = await import("node:fs");
+    const main = join(root, "plugins/main"), scripts = join(main, "scripts"), dest = join(priv, "reader");
+    mkdirSync(main, { recursive: true, mode: 0o700 }); symlinkSync("scripts", scripts);
+    await expect(grant("reader", dest)).rejects.toThrow(/cannot verify Kit’s linked scripts/i);
+    expect(lstatSync(scripts).isSymbolicLink()).toBe(true);
+    expect(existsSync(dest)).toBe(false); expect(existsSync(join(root, "agents/reader.json"))).toBe(false);
+  }));
+
   it("does not complete a dangling operator-token link by issuing a scoped credential", () => fixture(async (root, priv, grant) => {
     const { lstatSync } = await import("node:fs");
     const dest = join(priv, "reader"); symlinkSync(dest, join(root, "agent-token"));
