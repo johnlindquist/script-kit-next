@@ -80,7 +80,7 @@ function mcpUsage() {
     "",
     "Environment overrides:",
     "  SCRIPT_KIT_MCP_SERVER_JSON  Path to server.json",
-    "  SCRIPT_KIT_MCP_ENDPOINT     Base URL or /rpc endpoint",
+    "  SCRIPT_KIT_MCP_ENDPOINT     Loopback base URL or /rpc endpoint; another server requires its own credential",
     "  SCRIPT_KIT_MCP_TOKEN        Bearer token",
     "  SCRIPT_KIT_MCP_TIMEOUT_MS   Request timeout, at most 120000ms",
     "  SCRIPT_KIT_MCP_MAX_RESPONSE_BYTES  Response budget, at most 67108864 bytes",
@@ -212,6 +212,12 @@ function resolveEndpointAndToken(explicitToken?:string): { endpoint: string; tok
     fail("A local Script Kit MCP endpoint must be a valid loopback HTTP /rpc URL.");
   }
   const endpoint = reviewedOverride ?? reviewedLocalEndpoint(endpointOrBase);
+  // An endpoint override alone must never move Kit's operator credential to another
+  // listener. Compare normalized URLs, not merely “both loopback” or matching ports.
+  if (reviewedOverride !== undefined && tokenOverride === undefined &&
+      (typeof discovery?.url !== "string" || reviewedLocalEndpoint(discovery.url) !== reviewedOverride)) {
+    fail("The endpoint override does not match the server that supplied the stored credential. Unset SCRIPT_KIT_MCP_ENDPOINT or supply a credential for that server.");
+  }
   return { endpoint, token };
 }
 

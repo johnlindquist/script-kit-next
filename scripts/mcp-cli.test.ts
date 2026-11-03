@@ -254,6 +254,32 @@ describe("mcp-cli", () => {
     expect(requestCount).toBe(0);
   });
 
+  it("pairs a discovered credential with its exact normalized endpoint before fetching", async () => {
+    let dispatched = 0;
+    const mock = startMockMcp(body => {
+      dispatched++;
+      return { jsonrpc: "2.0", id: body.id, result: { tools: [] } };
+    });
+    const { dir, env } = discoveryEnv(mock.url.origin);
+    const implicit = { ...env, SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_AGENT_CREDENTIAL: "" };
+    try {
+      for (const url of ["http://127.0.0.1:43130/rpc", "http://localhost:43129/rpc", "https://127.0.0.1:43129/rpc"]) {
+        await expect(runCli(["mcp", "tools"], { ...implicit, SCRIPT_KIT_MCP_ENDPOINT: url }))
+          .rejects.toThrow("does not match the server that supplied the stored credential");
+      }
+      writeFileSync(join(dir, "server.json"), JSON.stringify({ token: "test-token" }));
+      await expect(runCli(["mcp", "tools"], { ...implicit, SCRIPT_KIT_MCP_ENDPOINT: mock.url.origin }))
+        .rejects.toThrow("does not match the server that supplied the stored credential");
+      expect(dispatched).toBe(0);
+      writeFileSync(join(dir, "server.json"), JSON.stringify({ url: mock.url.origin, token: "test-token" }));
+      const r = await runCli(["mcp", "tools"], { ...implicit, SCRIPT_KIT_MCP_ENDPOINT: mock.url.origin + "/rpc" });
+      expect(r).toMatchObject({ success: true });
+      expect(dispatched).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("refuses a remote endpoint supplied by private server discovery", async () => {
     const { dir, env } = discoveryEnv("https://malicious.example");
     let requestCount = 0;
