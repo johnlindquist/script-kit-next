@@ -1,6 +1,36 @@
 # Script Kit User Guide
 
-Welcome to Script Kit! This guide will help you get started and master the powerful automation capabilities of Script Kit.
+Start with one TypeScript file and run it by name. You can leave the other features alone until you need them.
+
+---
+
+## Welcome & Quick Start
+
+<a id="your-first-script-in-60-seconds"></a>
+
+### Run your first script
+
+Install [Bun](https://bun.sh) if you haven’t already. No AI account, source checkout, or extra packages are needed for the greeting.
+
+1. Press **⌘;**, search for **New Script**, and choose the row for a blank script (not **New Script from Template**).
+2. Name it **Hello Kit** and press Return. Replace the starter code in the new file with the following, then save it:
+
+```typescript
+import "@scriptkit/sdk";
+
+export const metadata = { name: "Hello Kit" };
+
+const who = await arg("Who would you like to greet?", ["Kit", "World"]);
+await div(who === "World" ? "Hello, world!" : "Hello, Kit!");
+```
+
+Press **⌘;**, search for **Hello Kit**, and run it. Choose **World** to see **Hello, world!** Run it again and choose **Kit** to see **Hello, Kit!**
+
+**Where is the file?** New Script uses the workspace Kit has open. Your scripts folder is `plugins/main/scripts/` inside it: `~/.scriptkit/plugins/main/scripts/` by default, or `<SK_PATH>/plugins/main/scripts/` if you configured another workspace. If the editor didn’t open, open the newly created `.ts` file there. If you create a script by hand, choose an unused filename in that same folder.
+
+### The Main Hotkey
+
+On the Mac, the default launcher hotkey is **⌘;**. If you’ve changed it, use your shortcut instead. See [Configuration](#configuration-configts) to change it in your workspace’s `config.ts`.
 
 ---
 
@@ -22,61 +52,9 @@ Welcome to Script Kit! This guide will help you get started and master the power
 
 ---
 
-## Welcome & Quick Start
-
-### What is Script Kit?
-
-Script Kit is a powerful automation tool that lets you create scripts to automate your daily workflows. Built with the GPUI framework from Zed, it offers:
-
-- **Blazing fast performance** - Native Rust with GPU-accelerated rendering
-- **Beautiful UI prompts** - Text inputs, editors, forms, file pickers, and more
-- **Global hotkey access** - Trigger scripts from anywhere
-- **Bun runtime** - Fast JavaScript/TypeScript execution
-- **Tailwind CSS** - Style your prompts with familiar utility classes
-
-### Your First Script in 60 Seconds
-
-1. **Create the scripts directory** (if it doesn't exist):
-   ```bash
-   mkdir -p ~/.scriptkit/plugins/main/scripts
-   ```
-
-2. **Create your first script** at `~/.scriptkit/plugins/main/scripts/hello.ts`:
-   ```typescript
-   import "@scriptkit/sdk";
-
-   export const metadata = {
-     name: "Hello World",
-     description: "My first Script Kit script",
-   };
-
-   const name = await arg("What's your name?");
-   await div(`<h1 class="text-4xl p-8 text-center">Hello, ${name}! 👋</h1>`);
-   ```
-
-3. **Open Script Kit** by pressing the global hotkey (default: `Cmd+;`)
-
-4. **Type "hello"** and press Enter
-
-5. **Enter your name** and see the greeting!
-
-### The Main Hotkey
-
-The global hotkey opens the Script Kit launcher from anywhere:
-
-| Platform | Default Hotkey |
-|----------|----------------|
-| macOS    | `Cmd+;`        |
-| Windows  | `Ctrl+;`       |
-| Linux    | `Ctrl+;`       |
-
-You can customize this in `~/.scriptkit/config.ts` (see [Configuration](#configuration-configts)).
-
----
-
 ## Directory Structure
 
-Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
+The following paths are relative to your workspace. The default is `~/.scriptkit/`; if you set `SK_PATH`, start there instead. For personal scripts, the only folder you need is `plugins/main/scripts/`.
 
 ```
 ~/.scriptkit/

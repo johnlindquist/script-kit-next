@@ -4,10 +4,14 @@ Script Kit scripts are local TypeScript files executed by Bun that talk to the n
 
 ## Where Scripts Live
 
-```bash
-~/.scriptkit/plugins/main/scripts/     # executable scripts
-~/.scriptkit/plugins/main/scriptlets/  # scriptlet bundles / snippets
-```
+Use **New Script** from the launcher to create a file in the active workspace. For a script you can run immediately, see [Run your first script](getting-started.md#run-your-first-script).
+
+| In your workspace | What belongs there |
+| --- | --- |
+| `plugins/main/scripts/` | Executable scripts |
+| `plugins/main/scriptlets/` | Scriptlet bundles and snippets |
+
+The workspace is `~/.scriptkit/` by default. If Kit uses a custom `SK_PATH`, both folders are under that path instead.
 
 ## Minimal Script
 
