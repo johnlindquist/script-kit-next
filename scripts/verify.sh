@@ -114,6 +114,8 @@ require_clean_source_identity() {
     scripts/test_macos_deployment.py
     scripts/release-stapler.sh
     scripts/verify-release-version.sh
+    scripts/verify-release-reports.sh
+    scripts/verify-installed-workspace.jq
     scripts/release-evidence.ts
     scripts/release-evidence.test.ts
     scripts/generate-surface-contracts.ts

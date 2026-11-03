@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -123,6 +124,58 @@ test("two isolated fixture runners transfer only the exact failed measurement an
 
 type ProofWorkflow = { jobs: Record<string, { steps: Array<{ name: string; id?: string; run: string; with: Record<string,string> }> }> };
 const yaml = (file: string) => Bun.YAML.parse(readFileSync(join(import.meta.dir, `../.github/workflows/${file}.yml`), "utf8")) as ProofWorkflow;
+test("the publisher requires the signer's artifact ID and workspace digest before download", () => {
+  const step = yaml("release").jobs.release.steps.find(s => s.id === "require-publication-inputs")!;
+  const check = (id: string, sha: string) => spawnSync("bash", ["-ec", step.run], {
+    env: { RELEASE_ID: id, WORKSPACE_SHA: sha }, encoding: "utf8",
+  }).status;
+  const digest = "a".repeat(64);
+  expect(check("42", digest)).toBe(0);
+  for (const [id, sha] of [["", digest], ["0", digest], ["42,43", digest], ["42", ""], ["42", "not-a-digest"]]) {
+    expect(check(id, sha)).not.toBe(0);
+  }
+});
+
+test("the final report check rejects missing, misleading, and substituted downloads", () => scratch(root => {
+  const dir = join(root, "downloaded assets"), recomputed = join(root, "independent scorecard.json");
+  mkdirSync(dir);
+  const sha = "a".repeat(40), zip = "b".repeat(64), sdk = "c".repeat(64);
+  const json = (f: string, v: unknown) => writeFileSync(f, JSON.stringify(v) + "\n");
+  const manifest = join(dir, "release-manifest.json"), card = join(dir, "release-scorecard.json");
+  const report = join(dir, "installed-workspace-check.json");
+  const result = { sourceSha: sha, archiveSha256: zip, journeys: [{ measuresPaint: false }] };
+  const workspace = { schemaVersion: 1, version: "0.1.29", packaged: true, freshWorkspace: true,
+    sdkSha256: sdk, starterScriptsIndexed: 12, userEditsPreserved: true, settingsTransaction: "verified",
+    scratchRemoved: true, sourceSha: sha, zipSha256: zip, settingsProof: { key: "editorFontSize", beforeValue: 16,
+      value: 27, beforeSha256: "d".repeat(64), writtenSha256: "e".repeat(64), afterRejectionSha256: "e".repeat(64), rejection: "stale_revision" } };
+  json(manifest, { version: "0.1.29", source_sha: sha, artifacts: [{ sha256: zip }], sdk: { sha256: sdk } });
+  json(card, result); json(recomputed, result); json(report, workspace);
+  const digest = () => createHash("sha256").update(readFileSync(report)).digest("hex");
+  const signer = digest();
+  const run = (expected = signer, independent = recomputed) => spawnSync("bash", [
+    join(import.meta.dir, "verify-release-reports.sh"), dir, independent, expected,
+  ], { encoding: "utf8" });
+  expect(run().status).toBe(0);
+  expect(run(signer, card).status).not.toBe(0);
+  expect(run("").status).not.toBe(0);
+  json(card, { ...result, journeys: [{ measuresPaint: true }] });
+  expect(run().stderr).toContain("scorecard differs");
+  rmSync(card); expect(run().status).not.toBe(0); json(card, result);
+  rmSync(report); expect(run().status).not.toBe(0);
+  // Even a separately valid account of these settings is not the signing job's original bytes.
+  json(report, { ...workspace, settingsProof: { ...workspace.settingsProof, beforeSha256: "f".repeat(64) } });
+  expect(run().stderr).toContain("differs from the signing job");
+  for (const field of ["sourceSha", "zipSha256", "sdkSha256"] as const) {
+    json(report, { ...workspace, [field]: "0".repeat(workspace[field].length) });
+    expect(run(digest()).stderr).toContain("different source, SDK, or archive");
+  }
+  json(report, { ...workspace, settingsProof: null }); expect(run(digest()).stderr).toContain("invalid packaged settings");
+  writeFileSync(report, JSON.stringify(workspace) + "\n" + JSON.stringify(workspace));
+  expect(run(digest()).status).not.toBe(0);
+  const indirect = join(root, "other.json"); json(indirect, workspace); rmSync(report); symlinkSync(indirect, report);
+  expect(run().status).not.toBe(0);
+}));
+
 const steps = yaml("release-compiler-proof").jobs[primary].steps;
 test("both runners validate the fetched tag and immutable HEAD before using repo code", () => scratch(root => {
   expect(steps[0].with.ref).toBe("${{ github.ref }}");

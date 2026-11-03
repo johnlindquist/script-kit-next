@@ -458,6 +458,9 @@ jobs:
   sign-notarize-macos:
     name: Sign and notarize macOS app
     runs-on: macos-15
+    outputs:
+      release_id: ${{ steps.upload-release.outputs.artifact-id }}
+      workspace_sha256: ${{ steps.verify-final-zip.outputs.workspace_sha256 }}
     env:
       EXPECTED_COMPILE_RECEIPT: ${{ needs.build-macos-app.outputs.compile_receipt_sha }}
     needs:
@@ -676,6 +679,7 @@ jobs:
           /usr/bin/ditto -c -k --keepParent "Script Kit.app" "Script-Kit-macos.zip"
 
       - name: Verify final release zip contents
+        id: verify-final-zip
         run: |
           TMP_DIR="$(mktemp -d)"
           /usr/bin/ditto -x -k "target/release/bundle/osx/Script-Kit-macos.zip" "$TMP_DIR"
@@ -688,6 +692,8 @@ jobs:
           (cd "$TMP_DIR" && "$APP/Contents/MacOS/script-kit-gpui" --check-installation) >"$CHECK"
           jq -e --arg version "${GITHUB_REF_NAME#v}" --argjson packaged true -f scripts/verify-installed-workspace.jq "$CHECK" >/dev/null
           jq --arg sha "$GITHUB_SHA" --arg archive "$(shasum -a 256 target/release/bundle/osx/Script-Kit-macos.zip | cut -d' ' -f1)" '. + {sourceSha:$sha, zipSha256:$archive}' "$CHECK" >target/release/bundle/osx/installed-workspace-check.json
+          digest="$(shasum -a 256 <target/release/bundle/osx/installed-workspace-check.json)"
+          printf 'workspace_sha256=%s\n' "${digest%% *}" >>"$GITHUB_OUTPUT"
 
       - name: Record advisory packaged-journey scorecard
         # Advisory until the owner ratifies the paint budget and authorizes capture sessions.
@@ -779,9 +785,11 @@ jobs:
           fi
 
       - name: Upload artifact
+        id: upload-release
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
+          if-no-files-found: error
           path: |
             target/release/bundle/osx/Script-Kit-macos.zip
             target/release/bundle/osx/installed-workspace-check.json
@@ -811,27 +819,44 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      - name: Require the signing job’s download identity
+        id: require-publication-inputs
+        env:
+          RELEASE_ID: ${{ needs.sign-notarize-macos.outputs.release_id }}
+          WORKSPACE_SHA: ${{ needs.sign-notarize-macos.outputs.workspace_sha256 }}
+        run: |
+          [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ && "$WORKSPACE_SHA" =~ ^[0-9a-f]{64}$ ]]
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: macos-build
+          artifact-ids: ${{ needs.sign-notarize-macos.outputs.release_id }}
+          merge-multiple: true
           path: artifacts
 
       - name: Verify exact archived artifact and all mandatory release evidence
         run: |
-          bun scripts/release-evidence.ts verify \
+          bun scripts/release-evidence.ts scorecard \
             --manifest artifacts/release-manifest.json \
             --zip artifacts/Script-Kit-macos.zip \
             --design-tokens design/mockups/generated/tokens.json \
             --design-css design/mockups/generated/tokens.css \
             --design-proof artifacts/generated-design-contracts-proof.json \
             --source-sha "$GITHUB_SHA" \
-            --tag "$GITHUB_REF_NAME"
+            --tag "$GITHUB_REF_NAME" \
+            --output "$RUNNER_TEMP/recomputed-release-scorecard.json" >/dev/null
+
+      - name: Check the reports that will accompany the download
+        id: verify-public-reports
+        env:
+          WORKSPACE_SHA: ${{ needs.sign-notarize-macos.outputs.workspace_sha256 }}
+        run: bash scripts/verify-release-reports.sh artifacts "$RUNNER_TEMP/recomputed-release-scorecard.json" "$WORKSPACE_SHA"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: docs/releases/${{ github.ref_name }}.md
+          fail_on_unmatched_files: true
           files: |
             artifacts/installed-workspace-check.json
             artifacts/Script-Kit-macos.zip
