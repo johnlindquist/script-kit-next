@@ -86,6 +86,65 @@ function discoveryEnv(baseUrl: string) {
   };
 }
 
+describe("scoped credential destinations", () => {
+  async function fixture(run: (root: string, priv: string, grant: (name: string, file: string) => Promise<unknown>) => Promise<void>) {
+    const { mkdirSync } = await import("node:fs");
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "kit-grant-")));
+    const root = join(dir, "workspace"), priv = join(dir, "private");
+    try {
+      for (const path of [root, priv]) mkdirSync(path, { mode: 0o700 });
+      const env = { SK_PATH: root, SCRIPT_KIT_AGENT_CREDENTIAL: "", SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_MCP_SERVER_JSON: "" };
+      await run(root, priv, (name, file) => runCli(["grant-agent", name, file, "notes:quiet"], env));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+
+  it("never mints a scoped bearer as Kit's operator token, script, or registration", () => fixture(async (root, priv, grant) => {
+    const { mkdirSync } = await import("node:fs");
+    const scripts = join(root, "plugins/main/scripts"), agents = join(root, "agents");
+    mkdirSync(scripts, { recursive: true, mode: 0o700 }); mkdirSync(agents, { mode: 0o700 });
+    symlinkSync(join(root, "plugins/main"), join(priv, "alias"), "dir");
+    symlinkSync(join(root, ".."), join(priv, "parent-alias"), "dir");
+    mkdirSync(join(root, "themes"), { mode: 0o700 });
+    mkdirSync(join(priv, "nested"), { mode: 0o700 });
+    symlinkSync(priv, join(root, "themes", "linked"), "dir");
+    for (const dest of [join(scripts, "reader.ts"), join(priv, "alias/scripts/reader.ts"), join(root, "agent-token"),
+      join(priv, "parent-alias/workspace/agent-token"), join(root, "AGENT-TOKEN"), join(root, "theme.json"),
+      join(root, "themes/linked/nested/theme.json"), join(agents, "reader.json")]) {
+      await expect(grant("reader", dest)).rejects.toThrow(/credential destination/i);
+      expect(existsSync(dest)).toBe(false);
+      expect(existsSync(join(agents, "reader.json"))).toBe(false);
+    }
+  }));
+
+  it("does not complete a dangling operator-token link by issuing a scoped credential", () => fixture(async (root, priv, grant) => {
+    const { lstatSync } = await import("node:fs");
+    const dest = join(priv, "reader"); symlinkSync(dest, join(root, "agent-token"));
+    await expect(grant("reader", dest)).rejects.toThrow(/operator token/i);
+    expect(existsSync(dest)).toBe(false);
+    expect(existsSync(join(root, "agents/reader.json"))).toBe(false);
+    expect(lstatSync(join(root, "agent-token")).isSymbolicLink()).toBe(true);
+  }));
+
+  it("preserves both destinations on collisions and registers only the hash on success", () => fixture(async (root, priv, grant) => {
+    const { lstatSync, mkdirSync, readFileSync } = await import("node:fs");
+    const { createHash } = await import("node:crypto");
+    const reg = join(root, "agents"), dest = join(priv, "reader"), grantPath = join(reg, "reader.json");
+    mkdirSync(reg, { mode: 0o700 }); symlinkSync(join(priv, "missing"), grantPath);
+    await expect(grant("reader", dest)).rejects.toThrow();
+    expect(existsSync(dest)).toBe(false); expect(lstatSync(grantPath).isSymbolicLink()).toBe(true);
+    rmSync(grantPath); writeFileSync(dest, "keep this file", { mode: 0o600 });
+    await expect(grant("reader", dest)).rejects.toThrow();
+    expect(readFileSync(dest, "utf8")).toBe("keep this file"); expect(existsSync(grantPath)).toBe(false);
+    rmSync(dest); await grant("reader", dest);
+    const raw = readFileSync(dest, "utf8").trim(), record = readFileSync(grantPath, "utf8");
+    expect(lstatSync(dest).mode & 0o777).toBe(0o600);
+    expect(record.includes(raw)).toBe(false);
+    expect(JSON.parse(record)).toEqual({ tokenHash: createHash("sha256").update(raw).digest("hex"), scopes: ["notes:quiet"] });
+    await expect(grant("reader", join(priv, "another"))).rejects.toThrow();
+    expect(existsSync(join(priv, "another"))).toBe(false); expect(readFileSync(grantPath, "utf8") === record).toBe(true);
+  }));
+});
+
 describe("mcp-cli", () => {
   it("prints product-oriented top-level help", async () => {
     const result = await runMcpCli(["--help"]);

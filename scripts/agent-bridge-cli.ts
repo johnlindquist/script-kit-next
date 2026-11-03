@@ -3,13 +3,15 @@ import { createHash, randomBytes } from "node:crypto";
 import {
 	constants,
 	closeSync,
-	existsSync,
 	fstatSync,
+	fsyncSync,
 	lstatSync,
 	mkdirSync,
 	openSync,
 	readFileSync,
+	realpathSync,
 	statSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
@@ -54,6 +56,59 @@ function privateFile(path: string, privateOnly = true, limit = 4096): Buffer {
 }
 export function credentialToken(path: string): string {
 	return privateFile(path).toString().trim();
+}
+// The server trusts agent-token as operator authority, independently of scoped registrations.
+// Kit must never mint a scoped bearer there or among files read as personal content or code.
+const reservedGrantSlots = new Set([
+	"agent-token", "server.json", "server-location.json", "theme.json", "config.ts", "secrets.age",
+	"agents", "plugins", "themes", "brain", "sdk", "bin", "share",
+]);
+function grantDestination(root: string, requested: string): string {
+	const dir = dirname(requested), leaf = basename(requested), owner = lstatSync(dir);
+	requireOk(owner.isDirectory() && !(owner.mode & 0o077) && owner.uid === process.getuid?.(),
+		"Choose an owned private directory (0700) for the credential");
+	requireOk(leaf && leaf !== "." && leaf !== ".." && !requested.endsWith("/"), "Expected a credential filename");
+	const physical = realpathSync.native(dir);
+	const kit = statSync(root, { bigint: true, throwIfNoEntry: false });
+	if (kit) {
+		// A private-looking alias can enter Kit's scripts; a directory under plugins can also
+		// link out. Compare the workspace identity along both routes, not just name prefixes.
+		for (const parent of new Set([dir, physical])) {
+			let ancestor = parent, slot = leaf;
+			for (;;) {
+				const id = statSync(ancestor, { bigint: true });
+				if (id.dev === kit.dev && id.ino === kit.ino) {
+					requireOk(!reservedGrantSlots.has(slot.toLowerCase()),
+						"Choose a private credential destination outside Kit’s managed files and content");
+					break;
+				}
+				const up = dirname(ancestor);
+				if (up === ancestor) break;
+				slot = basename(ancestor); ancestor = up;
+			}
+		}
+		const master = lstatSync(join(root, "agent-token"), { throwIfNoEntry: false });
+		requireOk(!master || (master.isFile() && master.nlink === 1),
+			"Kit’s operator token is not a direct regular file; no scoped grant was created");
+	}
+	return join(physical, leaf);
+}
+
+// Reserve both names without overwriting. An empty registration authenticates nobody. On
+// error, remove only our own reservation, not a file that has taken its place.
+function withGrantFile(path: string, collision: string, use: (fd: number, stillOurs: () => boolean) => void) {
+	let fd: number;
+	try { fd = openSync(path, "wx", 0o600); }
+	catch (e) { if ((e as NodeJS.ErrnoException).code === "EEXIST") throw Error(collision); throw e; }
+	try {
+		const opened = fstatSync(fd, { bigint: true });
+		const stillOurs = () => {
+			const named = lstatSync(path, { bigint: true, throwIfNoEntry: false });
+			return named?.dev === opened.dev && named.ino === opened.ino;
+		};
+		try { use(fd, stillOurs); }
+		catch (e) { if (stillOurs()) unlinkSync(path); throw e; }
+	} finally { closeSync(fd); }
 }
 export function operator(args: string[], root: string) {
 	const [verb, name, ...rest] = args;
@@ -108,11 +163,7 @@ export function operator(args: string[], root: string) {
 			),
 		"Invalid credential path or grant",
 	);
-	const dir = lstatSync(dirname(credential));
-	requireOk(
-		dir.isDirectory() && !(dir.mode & 0o077) && dir.uid === process.getuid?.(),
-		"Choose an owned private directory (0700) for the credential",
-	);
+	const destination = grantDestination(root, credential);
 	const reg = join(root, "agents");
 	mkdirSync(reg, { recursive: true, mode: 0o700 });
 	const regStat = lstatSync(reg);
@@ -122,23 +173,23 @@ export function operator(args: string[], root: string) {
 			regStat.uid === process.getuid?.(),
 		"Agent registry must be an owned, non-writable-by-others directory",
 	);
-	const file = join(reg, name + ".json");
-	requireOk(!existsSync(file), "Agent already registered; no grant changed");
-	const token = randomBytes(32).toString("hex");
-	writeFileSync(credential, token + "\n", { mode: 0o600, flag: "wx" });
-	writeFileSync(
-		file,
-		JSON.stringify({
-			tokenHash: createHash("sha256").update(token).digest("hex"),
-			scopes: scopes.map((s) =>
-				s === "handoff:receive" ? `handoff:receive:${name}` : s,
-			),
-		}) + "\n",
-		{ mode: 0o600, flag: "wx" },
-	);
+	const file = join(realpathSync.native(reg), name + ".json");
+	withGrantFile(file, "Agent already registered; no grant changed", (record, ownsRecord) => {
+		withGrantFile(destination, "Credential file already exists; no grant changed", (secret, ownsSecret) => {
+			const token = randomBytes(32).toString("hex");
+			writeFileSync(secret, token + "\n");
+			fsyncSync(secret);
+			requireOk(ownsRecord() && ownsSecret(), "A grant destination changed; no grant was activated");
+			writeFileSync(record, JSON.stringify({
+				tokenHash: createHash("sha256").update(token).digest("hex"),
+				scopes: scopes.map((s) => s === "handoff:receive" ? "handoff:receive:" + name : s),
+			}) + "\n");
+			fsyncSync(record);
+		});
+	});
 	return {
 		name,
-		credentialFile: credential,
+		credentialFile: destination,
 		registration: file,
 		revocation: "Remove the named registration to revoke this bearer.",
 	};
