@@ -42,19 +42,50 @@ export function directSettingsBun(file: string, excludeCwd?: string): string | u
     return parts.includes('shims') || parts.some((p, i) => p === '.bin' && parts[i - 1] === 'node_modules');
   };
   try {
-    const dir = path.dirname(file);
-    const resolvedDir = fs.realpathSync.native(dir);
-    const resolved = fs.realpathSync.native(file);
-    if ([dir, resolvedDir, path.dirname(resolved)].some(shim)) return;
-    if (excludeCwd !== undefined) {
-      const cwd = fs.realpathSync.native(excludeCwd);
-      const inside = (p: string) => {
-        const rel = path.relative(cwd, p);
-        // The filesystem root as cwd does not make every installed program project-local.
-        return !rel || (cwd !== path.parse(cwd).root && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
-      };
-      if ([dir, resolvedDir, resolved].some(inside)) return;
-    }
+    const cwd = excludeCwd === undefined ? undefined : fs.realpathSync.native(excludeCwd);
+    const inside = (p: string) => {
+      if (cwd === undefined) return false;
+      const rel = path.relative(cwd, p);
+      return !rel || (cwd !== path.parse(cwd).root && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+    };
+    // realpath alone loses the middle of bin/bun -> shims/bun -> mise. Check directory
+    // links too, and apply '..' to the directory reached, not to the unexpanded link.
+    let hops = 0;
+    const packageDirs = new Set<string>(); // node_modules itself may link to a package store
+    const walk = (base: string, input: string, directory: boolean): string | undefined => {
+      const root = path.parse(input).root;
+      if (root && !path.isAbsolute(input)) return;
+      let here = root || base;
+      const parts = input.slice(root.length).split(path.sep === '/' ? '/' : /[\\/]/).filter(Boolean);
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (part === '.') continue;
+        if (part === '..') { here = path.dirname(here); continue; }
+        const next = path.join(here, part);
+        const dir = directory || i + 1 < parts.length;
+        const name = part.toLowerCase();
+        if (inside(next) || (dir && (shim(next) || (name === '.bin' && packageDirs.has(here))))) return;
+        const st = fs.lstatSync(next);
+        if (st.isSymbolicLink()) {
+          if (++hops > 40) return;
+          const dest = walk(here, fs.readlinkSync(next), dir);
+          if (dest === undefined) return;
+          here = dest;
+        } else {
+          if (dir && !st.isDirectory()) return;
+          here = next;
+        }
+        if (dir && name === 'node_modules') packageDirs.add(here);
+      }
+      return here;
+    };
+    if (inside(path.dirname(file))) return;
+    const walked = walk('', file, false);
+    if (walked === undefined) return;
+    // Canonicalize the path we examined. Bun may collapse a caller's literal link/..
+    // before realpath sees it; that would name a different executable.
+    const resolved = fs.realpathSync.native(walked);
+    if (inside(path.dirname(resolved)) || shim(path.dirname(resolved))) return;
     fs.accessSync(resolved, fs.constants.X_OK);
     return fs.statSync(resolved).isFile() ? resolved : undefined;
   } catch {

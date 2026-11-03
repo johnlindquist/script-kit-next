@@ -85,6 +85,46 @@ describe('installed settings helper', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+  it('checks intermediate Bun links even when both ends appear to be direct installations', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'settings-bun-links-')));
+    try {
+      const real = join(root, 'versions/v1/bin/bun');
+      const bin = join(root, 'bin');
+      const shim = join(root, 'manager/shims');
+      const pkg = join(root, 'project/node_modules/.bin');
+      for (const dir of [join(root, 'versions/v1/bin'), bin, shim, pkg]) mkdirSync(dir, { recursive: true });
+      writeFileSync(real, 'fixture executable', { mode: 0o700 });
+      symlinkSync('../../versions/v1/bin/bun', join(shim, 'bun'));
+      symlinkSync('../manager/shims/bun', join(bin, 'via-mise'));
+      symlinkSync('../../../versions/v1/bin', join(pkg, 'programs'), 'dir');
+      symlinkSync('../project/node_modules/.bin/programs', join(bin, 'via-package'), 'dir');
+      symlinkSync('../versions', join(root, 'manager/versions'), 'dir');
+      symlinkSync('../manager/versions/v1/bin/bun', join(bin, 'direct'));
+      const project = join(root, 'project');
+      symlinkSync('../versions/v1/bin/bun', join(project, 'project-choice'));
+      symlinkSync('../project/project-choice', join(bin, 'via-project'));
+      for (const path of [join(bin, 'via-mise'), join(bin, 'via-package/bun')]) {
+        expect(realpathSync(path)).toBe(real);
+        expect(directSettingsBun(path)).toBeUndefined();
+        expect(directSettingsBun(path, project)).toBeUndefined();
+      }
+      const store = join(root, 'store/modules');
+      mkdirSync(join(store, '.bin'), {recursive: true});
+      mkdirSync(join(root, 'linked'));
+      symlinkSync('../store/modules', join(root, 'linked/node_modules'), 'dir');
+      symlinkSync('../../../versions/v1/bin/bun', join(store, '.bin/bun'));
+      symlinkSync('.bin', join(store, 'commands'), 'dir');
+      symlinkSync('../linked/node_modules/commands', join(bin, 'via-store'), 'dir');
+      expect(realpathSync(join(bin, 'via-store/bun'))).toBe(real);
+      expect(directSettingsBun(join(bin, 'via-store/bun'))).toBeUndefined();
+      expect(directSettingsBun(join(bin, 'via-project'), project)).toBeUndefined();
+      expect(directSettingsBun(join(bin, 'via-project'))).toBe(real); // an explicit non-shim pin
+      expect(directSettingsBun(join(bin, 'direct'), project)).toBe(real);
+      symlinkSync('../versions/v1/bin', join(bin, 'shelf'), 'dir');
+      expect(directSettingsBun(bin + '/shelf/../bin/bun', project)).toBe(real);
+      expect(directSettingsBun(real, '/')).toBe(real);
+    } finally { rmSync(root, {recursive: true, force: true}); }
+  });
   it('targets SK_PATH and edits only the selected literal; stale proposals cannot clobber human edits', async () => {
     const f = fixture(source);
     try {

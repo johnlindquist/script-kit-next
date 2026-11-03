@@ -10,7 +10,7 @@ Download the macOS archive from [Releases](https://github.com/johnlindquist/scri
 
 Kit needs [Bun](https://bun.sh) to run TypeScript scripts. Opening an app from Finder does not run your shell startup files. Kit checks common user and Homebrew install locations, absolute PATH entries outside the working directory, and direct Bun installations in mise and asdf (including their data-directory overrides when available to the app). It does not run either manager or let a project-local shim pick the binary.
 
-If you use mise or asdf, run `mise which bun` or `asdf which bun` in a trusted directory where the version you want is active. Use the absolute filename it prints, not the `shims/bun` path that `command -v bun` may return. If Kit sees more than one managed binary, or yours lives elsewhere, put that filename in your existing `~/.scriptkit/config.ts` (or the `config.ts` under your chosen `SK_PATH`), keeping the rest of your config:
+If you use mise or asdf, run `mise which bun` or `asdf which bun` in a trusted directory where the version you want is active. Use the absolute filename it prints, not the `shims/bun` path that `command -v bun` may return. A link in `/usr/local/bin` is fine if it points to the installed Bun executable. A link that goes through `shims/bun` or `node_modules/.bin/bun` still leads through a shim, so Kit skips it during discovery and refuses it as an explicit pin. If Kit sees more than one managed binary, or yours lives elsewhere, put that filename in your existing `~/.scriptkit/config.ts` (or the `config.ts` under your chosen `SK_PATH`), keeping the rest of your config:
 
 ```ts
 // Inside export default { ... }

@@ -136,7 +136,8 @@ function settingsBun(): string {
   const cwd = process.cwd();
   for (const bin of (process.env.PATH ?? '').split(path.delimiter)) {
     if (!path.isAbsolute(bin)) continue;
-    const direct = directSettingsBun(path.join(bin, exe), cwd);
+    // Do not normalize away a link followed by .. before the selector examines it.
+    const direct = directSettingsBun(`${bin}${path.sep}${exe}`, cwd);
     if (direct) return direct;
   }
   throw new Error('No direct Bun executable found; set BUN_PATH to the absolute Bun binary');

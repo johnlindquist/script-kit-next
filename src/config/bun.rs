@@ -74,17 +74,82 @@ fn shim_directory(dir: &Path) -> bool {
     })
 }
 
-fn executable(path: &Path) -> Option<PathBuf> {
-    // A nested package can inherit its parent's node_modules/.bin. Directory aliases
-    // and the link to the program must not hide a shim, even for an explicit pin.
+fn in_project(path: &Path, cwd: Option<&Path>) -> bool {
+    cwd.is_some_and(|d| path == d || (d.parent().is_some() && path.starts_with(d)))
+}
+
+#[derive(Default)]
+struct LinkTrace {
+    hops: u8,
+    // node_modules itself can be a link to an otherwise ordinary package-store directory.
+    package_dirs: BTreeSet<PathBuf>,
+}
+
+/// Check each directory on the way to the executable. Checking only the two ends misses
+/// e.g. a global link to shims/bun, itself a link to the manager's ordinary executable.
+fn walk_links(
+    mut here: PathBuf,
+    path: &Path,
+    directory: bool,
+    cwd: Option<&Path>,
+    trace: &mut LinkTrace,
+) -> Option<PathBuf> {
+    use std::path::Component;
+    if path.is_absolute() {
+        here.clear();
+    }
+    let mut parts = path.components().peekable();
+    while let Some(part) = parts.next() {
+        match part {
+            Component::Prefix(_) if !path.is_absolute() => return None,
+            Component::Prefix(_) | Component::RootDir => here.push(part.as_os_str()),
+            Component::CurDir => (),
+            Component::ParentDir => {
+                here.pop();
+            }
+            Component::Normal(name) => {
+                let next = here.join(name);
+                let dir = directory || parts.peek().is_some();
+                let named = |s| name.to_str().is_some_and(|n| n.eq_ignore_ascii_case(s));
+                if in_project(&next, cwd)
+                    || (dir
+                        && (shim_directory(&next)
+                            || (named(".bin") && trace.package_dirs.contains(&here))))
+                {
+                    return None;
+                }
+                let meta = std::fs::symlink_metadata(&next).ok()?;
+                if meta.file_type().is_symlink() {
+                    if trace.hops >= 40 {
+                        return None;
+                    }
+                    trace.hops += 1;
+                    here = walk_links(here, &std::fs::read_link(next).ok()?, dir, cwd, trace)?;
+                } else {
+                    if dir && !meta.is_dir() {
+                        return None;
+                    }
+                    here = next;
+                }
+                if dir && named("node_modules") {
+                    trace.package_dirs.insert(here.clone());
+                }
+            }
+        }
+    }
+    Some(here)
+}
+
+fn executable(path: &Path, cwd: Option<&Path>) -> Option<PathBuf> {
     if !path.is_absolute() || !path.is_file() {
         return None;
     }
-    let parent = path.parent()?;
     let resolved = path.canonicalize().ok()?;
-    if shim_directory(parent)
-        || shim_directory(&parent.canonicalize().ok()?)
+    let walked = walk_links(PathBuf::new(), path, false, cwd, &mut LinkTrace::default())?;
+    if in_project(path.parent()?, cwd)
+        || in_project(resolved.parent()?, cwd)
         || shim_directory(resolved.parent()?)
+        || walked.canonicalize().ok()? != resolved
     {
         return None;
     }
@@ -100,25 +165,22 @@ fn select(
     cwd: Option<&Path>,
 ) -> io::Result<PathBuf> {
     if let Some(pin) = configured {
-        return executable(pin).ok_or_else(|| {
+        return executable(pin, None).ok_or_else(|| {
             io::Error::other(
                 "bun_path must name an absolute executable Bun binary, not a manager shim",
             )
         });
     }
-    if let Some(binary) = bins.iter().find_map(|dir| executable(&dir.join(NAME))) {
+    if let Some(binary) = bins
+        .iter()
+        .find_map(|dir| executable(&dir.join(NAME), None))
+    {
         return Ok(binary);
     }
     // A launcher may inherit an absolute cwd or project bin in PATH as well as `.`.
-    let cwd = cwd.and_then(|dir| dir.canonicalize().ok());
-    let outside_cwd = |candidate: &Path| {
-        cwd.as_ref().is_some_and(|dir| {
-            candidate != dir && (dir.parent().is_none() || !candidate.starts_with(dir))
-        })
-    };
-    for dir in path.iter().filter(|dir| dir.is_absolute()) {
-        if outside_cwd(dir) && dir.canonicalize().ok().is_some_and(|dir| outside_cwd(&dir)) {
-            if let Some(binary) = executable(&dir.join(NAME)).filter(|binary| outside_cwd(binary)) {
+    if let Some(cwd) = cwd.and_then(|dir| dir.canonicalize().ok()) {
+        for dir in path.iter().filter(|dir| dir.is_absolute()) {
+            if let Some(binary) = executable(&dir.join(NAME), Some(&cwd)) {
                 return Ok(binary);
             }
         }
@@ -135,7 +197,7 @@ fn select(
         };
         let installs = installs.canonicalize()?;
         for version in versions {
-            if let Some(binary) = executable(&version?.path().join("bin").join(NAME)) {
+            if let Some(binary) = executable(&version?.path().join("bin").join(NAME), None) {
                 if !binary.starts_with(&installs) {
                     return Err(io::Error::other(
                         "Linked Bun installation; set bun_path explicitly",
@@ -237,6 +299,52 @@ mod tests {
             .unwrap(),
             direct
         );
+    }
+
+    #[test]
+    fn a_shim_anywhere_in_the_link_chain_cannot_become_a_direct_bun() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let cwd = root.join("project");
+        let bin = root.join("bin");
+        let shims = root.join("manager/shims");
+        let pkg = cwd.join("node_modules/.bin");
+        for dir in [&bin, &shims, &pkg] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let real = install(&root.join("versions/v1/bin/bun"), 0o700);
+        symlink("../../versions/v1/bin/bun", shims.join("bun")).unwrap();
+        symlink("../manager/shims/bun", bin.join("bun")).unwrap();
+        let inherited = |dir: &Path| select(None, &[], &[dir.to_owned()], &[], Some(&cwd));
+        let pinned = |p: &Path| select(Some(p), &[], &[], &[], Some(&cwd));
+        assert_eq!(bin.join("bun").canonicalize().unwrap(), real);
+        assert!(inherited(&bin).is_err());
+        assert!(pinned(&bin.join("bun")).is_err());
+        symlink("../../../versions/v1/bin", pkg.join("programs")).unwrap();
+        symlink(
+            "../project/node_modules/.bin/programs",
+            bin.join("elsewhere"),
+        )
+        .unwrap();
+        assert!(pinned(&bin.join("elsewhere/bun")).is_err());
+        assert!(inherited(&bin.join("elsewhere")).is_err());
+        let linked = root.join("linked");
+        let store = root.join("store/modules");
+        std::fs::create_dir(&linked).unwrap();
+        std::fs::create_dir_all(store.join(".bin")).unwrap();
+        symlink("../store/modules", linked.join("node_modules")).unwrap();
+        symlink("../../../versions/v1/bin/bun", store.join(".bin/bun")).unwrap();
+        symlink(".bin", store.join("commands")).unwrap();
+        symlink("../linked/node_modules/commands", bin.join("via-store")).unwrap();
+        assert_eq!(bin.join("via-store/bun").canonicalize().unwrap(), real);
+        assert!(pinned(&bin.join("via-store/bun")).is_err());
+        symlink("../versions/v1/bin", cwd.join("choice")).unwrap();
+        symlink("../project/choice", bin.join("via-project")).unwrap();
+        assert!(inherited(&bin.join("via-project")).is_err());
+        assert_eq!(pinned(&bin.join("via-project/bun")).unwrap(), real);
+        symlink("../versions/v1/bin", bin.join("installed")).unwrap();
+        assert_eq!(inherited(&bin.join("installed")).unwrap(), real);
+        assert_eq!(pinned(&bin.join("installed/../bin/bun")).unwrap(), real);
     }
 
     #[test]
