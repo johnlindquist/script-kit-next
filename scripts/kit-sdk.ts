@@ -10117,7 +10117,7 @@ interface ScriptKitMcpDiscovery {
 async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> {
   const discoveryPath = process.env.SCRIPT_KIT_MCP_SERVER_JSON?.trim()
     || nodePath.join(activeScriptKitRoot(), 'server.json');
-  let discovery: ScriptKitMcpDiscovery;
+  let text: string;
   let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
 
   try {
@@ -10136,8 +10136,7 @@ async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> 
     if (typeof process.getuid === 'function' && opened.uid !== process.getuid()) {
       throw new Error('Script Kit MCP discovery must belong to the current user');
     }
-    const text = await handle.readFile('utf8');
-    discovery = JSON.parse(text) as ScriptKitMcpDiscovery;
+    text = await handle.readFile('utf8');
   } catch (error) {
     throw new Error(
       `[computer] Script Kit MCP discovery is unavailable at ${discoveryPath}. Start Script Kit before using computer.* helpers. ${getMcpErrorMessage(error)}`
@@ -10146,6 +10145,13 @@ async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> 
     await handle?.close();
   }
 
+  let discovery: ScriptKitMcpDiscovery;
+  try {
+    discovery = JSON.parse(text) as ScriptKitMcpDiscovery;
+  } catch {
+    // A parse error from this private file may contain its bearer verbatim.
+    throw new Error("[computer] Script Kit's MCP discovery file contains invalid JSON. Restart Script Kit to recreate it.");
+  }
   if (
     typeof discovery?.url !== 'string' ||
     !discovery.url.trim() ||

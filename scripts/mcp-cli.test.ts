@@ -295,6 +295,26 @@ describe("mcp-cli", () => {
     }
   });
 
+  it.each(["server.json", "server-location.json"])("does not expose malformed private %s contents", async name => {
+    const { dir, env } = discoveryEnv("http://127.0.0.1:43129");
+    const canary = "PrivateFixture" + crypto.randomUUID().replaceAll("-", "");
+    let requests = 0;
+    startMockMcp(body => { requests++; return { jsonrpc: "2.0", id: body.id, result: {} }; });
+    try {
+      writeFileSync(join(dir, name), '{"token":' + canary + '}', { mode: 0o600 });
+      const message = await runCli(["mcp", "tools"], { ...env, SCRIPT_KIT_MCP_ENDPOINT: "",
+        SCRIPT_KIT_AGENT_CREDENTIAL: "", SCRIPT_KIT_MCP_TOKEN: name === "server.json" ? "" : "scoped-fixture" })
+        .then(() => "", (err: unknown) => err instanceof Error ? err.message : "");
+      // Assert on facts, not the raw failure: a failing regression must not print the canary.
+      expect({ disclosed: message.includes(canary), malformed: message.includes("invalid JSON"),
+        recovery: message.includes("Restart Script Kit"), requests }).toEqual({
+        disclosed: false, malformed: true, recovery: true, requests: 0,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("refuses symlinked bearer-token discovery before reading its external owner", async () => {
     const { dir } = discoveryEnv("http://127.0.0.1:43129");
     const alias = join(dir, "aliased-server.json");

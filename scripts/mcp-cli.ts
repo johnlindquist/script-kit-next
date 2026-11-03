@@ -145,7 +145,14 @@ function loadDiscovery(locationOnly=false): DiscoveryInfo | null {
     if (typeof process.getuid === "function" && opened.uid !== process.getuid()) {
       fail(`Script Kit MCP discovery must belong to the current user: ${path}`);
     }
-    const discovery = JSON.parse(readFileSync(descriptor, "utf8")) as DiscoveryInfo;
+    const text = readFileSync(descriptor, "utf8");
+    let discovery: DiscoveryInfo;
+    try {
+      discovery = JSON.parse(text) as DiscoveryInfo;
+    } catch {
+      // A parser error can quote private file contents, including an unquoted bearer.
+      return fail("Script Kit's MCP discovery file contains invalid JSON. Restart Script Kit to recreate it.");
+    }
     if (!discovery || typeof discovery !== "object") {
       fail(`Script Kit MCP discovery must contain a private endpoint and token: ${path}`);
     }

@@ -482,6 +482,19 @@ try {
     return { requests: observed.requests };
   });
 
+  await check("mcp-malformed-private-discovery-does-not-quote-its-contents", async () => {
+    const canary = "PrivateFixture" + crypto.randomUUID().replaceAll("-", "");
+    writeFileSync(discoveryPath, '{"token":' + canary + '}');
+    const observed = installServer(payload => successResponse(payload));
+    const message = await computer.listNativeWindows().then(() => "", (err: unknown) =>
+      err instanceof Error ? err.message : "");
+    if (observed.requests !== 0 || message.includes(canary) ||
+        !message.includes("invalid JSON") || !message.includes("Restart Script Kit")) {
+      throw new Error("Malformed private discovery was not refused safely before transport");
+    }
+    return { requests: observed.requests, privateFileContentsExposed: false };
+  });
+
   await check("mcp-symlinked-token-discovery-refuses-before-reading", async () => {
     const external = join(fixtureDirectory, "external-server.json");
     writeFileSync(external, JSON.stringify({ url: "http://127.0.0.1:43129", token: privateToken }), {
