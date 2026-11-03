@@ -315,6 +315,15 @@ export function readSource(file: string) {
   return snapshot(file)?.source ?? null;
 }
 
+/** A revision comparison actually ran and rejected this write. A lock or I/O failure is not this error. */
+export class StaleConfigRevision extends Error {
+  readonly code = 'stale_revision';
+  constructor() {
+    super('Stale config revision; reread the config and review the change');
+    this.name = 'StaleConfigRevision';
+  }
+}
+
 /** Atomic publication and optimistic concurrency between Kit settings writers.
  * Noncooperating editors are checked again immediately before publication.
  * A stale lock after process death is a refusal, never broken on a timer. */
@@ -337,7 +346,7 @@ export function mutate(
     const old = snapshot(file),
       source = old?.source ?? null;
     if (expected !== undefined && expected !== revision(source))
-      throw new Error('Stale config revision; reread the config and review the change');
+      throw new StaleConfigRevision();
     // Parse even for reset-all: never erase a dynamic config we cannot inspect.
     if (source !== null) parse(source);
     const next = change(source);

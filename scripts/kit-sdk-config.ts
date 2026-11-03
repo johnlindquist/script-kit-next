@@ -26,7 +26,8 @@
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { homedir, devNull } from 'node:os';
-import { configPath, directSettingsBun } from './config-document.ts';
+import { configPath, directSettingsBun, StaleConfigRevision } from './config-document.ts';
+export { StaleConfigRevision };
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -99,6 +100,7 @@ export interface ValidateResult {
 
 interface CLIResponse<T> {
   success: boolean;
+  errorCode?: 'stale_revision';
   data?: T;
   error?: string;
   // For validate command
@@ -161,27 +163,23 @@ async function runCLI<T>(args: string[]): Promise<T> {
     proc.stderr.resume(); // drain diagnostics without redisclosing raw config text
 
     proc.on('close', (code) => {
-      // Parse the JSON output
+      let result: CLIResponse<T>;
       try {
-        const result = JSON.parse(stdout) as CLIResponse<T>;
-        
-        if (result.success) {
-          resolve(result.data as T);
+        result = JSON.parse(stdout);
+      } catch {
+        reject(new Error(code === 0 ? 'Settings CLI returned invalid JSON' : 'Settings CLI failed without a readable result'));
+        return;
+      }
+      if (code === 0 && result?.success === true && Object.hasOwn(result, 'data')) {
+        resolve(result.data as T);
+      } else if (code === 1 && result?.success === false) {
+        if ((args[0] === 'validate' || args[0] === 'validate-change') && result.valid === false) {
+          resolve(result as unknown as T);
         } else {
-          // Check for validate-style response
-          if ('valid' in result) {
-            resolve(result as unknown as T);
-            return;
-          }
-          reject(new Error(result.error || 'Unknown CLI error'));
+          reject(result.errorCode === 'stale_revision' ? new StaleConfigRevision() : new Error(result.error || 'Settings CLI refused the request'));
         }
-      } catch (parseError) {
-        // If we can't parse JSON, report the raw output
-        if (code !== 0) {
-          reject(new Error(`Settings CLI failed (exit ${code})`));
-        } else {
-          reject(new Error('Settings CLI returned invalid JSON'));
-        }
+      } else {
+        reject(new Error('Settings CLI exited without a matching result'));
       }
     });
 
@@ -230,22 +228,8 @@ async function validate(): Promise<ValidateResult> {
   try {
     return await runCLI<ValidateResult>(['validate']);
   } catch (err) {
-    // validate command returns structured error, need to handle specially
-    const message = err instanceof Error ? err.message : String(err);
-    // Try to extract the structured response from stderr/error
-    try {
-      // Check if error contains JSON
-      const jsonMatch = message.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]) as ValidateResult;
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    return {
-      valid: false,
-      errors: [message]
-    };
+    // Structured validation results have already been checked against the exit status.
+    return { valid: false, errors: [err instanceof Error ? err.message : String(err)] };
   }
 }
 

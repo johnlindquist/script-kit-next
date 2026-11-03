@@ -18,7 +18,7 @@
  * Output is JSON by default for AI parsing.
  */
 
-import { configPath, editLiteral, mutate, readSource, revision, values } from './config-document.ts';
+import { configPath, editLiteral, mutate, readSource, revision, StaleConfigRevision, values } from './config-document.ts';
 
 import {
   analyzeCommandConfigPath,
@@ -1098,6 +1098,7 @@ let CONFIG_PATH: string;
 
 interface Result<T> {
   success: boolean;
+  errorCode?: 'stale_revision';
   data?: T;
   error?: string;
   valid?: boolean;
@@ -1113,8 +1114,8 @@ function success<T>(data: T): void {
   output({ success: true, data });
 }
 
-function error(message: string): void {
-  output({ success: false, error: message });
+function error(message: string, errorCode?: 'stale_revision'): void {
+  output({ success: false, error: message, errorCode });
   process.exit(1);
 }
 
@@ -1906,5 +1907,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  error(e instanceof Error ? e.message : String(e));
+  error(e instanceof Error ? e.message : String(e), e instanceof StaleConfigRevision ? e.code : undefined);
 });

@@ -27,6 +27,8 @@ For asdf, a typical path is `~/.asdf/installs/bun/<version>/bin/bun`. Substitute
 
 If a Node script imports Kit’s settings SDK (`sdk/kit-sdk-config.ts`), it can select Bun with the **`BUN_PATH` environment variable**. Use the absolute executable path from your manager, not a `shims` or `node_modules/.bin` entry. An invalid pin stops the settings request. Without a pin, the SDK looks in the usual install locations and then on `PATH`, skipping project-local candidates in the working directory. Keep the rest of `PATH` trusted. A script already running in Bun reuses that Bun.
 
+When a settings write fails with `stale_revision` (`error.code` in the SDK; `errorCode` in the CLI’s JSON), someone has changed the file since you read it. Read it again and review the proposed edit before saving. A busy writer or an unreadable helper result does not mean your edit was saved.
+
 ### Upgrading from a v1 kit
 
 Automatic migration runs only for the default home and a recognized legacy layout. If `~/.kenv` also contains a Git repository, subkits, links, or other unrecognized content, Kit leaves that workspace in place. Keep your old files and use **Migrate v1 Scripts** to review what to bring across. Choosing another `SK_PATH` does not migrate the default home.

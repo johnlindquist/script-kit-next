@@ -97,9 +97,13 @@ describe('installed settings helper', () => {
       expect(f.read()).toBe(source.replace('16, //', '18, //'));
       const before = f.read() + '// saved by me\n';
       writeFileSync(f.config, before);
-      expect(
-        (await f.run('set-json', 'editorFontSize', '22', '--if-revision', got.data.revision)).error,
-      ).toMatch(/stale/i);
+      const stale = await f.run('set-json', 'editorFontSize', '22', '--if-revision', got.data.revision);
+      expect(stale).toMatchObject({ code: 1, success: false, errorCode: 'stale_revision' });
+      expect(stale.error).toMatch(/stale/i);
+      mkdirSync(f.config + '.settings-lock');
+      const busy = await f.run('set-json', 'editorFontSize', '22', '--if-revision', got.data.revision);
+      expect(busy.code).toBe(1);
+      expect(busy.errorCode).toBeUndefined(); // The writer never reached the revision check.
       expect(f.read()).toBe(before);
     } finally {
       f.close();
@@ -173,7 +177,7 @@ describe('installed settings helper', () => {
         const old = await config.get('editorFontSize');
         await config.setValidated('editorFontSize',18,old.revision);
         const type = await config.set('editorFontSize','20').then(()=>false,()=>true);
-        const stale = await config.set('editorFontSize',20,old.revision).then(()=>false,()=>true);
+        const stale = await config.set('editorFontSize',20,old.revision).then(()=>null,e=>e.code);
         console.log(JSON.stringify({type,stale}));`,
       );
       const p = Bun.spawnSync([process.execPath, prog], {
@@ -181,8 +185,29 @@ describe('installed settings helper', () => {
         env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin' },
       });
       expect(p.exitCode).toBe(0);
-      expect(JSON.parse(p.stdout.toString())).toEqual({ type: true, stale: true });
+      expect(JSON.parse(p.stdout.toString())).toEqual({ type: true, stale: 'stale_revision' });
       expect(f.read()).toBe(source.replace('16, //', '18, //'));
+    } finally {
+      f.close();
+    }
+  });
+  it('does not accept a settings success reply from a process that failed', () => {
+    const f = fixture(source);
+    try {
+      writeFileSync(join(f.sdk, 'config-cli.ts'),
+        `console.log(JSON.stringify(process.argv[2] === 'validate'
+          ? { success:false, error:'unrelated failure {"valid":true}' }
+          : { success:true, data:{value:99} })); process.exit(1);`);
+      const caller = join(f.sdk, 'caller.ts');
+      writeFileSync(caller, `import {config} from './kit-sdk-config.ts';
+        const saved = await config.set('editorFontSize',20).then(()=> 'accepted',()=> 'refused');
+        console.log(JSON.stringify({saved, valid:(await config.validate()).valid}));`);
+      const child = Bun.spawnSync([process.execPath, caller], {
+        cwd: f.sdk, env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin' },
+      });
+      expect(child.exitCode).toBe(0);
+      expect(JSON.parse(child.stdout.toString())).toEqual({ saved: 'refused', valid: false });
+      expect(f.read()).toBe(source);
     } finally {
       f.close();
     }
