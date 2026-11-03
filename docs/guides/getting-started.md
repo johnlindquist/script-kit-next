@@ -10,7 +10,7 @@ Download the macOS archive from [Releases](https://github.com/johnlindquist/scri
 
 Kit needs [Bun](https://bun.sh) to run TypeScript scripts. Opening an app from Finder does not run your shell startup files. Kit checks common user and Homebrew install locations, absolute PATH entries outside the working directory, and direct Bun installations in mise and asdf (including their data-directory overrides when available to the app). It does not run either manager or let a project-local shim pick the binary.
 
-If there is more than one managed binary, or yours lives elsewhere, set a literal absolute path to the **actual executable** in your existing `~/.scriptkit/config.ts` (or the `config.ts` under your chosen `SK_PATH`), keeping the rest of your config:
+If you use mise or asdf, run `mise which bun` or `asdf which bun` in a trusted directory where the version you want is active. Use the absolute filename it prints, not the `shims/bun` path that `command -v bun` may return. If Kit sees more than one managed binary, or yours lives elsewhere, put that filename in your existing `~/.scriptkit/config.ts` (or the `config.ts` under your chosen `SK_PATH`), keeping the rest of your config:
 
 ```ts
 // Inside export default { ... }
@@ -18,6 +18,12 @@ bun_path: "/Users/you/.local/share/mise/installs/bun/1.3.14/bin/bun",
 ```
 
 For asdf, a typical path is `~/.asdf/installs/bun/<version>/bin/bun`. Substitute your full home path and installed version; don't use `~`, a `shims` path, or `./bun`. A computed `bun_path` requires another discoverable Bun to evaluate `config.ts` on cold start. Relaunch from Finder and run a simple script to confirm. If a pinned version is removed, update the pin; script execution will not silently switch binaries.
+
+`bun_path` tells the Mac app what to run; it does not change a terminal or an external agent’s `PATH`. To read Kit’s offline CLI manual in an environment without Bun on `PATH`, invoke the resolved executable directly (adjust the workspace path if you use `SK_PATH`):
+
+```sh
+"/absolute/path/to/bun" "$HOME/.scriptkit/bin/scriptkit" --skill
+```
 
 ### Upgrading from a v1 kit
 
