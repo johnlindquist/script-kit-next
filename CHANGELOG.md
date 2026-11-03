@@ -1,5 +1,9 @@
 # Script Kit changelog
 
+## 0.1.29 · A dependable Return action
+
+[Release notes and installation checks](docs/releases/v0.1.29.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
+
 ## 0.1.28 · Reliability
 
 [Release notes and installation checks](docs/releases/v0.1.28.md). Kit checks the selected browser tab or window before acting, preserves personal files on upgrade, and distinguishes unconfirmed microphone or Accessibility access from a working input device or cursor.

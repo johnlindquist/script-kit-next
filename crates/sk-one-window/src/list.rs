@@ -504,8 +504,11 @@ impl ListState {
                 let id = format!("slot{i}");
                 match self
                     .slot_row(i)
-                    .filter(|_| self.asking || self.steady.settled(now))
-                {
+                    // Only a reading waits for the typing pause. Once Jev is down for these
+                    // exact words, the selected local action is already what Return runs.
+                    .filter(|_| {
+                        self.asking || self.jev.is_down_for(&self.text) || self.steady.settled(now)
+                    }) {
                     None => {
                         let label = if self.held.is_some() {
                             words::ENTER_WAITING

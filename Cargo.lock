@@ -7739,7 +7739,7 @@ dependencies = [
 
 [[package]]
 name = "script-kit-gpui"
-version = "0.1.28"
+version = "0.1.29"
 dependencies = [
  "age",
  "alacritty_terminal",

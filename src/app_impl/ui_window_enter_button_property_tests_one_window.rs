@@ -80,6 +80,36 @@ fn typing_a_sentence_keeps_the_enter_capsule_steady() {
     );
 }
 
+#[test]
+fn cached_preflight_follows_the_capsule_when_a_reading_settles_on_the_same_row() {
+    in_launcher("preflight_after_reading", 0, |cx| {
+        let (app, window) = launcher(cx, Jev::Reading);
+        type_into_launcher(cx, window, &app, "zzqxframeproof");
+        let observe = |cx: &mut gpui::TestAppContext| {
+            let capsule = enter_capsule(&app, cx);
+            app.update(cx, |app, _| {
+                app.rebuild_main_window_preflight_if_needed();
+                let receipt = app
+                    .cached_main_window_preflight
+                    .as_ref()
+                    .expect("launcher receipt");
+                let action = receipt.enter_action.as_ref().expect("selected action");
+                assert_eq!(action.label, capsule);
+                (receipt.selected_result_key.clone(), capsule)
+            })
+        };
+        // First let the reading arrive; its own typing-pause timer still owns the label.
+        wait(cx, 120);
+        let (before_row, before_label) = observe(cx);
+        assert_eq!(before_label, words::ENTER_JEV_FIRST);
+        wait(cx, sk_one_window::contract::READING_SETTLE_MS);
+        let (after_row, after_label) = observe(cx);
+        assert!(before_row.is_some());
+        assert_eq!(before_row, after_row);
+        assert_ne!(before_label, after_label);
+    });
+}
+
 fn first_header(
     app: &gpui::Entity<ScriptListApp>,
     cx: &mut gpui::TestAppContext,

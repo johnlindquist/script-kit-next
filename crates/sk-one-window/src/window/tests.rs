@@ -463,6 +463,26 @@ fn selecting_is_the_users_own_change_and_never_arms_enter() {
 }
 
 #[test]
+fn a_known_offline_action_names_return_from_the_first_frame() {
+    let mut win = OneWindow::default();
+    let text = "zzqxframeproof";
+    win.handle(0, Event::Text(text.into()));
+    win.handle(0, Event::JevDown { text: text.into() });
+    let label = "Ask the model: “zzqxframeproof”";
+    assert_eq!(win.list().current_row().unwrap().key, "down:model");
+    assert_eq!(win.enter_target(0).label, label, "no reading is pending");
+    win.handle(crate::contract::READING_SETTLE_MS, Event::Tick);
+    assert_eq!(
+        win.enter_target(crate::contract::READING_SETTLE_MS).label,
+        label
+    );
+    let out = win.handle(500, Event::Key(Key::Enter));
+    assert!(
+        matches!(out.effects.first(), Some(Effect::Run { row, .. }) if row.key == "down:model")
+    );
+}
+
+#[test]
 fn jev_going_down_under_an_unchanged_enter_keeps_enter_live() {
     let mut win = OneWindow::default();
     win.handle(0, Event::Text("open notes".into()));

@@ -2355,6 +2355,14 @@ impl ScriptListApp {
                 if crate::logging::filter_perf_trace_enabled() {
                     crate::main_window_preflight::log_main_window_preflight_receipt(&receipt);
                 }
+            } else if let Some(action) = receipt
+                .enter_action
+                .as_mut()
+                .filter(|_| self.one_window_owns_list())
+            {
+                // A reading can settle on the same row. Keep the cached rows, but
+                // report the label the real Return capsule shows at this instant.
+                action.label = self.main_window_primary_action_label();
             }
             self.cached_main_window_preflight = Some(receipt);
             return;

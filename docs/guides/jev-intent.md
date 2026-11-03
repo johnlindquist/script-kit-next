@@ -4,6 +4,8 @@ The launcher works locally by default. For optional remote readings, set `jevInt
 
 **What leaves the machine:** when typing pauses, TypeSafe can receive the words typed so far, the front app name, app/menu choices and shortlists of command and script names and descriptions. With voice readings enabled by the same setting, it can receive partial and final transcripts. A sentence can incur several paid requests; a compound request can require one per clause. The live launcher does not put window titles, clipboard or selection contents, stored facts or prior action summaries in the screen description. Labels themselves can be private. Recognizable credentials are withheld, but no pattern detector catches every secret. Leave remote readings disabled for sensitive work. Opening chat or explicitly giving work to an agent is a separate action.
 
+With Jev off or unavailable, the Return button names the local action already selected, such as **Ask the model**. It doesn’t wait for a reading that cannot arrive. With Jev on, a reading can take over the button after you pause; a background file search cannot change what Return runs.
+
 Typed launcher syntax and exact local name matches do not need a remote reading. An unsupported service cannot connect or send a message from the launcher. Saving a fact writes it to today’s note; a fact-recall reading opens the existing local `brain:` search. A match is not a generated answer. Quit requests for another app wait in the cancellable hold before dispatch.
 
 ## Measuring readings

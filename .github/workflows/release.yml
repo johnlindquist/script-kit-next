@@ -330,6 +330,12 @@ jobs:
             --profile release --features owned-ui-evaluation --timeout-ms 5400000 \
             --artifact-out .test-output/release/compile.reference.json
 
+      - name: Check the compiled launcher before it reaches signing
+        run: |
+          bun scripts/agentic/root-search-frame-stability.ts \
+            --artifact .test-output/release/compile.reference.json \
+            --receipt .test-output/release/unsigned-root-frame.json
+
       - name: Bundle the verified executable without invoking cargo build
         run: |
           BIN="$(bun scripts/agentic/build-artifact.ts verify-reference "$PWD" .test-output/release/compile.reference.json)"
