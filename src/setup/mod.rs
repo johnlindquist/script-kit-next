@@ -262,11 +262,8 @@ pub fn settings_cli_command(configured_bun: Option<&str>) -> Result<std::process
     if !config.is_absolute() {
         return Err("Settings require an absolute config path".into());
     }
-    let bun = match configured_bun.filter(|p| !p.is_empty()) {
-        Some(path) if Path::new(path).is_absolute() && Path::new(path).is_file() => {
-            PathBuf::from(path)
-        }
-        Some(_) => return Err("Configured bun_path must name an absolute executable".into()),
+    let bun = match configured_bun {
+        Some(pin) => crate::config::resolve_bun(Some(pin)).map_err(|error| error.to_string())?,
         None => resolve_bun().ok_or("Bun is unavailable")?,
     };
     let mut command = std::process::Command::new(bun);

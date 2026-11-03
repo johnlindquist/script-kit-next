@@ -339,6 +339,10 @@ jobs:
       - name: Bundle the verified executable without invoking cargo build
         run: |
           BIN="$(bun scripts/agentic/build-artifact.ts verify-reference "$PWD" .test-output/release/compile.reference.json)"
+          CHECK="$RUNNER_TEMP/unsigned-workspace-check.json"
+          BUN_DIR="$(dirname "$(command -v bun)")"
+          (cd "$RUNNER_TEMP" && PATH="$BUN_DIR:/usr/bin:/bin" "$BIN" --check-installation) >"$CHECK"
+          jq -e --arg version "${GITHUB_REF_NAME#v}" --argjson packaged false -f scripts/verify-installed-workspace.jq "$CHECK" >/dev/null
           mkdir -p target/release
           install -m 0755 "$BIN" target/release/script-kit-gpui
           CARGO_BUNDLE_SKIP_BUILD=1 cargo bundle --release --bin script-kit-gpui --features owned-ui-evaluation
@@ -682,7 +686,7 @@ jobs:
           /bin/bash scripts/release-stapler.sh validate "$APP"
           CHECK="$RUNNER_TEMP/installed-workspace-check.json"
           (cd "$TMP_DIR" && "$APP/Contents/MacOS/script-kit-gpui" --check-installation) >"$CHECK"
-          jq -e --arg version "${GITHUB_REF_NAME#v}" '.schemaVersion == 1 and .version == $version and .packaged and .freshWorkspace and .starterScriptsIndexed > 0 and .userEditsPreserved and .settingsTransaction == "verified" and .scratchRemoved' "$CHECK" >/dev/null
+          jq -e --arg version "${GITHUB_REF_NAME#v}" --argjson packaged true -f scripts/verify-installed-workspace.jq "$CHECK" >/dev/null
           jq --arg sha "$GITHUB_SHA" --arg archive "$(shasum -a 256 target/release/bundle/osx/Script-Kit-macos.zip | cut -d' ' -f1)" '. + {sourceSha:$sha, zipSha256:$archive}' "$CHECK" >target/release/bundle/osx/installed-workspace-check.json
 
       - name: Record advisory packaged-journey scorecard

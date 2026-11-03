@@ -1,5 +1,7 @@
 //! The installed app can qualify its own first-run resources without launching the desktop.
 //! This entry point runs before hooks, services, hotkeys, credentials or GUI initialization.
+mod settings;
+
 use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -84,7 +86,7 @@ fn check() -> Result<Value> {
     }
     let config = root.join("config.ts");
     let mut original = fs::read(&config)?;
-    original.extend_from_slice(b"\n// Personal comment to preserve on upgrade.\n");
+    original.extend_from_slice(settings::PERSONAL_COMMENT.as_bytes());
     fs::write(&config, &original)?;
     let personal = b"// Name: Personal check\nexport {};\n";
     fs::write(&starter, personal)?;
@@ -96,40 +98,24 @@ fn check() -> Result<Value> {
             && fs::read(&config)? == original,
         "A second launch overwrote personal files"
     );
-    let bun = crate::setup::resolve_bun();
-    if let Some(bun) = &bun {
-        let run = |args: &[&str]| -> Result<(bool, Value)> {
-            let out = crate::setup::settings_cli_command(bun.to_str())
+    let settings_proof = if let Some(bun) = crate::setup::resolve_bun() {
+        let pin = bun.to_str().context("Settings runtime path is not UTF-8")?;
+        Some(settings::verify(&config, &original, |args| {
+            let out = crate::setup::settings_cli_command(Some(pin))
                 .map_err(anyhow::Error::msg)?
                 .args(args)
                 .output()?;
             Ok((
-                out.status.success(),
+                out.status.code(),
                 serde_json::from_slice(&out.stdout).context("Invalid settings helper response")?,
             ))
-        };
-        let (ok, read) = run(&["get", "editorFontSize"])?;
-        ensure!(ok, "Installed settings read failed");
-        let rev = read["data"]["revision"]
-            .as_str()
-            .context("Missing settings revision")?;
-        let (ok, _) = run(&["set-json", "editorFontSize", "27", "--if-revision", rev])?;
-        ensure!(ok, "Installed settings write failed");
-        let (ok, read) = run(&["get", "editorFontSize"])?;
-        ensure!(
-            ok && read["data"]["value"] == 27,
-            "Installed setting was not retained"
-        );
-        let after = fs::read(&config)?;
-        let (ok, _) = run(&["set-json", "editorFontSize", "29", "--if-revision", rev])?;
-        ensure!(
-            !ok && fs::read(&config)? == after,
-            "Stale settings update overwrote a newer revision"
-        );
-    }
+        })?)
+    } else {
+        None
+    };
     let sdk_hash = format!("{:x}", Sha256::digest(&sdk));
     private.close()?;
     Ok(
-        json!({"schemaVersion":1,"version":env!("CARGO_PKG_VERSION"),"packaged":packaged,"freshWorkspace":true,"sdkSha256":sdk_hash,"starterScriptsIndexed":scripts.len(),"userEditsPreserved":true,"settingsTransaction":if bun.is_some(){"verified"}else{"bun_unavailable"},"scratchRemoved":true}),
+        json!({"schemaVersion":1,"version":env!("CARGO_PKG_VERSION"),"packaged":packaged,"freshWorkspace":true,"sdkSha256":sdk_hash,"starterScriptsIndexed":scripts.len(),"userEditsPreserved":true,"settingsTransaction":if settings_proof.is_some(){"verified"}else{"bun_unavailable"},"settingsProof":settings_proof,"scratchRemoved":true}),
     )
 }

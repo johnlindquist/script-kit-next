@@ -62,13 +62,30 @@ pub(crate) fn resolve_bun(configured: Option<&str>) -> io::Result<PathBuf> {
     )
 }
 
+fn shim_directory(dir: &Path) -> bool {
+    let named = |p: &Path, name: &str| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|s| s.eq_ignore_ascii_case(name))
+    };
+    dir.ancestors().any(|part| {
+        named(part, "shims")
+            || (named(part, ".bin") && part.parent().is_some_and(|p| named(p, "node_modules")))
+    })
+}
+
 fn executable(path: &Path) -> Option<PathBuf> {
-    // Bare, relative and empty PATH entries must never bind a Bun from cwd.
-    if !path.is_absolute() || path.parent()?.ends_with("shims") || !path.is_file() {
+    // A nested package can inherit its parent's node_modules/.bin. Directory aliases
+    // and the link to the program must not hide a shim, even for an explicit pin.
+    if !path.is_absolute() || !path.is_file() {
         return None;
     }
+    let parent = path.parent()?;
     let resolved = path.canonicalize().ok()?;
-    if resolved.parent()?.ends_with("shims") {
+    if shim_directory(parent)
+        || shim_directory(&parent.canonicalize().ok()?)
+        || shim_directory(resolved.parent()?)
+    {
         return None;
     }
     // which on an absolute path checks effective executable access; no PATH search.
@@ -100,7 +117,7 @@ fn select(
         })
     };
     for dir in path.iter().filter(|dir| dir.is_absolute()) {
-        if dir.canonicalize().ok().is_some_and(|dir| outside_cwd(&dir)) {
+        if outside_cwd(dir) && dir.canonicalize().ok().is_some_and(|dir| outside_cwd(&dir)) {
             if let Some(binary) = executable(&dir.join(NAME)).filter(|binary| outside_cwd(binary)) {
                 return Ok(binary);
             }
@@ -182,6 +199,44 @@ mod tests {
         assert_eq!(choose(Some(&second)).unwrap(), second);
         std::fs::remove_file(first).unwrap();
         assert_eq!(choose(None).unwrap(), second);
+    }
+
+    #[test]
+    fn a_nested_package_and_an_alias_to_a_shim_directory_cannot_pick_the_runtime() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let cwd = root.join("project/packages/example");
+        let package_bin = root.join("project/node_modules/.bin");
+        let shims = root.join("manager/shims");
+        let alias = root.join("looks-direct");
+        for dir in [&cwd, &package_bin, &shims] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let direct = install(&root.join("installed/bin").join(NAME), 0o700);
+        let wrapper = install(&root.join("manager/dispatch"), 0o700);
+        symlink(&wrapper, package_bin.join(NAME)).unwrap();
+        symlink(&wrapper, shims.join(NAME)).unwrap();
+        symlink(&shims, &alias).unwrap();
+        assert!(select(
+            None,
+            &[],
+            &[package_bin.clone(), alias.clone()],
+            &[],
+            Some(&cwd)
+        )
+        .is_err());
+        assert!(select(Some(&alias.join(NAME)), &[], &[], &[], Some(&cwd)).is_err());
+        assert_eq!(
+            select(
+                None,
+                &[],
+                &[package_bin, alias, root.join("installed/bin")],
+                &[],
+                Some(&cwd)
+            )
+            .unwrap(),
+            direct
+        );
     }
 
     #[test]

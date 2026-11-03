@@ -1445,7 +1445,7 @@ pub fn init_notes_db() -> Result<()> {
         .context("Failed to prepare private Notes trash directory")?;
 
     if let Some(db) = NOTES_DB.get() {
-        let conn = db.lock().map_err(db_lock_err)?;
+        let mut conn = db.lock().map_err(db_lock_err)?;
 
         conn.execute_batch("PRAGMA foreign_keys=ON;")
             .context("Failed to enable notes foreign keys")?;
@@ -1454,7 +1454,7 @@ pub fn init_notes_db() -> Result<()> {
             rebuild_index_from_files_with_conn(&conn)
                 .context("Failed to rebuild notes index from brain files")?;
         } else {
-            backfill_note_metadata_with_conn(&conn)
+            backfill_note_metadata_with_conn(&mut conn)
                 .context("Failed to backfill notes metadata schema")?;
         }
         start_notes_dir_watcher();
@@ -1813,8 +1813,14 @@ fn recompute_all_note_link_targets_with_conn(conn: &Connection) -> Result<()> {
     resolve_unresolved_links_with_conn(conn)
 }
 
-fn backfill_note_metadata_with_conn(conn: &Connection) -> Result<()> {
-    let mut stmt = conn
+fn backfill_note_metadata_with_conn(conn: &mut Connection) -> Result<()> {
+    // Other connections can reindex, rename or delete a note. Take the writer slot
+    // before choosing parents so all derived tags, aliases and links describe the
+    // same committed snapshot. On error the transaction leaves prior metadata intact.
+    let tx = conn
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .context("Failed to begin notes metadata backfill")?;
+    let mut stmt = tx
         .prepare(
             r#"
             SELECT id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order
@@ -1830,11 +1836,12 @@ fn backfill_note_metadata_with_conn(conn: &Connection) -> Result<()> {
     drop(stmt);
 
     for note in notes {
-        replace_note_metadata_with_conn(conn, &note)?;
+        replace_note_metadata_with_conn(&tx, &note)?;
     }
 
-    recompute_all_note_link_targets_with_conn(conn)?;
-    Ok(())
+    recompute_all_note_link_targets_with_conn(&tx)?;
+    tx.commit()
+        .context("Failed to commit notes metadata backfill")
 }
 
 /// Get a note by ID

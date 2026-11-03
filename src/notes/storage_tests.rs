@@ -3,6 +3,59 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    /// A file watcher or second store may delete a note while an already-open index
+    /// is being checked. A backfill must never publish aliases for a vanished parent.
+    #[test]
+    fn metadata_backfill_observes_a_concurrent_delete_before_deriving_aliases() {
+        use std::cell::RefCell;
+        thread_local! {
+            static PENDING_DELETE: RefCell<Option<Connection>> = const { RefCell::new(None) };
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("concurrent.sqlite");
+        let mut checked = Connection::open(&path).unwrap();
+        checked
+            .execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+            .unwrap();
+        ensure_notes_schema(&checked).unwrap();
+        let id = NoteId::new().as_str();
+        let now = Utc::now().to_rfc3339();
+        checked.execute(
+            "INSERT INTO notes(id,title,content,created_at,updated_at) VALUES(?1,'Not here','# Not here',?2,?2)",
+            params![id, now],
+        ).unwrap();
+        let writer = Connection::open(&path).unwrap();
+        writer
+            .execute_batch("PRAGMA foreign_keys=ON; BEGIN IMMEDIATE;")
+            .unwrap();
+        writer
+            .execute("DELETE FROM notes WHERE id=?1", [&id])
+            .unwrap();
+        PENDING_DELETE.with(|held| held.replace(Some(writer)));
+        // The deleting transaction completes exactly when the checking connection first
+        // needs its write lock. No sleep, deadline, app singleton or real note is involved.
+        checked
+            .busy_handler(Some(|_| {
+                PENDING_DELETE.with(|held| {
+                    held.take()
+                        .is_some_and(|w| w.execute_batch("COMMIT").is_ok())
+                })
+            }))
+            .unwrap();
+        let result = backfill_note_metadata_with_conn(&mut checked);
+        assert!(
+            PENDING_DELETE.with(|held| held.borrow().is_none()),
+            "contention was exercised"
+        );
+        result.expect("the metadata pass must honor the committed delete");
+        for table in ["notes", "note_aliases"] {
+            let count: i64 = checked
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 0);
+        }
+    }
+
     #[test]
     fn confirmed_trash_delete_refuses_a_restored_note() {
         let _guard = notes_db_test_guard();

@@ -12,6 +12,12 @@ The portable receipt is historical evidence, not a locally executable reference.
 
 The same unprivileged runner builds the real `export_design_tokens` tool with `exporter-build --profile release --features owned-ui-evaluation`. This reuses the application's compiled Rust library; the exporter is still a separate verified binary and must reproduce the checked-in JSON and CSS byte for byte. The signing job downloads that proof by its exact artifact ID. Standalone exporter builds keep their test profile by default.
 
+## What the settings check proves
+
+Before signing, the compiled program runs `--check-installation` in a temporary workspace. The program reads the actual config file before and after a settings edit, checks the new value and neighboring settings without evaluating TypeScript, and compares each SDK revision to the file’s SHA-256. A second write using the old revision must return `stale_revision` and leave the edited file untouched. A failure for a different reason does not pass. The signed program repeats the check from the re-extracted ZIP.
+
+In `installed-workspace-check.json`, `settingsProof.beforeSha256` and `writtenSha256` must differ; `afterRejectionSha256` must match `writtenSha256`. The font values and hashes describe generated test data, not anyone’s settings. This checks the bundle’s own resources. A normal launch and an upgrade that retains an existing workspace require separate installed-app tests.
+
 ## Recovering a stopped compiler proof
 
 The authored-opacity unit and compile-fail checks use `sk-color`, the dependency-free production crate that supplies the launcher's public `theme::alpha` types. Proving six byte operations and three Rust type errors no longer builds the whole application. The full application build and behavior suites remain separate mandatory gates. Only the narrowly recognized cold compiler directory churn may instead produce a **failed measurement**, with its closed-owner receipt, and a one-use digest-bound cache handoff. A fresh Mac can start the *entire* proof immediately without waiting for packaging. A cache hit or refusal alone cannot satisfy the aggregate gate: the signer uses the artifact ID selected by the successful proof, not just its display name. Debug and release builds watch their active compiler directory under the same time, allocation and identity limits. An incomplete sample is never a passing measurement. A test failure, storage-limit breach, unknown identity or diagnostic, missing evidence or cache, unclosed worker, or second refusal stops the release.

@@ -526,7 +526,7 @@ fn a_line_added_in_another_app_while_typing_lands_in_the_note() {
 
 #[test]
 fn a_note_with_unreadable_front_matter_saves_and_esc_leaves() {
-    let (on_disk, left) = in_launcher("notes_broken_front_matter", 0, |cx| {
+    let (on_disk, left, still_open) = in_launcher("notes_broken_front_matter", 0, |cx| {
         let _brain = OneBrain::new();
         let id = seed_note("Sandpiper plan", "- start");
         let (app, window) = launcher(cx, Jev::Off);
@@ -541,9 +541,23 @@ fn a_note_with_unreadable_front_matter_saves_and_esc_leaves() {
         let path = crate::notes::note_file_path(id)
             .unwrap()
             .expect("the note's file");
-        (std::fs::read_to_string(&path).unwrap_or_default(), left)
+        // Distinguish a pending suggestion, a failed save and a navigation refusal. Only
+        // observe after a failed exit; never send a second Escape or replay a save.
+        let still_open = editor(&app, cx).map(|entity| entity.update(cx, |view, cx| {
+            let input = view.notes_editor.read(cx);
+            serde_json::json!({
+                "sameNote":view.current_note_id()==Some(id), "dirty":view.session.is_dirty(),
+                "inlineCompletion":input.has_inline_completion(cx), "trailDepth":view.trail.len(),
+                "saveFailure":view.save_failure, "storedMatchesEditor":view.session.verify_saved_content(&input.content(cx)).is_ok()
+            })
+        }));
+        (
+            std::fs::read_to_string(&path).unwrap_or_default(),
+            left,
+            still_open,
+        )
     });
-    assert!(left, "Esc leaves the editor");
+    assert!(left, "Esc leaves the editor: {still_open:?}");
     assert!(
         on_disk.contains("tags: [unclosed"),
         "the block is kept as typed: {on_disk:?}"
