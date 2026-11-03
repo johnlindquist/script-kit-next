@@ -287,6 +287,22 @@ impl ScriptListApp {
         events: Vec<Event>,
         cx: &mut Context<Self>,
     ) -> Handled {
+        // A reading or its timer can finish between two paints. If Return changes, update
+        // the actual footer host with the committed choice rather than leaving its previous
+        // button actionable/observable until some unrelated frame is drawn.
+        let previous_capsule = (self.one_window_host.window.is_some()
+            && events.iter().any(|event| {
+                matches!(
+                    event,
+                    Event::Jev { .. } | Event::JevDown { .. } | Event::Tick
+                )
+            }))
+        .then(|| {
+            (
+                self.one_window_enter_label(),
+                self.one_window_enter_arming(),
+            )
+        });
         let mut queue = VecDeque::from(events);
         let mut handled = Handled::default();
         let mut runs = Vec::new();
@@ -404,6 +420,19 @@ impl ScriptListApp {
         self.one_window_views_follow(cx);
         self.one_window_after_turn();
         self.one_window_remember_runs(now, cx);
+        if previous_capsule.is_some_and(|(label, arming)| {
+            arming != self.one_window_enter_arming() || label != self.one_window_enter_label()
+        }) {
+            self.one_window_in_window_later(cx, |app, window, cx| {
+                if app.one_window_host.window == Some(window.window_handle())
+                    && app.one_window_owns_list()
+                    && (window.is_owned_hidden() || crate::is_main_window_visible())
+                {
+                    // Derive the config at delivery. A newer key or surface always wins.
+                    app.sync_main_footer_popup(window, cx);
+                }
+            });
+        }
         cx.notify();
         handled
     }
