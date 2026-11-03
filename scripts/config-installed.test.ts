@@ -5,12 +5,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { directSettingsBun } from './config-document.ts';
 
 // No checkout-relative modules or global packages in the child. The Rust MCP
 // fixture exercises the real embedded first-run installer; here we can also
@@ -54,6 +56,35 @@ export default {
 } satisfies Config;\n`;
 
 describe('installed settings helper', () => {
+  it('binds a concrete settings runtime without following project or manager shims', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'settings-bun-paths-')));
+    try {
+      const project = join(root, 'project');
+      const pkg = join(project, 'node_modules/.bin');
+      const nested = join(project, 'packages/sub');
+      const trusted = join(root, 'project-tools/bin'); // common prefix, different directory
+      const shims = join(root, 'manager/shims');
+      const alias = join(root, 'alias');
+      for (const dir of [pkg, nested, trusted, shims, alias]) mkdirSync(dir, { recursive: true });
+      const good = join(trusted, 'bun');
+      const decoy = join(project, 'bun');
+      const runtime = realpathSync(process.execPath);
+      symlinkSync(runtime, good);
+      writeFileSync(decoy, 'fixture only', { mode: 0o700 });
+      for (const dir of [pkg, shims]) symlinkSync(good, join(dir, 'bun'));
+      symlinkSync(shims, join(root, 'shim-alias'), 'dir');
+      symlinkSync(decoy, join(alias, 'bun'));
+      symlinkSync(good, join(trusted, 'pinned'));
+      expect(directSettingsBun(good, project)).toBe(runtime);
+      expect(directSettingsBun(join(trusted, 'pinned'))).toBe(runtime);
+      for (const name of [decoy, join(alias, 'bun'), join(shims, 'bun'), join(root, 'shim-alias/bun'), './bun'])
+        expect(directSettingsBun(name, project)).toBeUndefined();
+      expect(directSettingsBun(join(pkg, 'bun'), nested)).toBeUndefined();
+      expect(directSettingsBun(join(shims, 'bun'))).toBeUndefined(); // even as BUN_PATH
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('targets SK_PATH and edits only the selected literal; stale proposals cannot clobber human edits', async () => {
     const f = fixture(source);
     try {

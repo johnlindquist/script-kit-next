@@ -24,9 +24,9 @@
  */
 
 import { spawn } from 'node:child_process';
-import { accessSync, constants, statSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { homedir, devNull } from 'node:os';
-import { configPath } from './config-document.ts';
+import { configPath, directSettingsBun } from './config-document.ts';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -115,21 +115,37 @@ interface CLIResponse<T> {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_PATH = path.join(__dirname, 'config-cli.ts');
 
+// Bun already identified itself by running this script. A Node caller can name
+// its Bun explicitly; an invalid pin must not silently switch to another runtime.
+function settingsBun(): string {
+  if (process.versions.bun) return realpathSync.native(process.execPath);
+  if (process.env.BUN_PATH !== undefined) {
+    const pinned = directSettingsBun(process.env.BUN_PATH);
+    if (pinned) return pinned;
+    throw new Error('BUN_PATH must name an absolute executable Bun binary, not a shim');
+  }
+  const exe = process.platform === 'win32' ? 'bun.exe' : 'bun';
+  const installed = [path.join(homedir(), '.bun/bin', exe)];
+  if (process.platform !== 'win32') installed.push('/opt/homebrew/bin/bun', '/usr/local/bin/bun');
+  for (const candidate of installed) {
+    const direct = directSettingsBun(candidate);
+    if (direct) return direct;
+  }
+  const cwd = process.cwd();
+  for (const bin of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!path.isAbsolute(bin)) continue;
+    const direct = directSettingsBun(path.join(bin, exe), cwd);
+    if (direct) return direct;
+  }
+  throw new Error('No direct Bun executable found; set BUN_PATH to the absolute Bun binary');
+}
+
 /**
  * Execute the config CLI with the given arguments
  */
 async function runCLI<T>(args: string[]): Promise<T> {
   return new Promise((resolve, reject) => {
-    const exe = process.platform === 'win32' ? 'bun.exe' : 'bun';
-    const candidates = process.versions.bun ? [process.execPath] : process.env.BUN_PATH ? [process.env.BUN_PATH] : [
-      path.join(homedir(), '.bun/bin', exe), '/opt/homebrew/bin/bun', '/usr/local/bin/bun',
-      ...(process.env.PATH ?? '').split(path.delimiter).filter(dir => path.isAbsolute(dir) && dir !== process.cwd()).map(dir => path.join(dir,exe)),
-    ];
-    const bunPath = candidates.find(p => {
-      if (!path.isAbsolute(p)) return false;
-      try { accessSync(p,constants.X_OK); return statSync(p).isFile(); } catch { return false; }
-    });
-    if (!bunPath) throw new Error('No absolute Bun executable available');
+    const bunPath = settingsBun();
     const proc = spawn(bunPath, [`--config=${devNull}`, '--no-install', '--no-env-file', CLI_PATH, ...args], {
       cwd: __dirname,
       stdio: ['ignore', 'pipe', 'pipe'],

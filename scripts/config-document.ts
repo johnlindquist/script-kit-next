@@ -32,6 +32,36 @@ export function configPath() {
   return file;
 }
 
+/** Select a concrete executable, never a project/manager shim. Return the resolved
+ * pathname that the SDK must spawn, not the possibly redirected name we checked.
+ * For inherited PATH candidates, exclude the invoking directory and its contents. */
+export function directSettingsBun(file: string, excludeCwd?: string): string | undefined {
+  if (!path.isAbsolute(file)) return;
+  const shim = (directory: string) => {
+    const parts = directory.toLowerCase().split(path.sep);
+    return parts.includes('shims') || parts.some((p, i) => p === '.bin' && parts[i - 1] === 'node_modules');
+  };
+  try {
+    const dir = path.dirname(file);
+    const resolvedDir = fs.realpathSync.native(dir);
+    const resolved = fs.realpathSync.native(file);
+    if ([dir, resolvedDir, path.dirname(resolved)].some(shim)) return;
+    if (excludeCwd !== undefined) {
+      const cwd = fs.realpathSync.native(excludeCwd);
+      const inside = (p: string) => {
+        const rel = path.relative(cwd, p);
+        // The filesystem root as cwd does not make every installed program project-local.
+        return !rel || (cwd !== path.parse(cwd).root && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel));
+      };
+      if ([dir, resolvedDir, resolved].some(inside)) return;
+    }
+    fs.accessSync(resolved, fs.constants.X_OK);
+    return fs.statSync(resolved).isFile() ? resolved : undefined;
+  } catch {
+    return;
+  }
+}
+
 interface Member {
   start: number;
   node: Node;
