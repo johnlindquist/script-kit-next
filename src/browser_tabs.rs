@@ -369,13 +369,7 @@ pub(crate) fn named_tab_browser(name: &str) -> Option<&'static str> {
 
 pub(crate) fn named_tab_program(app: &str, query: &str) -> Option<String> {
     let browser = SUPPORTED_BROWSERS.iter().find(|b| b.app_name == app)?;
-    Some(format!(
-        "{}(Application({}), {}, {})",
-        include_str!("browser_tabs/focus_named.js").trim_end(),
-        serde_json::to_string(browser.bundle_id).ok()?,
-        serde_json::to_string(query).ok()?,
-        browser.family == BrowserFamily::Safari
-    ))
+    snapshot_program(browser, TabRequest::Named(query)).ok()
 }
 
 #[allow(
@@ -398,7 +392,8 @@ pub(crate) fn focus_named_tab(app: &str, query: &str) -> Result<()> {
         "not-running" => bail!("{app} isn't running"),
         "not-found" => bail!("No {app} tab matches “{query}”"),
         "ambiguous" => bail!("Several {app} tabs match “{query}” — use a more specific title"),
-        "changed" => bail!("The tab changed before it could be focused"),
+        "changed" => bail!("The browser tabs changed; couldn't confirm the requested tab"),
+        "unconfirmed" => bail!("Couldn't confirm that {app} came to the front"),
         _ => bail!("Couldn't verify the selected tab in {app}"),
     }
 }
@@ -413,7 +408,7 @@ pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
         "Tab identity is unavailable; refresh the list"
     );
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::NativeInput)?;
-    let script = snapshot_program(browser, Some(tab))?;
+    let script = snapshot_program(browser, TabRequest::Selected(tab))?;
     let result =
         crate::platform::run_jxa_with_timeout(&script, "browser_tabs_focus_exact", BROWSER_TIMEOUT)
             .map_err(|_| anyhow!("Could not verify the browser tab; check Automation access"))?;
@@ -421,6 +416,7 @@ pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
         "focused" => Ok(()),
         "ambiguous" => bail!("Several identical tabs are open in the selected window"),
         "not-running" => bail!("The selected browser is no longer running"),
+        "unconfirmed" => bail!("Couldn't confirm that the selected browser came to the front"),
         _ => bail!("The selected tab changed; refresh the list"),
     }
 }
@@ -1129,7 +1125,7 @@ fn browser_tab_provider_for_bundle_id(
 }
 
 fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInfo>> {
-    let script = snapshot_program(browser, None)?;
+    let script = snapshot_program(browser, TabRequest::List)?;
     let output =
         crate::platform::run_jxa_with_timeout(&script, "browser_tabs_list", BROWSER_TIMEOUT)
             .with_context(|| format!("list_browser_tabs_failed: browser={}", browser.app_name))?;
@@ -1173,9 +1169,18 @@ fn host_from_url(url: &str) -> &str {
     after_scheme.split('/').next().unwrap_or(after_scheme)
 }
 
+// The adapter returns rows only for List. Neither focus route returns browser contents.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum TabRequest<'a> {
+    List,
+    Named(&'a str),
+    Selected(&'a BrowserTabInfo),
+}
+
 /// Bind a running process and its window before resolving the page. Neither cached positions
 /// nor an identical URL in another window are substitutes for the selected target.
-fn snapshot_program(browser: &SupportedBrowser, target: Option<&BrowserTabInfo>) -> Result<String> {
+fn snapshot_program(browser: &SupportedBrowser, target: TabRequest<'_>) -> Result<String> {
     let bundle = serde_json::to_string(browser.bundle_id)?;
     let name = serde_json::to_string(browser.app_name)?;
     let target = serde_json::to_string(&target)?;
@@ -1184,7 +1189,8 @@ fn snapshot_program(browser: &SupportedBrowser, target: Option<&BrowserTabInfo>)
         r#"ObjC.import('AppKit');
 const bundle = {bundle};
 const pid = () => {{ const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier(bundle); return apps.count === 1 ? Number(apps.objectAtIndex(0).processIdentifier) : 0; }};
-{}(Application(bundle), bundle, {name}, {safari}, pid, {target})"#,
+const frontPid = () => {{ const front = $.NSWorkspace.sharedWorkspace.frontmostApplication; return front ? Number(front.processIdentifier) : 0; }};
+{}(Application(bundle), bundle, {name}, {safari}, pid, {target}, frontPid)"#,
         include_str!("browser_tabs/snapshot.js").trim_end()
     ))
 }
