@@ -208,7 +208,7 @@ function parse(source: string) {
         }
       }
     } else if (eat('[')) {
-      const list = [];
+      const list: unknown[] = [];
       value = list;
       while (!eat(']')) {
         list.push(literal(depth + 1).value);
@@ -355,6 +355,36 @@ export class StaleConfigRevision extends Error {
   }
 }
 
+/** Ownership or staged bytes changed before publication. This is not a revision conflict. */
+export class DisplacedSettingsWrite extends Error {
+  readonly code = 'settings_write_displaced';
+  constructor() {
+    super('Settings write stopped: its lock or staged file changed. Wait for the active writer, then reread the config.');
+    this.name = 'DisplacedSettingsWrite';
+  }
+}
+export type SettingsWriteErrorCode = StaleConfigRevision['code'] | DisplacedSettingsWrite['code'];
+
+// The open descriptor pins its inode, even if the name is removed and reused.
+function namesDescriptor(name: string, fd: number): boolean {
+  const entry = fs.lstatSync(name, { bigint: true, throwIfNoEntry: false });
+  if (!entry) return false;
+  const held = fs.fstatSync(fd, { bigint: true });
+  return entry.dev === held.dev && entry.ino === held.ino;
+}
+
+function stagedMatches(fd: number, expected: Buffer, mode: number): boolean {
+  const stat = fs.fstatSync(fd);
+  if (stat.nlink !== 1 || stat.size !== expected.length || (stat.mode & 0o7777) !== mode) return false;
+  const actual = Buffer.alloc(expected.length); // already bounded by MAX_BYTES
+  for (let pos = 0; pos < actual.length;) {
+    const n = fs.readSync(fd, actual, pos, actual.length - pos, pos);
+    if (!n) return false;
+    pos += n;
+  }
+  return actual.equals(expected);
+}
+
 /** Atomic publication and optimistic concurrency between Kit settings writers.
  * Noncooperating editors are checked again immediately before publication.
  * A stale lock after process death is a refusal, never broken on a timer. */
@@ -373,42 +403,63 @@ export function mutate(
       throw new Error(`Settings writer busy: ${lock}; retry, or inspect the lock if a writer crashed`);
     throw e;
   }
+  // Do not clean up by name if opening the lock failed: its owner is unknown.
+  const lockFd = fs.openSync(lock, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+  const checkLock = () => {
+    if (!namesDescriptor(lock, lockFd)) throw new DisplacedSettingsWrite();
+  };
+  let disturbedStage = false;
   try {
-    const old = snapshot(file),
-      source = old?.source ?? null;
+    const old = snapshot(file), source = old?.source ?? null;
+    const checkSource = () => {
+      const current = snapshot(file);
+      checkLock();
+      if (current?.source !== old?.source || current?.ino !== old?.ino ||
+          current?.dev !== old?.dev || current?.mode !== old?.mode)
+        throw new Error('Stale config; changed during edit');
+    };
+    checkLock();
     if (expected !== undefined && expected !== revision(source))
       throw new StaleConfigRevision();
     // Parse even for reset-all: never erase a dynamic config we cannot inspect.
     if (source !== null) parse(source);
     const next = change(source);
-    if (next === null || next === source) return revision(source);
+    if (next === null || next === source) {
+      checkSource();
+      return revision(source);
+    }
     if (Buffer.byteLength(next) > MAX_BYTES) throw new Error('Config exceeds 2 MiB');
     parse(next);
+    checkLock();
+    const bytes = Buffer.from(next, 'utf8');
     const tmp = path.join(lock, randomUUID());
-    const fd = fs.openSync(tmp, 'wx', 0o600);
+    const fd = fs.openSync(tmp, 'wx+', 0o600);
     try {
-      try {
-        fs.writeFileSync(fd, next, 'utf8');
-        if (old) fs.fchmodSync(fd, old.mode);
-        fs.fsyncSync(fd);
-      } finally {
-        fs.closeSync(fd);
+      const mode = old?.mode ?? (fs.fstatSync(fd).mode & 0o777);
+      fs.writeFileSync(fd, bytes);
+      if (old) fs.fchmodSync(fd, old.mode);
+      fs.fsyncSync(fd);
+      checkSource();
+      if (!stagedMatches(fd, bytes, mode) || !namesDescriptor(tmp, fd)) {
+        disturbedStage = true;
+        throw new DisplacedSettingsWrite();
       }
-      const current = snapshot(file);
-      if (
-        current?.source !== old?.source ||
-        current?.ino !== old?.ino ||
-        current?.dev !== old?.dev ||
-        current?.mode !== old?.mode
-      )
-        throw new Error('Stale config; changed during edit');
+      checkLock();
       if (old) fs.renameSync(tmp, file);
       else fs.linkSync(tmp, file); // exclusive create
     } finally {
-      fs.rmSync(tmp, { force: true });
+      try {
+        if (!disturbedStage && namesDescriptor(lock, lockFd) && namesDescriptor(tmp, fd))
+          fs.unlinkSync(tmp);
+      } finally { fs.closeSync(fd); }
     }
     return revision(next);
   } finally {
-    fs.rmdirSync(lock);
+    try {
+      // Never remove a new owner's lock, or discard an unrecognized draft left inside ours.
+      if (namesDescriptor(lock, lockFd)) fs.rmdirSync(lock);
+    } catch (err) {
+      if (!disturbedStage || (err as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw err;
+    } finally { fs.closeSync(lockFd); }
   }
 }

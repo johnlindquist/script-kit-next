@@ -26,8 +26,8 @@
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { homedir, devNull } from 'node:os';
-import { configPath, directSettingsBun, StaleConfigRevision } from './config-document.ts';
-export { StaleConfigRevision };
+import { configPath, directSettingsBun, DisplacedSettingsWrite, type SettingsWriteErrorCode, StaleConfigRevision } from './config-document.ts';
+export { DisplacedSettingsWrite, StaleConfigRevision };
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -100,7 +100,7 @@ export interface ValidateResult {
 
 interface CLIResponse<T> {
   success: boolean;
-  errorCode?: 'stale_revision';
+  errorCode?: SettingsWriteErrorCode;
   data?: T;
   error?: string;
   // For validate command
@@ -177,7 +177,9 @@ async function runCLI<T>(args: string[]): Promise<T> {
         if ((args[0] === 'validate' || args[0] === 'validate-change') && result.valid === false) {
           resolve(result as unknown as T);
         } else {
-          reject(result.errorCode === 'stale_revision' ? new StaleConfigRevision() : new Error(result.error || 'Settings CLI refused the request'));
+          if (result.errorCode === 'stale_revision') reject(new StaleConfigRevision());
+          else if (result.errorCode === 'settings_write_displaced') reject(new DisplacedSettingsWrite());
+          else reject(new Error(result.error || 'Settings CLI refused the request'));
         }
       } else {
         reject(new Error('Settings CLI exited without a matching result'));

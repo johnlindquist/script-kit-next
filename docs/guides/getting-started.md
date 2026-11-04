@@ -47,7 +47,7 @@ For asdf, a typical path is `~/.asdf/installs/bun/<version>/bin/bun`. Substitute
 
 If a Node script imports Kit’s settings SDK (`sdk/kit-sdk-config.ts`), it can select Bun with the **`BUN_PATH` environment variable**. Use the absolute executable path from your manager, not a `shims` or `node_modules/.bin` entry. An invalid pin stops the settings request. Without a pin, the SDK looks in the usual install locations and then on `PATH`, skipping project-local candidates in the working directory. Keep the rest of `PATH` trusted. A script already running in Bun reuses that Bun.
 
-When a settings write fails with `stale_revision` (`error.code` in the SDK; `errorCode` in the CLI’s JSON), someone has changed the file since you read it. Read it again and review the proposed edit before saving. A busy writer or an unreadable helper result does not mean your edit was saved.
+When a settings write fails with `stale_revision` (`error.code` in the SDK; `errorCode` in the CLI’s JSON), someone has changed the file since you read it. Read it again and review the proposed edit before saving. If you see `settings_write_displaced`, the helper stopped before publishing because its lock or draft changed during the edit. Let the active writer finish, then reread your settings. Don’t remove a lock while another edit is in progress. If a draft remains in the lock after a writer has stopped, inspect it rather than deleting it blindly. An unreadable reply is not proof of a save.
 
 ### Upgrading from a v1 kit
 

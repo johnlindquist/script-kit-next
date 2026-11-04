@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { directSettingsBun } from './config-document.ts';
+import { directSettingsBun, DisplacedSettingsWrite, editLiteral, mutate, revision } from './config-document.ts';
 
 // No checkout-relative modules or global packages in the child. The Rust MCP
 // fixture exercises the real embedded first-run installer; here we can also
@@ -149,6 +154,80 @@ describe('installed settings helper', () => {
       f.close();
     }
   });
+  it.each(['directory', 'symlink'] as const)('refuses a displaced writer and preserves the replacement %s', async (replacement) => {
+    const f = fixture(source);
+    try {
+      const lock = f.config + '.settings-lock', retired = join(f.root, 'retired');
+      let replacementInode = 0;
+      expect(() => mutate(f.config, revision(source), old => {
+        renameSync(lock, retired);
+        if (replacement === 'directory') mkdirSync(lock);
+        else symlinkSync(retired, lock, 'dir'); // follows back to the same inode; still not our lock
+        replacementInode = lstatSync(lock).ino;
+        return replacement === 'directory' ? editLiteral(old!, ['editorFontSize'], 27) : old;
+      })).toThrow(DisplacedSettingsWrite);
+      expect(f.read()).toBe(source);
+      expect(lstatSync(lock).ino).toBe(replacementInode);
+      expect((await f.run('set-json', 'editorFontSize', '27')).error).toMatch(/writer busy/i);
+      if (replacement === 'directory') rmdirSync(lock); else rmSync(lock);
+      expect((await f.run('set-json', 'editorFontSize', '27', '--if-revision', revision(source))).code).toBe(0);
+      expect(f.read()).toBe(source.replace('16, //', '27, //'));
+    } finally { f.close(); }
+  });
+  it.each(['identity', 'bytes', 'mode'] as const)('does not publish or unlink a draft with changed %s', (change) => {
+    const f = fixture(source);
+    try {
+      chmodSync(f.config, 0o600);
+      const hook = join(f.root, 'alter-draft.mjs');
+      // Only the child is instrumented. Let all IO and decoding happen normally;
+      // change the real staged file during the helper's re-read of the original.
+      writeFileSync(hook, `import fs from 'node:fs'; import path from 'node:path';
+        const file = path.join(process.env.SK_PATH, 'config.ts'), lock = file + '.settings-lock';
+        const original = fs.readFileSync(file, 'utf8'), decode = TextDecoder.prototype.decode;
+        let changed = false;
+        TextDecoder.prototype.decode = function(...args) {
+          const text = decode.apply(this, args);
+          if (!changed && text === original && fs.existsSync(lock)) {
+            const names = fs.readdirSync(lock);
+            if (names.length === 1) {
+              changed = true;
+              const draft = path.join(lock, names[0]);
+              if (process.env.TEST_CHANGE === 'identity') {
+                fs.renameSync(draft, file + '.first-draft'); fs.copyFileSync(file + '.first-draft', draft);
+              } else if (process.env.TEST_CHANGE === 'bytes') {
+                fs.writeFileSync(draft, original.replace('16, //', '63, //'));
+              } else { fs.chmodSync(draft, 0o644); }
+            }
+          }
+          return text;
+        };`);
+      const child = Bun.spawnSync([process.execPath, '--preload', hook, join(f.sdk, 'config-cli.ts'),
+        'set-json', 'editorFontSize', '27', '--if-revision', revision(source)], {
+        cwd: f.sdk, env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin', TEST_CHANGE: change },
+      });
+      expect(child.exitCode).toBe(1);
+      expect(JSON.parse(child.stdout.toString())).toMatchObject({ success: false, errorCode: 'settings_write_displaced' });
+      expect(f.read()).toBe(source);
+      expect(lstatSync(f.config).mode & 0o777).toBe(0o600);
+      const lock = f.config + '.settings-lock', names = readdirSync(lock);
+      expect(names).toHaveLength(1);
+      const draft = join(lock, names[0]);
+      expect(readFileSync(draft, 'utf8')).toBe(source.replace('16, //', change === 'bytes' ? '63, //' : '27, //'));
+      expect(lstatSync(draft).mode & 0o777).toBe(change === 'mode' ? 0o644 : 0o600);
+      if (change === 'identity') expect(lstatSync(draft).ino).not.toBe(lstatSync(f.config + '.first-draft').ino);
+    } finally { f.close(); }
+  });
+  it('a no-op does not acknowledge an obsolete settings revision', () => {
+    const f = fixture(source);
+    try {
+      const newer = source + '// saved separately\n';
+      expect(() => mutate(f.config, revision(source), old => {
+        writeFileSync(f.config, newer);
+        return old;
+      })).toThrow(/changed during edit/i);
+      expect(f.read()).toBe(newer);
+    } finally { f.close(); }
+  });
   it('rejects wrong types, unknown keys and malformed paths before writing', async () => {
     const f = fixture(source);
     try {
@@ -251,6 +330,25 @@ describe('installed settings helper', () => {
     } finally {
       f.close();
     }
+  });
+  it('preserves a displaced-write refusal through the SDK', () => {
+    const f = fixture(source);
+    try {
+      writeFileSync(join(f.sdk, 'config-cli.ts'),
+        "console.log(JSON.stringify({success:false,errorCode:'settings_write_displaced'}));process.exit(1)");
+      const caller = join(f.sdk, 'caller.ts');
+      writeFileSync(caller, `import {config, DisplacedSettingsWrite} from './kit-sdk-config.ts';
+        await config.set('editorFontSize', 20).then(() => { throw Error('unexpected save') }, e => {
+          if (!(e instanceof DisplacedSettingsWrite)) throw e;
+          console.log(e.code);
+        });`);
+      const child = Bun.spawnSync([process.execPath, caller], {
+        cwd: f.sdk, env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin' },
+      });
+      expect(child.exitCode).toBe(0);
+      expect(child.stdout.toString().trim()).toBe('settings_write_displaced');
+      expect(f.read()).toBe(source);
+    } finally { f.close(); }
   });
   it('refuses dynamic and ambiguous source without running or repairing it', async () => {
     const f = fixture(source);

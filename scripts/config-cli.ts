@@ -18,7 +18,7 @@
  * Output is JSON by default for AI parsing.
  */
 
-import { configPath, editLiteral, mutate, readSource, revision, StaleConfigRevision, values } from './config-document.ts';
+import { configPath, DisplacedSettingsWrite, editLiteral, mutate, readSource, revision, type SettingsWriteErrorCode, StaleConfigRevision, values } from './config-document.ts';
 
 import {
   analyzeCommandConfigPath,
@@ -1098,7 +1098,7 @@ let CONFIG_PATH: string;
 
 interface Result<T> {
   success: boolean;
-  errorCode?: 'stale_revision';
+  errorCode?: SettingsWriteErrorCode;
   data?: T;
   error?: string;
   valid?: boolean;
@@ -1106,7 +1106,7 @@ interface Result<T> {
   warnings?: string[];
 }
 
-function output(result: Result<unknown>): void {
+function output(result: Result<unknown> | (ValidateConfigChangeResult & { success: false })): void {
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -1114,7 +1114,7 @@ function success<T>(data: T): void {
   output({ success: true, data });
 }
 
-function error(message: string, errorCode?: 'stale_revision'): void {
+function error(message: string, errorCode?: SettingsWriteErrorCode): void {
   output({ success: false, error: message, errorCode });
   process.exit(1);
 }
@@ -1907,5 +1907,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  error(e instanceof Error ? e.message : String(e), e instanceof StaleConfigRevision ? e.code : undefined);
+  const code = e instanceof StaleConfigRevision || e instanceof DisplacedSettingsWrite ? e.code : undefined;
+  error(e instanceof Error ? e.message : String(e), code);
 });
