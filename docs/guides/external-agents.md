@@ -4,7 +4,20 @@ Stay in your agent's current conversation. Kit can save a quiet Markdown note, r
 
 ## Give an agent just the operations it needs
 
-From your operator shell, using the `scriptkit` shim shipped by this build (`~/.scriptkit/bin/scriptkit` if not on PATH):
+### Put this workspace’s command on your PATH
+
+With Bun on your PATH, run your workspace’s executable directly to install the link. For the default workspace:
+
+```sh
+"$HOME/.scriptkit/bin/scriptkit" install-command "$HOME/.local/bin/scriptkit"
+command -v scriptkit
+```
+
+Omitting the target uses `~/.local/bin/scriptkit`. Quote a custom filename to keep its spaces. An empty argument is not the default; use a path without `..` (use `pwd -P` to find the physical directory). `install-command --help` makes no changes. Kit accepts an existing direct link only if the filesystem resolves it to this workspace’s command, so the link follows the next update at that location. It leaves another file, a dangling link, or a link to a different executable alone. If it refuses, choose an unused name or inspect the existing link yourself. The check applies to that path at installation time; if `command -v scriptkit` finds something else, use the workspace’s executable directly before giving it a credential.
+
+### Issue a scoped credential
+
+From your operator shell:
 
 ```sh
 mkdir -p -m 700 ~/.kit-agent-credentials

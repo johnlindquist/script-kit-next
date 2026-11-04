@@ -10,7 +10,7 @@
  */
 
 import {
-  chmodSync,
+  fchmodSync,
   closeSync,
   constants as fsConstants,
   existsSync,
@@ -20,12 +20,13 @@ import {
   openSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   statSync,
   symlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 type DiscoveryInfo = {
   url: string;
@@ -287,44 +288,90 @@ function safeMcpDiagnostic(message: string, token: string): string {
     .slice(0, 512);
 }
 
-function defaultCommandTarget(): string {
-  return join(homedir(), ".local", "bin", "scriptkit");
-}
+const installUsage = "Usage: scriptkit install-command [target-path]. Omit the target for ~/.local/bin/scriptkit. Use a filename without '..'.";
+const pathParts = (p: string) => p.split(process.platform === "win32" ? /[\\/]/ : "/");
 
-function currentScriptPath(): string {
-  const url = new URL(import.meta.url);
-  if (url.protocol !== "file:") {
-    fail("Cannot install command because the current CLI is not running from a file path.");
+function commandTarget(args: string[]): string {
+  if (!args.length) {
+    const home = homedir();
+    if (!isAbsolute(home) || pathParts(home).includes("..")) {
+      fail("Cannot verify the home directory. Pass an explicit command target.");
+    }
+    return join(home, ".local", "bin", "scriptkit");
   }
-  return fileURLToPath(url);
+  if (args.length !== 1) fail(installUsage);
+  const [raw] = args;
+  const parts = pathParts(raw), name = parts.at(-1);
+  if (!raw.trim() || raw.startsWith("-") || raw.includes("\0") || parts.includes("..") || !name || name === ".") {
+    fail(installUsage);
+  }
+  // No parent traversal remains. Preserve spaces in the name; a blank argument is not omission.
+  return resolve(raw);
 }
 
-function installCommand(targetArg: string | undefined): CliResult {
-  const source = currentScriptPath();
-  const target = resolve(targetArg?.trim() || defaultCommandTarget());
-  mkdirSync(dirname(target), { recursive: true });
+type FileId = { dev: bigint; ino: bigint };
+const sameFile = (a: FileId, b: FileId) => a.dev === b.dev && a.ino === b.ino;
 
-  const existing = lstatSync(target, { throwIfNoEntry: false });
-  if (existing) {
-    if (!existing.isSymbolicLink() || resolve(dirname(target), readlinkSync(target)) !== source) {
+function commandPointsTo(target: string, source: string, id: FileId): boolean {
+  try {
+    const link = lstatSync(target, { bigint: true });
+    if (!link.isSymbolicLink()) return false;
+    const payload = readlinkSync(target);
+    // Let the filesystem walk the link as the shell does. join()/resolve() would cancel a
+    // directory link followed by '..' before the OS could follow it.
+    const referenced = isAbsolute(payload) ? payload : dirname(target) + sep + payload;
+    const leaf = lstatSync(referenced, { bigint: true });
+    return leaf.isFile() && sameFile(leaf, id) && sameFile(statSync(target, { bigint: true }), id)
+      // Another name for a hard-linked inode will not follow a later atomic Kit upgrade.
+      && realpathSync.native(target) === source && sameFile(lstatSync(target, { bigint: true }), link);
+  } catch {
+    return false;
+  }
+}
+
+function installCommand(args: string[]): CliResult | string {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) return installUsage;
+  const target = commandTarget(args);
+  const url = new URL(import.meta.url);
+  if (url.protocol !== "file:") fail("The current CLI is not running from a file path.");
+  const source = realpathSync.native(fileURLToPath(url));
+  const fd = openSync(source, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+  try {
+    const file = fstatSync(fd, { bigint: true });
+    if (!file.isFile()) fail("The current CLI is not a regular file.");
+    const needsExecute = (file.mode & 0o100n) === 0n;
+    if (needsExecute && file.nlink !== 1n) {
+      fail("The CLI has another hard link; refusing to change its executable permissions.");
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    const existing = lstatSync(target, { throwIfNoEntry: false });
+    if (existing && !commandPointsTo(target, source, file)) {
       fail(`Refusing to replace a different command at ${target}. Choose an unused target path.`);
     }
-  } else {
-    symlinkSync(source, target);
+    if (needsExecute) fchmodSync(fd, Number(file.mode & 0o777n) | 0o100);
+    if (!sameFile(statSync(source, { bigint: true }), file)) {
+      fail("The CLI file changed. Check the source before installing the command.");
+    }
+    if (!existing) {
+      try { symlinkSync(source, target); }
+      catch (error) {
+        // A competing installer might have won. Verify its entry below; never replace or retry.
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }
+    if (!commandPointsTo(target, source, file) || !(fstatSync(fd, { bigint: true }).mode & 0o100n)) {
+      fail("The command link could not be verified. Inspect the target before trying again.");
+    }
+    return {
+      success: true,
+      data: {
+        command: "scriptkit", target, source,
+        note: "This link names the current CLI. Use command -v scriptkit to check which command your shell will run.",
+      },
+    };
+  } finally {
+    closeSync(fd);
   }
-  const mode = statSync(source).mode & 0o777;
-  if (!(mode & 0o100)) chmodSync(source, mode | 0o100);
-
-  return {
-    success: true,
-    data: {
-      command: "scriptkit",
-      target,
-      source,
-      note:
-        "Add the target directory to PATH if `scriptkit --help` is not found in new shells.",
-    },
-  };
 }
 
 export async function rpc(method: string, params: unknown, explicitToken?:string): Promise<unknown> {
@@ -424,7 +471,7 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     return {success:true,data:bridge.operator(argv,dirname(discoveryPath()))};
   }
   if (rawCommand === "install-command") {
-    return installCommand(rest[0]);
+    return installCommand(rest);
   }
 
   let command = rawCommand;

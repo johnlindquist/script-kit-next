@@ -675,6 +675,59 @@ describe("mcp-cli", () => {
     } finally { rmSync(dir,{recursive:true,force:true}); }
   });
 
+  it("does not certify a different executable reached through a link followed by '..'", async () => {
+    const { linkSync, lstatSync, mkdirSync, statSync } = await import("node:fs");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-command-identity-")));
+    try {
+      const owned = join(root, "Kit #1"), foreign = join(root, "another"), bin = join(root, "bin");
+      for (const dir of [owned, join(foreign, "nested"), bin]) mkdirSync(dir, { recursive: true });
+      const source = join(owned, "scriptkit"), other = join(foreign, "scriptkit"), target = join(bin, "scriptkit");
+      copyFileSync(new URL("./mcp-cli.ts", import.meta.url), source);
+      writeFileSync(other, "a different program");
+      symlinkSync(join(foreign, "nested"), join(owned, "detour"));
+      const spelling = owned + "/detour/../scriptkit";
+      symlinkSync(spelling, target);
+      const install = () => Bun.spawnSync([process.execPath, source, "install-command", target]);
+      expect(statSync(target).ino).toBe(statSync(other).ino);
+      expect(statSync(target).ino).not.toBe(statSync(source).ino);
+      expect(install().exitCode).not.toBe(0);
+      expect(readlinkSync(target)).toBe(spelling);
+      expect(await Bun.file(other).text()).toBe("a different program");
+      // The same inode under a second filename will not follow a future Kit upgrade.
+      rmSync(target); rmSync(other); linkSync(source, other); symlinkSync(other, target);
+      expect(statSync(target).ino).toBe(statSync(source).ino);
+      expect(install().exitCode).not.toBe(0);
+      // A genuine direct relative link remains valid and isn't replaced.
+      rmSync(target); symlinkSync("../Kit #1/scriptkit", target);
+      const id = lstatSync(target).ino;
+      expect(install().exitCode).toBe(0);
+      expect(lstatSync(target).ino).toBe(id);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("keeps explicit command names exact and never installs for a malformed request or help", () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "kit-command-target-")));
+    try {
+      const source = join(home, "cli.ts"), target = join(home, " command "), defaultLink = join(home, ".local/bin/scriptkit");
+      copyFileSync(new URL("./mcp-cli.ts", import.meta.url), source);
+      const invoke = (...args: string[]) => Bun.spawnSync([process.execPath, source, "install-command", ...args], { cwd: home, env: { HOME: home, PATH: "/usr/bin:/bin" } });
+      expect(invoke(target).exitCode).toBe(0);
+      expect(readlinkSync(target)).toBe(source);
+      expect(existsSync(target.trim())).toBe(false);
+      for (const args of [[""], ["   "], ["unused/../misdirected"], ["folder/"], ["unused/target", "extra"], ["--wrong-flag"]]) {
+        expect(invoke(...args).exitCode).not.toBe(0);
+      }
+      const help = invoke("--help");
+      expect(help.exitCode).toBe(0);
+      expect(help.stdout.toString()).toContain("install-command [target-path]");
+      for (const p of [".local", "unused", "misdirected", "folder", "--help", "--wrong-flag"]) {
+        expect(existsSync(join(home, p))).toBe(false);
+      }
+      expect(invoke().exitCode).toBe(0);
+      expect(readlinkSync(defaultLink)).toBe(source);
+    } finally { rmSync(home, { recursive: true, force: true }); }
+  });
+
   it("installs a scriptkit command symlink at a chosen target", async () => {
     const dir = mkdtempSync(join(tmpdir(), "script-kit-command-"));
     const target = join(dir, "scriptkit");
