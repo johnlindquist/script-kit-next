@@ -4380,10 +4380,12 @@ declare global {
   /**
    * Display HTML content to user
    * 
-   * Matches original Script Kit API: div(html?, config?, actions?)
+   * Pass an HTML string or a display configuration, then optional actions.
    * 
    * @param htmlOrConfig - HTML string or DivConfig object
    * @param actions - Optional actions for the actions panel (Cmd+K)
+   * @returns A submitted string (including an empty string), null for a native
+   * acknowledgment without a value, or undefined when the reply has no value field.
    * 
    * @example
    * // Basic usage
@@ -4411,7 +4413,7 @@ declare global {
    *   { name: "Copy", shortcut: "cmd+c", onAction: () => clipboard.writeText("Hello") }
    * ]);
    */
-  function div(html?: string | DivConfig, actions?: Action[]): Promise<string | void>;
+  function div(html?: string | DivConfig, actions?: Action[]): Promise<string | null | undefined>;
 
   /**
    * Show a confirmation dialog with Yes/No buttons.
@@ -5510,7 +5512,7 @@ globalThis.arg = async function arg(
 globalThis.div = async function div(
   htmlOrConfig?: string | DivConfig,
   actionsInput?: Action[]
-): Promise<string | void> {
+): Promise<string | null | undefined> {
   const id = nextId();
   
   // Parse arguments - support both string and config object
@@ -5564,7 +5566,7 @@ globalThis.div = async function div(
   }
   
   return new Promise((resolve) => {
-    addPending(id, (msg: SubmitMessage) => {
+    addPending(id, (msg?: SubmitMessage) => {
       resolve(msg?.value);
     }, undefined); // Auto-submit: div just dismisses, no value needed
 

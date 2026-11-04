@@ -24,6 +24,7 @@ const strictMode = process.argv.includes("--strict");
 // - Bundler resolution for module imports
 const TSC_OPTIONS = [
   "--noEmit",
+  "--strictNullChecks", // A no-value host reply must be represented in the script-facing type.
   "--lib", "ES2022",
   "--target", "ES2022",
   "--types", "node",

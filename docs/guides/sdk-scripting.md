@@ -86,6 +86,8 @@ stdin response pipe. Shell/Python topologies cannot claim SDK globals.
 | `await mini(prompt, choices)` | Native compact-choice prompt |
 | `await micro(prompt, choices)` | Native minimal-choice prompt |
 
+A `submit:` link in a display returns its string value. Dismissing the display without choosing a value can return `null`; a reply with no value field returns `undefined`. If you only need to show something, just `await div(html)`. If you need the submitted value, check `typeof result === "string"` so an empty string is not lost.
+
 `fields()` accepts `text`, `password`, `email`, `number`, `date`, `time`,
 `datetime-local`, `month`, `week`, `search`, `url`, `tel`, and `color` field
 definitions. A supported SDK field type does not imply a native date/color
