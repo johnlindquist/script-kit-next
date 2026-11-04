@@ -110,6 +110,8 @@ require_clean_source_identity() {
     scripts/agentic/release-compile-contract.ts
     scripts/agentic/release-compile.ts
     scripts/agentic/release-compile.test.ts
+    scripts/agentic/macho-payload.ts
+    scripts/agentic/release-sidecar.ts
     scripts/verify_macos_deployment.py
     scripts/test_macos_deployment.py
     scripts/release-stapler.sh

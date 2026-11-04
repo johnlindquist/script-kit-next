@@ -1857,7 +1857,7 @@ describe("isolated session readiness ownership", () => {
     ]) {
       copyFileSync(join(scripts, script), join(localScripts, script));
     }
-    for (const file of ["build-artifact.ts", "release-compile-contract.ts", "artifact-lifecycle.ts", "managed-storage.ts", "owned-process.ts", "session-supervisor.py"]) copyFileSync(join(scripts, file), join(localScripts, file));
+    for (const file of ["build-artifact.ts", "macho-payload.ts", "release-compile-contract.ts", "artifact-lifecycle.ts", "managed-storage.ts", "owned-process.ts", "session-supervisor.py"]) copyFileSync(join(scripts, file), join(localScripts, file));
     const devtoolsLib = join(workspace.root, "scripts/devtools/lib");
     mkdirSync(devtoolsLib, { recursive: true });
     copyFileSync(join(scripts, "../devtools/lib/build-ops-inventory.ts"), join(devtoolsLib, "build-ops-inventory.ts"));

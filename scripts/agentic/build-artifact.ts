@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { unsignedMachOBytesPayloadSha256 } from "./macho-payload.ts";
 import { chmodSync, closeSync, constants, copyFileSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readlinkSync, readSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -1091,30 +1092,7 @@ if (import.meta.main && ["native-task-bind", "native-task-finalize"].includes(pr
 
 /** Compare Mach-O compiler payload, excluding only signing-owned bytes. */
 export function unsignedMachOPayloadSha256(path: string): Sha256 {
-  const bytes = readFileSync(path);
-  if (bytes.length < 32 || bytes.readUInt32LE(0) !== 0xfeedfacf) refuse("manifest_invalid", "signed derivation requires a thin 64-bit Mach-O executable");
-  const commands = bytes.readUInt32LE(16), commandBytes = bytes.readUInt32LE(20);
-  if (commands > 4096 || 32 + commandBytes > bytes.length) refuse("manifest_invalid", "Mach-O load command bounds");
-  const normalized = Buffer.from(bytes);
-  let cursor = 32, payloadEnd = bytes.length, signatures = 0;
-  for (let index = 0; index < commands; index++) {
-    if (cursor + 8 > 32 + commandBytes) refuse("manifest_invalid", "truncated Mach-O command");
-    const command = bytes.readUInt32LE(cursor), size = bytes.readUInt32LE(cursor + 4);
-    if (size < 8 || cursor + size > 32 + commandBytes) refuse("manifest_invalid", "invalid Mach-O command size");
-    if (command === 0x1d) {
-      if (size !== 16 || ++signatures !== 1) refuse("manifest_invalid", "ambiguous Mach-O signature command");
-      const offset = bytes.readUInt32LE(cursor + 8), length = bytes.readUInt32LE(cursor + 12);
-      if (offset < 32 + commandBytes || offset + length !== bytes.length) refuse("manifest_invalid", "signature is not the terminal Mach-O region");
-      payloadEnd = offset;
-      normalized.fill(0, cursor + 8, cursor + 16);
-    } else if (command === 0x19 && size >= 72 && bytes.subarray(cursor + 8, cursor + 24).toString("ascii").replace(/\0+$/, "") === "__LINKEDIT") {
-      normalized.fill(0, cursor + 32, cursor + 40);
-      normalized.fill(0, cursor + 48, cursor + 56);
-    }
-    cursor += size;
-  }
-  if (signatures !== 1) refuse("manifest_invalid", "expected compiler ad-hoc/signing signature region");
-  return artifactHash(normalized.subarray(0, payloadEnd));
+  return unsignedMachOBytesPayloadSha256(readFileSync(path), detail => refuse("manifest_invalid", detail));
 }
 
 function publicationCopyReservation(path: string): number {

@@ -37,7 +37,7 @@ async function delegateToDirectPath(testName: string, mode?: "exit" | "timeout")
     "scripts/devtools/lib/evidence-class.ts", "scripts/devtools/lib/transport-errors.ts",
     "scripts/devtools/lib/build-ops-inventory.ts",
     "scripts/agentic/build-artifact-fixture.ts", "scripts/agentic/build-artifact.ts",
-    "scripts/agentic/release-compile-contract.ts", "scripts/agentic/managed-storage.ts",
+    "scripts/agentic/release-compile-contract.ts", "scripts/agentic/macho-payload.ts", "scripts/agentic/managed-storage.ts",
     "scripts/agentic/artifact-lifecycle.ts", "scripts/agentic/owned-process.ts",
     "scripts/agentic/session-supervisor.py", "scripts/agentic/cargo-cache-locks.sh",
   ]) {

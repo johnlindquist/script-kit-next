@@ -405,6 +405,10 @@ jobs:
   build-goose-sidecar:
     name: Build goose sidecar
     runs-on: macos-15
+    outputs:
+      engine_id: ${{ steps.upload-engine.outputs.artifact-id }}
+      engine_sha256: ${{ steps.prepare-engine.outputs.sha256 }}
+      engine_payload: ${{ steps.prepare-engine.outputs.payload_sha256 }}
     needs: [validate-fmt, validate-sdk-types, validate-sdk-tests]
     env:
       SCCACHE_GHA_ENABLED: "true"
@@ -443,16 +447,22 @@ jobs:
           test -x target/goose-sidecar/goose
           file target/goose-sidecar/goose
 
-      - name: Zip goose sidecar
+      - name: Prepare the exact engine that will be signed
+        id: prepare-engine
         run: |
-          cd target/goose-sidecar
-          /usr/bin/ditto -c -k goose "$RUNNER_TEMP/goose-sidecar.zip"
+          set -euo pipefail
+          mkdir -m 0700 "$RUNNER_TEMP/release-engine"
+          cp target/goose-sidecar/goose "$RUNNER_TEMP/release-engine/goose"
+          /usr/bin/strip -x "$RUNNER_TEMP/release-engine/goose"
+          bun scripts/agentic/release-sidecar.ts identify "$RUNNER_TEMP/release-engine/goose" >> "$GITHUB_OUTPUT"
 
-      - name: Upload goose sidecar
+      - name: Upload the ready-to-sign engine
+        id: upload-engine
         uses: actions/upload-artifact@v4
         with:
-          name: goose-sidecar
-          path: ${{ runner.temp }}/goose-sidecar.zip
+          name: macos-release-engine
+          path: ${{ runner.temp }}/release-engine/goose
+          if-no-files-found: error
           retention-days: 1
 
   sign-notarize-macos:
@@ -463,6 +473,8 @@ jobs:
       workspace_sha256: ${{ steps.verify-final-zip.outputs.workspace_sha256 }}
     env:
       EXPECTED_COMPILE_RECEIPT: ${{ needs.build-macos-app.outputs.compile_receipt_sha }}
+      EXPECTED_ENGINE_SHA256: ${{ needs.build-goose-sidecar.outputs.engine_sha256 }}
+      EXPECTED_ENGINE_PAYLOAD: ${{ needs.build-goose-sidecar.outputs.engine_payload }}
     needs:
       - validate-release-gates
       - build-macos-app
@@ -484,8 +496,13 @@ jobs:
           PROOF_ID: ${{ needs.validate-release-gates.outputs.proof_id }}
           DESIGN_ID: ${{ needs.build-macos-app.outputs.design_id }}
           UNSIGNED_ID: ${{ needs.build-macos-app.outputs.unsigned_id }}
+          ENGINE_ID: ${{ needs.build-goose-sidecar.outputs.engine_id }}
         run: |
-          [[ "$DESIGN_ID" =~ ^[1-9][0-9]*$ && "$PROOF_ID" =~ ^[1-9][0-9]*$ && "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ ]]
+          if ! [[ "$DESIGN_ID" =~ ^[1-9][0-9]*$ && "$PROOF_ID" =~ ^[1-9][0-9]*$ && "$UNSIGNED_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_COMPILE_RECEIPT" =~ ^[0-9a-f]{64}$ &&
+                "$ENGINE_ID" =~ ^[1-9][0-9]*$ && "$EXPECTED_ENGINE_SHA256" =~ ^[0-9a-f]{64}$ && "$EXPECTED_ENGINE_PAYLOAD" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Missing or invalid release producer outputs" >&2
+            exit 1
+          fi
 
       - name: Download executed Rust gate evidence
         uses: actions/download-artifact@v4
@@ -528,26 +545,23 @@ jobs:
           mkdir -p target/release/bundle/osx .test-output/release
           /usr/bin/ditto -x -k "$ZIP" target/release/bundle/osx
 
-      - name: Download goose sidecar
+      - name: Download the producer's exact engine
         uses: actions/download-artifact@v4
         with:
-          name: goose-sidecar
-          path: artifacts/goose
+          artifact-ids: ${{ needs.build-goose-sidecar.outputs.engine_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/received-engine
 
-      - name: Restore goose sidecar
+      - name: Verify and install the engine before signing
         run: |
-          mkdir -p target/goose-sidecar
-          /usr/bin/ditto -x -k artifacts/goose/goose-sidecar.zip target/goose-sidecar
-          chmod 0755 target/goose-sidecar/goose
-
-      - name: Install goose sidecar into bundle
-        run: bash scripts/install-goose-sidecar-into-bundle.sh
+          bun scripts/agentic/release-sidecar.ts receive "$RUNNER_TEMP/received-engine" \
+            "target/release/bundle/osx/Script Kit.app" "$EXPECTED_ENGINE_SHA256" "$EXPECTED_ENGINE_PAYLOAD"
 
       - name: Verify bundled macOS app contents
         run: |
           APP="target/release/bundle/osx/Script Kit.app"
           EXPECTED="$(bun scripts/agentic/release-compile.ts verify-executable artifacts/app/release-compile.json "$EXPECTED_COMPILE_RECEIPT" "$APP/Contents/MacOS/script-kit-gpui")"
-          SCRIPT_KIT_EXPECTED_APP_SHA256="$EXPECTED" bash scripts/verify-macos-bundle.sh
+          SCRIPT_KIT_EXPECTED_APP_SHA256="$EXPECTED" SCRIPT_KIT_EXPECTED_GOOSE_SHA256="$EXPECTED_ENGINE_SHA256" bash scripts/verify-macos-bundle.sh
           python3 -B scripts/verify_macos_deployment.py "target/release/bundle/osx/Script Kit.app"
 
       - name: Create temporary keychain
@@ -602,6 +616,7 @@ jobs:
           codesign --verify --verbose=4 "$APP_PATH/Contents/MacOS/script-kit-gpui"
           codesign --verify --verbose=4 "$APP_PATH"
           bun scripts/agentic/release-compile.ts verify-signed-payload artifacts/app/release-compile.json "$EXPECTED_COMPILE_RECEIPT" "$APP_PATH/Contents/MacOS/script-kit-gpui"
+          bun scripts/agentic/release-sidecar.ts verify-signed "$APP_PATH/Contents/MacOS/goose" "$EXPECTED_ENGINE_PAYLOAD"
 
       - name: Create zip for notarization
         run: |
@@ -684,6 +699,7 @@ jobs:
           TMP_DIR="$(mktemp -d)"
           /usr/bin/ditto -x -k "target/release/bundle/osx/Script-Kit-macos.zip" "$TMP_DIR"
           APP="$TMP_DIR/Script Kit.app"
+          bun scripts/agentic/release-sidecar.ts verify-signed "$APP/Contents/MacOS/goose" "$EXPECTED_ENGINE_PAYLOAD"
           bash scripts/verify-macos-bundle.sh "$APP"
           python3 -B scripts/verify_macos_deployment.py "$APP"
           codesign --verify --deep --strict "$APP"

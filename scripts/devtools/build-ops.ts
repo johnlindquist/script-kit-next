@@ -38,7 +38,7 @@ export const BUILD_ACTIONS: Readonly<Record<string, readonly string[]>> = Object
 const compilerInputOwner = "scripts/agentic/compiler-input-paths.txt";
 // Exact reviewed owners only. New scripts need a reviewed contract, never a guessed test name.
 const noncompilerContracts = [
-  { owners: ["scripts/agentic/release-compile-contract.ts", "scripts/agentic/release-compile.ts"], tests: ["scripts/agentic/release-compile.test.ts"] },
+  { owners: ["scripts/agentic/release-compile-contract.ts", "scripts/agentic/release-compile.ts", "scripts/agentic/macho-payload.ts", "scripts/agentic/release-sidecar.ts"], tests: ["scripts/agentic/release-compile.test.ts"] },
   { owners: ["scripts/devtools/build-ops.ts", "scripts/agentic/build-artifact.ts", "scripts/agentic/build-artifact-fixture.ts", "scripts/agent-check.sh"], tests: ["scripts/devtools/build-ops.test.ts"] },
   { owners: ["scripts/agentic/artifact-lifecycle.ts"], tests: ["scripts/agentic/artifact-lifecycle.test.ts"] },
   { owners: ["scripts/agentic/owned-process.ts", "scripts/agentic/session-supervisor.py"], tests: ["scripts/agentic/owned-process.test.ts", "scripts/agentic/session-stop-ownership.test.ts"] },
