@@ -310,6 +310,41 @@ describe('installed settings helper', () => {
       f.close();
     }
   });
+  it('returns exact Unicode settings from split replies and refuses invalid UTF-8', () => {
+    const dirs = ['/work/東京/🎙️', '/work/literal-�'];
+    const original = `export default { claudeCode: { addDirs: ${JSON.stringify(dirs)} } };`;
+    const f = fixture(original);
+    try {
+      const caller = join(f.sdk, 'read-dirs.ts');
+      // In this disposable caller only, fragment the real helper's bytes at a
+      // known boundary. No dependence on pipe buffer sizes or scheduler timing.
+      writeFileSync(caller, `import {Readable} from 'node:stream';
+        import {config} from './kit-sdk-config.ts';
+        const emit = Readable.prototype.emit, marker = Buffer.from('🎙');
+        let damage = false, injections = 0;
+        Readable.prototype.emit = function(event, ...args) {
+          const bytes = args[0];
+          const at = event === 'data' && Buffer.isBuffer(bytes) ? bytes.indexOf(marker) : -1;
+          if (at < 0) return emit.call(this, event, ...args);
+          injections++;
+          if (damage) { const bad = Buffer.from(bytes); bad[at] = 0xff; return emit.call(this, event, bad); }
+          emit.call(this, event, bytes.subarray(0, at + 2));
+          return emit.call(this, event, bytes.subarray(at + 2));
+        };
+        try {
+          const {value, revision} = await config.get('claudeCode.addDirs');
+          damage = true;
+          const refused = await config.get('claudeCode.addDirs').then(() => false, e => e.message === 'Settings CLI returned invalid JSON');
+          console.log(JSON.stringify({value, revision, refused, injections}));
+        } finally { Readable.prototype.emit = emit; }`);
+      const child = Bun.spawnSync([process.execPath, caller], {
+        cwd: f.sdk, env: { HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin' },
+      });
+      expect(child.exitCode).toBe(0);
+      expect(JSON.parse(child.stdout.toString())).toEqual({ value: dirs, revision: revision(original), refused: true, injections: 2 });
+      expect(f.read()).toBe(original);
+    } finally { f.close(); }
+  });
   it('does not accept a settings success reply from a process that failed', () => {
     const f = fixture(source);
     try {

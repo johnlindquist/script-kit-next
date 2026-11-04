@@ -155,18 +155,17 @@ async function runCLI<T>(args: string[]): Promise<T> {
       env: { HOME: homedir(), SCRIPT_KIT_CONFIG_PATH: configPath(), SCRIPT_KIT_NONINTERACTIVE: process.env.SCRIPT_KIT_NONINTERACTIVE, CI: process.env.CI }
     });
 
-    let stdout = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
+    // A pipe read can end inside one UTF-8 character. Keep the bytes until EOF.
+    const stdout: Uint8Array[] = [];
+    proc.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
 
     proc.stderr.resume(); // drain diagnostics without redisclosing raw config text
 
     proc.on('close', (code) => {
       let result: CLIResponse<T>;
       try {
-        result = JSON.parse(stdout);
+        const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(Buffer.concat(stdout));
+        result = JSON.parse(text);
       } catch {
         reject(new Error(code === 0 ? 'Settings CLI returned invalid JSON' : 'Settings CLI failed without a readable result'));
         return;
