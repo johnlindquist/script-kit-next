@@ -17,6 +17,10 @@ The installed CLI in `$SK_PATH/sdk/config-cli.ts` and adjacent `kit-sdk-config.t
 | `~/.scriptkit/config.ts` | Full config: hotkeys, built-ins, runtime preferences, Claude Code | Auto-reloads |
 | `~/.scriptkit/theme.json` | Theme colors | Auto-reloads |
 
+## Editing one setting
+
+For the settings SDK, pass the exact key and revision you read: `await config.set(key, value, revision)` or `await config.reset(key, revision)`. An empty selection or a supplied `undefined` revision is refused; do not remove an argument to make the edit go through. `config.get()` reads all settings. To deliberately reset all eligible settings at the reviewed revision, use `await config.resetAll(revision)`, not `config.reset(undefined, revision)`.
+
 ## What Goes Where
 
 | Setting | File | Key |

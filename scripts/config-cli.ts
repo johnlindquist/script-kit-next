@@ -1427,8 +1427,9 @@ function safeValue(key: string, value: unknown): unknown {
   );
 }
 function cmdGet(key?: string) {
+  if (key !== undefined && !key.trim()) throw new Error('Expected a nonempty settings key');
   const { config, ...meta } = readConfig();
-  if (!key)
+  if (key === undefined)
     return success({
       ...meta,
       config: safeValue('', {

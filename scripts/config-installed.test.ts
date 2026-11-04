@@ -168,6 +168,62 @@ describe('installed settings helper', () => {
       expect(directSettingsBun(real, '/')).toBe(real);
     } finally { rmSync(root, {recursive: true, force: true}); }
   });
+  it('a missing SDK key or revision cannot become a wider settings operation', async () => {
+    const f = fixture('export default { editorFontSize: 16, terminalFontSize: 20 };\n');
+    try {
+      const old = (await f.run('get', 'editorFontSize')).data.revision;
+      expect((await f.run('set-json', 'editorFontSize', '21', '--if-revision', old)).code).toBe(0);
+      const current = f.read();
+      const prog = join(f.sdk, 'missing-argument.mjs');
+      writeFileSync(prog, `import {config} from './kit-sdk-config.ts';
+        const missing = {}, refused = async work => work().then(() => false, () => true);
+        const get = await refused(() => config.get(missing.key));
+        const blank = await refused(() => config.get(''));
+        const set = await refused(() => config.set('editorFontSize', 27, missing.revision));
+        const validated = await refused(() => config.setValidated('editorFontSize', 28, missing.revision));
+        const resetKey = await refused(() => config.reset('editorFontSize', missing.revision));
+        const {revision} = await config.get('terminalFontSize');
+        const reset = await refused(() => config.reset(missing.key, revision));
+        console.log(JSON.stringify({get, blank, set, validated, resetKey, reset}));`);
+      const caller = Bun.spawnSync([process.execPath, prog], {cwd: f.sdk,
+        env: {HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin'}});
+      expect(caller.exitCode).toBe(0);
+      expect(JSON.parse(caller.stdout.toString())).toEqual({get:true, blank:true, set:true, validated:true, resetKey:true, reset:true});
+      expect(f.read()).toBe(current);
+      for (const key of ['', '   ']) {
+        const read = await f.run('get', key);
+        expect(read).toMatchObject({code: 1, success: false});
+        expect(read).not.toHaveProperty('data');
+      }
+    } finally { f.close(); }
+  });
+  it('resets just the named key or all eligible settings at the reviewed revision', () => {
+    const f = fixture('export default { editorFontSize: 16, terminalFontSize: 20 };\n');
+    try {
+      const prog = join(f.sdk, 'reviewed-reset.mjs');
+      writeFileSync(prog, `import {config} from './kit-sdk-config.ts';
+        const first = await config.get();
+        const edit = await config.setValidated('editorFontSize', 21, first.revision);
+        const stale = await config.resetAll(first.revision).then(() => 'accepted', e => e.code);
+        const invalid = await config.resetAll(undefined).then(() => 'accepted', () => 'refused');
+        const afterRefusal = await config.get('editorFontSize');
+        const justOne = await config.reset('editorFontSize', edit.revision);
+        const other = await config.get('terminalFontSize');
+        const all = await config.resetAll(justOne.revision);
+        const after = await config.get('terminalFontSize');
+        await config.set('terminalFontSize', 23);
+        await config.reset();
+        console.log(JSON.stringify({stale, invalid, first:first.config.editorFontSize,
+          stayed:afterRefusal.value, guarded:afterRefusal.revision === edit.revision,
+          other:other.value, otherWasConfigured:!other.isDefault,
+          all:after.isDefault && after.revision === all.revision, legacy:(await config.get('terminalFontSize')).isDefault}));`);
+      const caller = Bun.spawnSync([process.execPath, prog], {cwd: f.sdk,
+        env: {HOME: f.root, SK_PATH: join(f.root, 'workspace'), PATH: '/usr/bin:/bin'}});
+      expect(caller.exitCode).toBe(0);
+      expect(JSON.parse(caller.stdout.toString())).toEqual({stale:'stale_revision', invalid:'refused', first:16,
+        stayed:21, guarded:true, other:20, otherWasConfigured:true, all:true, legacy:true});
+    } finally { f.close(); }
+  });
   it('targets SK_PATH and edits only the selected literal; stale proposals cannot clobber human edits', async () => {
     const f = fixture(source);
     try {

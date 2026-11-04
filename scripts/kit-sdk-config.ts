@@ -195,25 +195,40 @@ async function runCLI<T>(args: string[]): Promise<T> {
 // Config API
 // =============================================================================
 
-/**
- * Get all config values or a specific key
- */
+// A missing selection or revision is not consent to broaden an operation.
+// Rest tuples retain the distinction between omission and a supplied undefined.
+type RevisionGuard = [] | [expectedRevision: string];
+
+function requireKey(key: unknown): string {
+  if (typeof key !== 'string' || !key.trim()) throw new Error('Expected a nonempty settings key');
+  return key;
+}
+
+function revisionArgs(guard: readonly unknown[]): string[] {
+  if (guard.length === 0) return [];
+  if (guard.length !== 1 || typeof guard[0] !== 'string') {
+    throw new Error('Expected a settings revision from get or list');
+  }
+  // The helper validates the revision format and compares it under the writer lock.
+  return ['--if-revision', guard[0]];
+}
+
 async function get(): Promise<GetAllResult>;
 async function get(key: string): Promise<GetKeyResult>;
-async function get(key?: string): Promise<GetAllResult | GetKeyResult> {
-  if (key) {
-    return runCLI<GetKeyResult>(['get', key]);
-  }
-  return runCLI<GetAllResult>(['get']);
+async function get(...keys: string[]): Promise<GetAllResult | GetKeyResult> {
+  if (keys.length === 0) return runCLI<GetAllResult>(['get']);
+  if (keys.length !== 1) throw new Error('Expected one settings key');
+  return runCLI<GetKeyResult>(['get', requireKey(keys[0])]);
 }
 
 /**
  * Set a config value
  */
-async function set(key: string, value: unknown, expectedRevision?: string): Promise<SetResult> {
+async function set(key: string, value: unknown, ...guard: RevisionGuard): Promise<SetResult> {
+  const target = requireKey(key), options = revisionArgs(guard);
   const json = JSON.stringify(value);
   if (json === undefined) throw new Error('Expected a JSON config value');
-  return runCLI<SetResult>(['set-json', key, json, ...(expectedRevision === undefined ? [] : ['--if-revision', expectedRevision])]);
+  return runCLI<SetResult>(['set-json', target, json, ...options]);
 }
 
 /**
@@ -250,11 +265,18 @@ export async function validateChange(change: { key: string; value: unknown }): P
 // The writer validates the typed value inside the same operation as the edit.
 const setValidated = set;
 
-/**
- * Reset a config value to default (or all values if no key specified)
- */
-async function reset(key?: string, expectedRevision?: string): Promise<{ key?: string; value?: unknown; message: string; config?: Config; revision: string }> {
-  return runCLI(['reset', ...(key === undefined ? [] : [key]), ...(expectedRevision === undefined ? [] : ['--if-revision',expectedRevision])]);
+type ResetResult = { key?: string; value?: unknown; message: string; config?: Config; revision: string };
+
+/** Reset the whole config at an optional reviewed revision; the helper can refuse the whole operation. */
+async function resetAll(...guard: RevisionGuard): Promise<ResetResult> {
+  return runCLI(['reset', ...revisionArgs(guard)]);
+}
+
+/** Omit all arguments for the legacy whole reset; never promote a supplied key to reset-all. */
+async function reset(...selection: [] | [key: string, ...RevisionGuard]): Promise<ResetResult> {
+  if (selection.length === 0) return resetAll();
+  const [key, ...guard] = selection;
+  return runCLI(['reset', requireKey(key), ...revisionArgs(guard)]);
 }
 
 // =============================================================================
@@ -268,7 +290,8 @@ export const config = {
   list,
   validate,
   validateChange,
-  reset
+  reset,
+  resetAll
 };
 
 // Convenience alias for Tab AI consumers
