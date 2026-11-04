@@ -50,11 +50,12 @@ function startMockMcp(handler: (body: any) => any) {
   return server;
 }
 
-async function runCli(args: string[], env: Record<string, string>) {
+async function runCli(args: string[], env: Record<string, string | undefined>) {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(env)) {
     previous.set(key, process.env[key]);
-    process.env[key] = value;
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
   }
   try {
     return await runMcpCli(args);
@@ -91,7 +92,7 @@ function discoveryEnv(baseUrl: string) {
 }
 
 describe("workspace path identity", () => {
-  const local = { SCRIPT_KIT_MCP_ENDPOINT: "", SCRIPT_KIT_MCP_SERVER_JSON: "", SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_AGENT_CREDENTIAL: "" };
+  const local = { SCRIPT_KIT_MCP_ENDPOINT: undefined, SCRIPT_KIT_MCP_SERVER_JSON: undefined, SCRIPT_KIT_MCP_TOKEN: undefined, SCRIPT_KIT_AGENT_CREDENTIAL: undefined };
 
   it("honors significant spaces in connection files, workspace names and grant registrations", async () => {
     const { mkdirSync } = await import("node:fs");
@@ -148,7 +149,7 @@ describe("scoped credential destinations", () => {
     const root = join(dir, "workspace"), priv = join(dir, "private");
     try {
       for (const path of [root, priv]) mkdirSync(path, { mode: 0o700 });
-      const env = { SK_PATH: root, SCRIPT_KIT_AGENT_CREDENTIAL: "", SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_MCP_SERVER_JSON: "" };
+      const env = { SK_PATH: root, SCRIPT_KIT_AGENT_CREDENTIAL: undefined, SCRIPT_KIT_MCP_TOKEN: undefined, SCRIPT_KIT_MCP_SERVER_JSON: undefined };
       await run(root, priv, (name, file) => runCli(["grant-agent", name, file, "notes:quiet"], env));
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
@@ -185,7 +186,7 @@ describe("scoped credential destinations", () => {
     }
     const program = "// Agent effect: Say hello\nconsole.log('hello')\n";
     writeFileSync(join(external, "hello.ts"), program);
-    expect(await runCli(["inspect-command", "hello"], { SK_PATH: root, SCRIPT_KIT_MCP_SERVER_JSON: "" }))
+    expect(await runCli(["inspect-command", "hello"], { SK_PATH: root, SCRIPT_KIT_MCP_SERVER_JSON: undefined }))
       .toMatchObject({ success: true, data: { source: program } });
     await grant("reader", join(sibling, "reader.ts"));
     expect(readFileSync(join(external, "hello.ts"), "utf8")).toBe(program);
@@ -288,9 +289,9 @@ describe("mcp-cli", () => {
     try {
       const result = await runCli(["mcp", "tools"], {
         SK_PATH: dir,
-        SCRIPT_KIT_MCP_SERVER_JSON: "",
-        SCRIPT_KIT_MCP_ENDPOINT: "",
-        SCRIPT_KIT_MCP_TOKEN: "",
+        SCRIPT_KIT_MCP_SERVER_JSON: undefined,
+        SCRIPT_KIT_MCP_ENDPOINT: undefined,
+        SCRIPT_KIT_MCP_TOKEN: undefined,
       });
       expect(typeof result).toBe("object");
       expect((result as any).data.result.tools[0].name).toBe("workspace-owned-tool");
@@ -313,9 +314,9 @@ describe("mcp-cli", () => {
       const result = await runCli(["mcp", "tools"], {
         SK_PATH: root,
         SCRIPT_KIT_MCP_FIXTURE_ROOT: dir,
-        SCRIPT_KIT_MCP_SERVER_JSON: "",
-        SCRIPT_KIT_MCP_ENDPOINT: "",
-        SCRIPT_KIT_MCP_TOKEN: "",
+        SCRIPT_KIT_MCP_SERVER_JSON: undefined,
+        SCRIPT_KIT_MCP_ENDPOINT: undefined,
+        SCRIPT_KIT_MCP_TOKEN: undefined,
       });
       expect(typeof result).toBe("object");
       expect((result as any).data.result.tools[0].name).toBe("expanded-workspace-tool");
@@ -417,7 +418,7 @@ describe("mcp-cli", () => {
       return { jsonrpc: "2.0", id: body.id, result: { tools: [] } };
     });
     const { dir, env } = discoveryEnv(mock.url.origin);
-    const implicit = { ...env, SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_AGENT_CREDENTIAL: "" };
+    const implicit = { ...env, SCRIPT_KIT_MCP_TOKEN: undefined, SCRIPT_KIT_AGENT_CREDENTIAL: undefined };
     try {
       for (const url of ["http://127.0.0.1:43130/rpc", "http://localhost:43129/rpc", "https://127.0.0.1:43129/rpc"]) {
         await expect(runCli(["mcp", "tools"], { ...implicit, SCRIPT_KIT_MCP_ENDPOINT: url }))
@@ -458,8 +459,8 @@ describe("mcp-cli", () => {
     startMockMcp(body => { requests++; return { jsonrpc: "2.0", id: body.id, result: {} }; });
     try {
       writeFileSync(join(dir, name), '{"token":' + canary + '}', { mode: 0o600 });
-      const message = await runCli(["mcp", "tools"], { ...env, SCRIPT_KIT_MCP_ENDPOINT: "",
-        SCRIPT_KIT_AGENT_CREDENTIAL: "", SCRIPT_KIT_MCP_TOKEN: name === "server.json" ? "" : "scoped-fixture" })
+      const message = await runCli(["mcp", "tools"], { ...env, SCRIPT_KIT_MCP_ENDPOINT: undefined,
+        SCRIPT_KIT_AGENT_CREDENTIAL: undefined, SCRIPT_KIT_MCP_TOKEN: name === "server.json" ? undefined : "scoped-fixture" })
         .then(() => "", (err: unknown) => err instanceof Error ? err.message : "");
       // Assert on facts, not the raw failure: a failing regression must not print the canary.
       expect({ disclosed: message.includes(canary), malformed: message.includes("invalid JSON"),
@@ -740,5 +741,35 @@ describe("mcp-cli", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("explicit connection context", () => {
+  it("does not borrow an operator identity or endpoint when a selected credential or route is blank", async () => {
+    const { dir } = discoveryEnv("http://127.0.0.1:43129");
+    let calls = 0;
+    startMockMcp(body => { calls++; return { jsonrpc: "2.0", id: body.id, result: { tools: [] } }; });
+    try {
+      writeFileSync(join(dir, "server-location.json"), JSON.stringify({ url: "http://127.0.0.1:43129" }), { mode: 0o600 });
+      for (const key of ["SCRIPT_KIT_AGENT_CREDENTIAL", "SCRIPT_KIT_MCP_TOKEN", "SCRIPT_KIT_MCP_ENDPOINT", "SCRIPT_KIT_MCP_SERVER_JSON"]) {
+        for (const value of ["", "   "]) {
+          await expect(runCli(["mcp", "tools"], { SK_PATH: dir, [key]: value })).rejects.toThrow();
+        }
+      }
+      await expect(runCli(["agent", "discover"], { SK_PATH: dir, SCRIPT_KIT_AGENT_CREDENTIAL: "", SCRIPT_KIT_MCP_TOKEN: "test-token" })).rejects.toThrow(/credential/i);
+      expect(calls).toBe(0);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("cannot issue a grant or inspect script source from an empty agent credential context", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-empty-agent-")));
+    try {
+      for (const key of ["SCRIPT_KIT_AGENT_CREDENTIAL", "SCRIPT_KIT_MCP_TOKEN"]) {
+        const env = { SK_PATH: root, [key]: "" };
+        await expect(runCli(["grant-agent", "reader", join(root, "new-secret"), "notes:quiet"], env)).rejects.toThrow("operator shell");
+        await expect(runCli(["inspect-command", "example"], env)).rejects.toThrow("operator shell");
+        expect(existsSync(join(root, "agents"))).toBe(false);
+        expect(existsSync(join(root, "new-secret"))).toBe(false);
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

@@ -480,6 +480,27 @@ try {
     return { requests: observed.requests, activeWorkspaceRespected: true };
   });
 
+  await check("mcp-empty-routes-and-ambiguous-default-home-stop-before-contact", async () => {
+    const observed = installServer(payload => successResponse(payload));
+    process.env.SCRIPT_KIT_MCP_ENDPOINT = '';
+    await expectFailure(() => computer.listNativeWindows(), 'loopback');
+    delete process.env.SCRIPT_KIT_MCP_ENDPOINT;
+    process.env.SCRIPT_KIT_MCP_SERVER_JSON = '';
+    await expectFailure(() => computer.listNativeWindows(), 'absolute');
+    delete process.env.SCRIPT_KIT_MCP_SERVER_JSON;
+    const oldHome = process.env.HOME, oldKit = process.env.SK_PATH;
+    try {
+      delete process.env.SK_PATH;
+      process.env.HOME = fixtureDirectory + '/child/..';
+      await expectFailure(() => computer.listNativeWindows(), "without '..'");
+    } finally {
+      if (oldHome === undefined) delete process.env.HOME; else process.env.HOME = oldHome;
+      if (oldKit === undefined) delete process.env.SK_PATH; else process.env.SK_PATH = oldKit;
+    }
+    if (observed.requests !== 0) throw new Error('An invalid connection or home reached transport');
+    return { requests: observed.requests, noNativeInput: true };
+  });
+
   await check("mcp-private-local-discovery-preserves-auth-and-session", async () => {
     const observed = installServer((payload, request, init) => {
       if (request.headers.get("authorization") !== `Bearer ${privateToken}`) {

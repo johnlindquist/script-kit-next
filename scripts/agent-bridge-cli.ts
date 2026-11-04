@@ -47,7 +47,7 @@ function privateFile(path: string, privateOnly = true, limit = 4096): Buffer {
 		requireOk(
 			st.isFile() &&
 				st.size <= limit &&
-				(!privateOnly || (!(st.mode & 0o077) && st.uid === process.getuid?.())),
+				(!privateOnly || (st.nlink === 1 && !(st.mode & 0o077) && st.uid === process.getuid?.())),
 			"Expected an owner-only regular credential file or a bounded regular source file",
 		);
 		return readFileSync(fd);
@@ -55,8 +55,17 @@ function privateFile(path: string, privateOnly = true, limit = 4096): Buffer {
 		closeSync(fd);
 	}
 }
+function validBearer(value: unknown): value is string {
+	return typeof value === "string" && value.length <= 4096 && /^[A-Za-z0-9._~+/\-]+=*$/.test(value);
+}
 export function credentialToken(path: string): string {
-	return privateFile(path).toString().trim();
+	requireOk(isAbsolute(path) && !path.split(process.platform === "win32" ? /[\\/]/ : "/").includes(".."),
+		"Supply an absolute credential file path without '..'. No operator credential was used.");
+	let token: string;
+	try { token = privateFile(path).toString("utf8").replace(/\r?\n$/, ""); }
+	catch { throw Error("The selected credential file is unavailable or not private. No operator credential was used."); }
+	requireOk(validBearer(token), "The selected credential file is empty or invalid. No operator credential was used.");
+	return token;
 }
 // The server trusts agent-token as operator authority, independently of scoped registrations.
 // Kit must never mint a scoped bearer there or among files read as personal content or code.
@@ -255,11 +264,10 @@ export function operator(args: string[], root: string) {
 type Rpc = (method: string, params: unknown, token: string) => Promise<any>;
 export async function agent(args: string[], rpc: Rpc) {
 	const [verb, a, b, ...extra] = args;
-	const raw = process.env.SCRIPT_KIT_AGENT_CREDENTIAL
-		? credentialToken(process.env.SCRIPT_KIT_AGENT_CREDENTIAL)
-		: process.env.SCRIPT_KIT_MCP_TOKEN;
+	const file = process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+	const raw = file === undefined ? process.env.SCRIPT_KIT_MCP_TOKEN : credentialToken(file);
 	requireOk(
-		raw,
+		validBearer(raw),
 		"Set SCRIPT_KIT_AGENT_CREDENTIAL to your scoped token file. No operator token was used.",
 	);
 	const call = async (name: string, parameters: unknown) => {

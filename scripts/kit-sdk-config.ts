@@ -26,7 +26,7 @@
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { homedir, devNull } from 'node:os';
-import { configPath, directSettingsBun, DisplacedSettingsWrite, type SettingsWriteErrorCode, StaleConfigRevision } from './config-document.ts';
+import { configPath, directSettingsBun, settingsHome, DisplacedSettingsWrite, type SettingsWriteErrorCode, StaleConfigRevision } from './config-document.ts';
 export { DisplacedSettingsWrite, StaleConfigRevision };
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,7 +127,7 @@ function settingsBun(): string {
     throw new Error('BUN_PATH must name an absolute executable Bun binary, not a shim');
   }
   const exe = process.platform === 'win32' ? 'bun.exe' : 'bun';
-  const installed = [path.join(homedir(), '.bun/bin', exe)];
+  const installed = [path.join(settingsHome(), '.bun/bin', exe)];
   if (process.platform !== 'win32') installed.push('/opt/homebrew/bin/bun', '/usr/local/bin/bun');
   for (const candidate of installed) {
     const direct = directSettingsBun(candidate);

@@ -6,7 +6,7 @@ Use Kit to work with one desktop object the person named. Creating something is 
 
 Use the workspace the operator selected. If `SK_PATH` is set, it must expand to an absolute path without `..`. Keep spaces in the name. If the path is refused, ask for the intended directory rather than switching to the default workspace.
 
-`scriptkit --skill` is offline. `scriptkit agent discover` talks to the already running Kit without raising it or capturing the desktop. It requires the scoped credential file supplied by the operator (`SCRIPT_KIT_AGENT_CREDENTIAL`), or an explicitly supplied `SCRIPT_KIT_MCP_TOKEN`. Never fetch the operator token to get around a denial. The app must be running for live operations. `SCRIPT_KIT_MCP_ENDPOINT` can specify its loopback `/rpc` endpoint. Scopes limit calls made with this credential; they do not sandbox a local shell running as the user.
+`scriptkit --skill` is offline. `scriptkit agent discover` talks to the already running Kit without raising it or capturing the desktop. It requires the scoped credential file supplied by the operator (`SCRIPT_KIT_AGENT_CREDENTIAL`), or an explicitly supplied `SCRIPT_KIT_MCP_TOKEN`. Give the credential file’s absolute path without `..`. If both a file and a token are supplied, the file wins; an invalid file never selects the other token. Leave unused connection overrides unset, not blank. Never fetch the operator token or unset a broken agent grant to get around a denial. The app must be running for live operations. `SCRIPT_KIT_MCP_ENDPOINT` can specify its loopback `/rpc` endpoint. Scopes limit calls made with this credential; they do not sandbox a local shell running as the user.
 
 ## Save a quiet note
 

@@ -6,20 +6,26 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
-function checkedSettingsPath(value: string, kind: 'workspace' | 'config'): string {
+function checkedSettingsPath(value: string, kind: 'workspace' | 'config' | 'home'): string {
   // Check the supplied spelling before join() can erase a link followed by '..'.
   if (!path.isAbsolute(value) || value.split(process.platform === 'win32' ? /[\\/]/ : '/').includes('..'))
     throw new Error(`Settings require an absolute ${kind} path without '..'`);
   return value;
 }
 
+/** Shared by the implicit workspace and Node's per-user Bun lookup, before either joins a path. */
+export function settingsHome(): string {
+  return checkedSettingsPath((process.platform === 'win32' ? undefined : process.env.HOME) ?? os.homedir(), 'home');
+}
+
 export function configPath() {
-  const home = os.homedir();
   // Match setup::get_kit_path for ordinary home/env expansions. Never use
   // the process CWD as an implicit settings home or helper directory.
   let file = process.env.SCRIPT_KIT_CONFIG_PATH;
   if (file === undefined) {
-    const root = process.env.SK_PATH ?? path.join(home, '.scriptkit');
+    const root = process.env.SK_PATH;
+    // The OS home is a literal pathname. Never expand dollar signs in it a second time.
+    if (root === undefined) return path.join(settingsHome(), '.scriptkit', 'config.ts');
     let expanded = root.replace(
       /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
       (_, braced, bare) => {
@@ -31,7 +37,7 @@ export function configPath() {
     );
     if (expanded.includes('$') || (expanded.startsWith('~') && !root.startsWith('~')))
       throw new Error('Unsupported expansion in SK_PATH; use an absolute workspace path');
-    expanded = expanded.replace(/^~(?=\/|$)/, () => home);
+    expanded = expanded.replace(/^~(?=\/|$)/, settingsHome);
     file = path.join(checkedSettingsPath(expanded, 'workspace'), 'config.ts');
   }
   return checkedSettingsPath(file, 'config');

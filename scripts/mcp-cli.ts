@@ -107,6 +107,13 @@ function parseJsonArg(raw: string | undefined, fallback: unknown): unknown {
   }
 }
 
+// HOME is already a pathname, not another shell expression. Validate before join can erase '..'.
+function checkedHome(): string {
+  const home = (process.platform === "win32" ? undefined : process.env.HOME) ?? homedir();
+  if (!isAbsolute(home) || pathParts(home).includes("..")) fail("Use an absolute home path without '..', or supply an explicit workspace or command target.");
+  return home;
+}
+
 function discoveryPath(): string {
   // Check before join(): a link followed by '..' need not name the lexical parent.
   const checked = (path: string) => {
@@ -116,15 +123,15 @@ function discoveryPath(): string {
     return path;
   };
   const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON;
-  if (explicit) return checked(explicit);
+  if (explicit !== undefined) return checked(explicit);
 
   const configured = process.env.SK_PATH;
-  if (configured === undefined) return join(homedir(), ".scriptkit", "server.json");
+  if (configured === undefined) return join(checkedHome(), ".scriptkit", "server.json");
   const expanded = configured.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
     (_, braced: string | undefined, bare: string | undefined) =>
       process.env[braced ?? bare ?? ""] ?? fail("Unknown variable in SK_PATH; use an absolute workspace path"),
   );
-  const workspace = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, () => homedir()) : expanded;
+  const workspace = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, checkedHome) : expanded;
   return join(checked(workspace), "server.json");
 }
 
@@ -172,7 +179,8 @@ function loadDiscovery(locationOnly=false): DiscoveryInfo | null {
 
 function envValue(name: string): string | undefined {
   const value = process.env[name];
-  return value && value.trim() !== "" ? value : undefined;
+  if (value !== undefined && !value.trim()) fail(`${name} is empty. Supply a valid value; no operator credential was used.`);
+  return value;
 }
 
 function reviewedLocalEndpoint(endpointOrBase: string): string {
@@ -203,6 +211,9 @@ function reviewedLocalEndpoint(endpointOrBase: string): string {
 function resolveEndpointAndToken(explicitToken?:string): { endpoint: string; token: string } {
   const endpointOverride = envValue("SCRIPT_KIT_MCP_ENDPOINT");
   const tokenOverride = explicitToken ?? envValue("SCRIPT_KIT_MCP_TOKEN");
+  if (tokenOverride !== undefined && (tokenOverride.length > 4096 || !/^[A-Za-z0-9._~+/\-]+=*$/.test(tokenOverride))) {
+    fail("The supplied MCP credential is invalid. No operator credential was used.");
+  }
   // Validate an explicit destination before opening local bearer-token state.
   const reviewedOverride = endpointOverride ? reviewedLocalEndpoint(endpointOverride) : undefined;
   const discovery = reviewedOverride && tokenOverride ? null : loadDiscovery(tokenOverride !== undefined);
@@ -293,11 +304,7 @@ const pathParts = (p: string) => p.split(process.platform === "win32" ? /[\\/]/ 
 
 function commandTarget(args: string[]): string {
   if (!args.length) {
-    const home = homedir();
-    if (!isAbsolute(home) || pathParts(home).includes("..")) {
-      fail("Cannot verify the home directory. Pass an explicit command target.");
-    }
-    return join(home, ".local", "bin", "scriptkit");
+    return join(checkedHome(), ".local", "bin", "scriptkit");
   }
   if (args.length !== 1) fail(installUsage);
   const [raw] = args;
@@ -466,8 +473,13 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     const bridge=await import("./agent-bridge-cli.ts");
     if(rawCommand==='--skill')return bridge.agentDoc();
     if(rawCommand==='agent')return {success:true,data:await bridge.agent(rest,rpc)};
-    if(["grant-agent","inspect-command"].includes(rawCommand) && (process.env.SCRIPT_KIT_AGENT_CREDENTIAL || process.env.SCRIPT_KIT_MCP_TOKEN)) fail("Use an operator shell, not an agent credential context");
-    if(process.env.SCRIPT_KIT_MCP_SERVER_JSON) fail('Use SK_PATH rather than an endpoint override for operator commands');
+    const operatorOnly = ["grant-agent", "inspect-command"].includes(rawCommand);
+    if (operatorOnly && (process.env.SCRIPT_KIT_AGENT_CREDENTIAL !== undefined || process.env.SCRIPT_KIT_MCP_TOKEN !== undefined)) {
+      fail("Use an operator shell, not an agent credential context");
+    }
+    if (process.env.SCRIPT_KIT_MCP_SERVER_JSON !== undefined || (operatorOnly && process.env.SCRIPT_KIT_MCP_ENDPOINT !== undefined)) {
+      fail("Use SK_PATH rather than an endpoint override for operator commands");
+    }
     return {success:true,data:bridge.operator(argv,dirname(discoveryPath()))};
   }
   if (rawCommand === "install-command") {

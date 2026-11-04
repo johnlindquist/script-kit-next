@@ -81,6 +81,24 @@ describe('installed settings helper', () => {
       expect(readFileSync(join(other, 'workspace/config.ts'), 'utf8')).toBe(source);
     } finally { f.close(); }
   });
+  it('uses a literal default home and refuses a parent traversal before spending a revision', () => {
+    const f = fixture(source);
+    try {
+      const a = join(f.root, 'Home $KIT_LABEL'), b = join(f.root, 'Home other');
+      const aFile = join(a, '.scriptkit/config.ts'), bFile = join(b, '.scriptkit/config.ts');
+      for (const home of [a, b]) mkdirSync(join(home, '.scriptkit'), { recursive: true });
+      writeFileSync(aFile, source); writeFileSync(bFile, source);
+      mkdirSync(join(b, 'nested')); symlinkSync(join(b, 'nested'), join(a, 'detour'), 'dir');
+      const set = (home: string) => Bun.spawnSync([process.execPath, join(f.sdk, 'config-cli.ts'), 'set-json', 'editorFontSize', '27', '--if-revision', revision(source)], {
+        cwd: f.root, env: { HOME: home, KIT_LABEL: 'other', PATH: '/usr/bin:/bin' },
+      });
+      expect(set(join(a, 'detour') + '/..').exitCode).toBe(1);
+      expect(readFileSync(aFile, 'utf8')).toBe(source); expect(readFileSync(bFile, 'utf8')).toBe(source);
+      expect(set(a).exitCode).toBe(0);
+      expect(readFileSync(aFile, 'utf8')).toContain('editorFontSize: 27');
+      expect(readFileSync(bFile, 'utf8')).toBe(source);
+    } finally { f.close(); }
+  });
   it('binds a concrete settings runtime without following project or manager shims', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'settings-bun-paths-')));
     try {

@@ -26,7 +26,7 @@ Press **⌘;**, search for **Hello Kit**, and run it. Choose **World** to see **
 
 **Where is the file?** New Script uses the workspace Kit has open. Your scripts folder is `plugins/main/scripts/` inside it: `~/.scriptkit/plugins/main/scripts/` by default, or `<SK_PATH>/plugins/main/scripts/` if you configured another workspace. If the editor didn’t open, open the newly created `.ts` file there. If you create a script by hand, choose an unused filename in that same folder.
 
-If you set `SK_PATH`, quote the entire folder name, including any spaces. For scripts and settings commands, use an absolute path without `..` (a direct symlink is fine). From inside the intended folder, `pwd -P` shows its physical path. To use the default again, run `unset SK_PATH` rather than setting it to an empty string.
+If you set `SK_PATH`, quote the entire folder name, including any spaces. For scripts and settings commands, use an absolute path without `..` (a direct symlink is fine). From inside the intended folder, `pwd -P` shows its physical path. To use the default again, run `unset SK_PATH` rather than setting it to an empty string. Kit’s settings helper, CLI and SDK then use `.scriptkit` under your actual home directory, without interpreting dollar signs in its name. If you supply a custom `HOME`, give its absolute path without `..`. The settings SDK also checks that home before looking for `~/.bun/bin/bun` under Node; a fully explicit `BUN_PATH` and `SK_PATH` do not depend on that lookup.
 
 ### If Kit can't find Bun
 

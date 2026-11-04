@@ -8243,14 +8243,19 @@ function hasParentPathComponent(path: string): boolean {
 
 function activeScriptKitRoot(): string {
   const configured = process.env.SK_PATH;
-  if (configured === undefined) return nodePath.join(os.homedir(), '.scriptkit');
+  const home = () => {
+    const value = (process.platform === 'win32' ? undefined : process.env.HOME) ?? os.homedir();
+    if (!nodePath.isAbsolute(value) || hasParentPathComponent(value)) throw new Error("Use an absolute home path without '..', or set SK_PATH explicitly.");
+    return value;
+  };
+  if (configured === undefined) return nodePath.join(home(), '.scriptkit');
   const expanded = configured.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
     (_, braced: string | undefined, bare: string | undefined) => {
       const value = process.env[braced ?? bare ?? ''];
       if (value === undefined) throw new Error('Unknown variable in SK_PATH; use an absolute workspace path');
       return value;
     });
-  const root = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, () => os.homedir()) : expanded;
+  const root = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, home) : expanded;
   if (!nodePath.isAbsolute(root) || hasParentPathComponent(root)) {
     throw new Error("Use an absolute workspace path without '..'. Unset SK_PATH for the default workspace.");
   }
@@ -10120,8 +10125,8 @@ async function loadScriptKitMcpConfig(): Promise<McpConfig> {
 
 function computerDiscoveryFile(scoped: boolean): string {
   const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON;
-  const path = explicit || activeScriptKitRoot();
-  if (explicit && (!nodePath.isAbsolute(explicit) || hasParentPathComponent(explicit))) {
+  const path = explicit ?? activeScriptKitRoot();
+  if (explicit !== undefined && (!nodePath.isAbsolute(explicit) || hasParentPathComponent(explicit))) {
     throw new Error("[computer] Use an absolute MCP discovery or workspace path without '..'.");
   }
   if (explicit && !scoped) return explicit;
@@ -10192,7 +10197,7 @@ async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> 
   const supplied = process.env.SCRIPT_KIT_MCP_TOKEN;
   const scoped = file !== undefined || supplied !== undefined;
   const address = process.env.SCRIPT_KIT_MCP_ENDPOINT;
-  const override = address ? computerEndpoint(address) : undefined;
+  const override = address === undefined ? undefined : computerEndpoint(address);
   const discovery = scoped && override ? undefined : computerDiscoveryFile(scoped);
   let token: unknown = supplied;
   let endpoint = override;
