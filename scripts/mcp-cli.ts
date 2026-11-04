@@ -163,7 +163,7 @@ function loadDiscovery(locationOnly=false): DiscoveryInfo | null {
     return discovery;
   } catch (error) {
     if (error instanceof CliFailure) throw error;
-    fail(`Failed to parse ${path}: ${error instanceof Error ? error.message : String(error)}`);
+    return fail(`Failed to parse ${path}: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }

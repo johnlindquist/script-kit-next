@@ -15,6 +15,10 @@ import { join } from "node:path";
 import { runMcpCli } from "./mcp-cli";
 
 const originalFetch = globalThis.fetch;
+// These fixtures never preconnect or open a socket, including with Bun's extended fetch type.
+const stubResponse = (respond: () => Promise<Response>) => Object.assign(respond, {
+  preconnect() { throw Error("Unexpected preconnect in MCP fixture"); },
+});
 let server: { url: URL; stop: (force?: boolean) => void } | null = null;
 
 afterEach(() => {
@@ -267,7 +271,7 @@ describe("mcp-cli", () => {
     try {
       const result = await runCli(["mcp", "tools"], env);
       expect(typeof result).toBe("object");
-      expect(result.success).toBe(true);
+      expect(result).toMatchObject({success:true});
       expect((result as any).data.result.tools[0].name).toBe("kit/trigger_builtin");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -345,7 +349,7 @@ describe("mcp-cli", () => {
       },
     );
     expect(typeof result).toBe("object");
-    expect(result.success).toBe(true);
+    expect(result).toMatchObject({success:true});
     expect((result as any).data.result.content[0].text).toBe("{\"ok\":true}");
   });
 
@@ -363,7 +367,7 @@ describe("mcp-cli", () => {
       SCRIPT_KIT_MCP_TOKEN: "test-token",
     });
     expect(typeof result).toBe("object");
-    expect(result.success).toBe(true);
+    expect(result).toMatchObject({success:true});
   });
 
   it("reads resources", async () => {
@@ -394,10 +398,10 @@ describe("mcp-cli", () => {
     "http://127.0.0.1:43129/rpc#credentials",
   ])("refuses unsafe MCP endpoint %s before sending the local bearer token", async (endpoint) => {
     let requestCount = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = stubResponse(async () => {
       requestCount += 1;
       return Response.json({ jsonrpc: "2.0", id: "forged", result: {} });
-    }) as typeof fetch;
+    });
 
     await expect(runCli(["tools"], {
       SCRIPT_KIT_MCP_ENDPOINT: endpoint,
@@ -435,10 +439,10 @@ describe("mcp-cli", () => {
   it("refuses a remote endpoint supplied by private server discovery", async () => {
     const { dir, env } = discoveryEnv("https://malicious.example");
     let requestCount = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = stubResponse(async () => {
       requestCount += 1;
       return Response.json({ jsonrpc: "2.0", id: "forged", result: {} });
-    }) as typeof fetch;
+    });
     try {
       await expect(runCli(["tools"], env)).rejects.toThrow("local Script Kit MCP endpoint");
       expect(requestCount).toBe(0);
@@ -592,9 +596,9 @@ describe("mcp-cli", () => {
   });
 
   it("rejects a declared oversized MCP response before accepting its body", async () => {
-    globalThis.fetch = (async () => new Response("x".repeat(257), {
+    globalThis.fetch = stubResponse(async () => new Response("x".repeat(257), {
       headers: { "content-length": "257" },
-    })) as typeof fetch;
+    }));
     await expect(runCli(["tools"], {
       SCRIPT_KIT_MCP_ENDPOINT: "http://127.0.0.1:43129/rpc",
       SCRIPT_KIT_MCP_TOKEN: "test-token",
@@ -605,14 +609,14 @@ describe("mcp-cli", () => {
   it("cancels an oversized streamed MCP response without buffering unbounded bytes", async () => {
     let cancelled = false;
     let pullCount = 0;
-    globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+    globalThis.fetch = stubResponse(async () => new Response(new ReadableStream<Uint8Array>({
       pull(controller) {
         pullCount += 1;
         controller.enqueue(new Uint8Array(pullCount === 1 ? 128 : 129));
         if (pullCount >= 8) controller.close();
       },
       cancel() { cancelled = true; },
-    }))) as typeof fetch;
+    })));
     await expect(runCli(["tools"], {
       SCRIPT_KIT_MCP_ENDPOINT: "http://127.0.0.1:43129/rpc",
       SCRIPT_KIT_MCP_TOKEN: "test-token",
@@ -625,10 +629,10 @@ describe("mcp-cli", () => {
     "refuses invalid MCP response budget %s before fetching",
     async (budget) => {
       let requestCount = 0;
-      globalThis.fetch = (async () => {
+      globalThis.fetch = stubResponse(async () => {
         requestCount += 1;
         return Response.json({});
-      }) as typeof fetch;
+      });
       await expect(runCli(["tools"], {
         SCRIPT_KIT_MCP_ENDPOINT: "http://127.0.0.1:43129/rpc",
         SCRIPT_KIT_MCP_TOKEN: "test-token",
@@ -642,10 +646,10 @@ describe("mcp-cli", () => {
     "refuses invalid MCP request timeout %s before fetching",
     async (timeout) => {
       let requestCount = 0;
-      globalThis.fetch = (async () => {
+      globalThis.fetch = stubResponse(async () => {
         requestCount += 1;
         return Response.json({});
-      }) as typeof fetch;
+      });
       await expect(runCli(["tools"], {
         SCRIPT_KIT_MCP_ENDPOINT: "http://127.0.0.1:43129/rpc",
         SCRIPT_KIT_MCP_TOKEN: "test-token",
