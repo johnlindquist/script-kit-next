@@ -8237,15 +8237,24 @@ globalThis.home = function home(...segments: string[]): string {
   return nodePath.join(os.homedir(), ...segments);
 };
 
+function hasParentPathComponent(path: string): boolean {
+  return path.split(process.platform === 'win32' ? /[\\/]/ : '/').includes('..');
+}
+
 function activeScriptKitRoot(): string {
   const configured = process.env.SK_PATH;
-  if (!configured) return nodePath.join(os.homedir(), '.scriptkit');
-  const homeExpanded = configured === '~' || configured.startsWith('~/')
-    ? nodePath.join(os.homedir(), configured.slice(1))
-    : configured;
-  return homeExpanded.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-    (match, braced: string | undefined, unbraced: string | undefined) =>
-      process.env[braced ?? unbraced ?? ''] ?? match);
+  if (configured === undefined) return nodePath.join(os.homedir(), '.scriptkit');
+  const expanded = configured.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (_, braced: string | undefined, bare: string | undefined) => {
+      const value = process.env[braced ?? bare ?? ''];
+      if (value === undefined) throw new Error('Unknown variable in SK_PATH; use an absolute workspace path');
+      return value;
+    });
+  const root = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, () => os.homedir()) : expanded;
+  if (!nodePath.isAbsolute(root) || hasParentPathComponent(root)) {
+    throw new Error("Use an absolute workspace path without '..'. Unset SK_PATH for the default workspace.");
+  }
+  return root;
 }
 
 globalThis.skPath = function skPath(...segments: string[]): string {
@@ -10109,17 +10118,10 @@ async function loadScriptKitMcpConfig(): Promise<McpConfig> {
   return normalizeMcpConfig(config?.mcp);
 }
 
-function hasComputerParentSegment(path: string): boolean {
-  return path.split(process.platform === 'win32' ? /[\\/]/ : '/').includes('..');
-}
-
 function computerDiscoveryFile(scoped: boolean): string {
   const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON;
-  const rawRoot = process.env.SK_PATH;
   const path = explicit || activeScriptKitRoot();
-  // join() can select a different directory from the OS when a link precedes '..'.
-  if (!nodePath.isAbsolute(path) || hasComputerParentSegment(path) ||
-      (!explicit && rawRoot !== undefined && (!rawRoot || hasComputerParentSegment(rawRoot)))) {
+  if (explicit && (!nodePath.isAbsolute(explicit) || hasParentPathComponent(explicit))) {
     throw new Error("[computer] Use an absolute MCP discovery or workspace path without '..'.");
   }
   if (explicit && !scoped) return explicit;
@@ -10195,7 +10197,7 @@ async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> 
   let token: unknown = supplied;
   let endpoint = override;
   if (file !== undefined) {
-    if (!nodePath.isAbsolute(file) || hasComputerParentSegment(file) || typeof process.getuid !== 'function') {
+    if (!nodePath.isAbsolute(file) || hasParentPathComponent(file) || typeof process.getuid !== 'function') {
       throw new Error('[computer] Supply an owned private credential file by its absolute path, or supply the token explicitly.');
     }
     token = (await readComputerPrivateFile(file, 'credential')).replace(/\r?\n$/, '');

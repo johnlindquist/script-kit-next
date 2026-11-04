@@ -109,6 +109,8 @@ function linkedScriptEntries(root: string, parents: Set<string>): string[] {
 	return links;
 }
 function grantDestination(root: string, requested: string) {
+	// Bun's realpath can collapse a link and '..' to a different private directory.
+	requireOk(!requested.split(process.platform === "win32" ? /[\\/]/ : "/").includes(".."), "Choose an absolute credential destination without '..'.");
 	const dir = dirname(requested), leaf = basename(requested), owner = lstatSync(dir);
 	requireOk(owner.isDirectory() && !(owner.mode & 0o077) && owner.uid === process.getuid?.(),
 		"Choose an owned private directory (0700) for the credential");

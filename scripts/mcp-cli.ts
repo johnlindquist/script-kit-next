@@ -25,7 +25,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 type DiscoveryInfo = {
   url: string;
@@ -107,20 +107,24 @@ function parseJsonArg(raw: string | undefined, fallback: unknown): unknown {
 }
 
 function discoveryPath(): string {
-  const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON?.trim();
-  if (explicit) return explicit;
+  // Check before join(): a link followed by '..' need not name the lexical parent.
+  const checked = (path: string) => {
+    if (!isAbsolute(path) || path.split(process.platform === "win32" ? /[\\/]/ : "/").includes("..")) {
+      fail("Use an absolute MCP discovery or workspace path without '..'. Unset SK_PATH for the default workspace.");
+    }
+    return path;
+  };
+  const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON;
+  if (explicit) return checked(explicit);
 
-  const configured = process.env.SK_PATH?.trim();
-  if (!configured) return join(homedir(), ".scriptkit", "server.json");
-  const homeExpanded = configured === "~" || configured.startsWith("~/")
-    ? join(homedir(), configured.slice(1))
-    : configured;
-  const workspace = homeExpanded.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
-    (match, braced: string | undefined, unbraced: string | undefined) =>
-      process.env[braced ?? unbraced ?? ""] ?? match,
+  const configured = process.env.SK_PATH;
+  if (configured === undefined) return join(homedir(), ".scriptkit", "server.json");
+  const expanded = configured.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (_, braced: string | undefined, bare: string | undefined) =>
+      process.env[braced ?? bare ?? ""] ?? fail("Unknown variable in SK_PATH; use an absolute workspace path"),
   );
-  return join(workspace, "server.json");
+  const workspace = /^~(?=\/|$)/.test(configured) ? expanded.replace(/^~/, () => homedir()) : expanded;
+  return join(checked(workspace), "server.json");
 }
 
 function loadDiscovery(locationOnly=false): DiscoveryInfo | null {

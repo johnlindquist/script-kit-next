@@ -86,6 +86,57 @@ function discoveryEnv(baseUrl: string) {
   };
 }
 
+describe("workspace path identity", () => {
+  const local = { SCRIPT_KIT_MCP_ENDPOINT: "", SCRIPT_KIT_MCP_SERVER_JSON: "", SCRIPT_KIT_MCP_TOKEN: "", SCRIPT_KIT_AGENT_CREDENTIAL: "" };
+
+  it("honors significant spaces in connection files, workspace names and grant registrations", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const mock = startMockMcp(body => ({ jsonrpc: "2.0", id: body.id, result: { tools: [] } }));
+    const { dir } = discoveryEnv(mock.url.origin);
+    try {
+      const selected = join(dir, "Kit "), neighbor = join(dir, "Kit");
+      const connection = (token: string) => JSON.stringify({ url: mock.url.origin, token });
+      for (const root of [selected, neighbor]) {
+        mkdirSync(root, { mode: 0o700 });
+        writeFileSync(join(root, "server.json"), connection(root === selected ? "test-token" : "neighbor-token"), { mode: 0o600 });
+      }
+      const explicit = join(neighbor, "server.json ");
+      writeFileSync(explicit, connection("test-token"), { mode: 0o600 });
+      for (const env of [{ ...local, SK_PATH: selected }, { ...local, SCRIPT_KIT_MCP_SERVER_JSON: explicit }]) {
+        expect(await runCli(["mcp", "tools"], env)).toMatchObject({ success: true });
+      }
+      await runCli(["grant-agent", "reader", join(dir, "reader"), "notes:quiet"], { ...local, SK_PATH: selected });
+      expect(existsSync(join(selected, "agents/reader.json"))).toBe(true);
+      expect(existsSync(join(neighbor, "agents/reader.json"))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it("refuses an ambiguous workspace, discovery file or new credential before contact or issuance", async () => {
+    const { mkdirSync } = await import("node:fs");
+    let calls = 0;
+    const mock = startMockMcp(body => { calls++; return { jsonrpc: "2.0", id: body.id, result: {} }; });
+    const { dir } = discoveryEnv(mock.url.origin);
+    try {
+      const logical = join(dir, "logical"), physical = join(dir, "physical"), alias = join(logical, "via");
+      for (const path of [logical, physical, join(physical, "anchor"), join(physical, "kit"), join(logical, "kit")]) mkdirSync(path, { mode: 0o700 });
+      symlinkSync(join(physical, "anchor"), alias, "dir");
+      const ambiguous = alias + "/../kit"; // join() would erase the very distinction under test.
+      for (const base of [logical, physical]) {
+        copyFileSync(join(dir, "server.json"), join(base, "kit/server.json"));
+        writeFileSync(join(base, "kit/server-location.json"), JSON.stringify({ url: mock.url.origin }), { mode: 0o600 });
+      }
+      for (const env of [{ ...local, SK_PATH: ambiguous }, { ...local, SK_PATH: "$KIT_TEST_ROOT", KIT_TEST_ROOT: ambiguous },
+        { ...local, SCRIPT_KIT_MCP_SERVER_JSON: ambiguous + "/server.json", SCRIPT_KIT_MCP_TOKEN: "test-token" }]) {
+        await expect(runCli(["mcp", "tools"], env)).rejects.toThrow("without '..'");
+      }
+      await expect(runCli(["grant-agent", "reader", ambiguous + "/reader", "notes:quiet"], { ...local, SK_PATH: physical })).rejects.toThrow("without '..'");
+      expect(calls).toBe(0);
+      for (const base of [logical, physical]) expect(existsSync(join(base, "kit/reader"))).toBe(false);
+      expect(existsSync(join(physical, "agents/reader.json"))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
 describe("scoped credential destinations", () => {
   async function fixture(run: (root: string, priv: string, grant: (name: string, file: string) => Promise<unknown>) => Promise<void>) {
     const { mkdirSync } = await import("node:fs");

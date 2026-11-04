@@ -61,6 +61,26 @@ export default {
 } satisfies Config;\n`;
 
 describe('installed settings helper', () => {
+  it('does not spend a matching revision in a neighboring workspace across a link and parent segment', () => {
+    const f = fixture(source);
+    try {
+      const other = join(f.root, 'other'), link = join(f.root, 'via');
+      mkdirSync(join(other, 'anchor'), { recursive: true });
+      mkdirSync(join(other, 'workspace'));
+      writeFileSync(join(other, 'workspace/config.ts'), source); // same bytes and revision in both workspaces
+      symlinkSync(join(other, 'anchor'), link, 'dir');
+      const raw = link + '/../workspace';
+      for (const key of ['SK_PATH', 'SCRIPT_KIT_CONFIG_PATH']) {
+        const run = Bun.spawnSync([process.execPath, join(f.sdk, 'config-cli.ts'), 'set-json', 'editorFontSize', '27', '--if-revision', revision(source)], {
+          cwd: f.root, env: { HOME: f.root, PATH: '/usr/bin:/bin', [key]: key === 'SK_PATH' ? raw : raw + '/config.ts' },
+        });
+        expect(run.exitCode).toBe(1);
+        expect(JSON.parse(run.stdout.toString()).error).toContain("without '..'");
+      }
+      expect(f.read()).toBe(source);
+      expect(readFileSync(join(other, 'workspace/config.ts'), 'utf8')).toBe(source);
+    } finally { f.close(); }
+  });
   it('binds a concrete settings runtime without following project or manager shims', () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'settings-bun-paths-')));
     try {

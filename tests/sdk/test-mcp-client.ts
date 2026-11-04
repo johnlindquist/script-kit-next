@@ -294,6 +294,25 @@ try {
     return { configuredServerCount: servers.length, activeWorkspaceRespected: true };
   });
 
+  await check("mcp-paths-refuse-a-link-parent-before-loading-another-workspaces-config", async () => {
+    const base = join(fixtureDirectory, "directory-paths"), alias = join(base, "via"), target = join(base, "actual/anchor");
+    mkdirSync(target, { recursive: true });
+    symlinkSync(target, alias, "dir");
+    for (const [dir, id] of [[join(base, "actual/Kit"), "selected"], [join(base, "Kit"), "neighbor"]]) {
+      mkdirSync(dir);
+      writeFileSync(join(dir, "config.ts"), 'export default ' + JSON.stringify({ mcp: { enabled: true, servers: { [id]: { transport: "http", endpoint: "http://127.0.0.1:9/rpc" } } } }));
+    }
+    try {
+      process.env.SK_PATH = alias + "/../Kit";
+      await expectFailure(async () => skPath(), "without '..'");
+      await expectFailure(async () => kitPath("config.ts"), "without '..'");
+      await expectFailure(() => mcp.listServers(), "without '..'");
+      process.env.SK_PATH = join(base, "actual/Kit");
+      if (!(await mcp.listServers()).some(s => s.id === "selected")) throw Error("Explicit workspace was not restored");
+    } finally { process.env.SK_PATH = fixtureDirectory; }
+    return { neighborNotLoaded: true };
+  });
+
   await check("mcp-public-server-inventory-never-discloses-private-stdio-credentials", async () => {
     const servers = await mcp.listServers();
     const stdio = servers.find((server) => server.id === "stdioPrivateError");

@@ -6,6 +6,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
+function checkedSettingsPath(value: string, kind: 'workspace' | 'config'): string {
+  // Check the supplied spelling before join() can erase a link followed by '..'.
+  if (!path.isAbsolute(value) || value.split(process.platform === 'win32' ? /[\\/]/ : '/').includes('..'))
+    throw new Error(`Settings require an absolute ${kind} path without '..'`);
+  return value;
+}
+
 export function configPath() {
   const home = os.homedir();
   // Match setup::get_kit_path for ordinary home/env expansions. Never use
@@ -25,11 +32,9 @@ export function configPath() {
     if (expanded.includes('$') || (expanded.startsWith('~') && !root.startsWith('~')))
       throw new Error('Unsupported expansion in SK_PATH; use an absolute workspace path');
     expanded = expanded.replace(/^~(?=\/|$)/, () => home);
-    if (!path.isAbsolute(expanded)) throw new Error('Settings require an absolute workspace path');
-    file = path.join(expanded, 'config.ts');
+    file = path.join(checkedSettingsPath(expanded, 'workspace'), 'config.ts');
   }
-  if (!path.isAbsolute(file)) throw new Error('Settings require an absolute config path');
-  return file;
+  return checkedSettingsPath(file, 'config');
 }
 
 /** Select a concrete executable, never a project/manager shim. Return the resolved
@@ -343,7 +348,7 @@ function snapshot(file: string) {
   }
 }
 export function readSource(file: string) {
-  return snapshot(file)?.source ?? null;
+  return snapshot(checkedSettingsPath(file, 'config'))?.source ?? null;
 }
 
 /** A revision comparison actually ran and rejected this write. A lock or I/O failure is not this error. */
@@ -393,7 +398,7 @@ export function mutate(
   expected: string | undefined,
   change: (old: string | null) => string | null,
 ) {
-  const dir = path.dirname(file);
+  const dir = path.dirname(checkedSettingsPath(file, 'config'));
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const lock = `${file}.settings-lock`;
   try {

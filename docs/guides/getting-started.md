@@ -26,6 +26,8 @@ Press **⌘;**, search for **Hello Kit**, and run it. Choose **World** to see **
 
 **Where is the file?** New Script uses the workspace Kit has open. Your scripts folder is `plugins/main/scripts/` inside it: `~/.scriptkit/plugins/main/scripts/` by default, or `<SK_PATH>/plugins/main/scripts/` if you configured another workspace. If the editor didn’t open, open the newly created `.ts` file there. If you create a script by hand, choose an unused filename in that same folder.
 
+If you set `SK_PATH`, quote the entire folder name, including any spaces. For scripts and settings commands, use an absolute path without `..` (a direct symlink is fine). From inside the intended folder, `pwd -P` shows its physical path. To use the default again, run `unset SK_PATH` rather than setting it to an empty string.
+
 ### If Kit can't find Bun
 
 Kit needs [Bun](https://bun.sh) to run TypeScript scripts. Opening an app from Finder does not run your shell startup files. Kit checks common user and Homebrew install locations, absolute PATH entries outside the working directory, and direct Bun installations in mise and asdf (including their data-directory overrides when available to the app). It does not run either manager or let a project-local shim pick the binary.
