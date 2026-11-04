@@ -51,6 +51,8 @@ If a Node script imports Kit’s settings SDK (`sdk/kit-sdk-config.ts`), it can 
 
 When a settings write fails with `stale_revision` (`error.code` in the SDK; `errorCode` in the CLI’s JSON), someone has changed the file since you read it. Read it again and review the proposed edit before saving. If you see `settings_write_displaced`, the helper stopped before publishing because its lock or draft changed during the edit. Let the active writer finish, then reread your settings. Don’t remove a lock while another edit is in progress. If a draft remains in the lock after a writer has stopped, inspect it rather than deleting it blindly. An unreadable reply is not proof of a save.
 
+If `config.ts` ends with a type annotation, start `as` or `satisfies` on the same line as the closing brace: `} satisfies Config;`. On a new line, those words no longer annotate the object. The settings tools leave that file unchanged; move the annotation back before editing through the SDK.
+
 ### Upgrading from a v1 kit
 
 Automatic migration runs only for the default home and a recognized legacy layout. If `~/.kenv` also contains a Git repository, subkits, links, or other unrecognized content, Kit leaves that workspace in place. Keep your old files and use **Migrate v1 Scripts** to review what to bring across. Choosing another `SK_PATH` does not migrate the default home.

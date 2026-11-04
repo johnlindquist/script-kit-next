@@ -248,6 +248,7 @@ function parse(source: string) {
     }
     return { start, end: i, value, members };
   }
+  const lineTerminator = /[\n\r\u2028\u2029]/;
   let head = word();
   if (head === 'import') {
     if (word() !== 'type') fail('only the SDK type import is supported');
@@ -258,7 +259,7 @@ function parse(source: string) {
     trivia();
     if (!['"', "'"].includes(source[i]) || str() !== '@scriptkit/sdk') fail('expected @scriptkit/sdk');
     const importEnd = i;
-    if (!eat(';') && !/[\n\r\u2028\u2029]/.test(source.slice(importEnd, i)))
+    if (!eat(';') && !lineTerminator.test(source.slice(importEnd, i)))
       fail('expected semicolon or newline after type import');
     head = word();
   }
@@ -266,8 +267,14 @@ function parse(source: string) {
   const root = literal(0);
   if (!root.members) fail('expected an object');
   const annotation = word();
-  if (annotation !== undefined && (!['satisfies', 'as'].includes(annotation) || word() !== 'Config'))
-    fail('unsupported type annotation');
+  if (annotation !== undefined) {
+    if (annotation !== 'satisfies' && annotation !== 'as') fail('unexpected expression or statement');
+    // After a line terminator these identifiers start a new statement, not a type suffix.
+    // word() crossed the intervening trivia; a newline inside a block comment counts too.
+    if (lineTerminator.test(source.slice(root.end, i)))
+      fail("start 'as' or 'satisfies' on the same line as the exported object's closing brace");
+    if (word() !== 'Config') fail('unsupported type annotation');
+  }
   eat(';');
   trivia();
   if (i !== source.length) fail('unexpected expression or statement');

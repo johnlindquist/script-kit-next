@@ -405,6 +405,31 @@ describe('installed settings helper', () => {
       expect(f.read()).toBe(source);
     } finally { f.close(); }
   });
+  it('does not edit a new statement as if it were a type annotation', async () => {
+    const object = 'export default { editorFontSize: 16 }';
+    // All four ECMAScript line terminators count, even inside a comment.
+    for (const gap of ['\n', '\r', '\r\n', '\u2028', '\u2029', ' /* a\nb */ ', ' // note\n']) {
+      for (const operator of ['as', 'satisfies']) {
+        expect(() => editLiteral(object + gap + operator + ' Config;', ['editorFontSize'], 27)).toThrow();
+      }
+    }
+    // With another newline, these are valid *runtime statements*, not a type suffix.
+    const separate = object + '\nsatisfies\nConfig;';
+    const f = fixture(separate);
+    try {
+      for (const args of [['get'], ['validate'], ['set-json', 'editorFontSize', '27', '--if-revision', revision(separate)], ['reset']]) {
+        expect((await f.run(...args)).code).toBe(1);
+        expect(f.read()).toBe(separate);
+      }
+      // A newline after the operator is fine, as are trailing comments without a type.
+      for (const suffix of [' /* inline */ as\nConfig;', ' satisfies\r\nConfig;', '\n// end\n;']) {
+        const valid = object + suffix;
+        writeFileSync(f.config, valid);
+        expect((await f.run('set-json', 'editorFontSize', '27', '--if-revision', revision(valid))).code).toBe(0);
+        expect(f.read()).toBe(object.replace('16', '27') + suffix);
+      }
+    } finally { f.close(); }
+  });
   it('refuses dynamic and ambiguous source without running or repairing it', async () => {
     const f = fixture(source);
     try {
