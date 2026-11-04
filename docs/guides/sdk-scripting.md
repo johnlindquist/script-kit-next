@@ -172,6 +172,8 @@ await div(`<h1>${parsed.title}</h1>`);
 
 ## Observation Helpers
 
+`await getFrontmostWindow()` returns the previous app’s reported window, or `null` when Kit reports no window. If the lookup fails, the promise rejects with `ERR_WINDOW_LOOKUP_UNAVAILABLE`; an inconsistent response or invalid window record rejects with `ERR_WINDOW_LOOKUP_UNVERIFIED`. Stop the window command in either case. Do not substitute the first item from `getWindows()` or guess that Accessibility was denied.
+
 `computer.listNativeWindows()` and `computer.captureNativeWindow(...)` give
 scripts explicitly scoped access to native macOS windows — see
 [Computer Use](./computer-use.md). Listing is observation-only; capturing an

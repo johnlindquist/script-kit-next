@@ -3857,7 +3857,7 @@ type ResponseMessage =
   | MenuActionResultMessage
   | { type: 'chatSubmit'; id: string; text: string }
   | { type: 'displayListResult'; requestId: string; displays: DisplayInfo[] }
-  | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo }
+  | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo | null; error?: string | null }
   | { type: 'systemFeedbackResult'; requestId: string; result: SystemFeedbackResult }
   | StateResultMessage
   | ElementsResultMessage
@@ -5169,7 +5169,8 @@ declare global {
   /**
    * Get the frontmost window of the app that was active before Script Kit appeared
    * This is useful for window management commands that operate on the user's previous window
-   * @returns The frontmost window info, or null if no window is found
+   * @returns The reported window, or null when Kit reports no window.
+   * @throws With code ERR_WINDOW_LOOKUP_UNAVAILABLE for a host failure, or ERR_WINDOW_LOOKUP_UNVERIFIED for an invalid reply.
    */
   function getFrontmostWindow(): Promise<SystemWindowInfo | null>;
 
@@ -9073,20 +9074,28 @@ globalThis.getFrontmostWindow = async function getFrontmostWindow(): Promise<Sys
   const id = nextId();
 
   return new Promise((resolve, reject) => {
+    const unverified = () => reject(Object.assign(new Error('Kit returned an invalid window lookup reply.'),
+      { code: 'ERR_WINDOW_LOOKUP_UNVERIFIED' }));
     addPending(id, (msg: ResponseMessage) => {
-      if (msg.type === 'frontmostWindowResult') {
-        const resultMsg = msg as { window?: SystemWindowInfo; error?: string };
-        if (resultMsg.error) {
-          // Return null instead of rejecting - no frontmost window is not an error
-          resolve(null);
-        } else {
-          resolve(resultMsg.window ?? null);
-        }
-        return;
+      if (msg?.type !== 'frontmostWindowResult' || msg.requestId !== id) return unverified();
+      const { window: win, error } = msg;
+      if (error != null) {
+        if (win != null || typeof error !== 'string' || !error.trim()) return unverified();
+        // Both Mac dispatchers encode Ok(None) with this legacy marker. Other errors are not an empty lookup.
+        if (error === 'No frontmost window found') return resolve(null);
+        return reject(Object.assign(new Error('Kit could not identify the previous app’s window.'),
+          { code: 'ERR_WINDOW_LOOKUP_UNAVAILABLE' }));
       }
-      // Fallback
-      resolve(null);
-    }, { window: null });
+      if (win == null) return resolve(null);
+      const integer = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
+      const u32 = (v: unknown) => integer(v, 0, 0xffffffff), i32 = (v: unknown) => integer(v, -0x80000000, 0x7fffffff);
+      const b = win.bounds;
+      if (!u32(win.windowId) || typeof win.title !== 'string' || typeof win.appName !== 'string' ||
+          (win.isActive !== undefined && typeof win.isActive !== 'boolean') ||
+          (win.isMinimized !== undefined && typeof win.isMinimized !== 'boolean') ||
+          (b !== undefined && (!b || !i32(b.x) || !i32(b.y) || !u32(b.width) || !u32(b.height)))) return unverified();
+      resolve(win);
+    }, { type: 'frontmostWindowResult', requestId: id });
 
     const message = {
       type: 'frontmostWindow',
