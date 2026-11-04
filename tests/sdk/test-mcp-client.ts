@@ -170,6 +170,10 @@ writeFileSync(join(fixtureDirectory, "config.ts"), `export default ${JSON.string
   },
 })};\n`, { mode: 0o600 });
 
+function fixtureFetch(send: (...args: Parameters<typeof fetch>) => Promise<Response>): typeof fetch {
+  return Object.assign(send, { preconnect() { throw new Error('MCP fixture cannot preconnect to a real server'); } });
+}
+
 function writeDiscovery(url = "http://127.0.0.1:43129", token = privateToken): void {
   if (existsSync(discoveryPath)) rmSync(discoveryPath);
   writeFileSync(discoveryPath, JSON.stringify({ url, token }), { mode: 0o600 });
@@ -185,9 +189,9 @@ async function check(name: string, operation: () => Promise<unknown>): Promise<v
   delete process.env.SCRIPT_KIT_MCP_TIMEOUT_MS;
   delete process.env.SCRIPT_KIT_MCP_MAX_RESPONSE_BYTES;
   delete process.env.SCRIPT_KIT_MCP_CONCURRENCY;
-  globalThis.fetch = (async () => {
+  globalThis.fetch = fixtureFetch(async () => {
     throw new Error("MCP fixture attempted an unapproved real network request");
-  }) as typeof fetch;
+  });
   try {
     const result = await operation();
     report(name, "pass", { result, duration_ms: Date.now() - started });
@@ -219,12 +223,12 @@ function installServer(
   ) => Promise<Response> | Response,
 ): { requests: number } {
   const observed = { requests: 0 };
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     observed.requests += 1;
     const request = new Request(input, init);
     const payload = await request.json() as Record<string, unknown>;
     return await handler(payload, request, init);
-  }) as typeof fetch;
+  });
   return observed;
 }
 
@@ -610,12 +614,12 @@ try {
 
   await check("mcp-unresponsive-local-server-times-out-without-a-real-socket", async () => {
     process.env.SCRIPT_KIT_MCP_TIMEOUT_MS = "25";
-    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) =>
+    globalThis.fetch = fixtureFetch((_input: RequestInfo | URL, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => {
           reject(new DOMException("The operation was aborted", "AbortError"));
         }, { once: true });
-      })) as typeof fetch;
+      }));
     const started = Date.now();
     await expectFailure(() => computer.listNativeWindows(), "timed out after 25ms");
     if (Date.now() - started > 1_000) throw new Error("MCP timeout was not bounded");
@@ -682,7 +686,7 @@ try {
         if (requestedWorkers !== undefined) process.env.SCRIPT_KIT_MCP_CONCURRENCY = requestedWorkers;
         let activeRequests = 0;
         let maximumObserved = 0;
-        globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        globalThis.fetch = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
           const request = new Request(input, init);
           const payload = await request.json() as Record<string, unknown>;
           activeRequests += 1;
@@ -698,7 +702,7 @@ try {
               ? { tools: [{ name: `tool-${owner}` }] }
               : { capabilities: {} },
           });
-        }) as typeof fetch;
+        });
         const tools = await mcp.listTools();
         if (maximumObserved > maximumWorkers) {
           throw new Error(`MCP discovery exceeded its ${maximumWorkers}-worker limit with ${maximumObserved} active requests`);
@@ -715,7 +719,7 @@ try {
     withDiscoveryWorkspace(6, async () => {
       let activeRequests = 0;
       const startedServers = new Set<string>();
-      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      globalThis.fetch = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init);
         const owner = new URL(request.url).hostname;
         const payload = await request.json() as Record<string, unknown>;
@@ -736,7 +740,7 @@ try {
           id: payload.id,
           result: payload.method === "tools/list" ? { tools: [] } : { capabilities: {} },
         });
-      }) as typeof fetch;
+      });
       await expectFailure(() => mcp.listTools(), "owned discovery failure");
       if (activeRequests !== 0) {
         throw new Error(`MCP discovery returned while ${activeRequests} owned requests were still running`);
@@ -782,9 +786,9 @@ try {
   });
 
   await check("mcp-configured-http-failures-never-expose-private-header-or-cookie-values", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = fixtureFetch(async () => {
       throw new Error("remote failed remote-cookie-secret opaque-header-secret remote-private-api-key");
-    }) as typeof fetch;
+    });
     const failure = await expectFailure(() => mcp.listTools("remoteExplicit"), "remote failed");
     for (const secret of ["remote-cookie-secret", "opaque-header-secret", "remote-private-api-key"]) {
       if (failure.message.includes(secret)) {
@@ -795,9 +799,9 @@ try {
   });
 
   await check("mcp-configured-http-failures-never-expose-private-endpoint-values", async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    globalThis.fetch = fixtureFetch(async (input: RequestInfo | URL) => {
       throw new Error(`remote failed for ${String(input)}`);
-    }) as typeof fetch;
+    });
     const failure = await expectFailure(() => mcp.listTools("remotePrivateEndpoint"), "remote failed");
     for (const secret of ["private-user", "url-private-password", "query-private-token", "opaque-query-secret"]) {
       if (failure.message.includes(secret)) {
