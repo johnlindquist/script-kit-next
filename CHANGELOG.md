@@ -6,9 +6,11 @@
 
 Deleting a note during a search-index rebuild no longer interrupts indexing. The CLI keeps saved credentials paired with their local server, and a malformed connection file can be diagnosed without printing its contents.
 
-## 0.1.28 · Reliability
+## 0.1.28 · Reliability (source tag only)
 
-[Release notes and installation checks](docs/releases/v0.1.28.md). Kit checks the selected browser tab or window before acting, preserves personal files on upgrade, and distinguishes unconfirmed microphone or Accessibility access from a working input device or cursor.
+[Source-tag notes](docs/releases/v0.1.28.md). The 0.1.20 through 0.1.28 tags did not publish Mac installers. For a downloadable app, see [GitHub Releases](https://github.com/johnlindquist/script-kit-next/releases).
+
+Changes in this source include checking the selected browser tab or window before acting, preserving personal files during workspace setup, and distinguishing microphone or Accessibility permission from a working input device or cursor.
 
 New chats respect changes to a profile’s tool permissions and leave an earlier reply running. When you dictate into a pinned launcher, **Stays open** appears once beside the input.
 
