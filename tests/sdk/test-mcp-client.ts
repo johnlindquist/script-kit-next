@@ -31,6 +31,8 @@ const previousTimeout = process.env.SCRIPT_KIT_MCP_TIMEOUT_MS;
 const previousResponseBudget = process.env.SCRIPT_KIT_MCP_MAX_RESPONSE_BYTES;
 const previousDiscoveryConcurrency = process.env.SCRIPT_KIT_MCP_CONCURRENCY;
 const previousKitPath = process.env.SK_PATH;
+const selfConnectionKeys = ['SCRIPT_KIT_AGENT_CREDENTIAL', 'SCRIPT_KIT_MCP_TOKEN', 'SCRIPT_KIT_MCP_ENDPOINT'] as const;
+const originalSelfConnection = selfConnectionKeys.map(key => [key, process.env[key]] as const);
 const stdioServerPath = join(fixtureDirectory, "mcp-stdio-fixture.ts");
 const descendantPidPath = join(fixtureDirectory, "owned-descendant.pid");
 const unsafeLaunchPath = join(fixtureDirectory, "unsafe-server-launched.txt");
@@ -179,6 +181,7 @@ async function check(name: string, operation: () => Promise<unknown>): Promise<v
   report(name, "running");
   const started = Date.now();
   writeDiscovery();
+  for (const key of selfConnectionKeys) delete process.env[key];
   delete process.env.SCRIPT_KIT_MCP_TIMEOUT_MS;
   delete process.env.SCRIPT_KIT_MCP_MAX_RESPONSE_BYTES;
   delete process.env.SCRIPT_KIT_MCP_CONCURRENCY;
@@ -472,6 +475,64 @@ try {
       throw new Error(`Unexpected isolated MCP result: ${JSON.stringify(result)}`);
     }
     return { requests: observed.requests, realNetworkUsed: false, nativeInputUsed: false };
+  });
+
+  await check('mcp-computer-uses-the-scoped-file-without-operator-discovery', async () => {
+    const scoped = 'fixture-scoped-computer', file = join(fixtureDirectory, 'observer');
+    const endpoint = 'http://127.0.0.1:43843/rpc';
+    writeFileSync(file, scoped + '\n', { mode: 0o600 });
+    writeFileSync(join(fixtureDirectory, 'server-location.json'), JSON.stringify({ url: endpoint }), { mode: 0o600 });
+    rmSync(discoveryPath); // An agent is not entitled to the operator file, even to find a URL.
+    process.env.SCRIPT_KIT_AGENT_CREDENTIAL = file;
+    process.env.SCRIPT_KIT_MCP_TOKEN = 'not-the-selected-file';
+    const observed = installServer((payload, request) => {
+      if (request.url !== endpoint || request.headers.get('authorization') !== 'Bearer ' + scoped) {
+        throw new Error('Scoped SDK call used a different address or credential');
+      }
+      if ((payload.params as {name?: string})?.name === 'computer/capture_native_window') {
+        return Response.json({ jsonrpc: '2.0', id: payload.id, result: { isError: true,
+          content: [{type: 'text', text: JSON.stringify({error: {code: 'scope_denied', diagnostic: scoped}})}] } });
+      }
+      return successResponse(payload);
+    });
+    const result = await computer.listNativeWindows();
+    const denied = await expectFailure(() => computer.captureNativeWindow({pid: 1, nativeWindowId: 2}), 'scope_denied');
+    if (denied.message.includes(scoped)) throw new Error('Tool refusal disclosed the selected credential');
+    if (result.status !== 'listed' || observed.requests !== 6) throw new Error('Unexpected scoped calls or retry');
+    return { scopedList: true, captureRefused: true };
+  });
+
+  await check('mcp-computer-binds-explicit-token-to-explicit-loopback-endpoint', async () => {
+    const token = 'fixture-explicit-computer', endpoint = 'http://127.0.0.1:43131/rpc';
+    process.env.SCRIPT_KIT_MCP_TOKEN = token;
+    process.env.SCRIPT_KIT_MCP_ENDPOINT = endpoint;
+    rmSync(discoveryPath);
+    const observed = installServer((payload, request) => {
+      if (request.url !== endpoint || request.headers.get('authorization') !== 'Bearer ' + token) {
+        throw new Error('Explicit SDK connection changed');
+      }
+      return successResponse(payload);
+    });
+    if ((await computer.listNativeWindows()).status !== 'listed' || observed.requests !== 3) throw new Error('Explicit connection failed');
+    process.env.SCRIPT_KIT_MCP_ENDPOINT = 'https://remote.example/rpc';
+    await expectFailure(() => computer.listNativeWindows(), 'loopback');
+    if (observed.requests !== 3) throw new Error('Remote override reached transport');
+    return { explicitLocalOnly: true };
+  });
+
+  await check('mcp-computer-does-not-upgrade-missing-or-empty-scoped-credentials', async () => {
+    const observed = installServer(payload => successResponse(payload));
+    process.env.SCRIPT_KIT_MCP_TOKEN = 'fixture-fallback-must-not-run';
+    process.env.SCRIPT_KIT_AGENT_CREDENTIAL = join(fixtureDirectory, 'nonexistent-credential');
+    await expectFailure(() => computer.listNativeWindows(), 'credential');
+    delete process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+    process.env.SCRIPT_KIT_MCP_TOKEN = '';
+    await expectFailure(() => computer.listNativeWindows(), 'credential');
+    delete process.env.SCRIPT_KIT_MCP_TOKEN;
+    process.env.SCRIPT_KIT_MCP_ENDPOINT = 'http://127.0.0.1:43130/rpc';
+    await expectFailure(() => computer.listNativeWindows(), 'does not match');
+    if (observed.requests !== 0) throw new Error('An invalid connection used operator authority');
+    return { requests: observed.requests };
   });
 
   await check("mcp-remote-discovery-never-receives-a-local-bearer-token", async () => {
@@ -842,6 +903,10 @@ try {
   });
 } finally {
   globalThis.fetch = originalFetch;
+  for (const [key, value] of originalSelfConnection) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
   if (previousDiscoveryPath === undefined) {
     delete process.env.SCRIPT_KIT_MCP_SERVER_JSON;
   } else {

@@ -10109,64 +10109,61 @@ async function loadScriptKitMcpConfig(): Promise<McpConfig> {
   return normalizeMcpConfig(config?.mcp);
 }
 
-interface ScriptKitMcpDiscovery {
-  url: string;
-  token: string;
-  version?: string;
-  capabilities?: Record<string, unknown>;
+function hasComputerParentSegment(path: string): boolean {
+  return path.split(process.platform === 'win32' ? /[\\/]/ : '/').includes('..');
 }
 
-async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> {
-  const discoveryPath = process.env.SCRIPT_KIT_MCP_SERVER_JSON?.trim()
-    || nodePath.join(activeScriptKitRoot(), 'server.json');
-  let text: string;
-  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
+function computerDiscoveryFile(scoped: boolean): string {
+  const explicit = process.env.SCRIPT_KIT_MCP_SERVER_JSON;
+  const rawRoot = process.env.SK_PATH;
+  const path = explicit || activeScriptKitRoot();
+  // join() can select a different directory from the OS when a link precedes '..'.
+  if (!nodePath.isAbsolute(path) || hasComputerParentSegment(path) ||
+      (!explicit && rawRoot !== undefined && (!rawRoot || hasComputerParentSegment(rawRoot)))) {
+    throw new Error("[computer] Use an absolute MCP discovery or workspace path without '..'.");
+  }
+  if (explicit && !scoped) return explicit;
+  return nodePath.join(explicit ? nodePath.dirname(explicit) : path, scoped ? 'server-location.json' : 'server.json');
+}
 
+async function readComputerPrivateFile(path: string, kind: 'discovery' | 'credential'): Promise<string> {
+  const limit = kind === 'credential' ? 4096 : 64 * 1024;
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined;
   try {
-    const owner = await fs.lstat(discoveryPath);
-    if (!owner.isFile() || owner.isSymbolicLink()) {
-      throw new Error('Script Kit MCP requires a private regular discovery file');
+    const named = await fs.lstat(path, { bigint: true });
+    const unsafe = () => new Error(`[computer] Script Kit MCP requires a private regular ${kind} file`);
+    if (!named.isFile() || named.nlink !== 1n) throw unsafe();
+    handle = await fs.open(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0));
+    const held = await handle.stat({ bigint: true });
+    if (!held.isFile() || held.nlink !== 1n || held.dev !== named.dev || held.ino !== named.ino) throw unsafe();
+    if (process.platform !== 'win32' && (held.mode & 0o077n) !== 0n) {
+      throw new Error(`[computer] Script Kit MCP ${kind} requires owner-only permissions`);
     }
-    handle = await fs.open(discoveryPath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
-    const opened = await handle.stat();
-    if (!opened.isFile() || owner.dev !== opened.dev || owner.ino !== opened.ino) {
-      throw new Error('Script Kit MCP requires a private regular discovery file');
+    if (typeof process.getuid === 'function' && held.uid !== BigInt(process.getuid())) {
+      throw new Error(`[computer] Script Kit MCP ${kind} must belong to the current user`);
     }
-    if (process.platform !== 'win32' && (opened.mode & 0o077) !== 0) {
-      throw new Error('Script Kit MCP discovery requires owner-only permissions');
+    if (held.size > BigInt(limit)) throw unsafe();
+    const bytes = Buffer.alloc(limit + 1);
+    let used = 0;
+    while (used <= limit) {
+      const { bytesRead } = await handle.read(bytes, used, bytes.length - used, used);
+      if (!bytesRead) return new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, used));
+      used += bytesRead;
     }
-    if (typeof process.getuid === 'function' && opened.uid !== process.getuid()) {
-      throw new Error('Script Kit MCP discovery must belong to the current user');
-    }
-    text = await handle.readFile('utf8');
+    throw unsafe();
   } catch (error) {
-    throw new Error(
-      `[computer] Script Kit MCP discovery is unavailable at ${discoveryPath}. Start Script Kit before using computer.* helpers. ${getMcpErrorMessage(error)}`
-    );
+    // Filesystem and decoder messages are not a safe place to echo private input.
+    if (error instanceof Error && error.message.startsWith('[computer]')) throw error;
+    throw new Error(`[computer] Script Kit MCP ${kind} is unavailable or unreadable.`);
   } finally {
     await handle?.close();
   }
+}
 
-  let discovery: ScriptKitMcpDiscovery;
-  try {
-    discovery = JSON.parse(text) as ScriptKitMcpDiscovery;
-  } catch {
-    // A parse error from this private file may contain its bearer verbatim.
-    throw new Error("[computer] Script Kit's MCP discovery file contains invalid JSON. Restart Script Kit to recreate it.");
-  }
-  if (
-    typeof discovery?.url !== 'string' ||
-    !discovery.url.trim() ||
-    typeof discovery.token !== 'string' ||
-    !discovery.token.trim() ||
-    /[\r\n]/.test(discovery.token)
-  ) {
-    throw new Error(`[computer] Script Kit MCP discovery at ${discoveryPath} is missing url or token`);
-  }
-
+function computerEndpoint(address: unknown): string {
   let endpoint: URL;
   try {
-    endpoint = new URL(discovery.url);
+    endpoint = new URL(typeof address === 'string' ? address : '');
   } catch {
     throw new Error('[computer] A local Script Kit MCP endpoint must be a valid loopback HTTP /rpc URL.');
   }
@@ -10185,13 +10182,44 @@ async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> 
     throw new Error('[computer] A local Script Kit MCP endpoint must be a loopback HTTP /rpc URL without credentials, query, or fragment.');
   }
   endpoint.pathname = '/rpc';
-  return {
-    transport: 'http',
-    endpoint: endpoint.toString(),
-    headers: {
-      authorization: `Bearer ${discovery.token}`,
-    },
-  };
+  return endpoint.toString();
+}
+
+async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> {
+  const file = process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+  const supplied = process.env.SCRIPT_KIT_MCP_TOKEN;
+  const scoped = file !== undefined || supplied !== undefined;
+  const address = process.env.SCRIPT_KIT_MCP_ENDPOINT;
+  const override = address ? computerEndpoint(address) : undefined;
+  const discovery = scoped && override ? undefined : computerDiscoveryFile(scoped);
+  let token: unknown = supplied;
+  let endpoint = override;
+  if (file !== undefined) {
+    if (!nodePath.isAbsolute(file) || hasComputerParentSegment(file) || typeof process.getuid !== 'function') {
+      throw new Error('[computer] Supply an owned private credential file by its absolute path, or supply the token explicitly.');
+    }
+    token = (await readComputerPrivateFile(file, 'credential')).replace(/\r?\n$/, '');
+  }
+  if (scoped && (typeof token !== 'string' || token.length > 4096 || !/^[A-Za-z0-9._~+/\-]+=*$/.test(token))) {
+    throw new Error('[computer] The supplied MCP credential is empty or invalid. No operator credential was used.');
+  }
+  if (discovery !== undefined) {
+    const text = await readComputerPrivateFile(discovery, 'discovery');
+    let record: {url?: unknown; token?: unknown} | null;
+    try { record = JSON.parse(text); } catch {
+      throw new Error("[computer] Script Kit's MCP discovery file contains invalid JSON. Restart Script Kit to recreate it.");
+    }
+    const recorded = computerEndpoint(record?.url);
+    if (override && override !== recorded) {
+      throw new Error('[computer] The endpoint does not match the server that supplied the operator credential. Supply a credential for that server.');
+    }
+    endpoint = recorded;
+    if (!scoped) token = record?.token;
+  }
+  if (!endpoint || typeof token !== 'string' || !token.trim() || /[\r\n]/.test(token)) {
+    throw new Error('[computer] Missing MCP endpoint or credential.');
+  }
+  return { transport: 'http', endpoint, headers: { authorization: `Bearer ${token}` } };
 }
 
 function isServerEnabled(server: McpServerConfig): boolean {
@@ -10876,10 +10904,10 @@ function normalizeMcpToolCallResult(
   };
 }
 
-function parseComputerToolTextResult<T>(result: McpToolCallResult): T {
+function parseComputerToolTextResult<T>(result: McpToolCallResult, secrets: readonly string[]): T {
   if (result.isError) {
     const text = result.content.find((entry) => typeof entry.text === 'string')?.text;
-    throw new Error(`[computer] ${result.toolName} failed${text ? `: ${text}` : ''}`);
+    throw new Error(`[computer] ${result.toolName} failed${text ? `: ${safeMcpErrorMessage(text, secrets)}` : ''}`);
   }
 
   const text = result.content.find((entry) => typeof entry.text === 'string')?.text;
@@ -10889,10 +10917,8 @@ function parseComputerToolTextResult<T>(result: McpToolCallResult): T {
 
   try {
     return JSON.parse(text) as T;
-  } catch (error) {
-    throw new Error(
-      `[computer] ${result.toolName} returned invalid JSON text content: ${getMcpErrorMessage(error)}`
-    );
+  } catch {
+    throw new Error(`[computer] ${result.toolName} returned invalid JSON text content`);
   }
 }
 
@@ -10908,7 +10934,7 @@ async function callScriptKitComputerTool<T>(
     });
     return normalizeMcpToolCallResult('__scriptkit_self__', toolName, response);
   });
-  return parseComputerToolTextResult<T>(result);
+  return parseComputerToolTextResult<T>(result, privateMcpServerMetadata(server.headers));
 }
 
 function scoreDiscoveredTool(tool: McpToolInfo, query: string): number {

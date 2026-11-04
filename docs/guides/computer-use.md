@@ -80,7 +80,9 @@ Treat non-`captured` statuses as actionable diagnostics, not generic failures.
 
 ## MCP Computer-Use Tools
 
-External agents get the same observation surface over the app's MCP server (see [MCP and Agent Context](./mcp-and-agent-context.md)). The `computer/` namespace includes `computer/see` (state-first observation of Script Kit's own windows), `computer/list_native_windows`, `computer/capture_native_window`, `computer/list_windows`, `computer/get_focused_window`, `computer/list_apps`, `computer/get_frontmost_app`, `computer/list_menus`, and related get/list variants. The SDK's `computer.*` helpers call these tools under the hood, so Script Kit must be running (they read `~/.scriptkit/server.json`).
+External agents get the same observation surface over the app's MCP server (see [MCP and Agent Context](./mcp-and-agent-context.md)). The `computer/` namespace includes `computer/see` (state-first observation of Script Kit's own windows), `computer/list_native_windows`, `computer/capture_native_window`, `computer/list_windows`, `computer/get_focused_window`, `computer/list_apps`, `computer/get_frontmost_app`, `computer/list_menus`, and related get/list variants. The SDK's `computer.*` helpers call these tools, so Kit must be running. A normal personal script uses the operator connection in its active workspace’s `server.json`.
+
+To run a script with a particular grant, set `SCRIPT_KIT_AGENT_CREDENTIAL` to its absolute private token-file path, or supply `SCRIPT_KIT_MCP_TOKEN`. The file takes precedence, even if it cannot be read. On macOS use a regular file readable only by its owner, not a link; give its path without `..`. With a supplied credential the SDK reads only the address from `server-location.json`, not the operator token. To use another loopback server, set `SCRIPT_KIT_MCP_ENDPOINT` and supply that server’s credential. A missing credential file, empty token, or denied call does not trigger a retry as the operator. Listing and capturing remain separate permissions; a notes-only grant permits neither. Choosing a credential does not grant macOS permissions or sandbox a script running locally as you.
 
 ## Good and Poor Fits
 
