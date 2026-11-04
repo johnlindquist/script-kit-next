@@ -41,10 +41,11 @@ bun_path: "/Users/you/.local/share/mise/installs/bun/1.3.14/bin/bun",
 
 For asdf, a typical path is `~/.asdf/installs/bun/<version>/bin/bun`. Substitute your full home path and installed version; don't use `~`, a `shims` path, or `./bun`. A computed `bun_path` requires another discoverable Bun to evaluate `config.ts` on cold start. Relaunch from Finder and run a simple script to confirm. If a pinned version is removed, update the pin; script execution will not silently switch binaries.
 
-`bun_path` tells the Mac app what to run; it does not change a terminal or an external agent’s `PATH`. To read Kit’s offline CLI manual in an environment without Bun on `PATH`, invoke the resolved executable directly (adjust the workspace path if you use `SK_PATH`):
+`bun_path` tells the Mac app what to run; it does not change a terminal or an external agent’s `PATH`. To read Kit’s offline CLI manual in an environment without Bun on `PATH`, invoke the resolved Bun directly with Kit’s startup options (adjust the workspace path if you use `SK_PATH`). This keeps the current project’s Bun preloads and `.env` files out of the command without changing how Bun runs your own scripts:
 
 ```sh
-"/absolute/path/to/bun" "$HOME/.scriptkit/bin/scriptkit" --skill
+"/absolute/path/to/bun" --config=/dev/null --no-env-file --no-install --no-macros \
+  "$HOME/.scriptkit/bin/scriptkit" --skill
 ```
 
 If a Node script imports Kit’s settings SDK (`sdk/kit-sdk-config.ts`), it can select Bun with the **`BUN_PATH` environment variable**. Use the absolute executable path from your manager, not a `shims` or `node_modules/.bin` entry. An invalid pin stops the settings request. Without a pin, the SDK looks in the usual install locations and then on `PATH`, skipping project-local candidates in the working directory. Keep the rest of `PATH` trusted. A script already running in Bun reuses that Bun.

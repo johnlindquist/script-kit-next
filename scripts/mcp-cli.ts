@@ -1,6 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --config=/dev/null --no-env-file --no-install --no-macros
 /**
  * Script Kit MCP CLI
+ * The executable can receive a credential from its caller. Project preloads
+ * and dotenv must be disabled before Bun starts, not inside this module.
  *
  * Thin JSON CLI for the live Script Kit MCP server. It reads
  * ~/.scriptkit/server.json by default, or accepts env overrides:

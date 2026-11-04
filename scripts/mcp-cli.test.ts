@@ -729,6 +729,47 @@ describe("mcp-cli", () => {
     } finally { rmSync(home, { recursive: true, force: true }); }
   });
 
+  it.skipIf(process.platform === "win32")("keeps project startup code and dotenv out of the shell command", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-cli-startup-")));
+    try {
+      const home = join(root, "home"), workspace = join(home, ".scriptkit"), other = join(root, "other Kit");
+      const bin = join(root, "commands"), caller = join(root, "unrelated project");
+      const source = join(workspace, "bin/scriptkit");
+      for (const dir of [bin, caller, join(workspace, "bin")]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+      for (const [kit, effect] of [[workspace, "original"], [other, "other"]] as const) {
+        const scripts = join(kit, "plugins/main/scripts");
+        mkdirSync(scripts, { recursive: true, mode: 0o700 });
+        writeFileSync(join(scripts, "example.ts"), "// Agent effect: " + effect + "\n", { mode: 0o600 });
+      }
+      copyFileSync(new URL("./mcp-cli.ts", import.meta.url), source);
+      chmodSync(source, 0o700);
+      copyFileSync(new URL("./agent-bridge-cli.ts", import.meta.url), join(workspace, "bin/agent-bridge-cli.ts"));
+      symlinkSync(realpathSync(process.execPath), join(bin, "bun"));
+      const env = { HOME: home, PATH: bin + ":/usr/bin:/bin", TMPDIR: root, SCRIPT_KIT_NONINTERACTIVE: "1", CI: "1" };
+      const install = Bun.spawnSync([source, "install-command", join(bin, "scriptkit")], { cwd: home, env });
+      expect(install.exitCode).toBe(0);
+      const marker = join(caller, "ran-before-cli");
+      writeFileSync(join(caller, "project.ts"), "import fs from 'node:fs'; fs.writeFileSync('ran-before-cli', 'ran');\n");
+      writeFileSync(join(caller, "bunfig.toml"), 'preload = ["./project.ts"]\n');
+      writeFileSync(join(caller, ".env"), "SK_PATH=" + JSON.stringify(other) + "\n");
+      const run = (args: string[], overrides: Record<string, string> = {}) => {
+        const child = Bun.spawnSync(["/bin/sh", "-c", 'exec scriptkit "$@"', "shell", ...args], {
+          cwd: caller, env: { ...env, ...overrides },
+        });
+        expect(child.exitCode).toBe(0);
+        return child.stdout.toString();
+      };
+      expect(run(["--help"])).toContain("Script Kit command line");
+      const inspect = ["inspect-command", "example"];
+      const fromDefault = JSON.parse(run(inspect)).data.effect;
+      const fromExport = JSON.parse(run(inspect, { SK_PATH: other })).data.effect;
+      expect({ projectRan: existsSync(marker), fromDefault, fromExport }).toEqual({
+        projectRan: false, fromDefault: "original", fromExport: "other",
+      });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   it("installs a scriptkit command symlink at a chosen target", async () => {
     const dir = mkdtempSync(join(tmpdir(), "script-kit-command-"));
     const target = join(dir, "scriptkit");

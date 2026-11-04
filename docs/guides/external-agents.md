@@ -15,6 +15,10 @@ command -v scriptkit
 
 Omitting the target uses `~/.local/bin/scriptkit`. Quote a custom filename to keep its spaces. An empty argument is not the default; use a path without `..` (use `pwd -P` to find the physical directory). `install-command --help` makes no changes. Kit accepts an existing direct link only if the filesystem resolves it to this workspace’s command, so the link follows the next update at that location. It leaves another file, a dangling link, or a link to a different executable alone. If it refuses, choose an unused name or inspect the existing link yourself. The check applies to that path at installation time; if `command -v scriptkit` finds something else, use the workspace’s executable directly before giving it a credential.
 
+Run `scriptkit` as an executable, using a Bun you trust on `PATH`. You can stay in your project: its Bun preloads won’t run, and its `.env` files won’t choose Kit’s workspace, server, or credential. Export the settings you intend to use in that process instead. Variables already exported by your shell or a directory environment manager still apply.
+
+If you call Bun directly, its normal project startup applies **before** Kit can check anything. To use a specific Bun, put `--config=/dev/null --no-env-file --no-install --no-macros` between that executable and the workspace’s `bin/scriptkit`.
+
 ### Issue a scoped credential
 
 From your operator shell:
