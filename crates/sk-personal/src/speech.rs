@@ -83,10 +83,20 @@ fn first(action: &str, subject: &str) -> Option<Edit> {
     }
     None
 }
+/// Explicitly addressed to the launcher author, not a Jev search or an ordinary chat.
+pub fn directed(input: &str) -> Option<&str> {
+    let input = input.trim_start();
+    let prefix = "customize kit:";
+    input
+        .get(..prefix.len())
+        .filter(|s| s.eq_ignore_ascii_case(prefix))?;
+    Some(input[prefix.len()..].trim())
+}
 pub fn read(input: &str) -> Option<Reading> {
     if input.len() > 280 {
         return None;
     } // Never interpret an arbitrary document as instructions.
+    let input = directed(input).unwrap_or(input);
     if let Some(view) = lists::requested(input) {
         return Some(Reading::Change(Change::PutView { view }));
     }

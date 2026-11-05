@@ -145,7 +145,23 @@ impl ScriptListApp {
     }
 
     pub(super) fn personal_rule_row(&self, text: &str) -> Option<Row> {
-        let read = speech::read(text)?;
+        let read = match speech::read(text) {
+            Some(read) => read,
+            None => {
+                let words = speech::directed(text).filter(|w| !w.is_empty() && w.len() <= 4096)?;
+                let id = Sha256::digest(words.as_bytes());
+                return Some(
+                    Row::new(
+                        format!("personal/author-draft/{id:x}"),
+                        "Review this request with my launcher author",
+                    )
+                    .with_head("Customize Kit")
+                    .with_icon("settings")
+                    .with_sub("Only your selected launcher-only profile · Nothing sent yet")
+                    .with_enter_label("Review request"),
+                );
+            }
+        };
         let state = self.one_window_host.personal.state.as_ref();
         let rev = state.map_or("unavailable", |s| s.revision.as_str());
         if let Reading::Change(Change::PutView { view }) = &read {

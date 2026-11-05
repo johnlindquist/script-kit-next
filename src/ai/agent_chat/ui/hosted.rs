@@ -13,17 +13,37 @@ pub(crate) fn spawn_hosted_thread(
     requirements: AgentChatLaunchRequirements,
     cx: &mut App,
 ) -> Result<Entity<AgentChatThread>, String> {
+    spawn_bound_thread(initial_input, requirements, None, cx)
+}
+
+pub(crate) fn spawn_bound_thread(
+    initial_input: Option<String>,
+    requirements: AgentChatLaunchRequirements,
+    expected_author: Option<&crate::ai::agent_chat::profiles::ResolvedAgentChatProfile>,
+    cx: &mut App,
+) -> Result<Entity<AgentChatThread>, String> {
     crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Provider)
         .map_err(|error| error.to_string())?;
-    let profile_ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
-    let ai_preferences = crate::config::load_user_preferences().ai;
-    let agent_launch =
-        crate::ai::agent_chat::launch::resolve_selected_launch(&ai_preferences, &profile_ctx)
-            .map_err(|error| error.to_string())?;
+    use crate::ai::agent_chat::launch;
+    let agent_launch = if let Some(expected) = expected_author {
+        let profile = launch::selected_launcher_author()
+            .filter(|p| p == expected)
+            .ok_or_else(|| "The selected launcher author changed".to_owned())?;
+        // Build from the same scoped object we checked; never look up a replacement profile.
+        launch::AgentChatLaunch::from_profile(profile)
+            .map_err(|_| "The selected launcher author is unavailable".to_owned())?
+    } else {
+        let ctx = crate::ai::agent_chat::profiles::AgentChatProfileContext::from_setup();
+        launch::resolve_selected_launch(&crate::config::load_user_preferences().ai, &ctx)
+            .map_err(|error| error.to_string())?
+    };
     let session_policy = match agent_launch.goose.tools.launcher_author() {
         Some(access) => super::capabilities::AgentChatSessionPolicy::LauncherAuthor(access),
         None => super::capabilities::AgentChatSessionPolicy::Full,
     };
+    if expected_author.is_some() && agent_launch.goose.tools.launcher_author().is_none() {
+        return Err("The launcher author no longer has a dedicated tool policy".to_owned());
+    }
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
     // Acquire-or-cold-spawn instead of prepare+acquire: when the warm slot for
     // this key is already leased to a live thread (e.g. starting a second

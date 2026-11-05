@@ -26,7 +26,7 @@ impl ScriptListApp {
     }
 
     pub(super) fn personal_font_row(&self, text: &str) -> Option<Row> {
-        let choice = font_preference::read(text)?;
+        let choice = font_preference::read(sk_personal::speech::directed(text).unwrap_or(text))?;
         let before = self.surface_pixels(choice.surface);
         Some(
             Row::new(
@@ -56,7 +56,7 @@ impl ScriptListApp {
     ) -> anyhow::Result<()> {
         // Bind the selected request, target and old size. Never reinterpret a stale row as a new edit.
         let text = self.filter_text.clone();
-        let choice = font_preference::read(&text)
+        let choice = font_preference::read(sk_personal::speech::directed(&text).unwrap_or(&text))
             .ok_or_else(|| anyhow::anyhow!("The text-size request changed"))?;
         anyhow::ensure!(
             self.personal_font_row(&text)

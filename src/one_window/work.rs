@@ -46,6 +46,7 @@ pub(crate) struct ModelThread {
 #[derive(Default)]
 pub(crate) struct WorkHost {
     pub(crate) chat: Option<ModelThread>,
+    pub(super) reviewed_author: Option<crate::ai::agent_chat::profiles::ResolvedAgentChatProfile>,
     pub(super) presentation: super::chat_presentation::ChatPresentation,
     pub(crate) agents: HashMap<String, ModelThread>,
     /// What waits in the line for the chat's next turn, by the key its subject carries.
@@ -370,10 +371,16 @@ impl ScriptListApp {
             match self.one_window_fresh_chat_thread(cx) {
                 Ok(model) => self.one_window_host.work.chat = Some(model),
                 Err(error) => {
-                    tracing::warn!(target: "script_kit::one_window", event = "model_unavailable", %error);
+                    let message = if self.one_window_host.work.reviewed_author.is_some() {
+                        tracing::warn!(target: "script_kit::one_window", event = "launcher_author_unavailable");
+                        "The reviewed launcher author is unavailable. Nothing was sent."
+                    } else {
+                        tracing::warn!(target: "script_kit::one_window", event = "model_unavailable", %error);
+                        "The model couldn't start"
+                    };
                     self.one_window_work_later(
                         WorkEvent::ModelFailed {
-                            message: "The model couldn't start".into(),
+                            message: message.into(),
                         },
                         cx,
                     );
@@ -408,7 +415,13 @@ impl ScriptListApp {
         id: String,
         cx: &mut Context<Self>,
     ) -> Result<ModelThread, String> {
+        let reviewed_author = (id == CHAT_THREAD)
+            .then_some(self.one_window_host.work.reviewed_author.as_ref())
+            .flatten();
         let (thread, fixture) = if matches!(self.main_services, MainServices::OwnedFixtures(_)) {
+            if reviewed_author.is_some() {
+                return Err("The hidden launcher cannot contact a configured author".into());
+            }
             let thread_id = if id == CHAT_THREAD {
                 format!(
                     "{CHAT_THREAD}-{}",
@@ -426,11 +439,17 @@ impl ScriptListApp {
             thread.update(cx, |thread, cx| thread.mark_context_bootstrap_ready(cx));
             (thread, Some(control))
         } else {
-            let thread = crate::ai::agent_chat::ui::hosted::spawn_hosted_thread(
-                None,
-                crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default(),
-                cx,
-            )?;
+            let requirements = crate::ai::agent_chat::ui::AgentChatLaunchRequirements::default();
+            let thread = if reviewed_author.is_some() {
+                crate::ai::agent_chat::ui::hosted::spawn_bound_thread(
+                    None,
+                    requirements,
+                    reviewed_author,
+                    cx,
+                )?
+            } else {
+                crate::ai::agent_chat::ui::hosted::spawn_hosted_thread(None, requirements, cx)?
+            };
             (thread, None)
         };
         let observer = cx.observe(&thread, move |app, thread, cx| {

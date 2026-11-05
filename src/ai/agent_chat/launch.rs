@@ -49,12 +49,7 @@ impl AgentChatLaunch {
                 "The goose AI engine is missing. Ship Contents/MacOS/goose in the app bundle or configure ai.gooseBinary / SCRIPT_KIT_GOOSE_BINARY."
             )
         })?;
-        let dedicated_author = crate::ai::agent_chat::goose::recipe::profile_tool_ids(&profile)
-            .is_some_and(|ids| {
-                crate::ai::agent_chat::goose::recipe::recipe_tools(&ids)
-                    .launcher_author()
-                    .is_some()
-            });
+        let dedicated_author = launcher_author_access(&profile).is_some();
         let cwd = if dedicated_author {
             // The target is the current Kit workspace, never a project directory.
             crate::setup::get_kit_path()
@@ -125,6 +120,24 @@ impl AgentChatLaunch {
             }),
         }
     }
+}
+
+pub(crate) fn launcher_author_access(
+    profile: &ResolvedAgentChatProfile,
+) -> Option<sk_personal::api::Endpoint> {
+    use crate::ai::agent_chat::goose::recipe::{profile_tool_ids, recipe_tools};
+    recipe_tools(&profile_tool_ids(profile)?).launcher_author()
+}
+
+/// Resolves only at review or send, never while typing. No launch, directory creation, or
+/// fallback to a general assistant when a selected profile is missing or overly broad.
+pub(crate) fn selected_launcher_author() -> Option<ResolvedAgentChatProfile> {
+    let ai = crate::config::load_user_preferences().ai;
+    let profile = resolve_effective_profile_decision(&ai, &AgentChatProfileContext::from_setup())
+        .into_result()
+        .ok()?;
+    launcher_author_access(&profile)?;
+    Some(profile)
 }
 
 pub(crate) fn warm_session_manager() -> &'static AgentChatWarmSessionManager {

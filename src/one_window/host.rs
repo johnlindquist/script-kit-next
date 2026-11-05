@@ -737,8 +737,8 @@ impl ScriptListApp {
         let mut fallbacks: Vec<(u8, Row, &SearchResult)> = Vec::new();
         let mut results = HashMap::new();
         if let Some(row) = self
-            .personal_rule_row(text)
-            .or_else(|| self.personal_font_row(text))
+            .personal_font_row(text)
+            .or_else(|| self.personal_rule_row(text))
         {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
@@ -979,6 +979,7 @@ impl ScriptListApp {
         if sk_one_window::font_preference::read(&text).is_some()
             || sk_personal::speech::read(&text).is_some()
             || !sk_personal::speech::examples(&text).is_empty()
+            || sk_personal::speech::directed(&text).is_some()
         {
             self.one_window_cancel_jev();
             queue.push_back(Event::Jev {
@@ -1141,6 +1142,17 @@ impl ScriptListApp {
             .strip_prefix(sk_one_window::contract::ALL_RESULTS_KEY)
         {
             return self.one_window_open_all_results(query, cx);
+        }
+        if row.key.starts_with("personal/author-draft/") {
+            let draft = sk_personal::speech::directed(&self.filter_text)
+                .filter(|_| {
+                    self.personal_rule_row(&self.filter_text)
+                        .is_some_and(|r| r.key == row.key)
+                })
+                .ok_or_else(|| anyhow::anyhow!("The customization request changed"))?
+                .to_owned();
+            self.one_window_review_with_launcher_author(draft, cx);
+            return Ok(());
         }
         if let Some(id) = row.key.strip_prefix("personal/example/") {
             let (_, _, words) = sk_personal::speech::examples(&self.filter_text)

@@ -124,6 +124,31 @@ fn captured_parts(
 impl ScriptListApp {
     /// Opens the one chat for `entry`: the window shows, the chat opens under its input (or the
     /// open chat takes it), and what the entry carries waits in the line above the input.
+    pub(super) fn one_window_review_with_launcher_author(
+        &mut self,
+        words: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.personal_root().is_err() {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Launcher customization is unavailable in this workspace",
+                cx,
+            );
+            return;
+        }
+        let Some(profile) = crate::ai::agent_chat::launch::selected_launcher_author() else {
+            self.one_window_notice(
+                crate::line_notice::INFO,
+                "Choose a launcher-only profile, or type Customize Kit for offline examples",
+                cx,
+            );
+            return;
+        };
+        // A clean draft only. No attachment or capture, no model call until another Return.
+        self.one_window_open_chat(ChatEntry::seeded(words), cx);
+        self.one_window_host.work.reviewed_author = Some(profile);
+    }
     pub(crate) fn one_window_open_chat(&mut self, entry: ChatEntry, cx: &mut Context<Self>) {
         tracing::info!(
             target: "script_kit::one_window",
@@ -141,6 +166,7 @@ impl ScriptListApp {
             .is_some_and(|top| top.name == sk_one_window::chat::VIEW);
         if !chat_on_top {
             self.one_window_host.work.chat = None;
+            self.one_window_host.work.reviewed_author = None;
             self.one_window_host.work.parts.clear();
         }
         let with = self.one_window_stage_parts(entry.parts);
