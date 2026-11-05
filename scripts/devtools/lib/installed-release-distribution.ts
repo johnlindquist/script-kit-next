@@ -21,6 +21,10 @@ export function publicApiFailure(path: string, status: number, headers: Headers,
     until !== null && until*1000 >= now ? until*1000-now+1000 : null;
   return { code: `public_${endpoint}_http_${status}${limited ? '_limited' : ''}${until === null ? '' : '_reset_'+until}`, waitMs };
 }
+// A fresh VM has at most 25 minutes. Spend at most the first 12 minutes on the
+// pre-attestation reads; this can wait out a known shared anonymous quota reset
+// without starting another Mac. Later release reads keep their short bound.
+const publicPreflightUntil = Date.now()+12*60_000;
 export async function publicJson(path: string): Promise<Json> {
   const read = () => fetch(`https://api.github.com/repos/${REPO}/${path}`, {
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
@@ -32,7 +36,8 @@ export async function publicJson(path: string): Promise<Json> {
   if (!res.ok) {
     const {code, waitMs} = publicApiFailure(path,res.status,res.headers,Date.now());
     await res.body?.cancel();
-    check(waitMs !== null && waitMs > 0 && waitMs <= 60_000, code, 'blocked');
+    const budget = path.startsWith('actions/runs/') ? publicPreflightUntil-Date.now() : 60_000;
+    check(waitMs !== null && waitMs > 0 && waitMs <= budget, code, 'blocked');
     await new Promise(resolve => setTimeout(resolve,waitMs));
     res = await read(); // One bounded, read-only retry after the server's stated wait, never a write.
     if (!res.ok) {

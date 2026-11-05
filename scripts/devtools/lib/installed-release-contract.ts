@@ -1,4 +1,5 @@
 // Pure contracts; none of these authorize execution on their own.
+import { createHash } from 'node:crypto';
 export const REPO = "johnlindquist/script-kit-next";
 export const APP = "/Applications/Script Kit.app";
 export const EXE = "Contents/MacOS/script-kit-gpui";
@@ -150,7 +151,19 @@ export const STABILITY_STARTER = Object.freeze({
   // Source-owned script/main row for the default workspace on /Users/runner.
   semanticId: "main-list-row:v2:64c6ffc7eed5c8f7f1a9ee78d731368cd314204da62103ee751aa4cbf1e72302",
 });
-export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStarter = false, observedPaneRows?: ReadonlySet<string>) {
+export type PersonalChoice = 'pin'|'undo'|'panes';
+export function personalChoiceTarget(choice:PersonalChoice, revision:string) {
+  if(choice==='pin' ? revision!=='stock' : !/^[0-9a-f]{64}$/.test(revision)) return null;
+  const key=choice==='panes' ? `personal/view/${revision}/qa-shared-panes` :
+    `personal/launcher/${revision}/${choice==='pin'?'Change(Edit { edit: PinText(Primary) })':'UndoLast'}`;
+  return {key,id:'main-list-row:v2:'+createHash('sha256').update('one-window/'+key).digest('hex'),
+    label:choice==='panes'?null:choice==='pin'?'Use brighter text for Stays open':'Undo my last launcher change'};
+}
+export function matchesPersonalChoice(row:Json, target:ReturnType<typeof personalChoiceTarget>) {
+  return !!target && row.role==='row' && row.selectable===true && !row.actionDisabled && row.semanticId===target.id &&
+    (target.label!==null ? row.text===target.label : row.text==null && row.value==null && row.content?.text?.rawContentReturned===false);
+}
+export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStarter = false, observedPaneRows?: ReadonlySet<string>, observedMenu?:{revision:string;choices:readonly PersonalChoice[];ids:ReadonlySet<string>}) {
   if (
     ["listAutomationWindows", "getState", "getElements", "checkAccessibility", "openNotes", "show"].includes(
       cmd.type,
@@ -192,6 +205,9 @@ export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStar
         (["main-list-row:v2:16cf1fc9a69fa8aa98d65534af5e7c06f11cdfb262a43a3accda7735a5780c79",
           "main-list-row:v2:6a48e7c4c80e6c41d75cddedcc44324ee352b911c5a2cd89653101723b3d16c8"].includes(row.semanticId) && row.submit === true) ||
         (verifyStarter && row.semanticId === STABILITY_STARTER.semanticId && row.submit === true) ||
+        (row.submit===false && observedMenu?.ids.has(row.semanticId)===true &&
+          observedMenu.choices.some(c=>personalChoiceTarget(c,observedMenu.revision)?.id===row.semanticId) &&
+          Object.keys(row).every(k=>['type','semanticId','submit'].includes(k))) ||
         (row.submit === false && typeof row.semanticId === "string" && /^personal-item:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}:h-[0-9a-f]{64}$/.test(row.semanticId) && observedPaneRows?.has(row.semanticId) === true &&
           Object.keys(row).every(k=>["type","semanticId","submit"].includes(k))),
       "unreviewed_menu_selection",

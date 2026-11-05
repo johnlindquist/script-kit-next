@@ -2,6 +2,7 @@
 import {describe,it,expect} from 'bun:test';
 import {preparePersonal,recoverPersonal,boundaries} from './installed-release-personal';
 import type {InstalledKit} from './lib/installed-release-host';
+import {personalChoiceTarget} from './lib/installed-release-contract';
 type J=Record<string,any>;
 const stock={pinnedText:'muted',pinnedWeight:'regular',selectionFirst:null,clipboardFirst:null,homeMode:'standard'};
 function fixture(){
@@ -15,16 +16,16 @@ function fixture(){
     expect(q.request.workspace).toBe(workspace);expect(q.request.expectedRevision).toBe(rev);
     undo=q.request.requestId;rules.selectionFirst='note';next();return {scope:'stored',result:{requestId:undo,replayed:false,state:state(),appliedRevision:rev}};
   };
-  const instance=(pid:number,generation:number):InstalledKit=>({pid,kitPath:'unused',scratchPath:'unused',async send(){throw Error('unreviewed fixture action')},async request(q:J){
+  const instance=(pid:number,generation:number):InstalledKit=>{let selected='';return {pid,kitPath:'unused',scratchPath:'unused',async send(){throw Error('unreviewed fixture action')},async request(q:J){
     const r=(type:string,x:J)=>({type,...x,requestId:q.requestId});
     if(q.type==='listAutomationWindows')return r('automationWindowListResult',{windows:[{id:'main',pid,generation}]});
     expect(q.target).toEqual({type:'instance',id:'main',generation});
-    const un=words==='Undo my last launcher change';
-    if(q.type==='getState')return r('stateResult',{permissions:{bundleIdentifier:'com.scriptkit.app'},promptType:'none',inputValue:words,windowVisible:true,oneWindow:{personalization:{scope:'runningWindow',appliedRevision:rev,effective:rules},enterArmed:false,enter:{id:'personal/launcher/'+rev+'/reading',label:un?'Undo':'Apply'}}});
-    if(q.type==='batch'){words=q.commands[0].text;return r('batchResult',{success:true,results:[{command:'setInput',success:true}]})}
-    if(q.type==='getElements')return r('elementsResult',{elements:[{role:'row',selected:true,selectable:true,text:un?words:'Use brighter text for Stays open'}]});
-    expect(q.key).toBe('enter');enters++;if(un && rules.selectionFirst){rules.selectionFirst=null;undo=pinId}else if(un){rules.pinnedText='muted';undo=null}else{rules.pinnedText='primary';undo=pinId='00000000-0000-4000-8000-000000000001'}next();words='';return r('externalCommandResult',{ok:true,command:'simulateKey'});
-  }});
+    const un=words==='Undo my last launcher change', target=personalChoiceTarget(un?'undo':'pin',rev), focused=!!target&&selected===target.id;
+    if(q.type==='getState')return r('stateResult',{permissions:{bundleIdentifier:'com.scriptkit.app'},promptType:'none',inputValue:words,windowVisible:true,oneWindow:{personalization:{scope:'runningWindow',appliedRevision:rev,effective:rules},enterArmed:false,enter:focused?{id:target!.key,label:un?'Undo':'Apply'}:{id:'some-neighbor',label:'Open'}}});
+    if(q.type==='batch'){const cmd=q.commands[0];if(cmd.type==='setInput'){words=cmd.text;selected='';}else{expect(cmd).toEqual({type:'selectBySemanticId',semanticId:target!.id,submit:false});selected=cmd.semanticId;}return r('batchResult',{success:true,results:[{command:cmd.type,success:true}]})}
+    if(q.type==='getElements')return r('elementsResult',{semanticSurface:'scriptList',elements:[{role:'row',selected:!focused,selectable:true,text:'Neighbor'},{role:'row',semanticId:target!.id,selected:focused,selectable:true,text:target!.label}]});
+    expect(focused).toBe(true);expect(q.key).toBe('enter');enters++;if(un && rules.selectionFirst){rules.selectionFirst=null;undo=pinId}else if(un){rules.pinnedText='muted';undo=null}else{rules.pinnedText='primary';undo=pinId='00000000-0000-4000-8000-000000000001'}next();words='';return r('externalCommandResult',{ok:true,command:'simulateKey'});
+  }};};
   return {author,instance,enters:()=>enters};
 }
 describe('installed personalization verifier — controlled requests and responses only',()=>{

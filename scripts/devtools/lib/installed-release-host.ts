@@ -29,7 +29,7 @@ import { assertNoninteractiveVisualProbe } from "./operator-safety";
 import {
   APP,
   ARCHIVE,
-  authorizeInstalledCommand,
+  authorizeInstalledCommand, matchesPersonalChoice, personalChoiceTarget, type PersonalChoice,
   STABILITY_STARTER,
   check,
   correlated,
@@ -339,6 +339,7 @@ async function withInstance<T>(
   verifyStarter: boolean,
   body: (kit: InstalledKit) => Promise<T>,
   observePaneSelection = false,
+  observeRuleSelection = false,
 ): Promise<T> {
   const io = mkdtempSync(`${scratch}/instance-`), fifo = join(io, "stdin"), out = join(io, "stdout");
   command("cannot_create_private_fifo", "/usr/bin/mkfifo", ["-m", "600", fifo]);
@@ -404,16 +405,18 @@ async function withInstance<T>(
     record.owner = { pid: owner.pid, generation: owner.generation, cdhash: owner.cdhash };
     checkpoint();
     const owned = owner, ids = new Set<string>();
-    const paneRows = new Set<string>();
-    let paneGeneration: number | undefined;
+    const paneRows = new Set<string>(), menuRows = new Set<string>();
+    const choices:PersonalChoice[] = observeRuleSelection ? ['pin','undo'] : observePaneSelection ? ['panes'] : [];
+    let paneGeneration: number | undefined, menuRevision:string|undefined;
     let busy = false;
     const assertOwner = () => check(sameProcess(current(), owned), "installed_instance_changed");
     function write(command: Json, request: boolean) {
       active();
       assertNoninteractiveVisualProbe("installed-release-send");
       authorizeInstalledCommand(command, io, verifyStarter,
-        observePaneSelection && command.target?.generation === paneGeneration ? paneRows : undefined);
-      if(command.type!=="getState"){paneRows.clear();paneGeneration=undefined;}
+        observePaneSelection && command.target?.generation === paneGeneration ? paneRows : undefined,
+        choices.length && menuRevision && command.target?.generation===paneGeneration ? {revision:menuRevision,choices,ids:menuRows} : undefined);
+      if(command.type!=="getState"){paneRows.clear();menuRows.clear();paneGeneration=undefined;}
       if (command.type === "run") {
         check(
           realpathSync(command.path) === command.path && lstatSync(command.path).isFile(),
@@ -461,9 +464,20 @@ async function withInstance<T>(
             const result = response(id, types);
             if (result) {
               assertOwner();
-              if(observePaneSelection && cmd.type==="getElements" && result.type==="elementsResult" && cmd.target?.type==="instance" && cmd.target.id==="main" && Number.isSafeInteger(cmd.target.generation) && cmd.target.generation>0){
-                paneGeneration=cmd.target.generation;
-                for(const e of result.elements??[])if(e.role==="row"&&e.selectable===true&&e.actionDisabled==="personal_list_read_only"&&/^personal-item:[0-9a-f-]{36}:h-[0-9a-f]{64}$/.test(e.semanticId))paneRows.add(e.semanticId);
+              if(choices.length && cmd.target?.type==='instance' && cmd.target.id==='main' && Number.isSafeInteger(cmd.target.generation) && cmd.target.generation>0){
+                if(cmd.type==='getState' && result.type==='stateResult'){
+                  const rev=result.oneWindow?.personalization?.appliedRevision;
+                  if(rev!==menuRevision || cmd.target.generation!==paneGeneration)menuRows.clear();
+                  menuRevision=typeof rev==='string' && (rev==='stock'||/^[0-9a-f]{64}$/.test(rev))?rev:undefined;
+                }
+                if(cmd.type==='getElements' && result.type==='elementsResult'){
+                  paneGeneration=cmd.target.generation;const rows:Json[]=result.elements??[];
+                  if(result.semanticSurface==='scriptList' && menuRevision)for(const choice of choices){
+                    const target=personalChoiceTarget(choice,menuRevision);
+                    if(target && rows.filter(e=>e.semanticId===target.id).length===1 && rows.some(e=>matchesPersonalChoice(e,target))) menuRows.add(target.id);
+                  }
+                  if(observePaneSelection)for(const e of rows)if(e.role==='row'&&e.selectable===true&&e.actionDisabled==='personal_list_read_only'&&/^personal-item:[0-9a-f-]{36}:h-[0-9a-f]{64}$/.test(e.semanticId))paneRows.add(e.semanticId);
+                }
               }
               return result;
             }
@@ -721,10 +735,10 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
           const v=JSON.parse(p.stdout);check(v?.ok===true&&v.data,"personal_offline_author_unverified");return v.data;
         };
         await guard('journeysProcessExited');
-        const saved=await withInstance(inspect,scratch,installed.cdhash,r.personal.first,checkpoint,false,kit=>preparePersonal(kit,appAuthor,guard));
+        const saved=await withInstance(inspect,scratch,installed.cdhash,r.personal.first,checkpoint,false,kit=>preparePersonal(kit,appAuthor,guard),false,true);
         check(r.personal.first.cleanup==='exact_instance_terminated',"personal_first_exit_not_verified");
         await guard('beforeRelaunch');
-        r.personal.result=await withInstance(inspect,scratch,installed.cdhash,r.personal.relaunched,checkpoint,false,kit=>recoverPersonal(kit,appAuthor,saved,guard));
+        r.personal.result=await withInstance(inspect,scratch,installed.cdhash,r.personal.relaunched,checkpoint,false,kit=>recoverPersonal(kit,appAuthor,saved,guard),false,true);
         check(r.personal.relaunched.cleanup==='exact_instance_terminated'&&!sameProcess(r.personal.first.owner,r.personal.relaunched.owner),"personal_relaunch_not_verified");
         await guard('afterFinalExit');
         r.stage = 'installed-read-only-pane-list';

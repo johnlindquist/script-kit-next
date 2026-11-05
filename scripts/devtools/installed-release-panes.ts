@@ -23,7 +23,8 @@ export type Scene={revision:string;pair:string;phase:(p:PanePhase)=>void;withdra
 export async function readInstalledPaneView(kit:InstalledKit,scene:Scene){
   const ui=await personalControls(kit);await until(async()=>(await ui.state()).oneWindow?.personalization?.appliedRevision===scene.revision,'pane_recipe_not_adopted');
   const words='view '+view.id,openId='personal/view/'+scene.revision+'/'+view.id;
-  await ui.filter(words);await until(async()=>{const s=await ui.state();return s.inputValue===words&&s.oneWindow?.enter?.id===openId&&s.oneWindow.enterArmed===false;},'declared_pane_view_not_current');
+  await ui.filter(words);await ui.selectMenu('panes',scene.revision,words,privateTitleMarker);
+  await until(async()=>{const s=await ui.state();return s.inputValue===words&&s.oneWindow?.enter?.id===openId&&s.oneWindow.enterArmed===false;},'declared_pane_view_not_current');
   const menu=(await ui.elements()).elements as Json[];
   check(!JSON.stringify(menu).toLowerCase().includes(privateTitleMarker) && menu.some(e=>e.role==='row'&&e.selected===true&&e.selectable===true&&e.text==null&&e.content?.text?.rawContentReturned===false),'private_view_title_or_identity_exposed');
   const beforeOpen=await ui.state();check(beforeOpen.inputValue===words&&beforeOpen.oneWindow?.enter?.id===openId&&!beforeOpen.oneWindow.enterArmed,'pane_view_selection_changed');

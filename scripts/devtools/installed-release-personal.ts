@@ -1,7 +1,7 @@
 // Drives only the host's verified installed instance and the matching app's offline author.
 // No global input, OS clipboard, screenshots, provider, or access to a different workspace.
 import {randomUUID} from 'node:crypto';
-import {check, SmokeFault, type Json} from './lib/installed-release-contract';
+import {check, SmokeFault, matchesPersonalChoice, personalChoiceTarget, type PersonalChoice, type Json} from './lib/installed-release-contract';
 import type {InstalledKit} from './lib/installed-release-host';
 export type Author = (q:Json)=>Json;
 export const boundaries=['journeysProcessExited','beforeLauncherEdit','afterLauncherEdit','afterExternalEdit','beforeRelaunch','afterRelaunch','afterSelectionUndo','afterPinnedLabelUndo','afterFinalExit'] as const;
@@ -24,9 +24,19 @@ export async function personalControls(kit:InstalledKit){
   const filter=async(text:string)=>{const b=await req({type:'batch',target,commands:[{type:'setInput',text}]},'batchResult');check(b.success && b.results?.length===1 && b.results[0].success && b.results[0].command==='setInput','personal_input_refused');};
   const key=async(value:'enter'|'escape')=>{const k=await req({type:'simulateKey',target,key:value,modifiers:[]},'externalCommandResult');check(k.ok && k.command==='simulateKey','personal_key_refused');};
   const elements=()=>req({type:'getElements',target,limit:100},'elementsResult');
+  const selectMenu=async(choice:PersonalChoice,revision:string,words:string,privateMarker?:string)=>{
+    const expected=personalChoiceTarget(choice,revision);check(expected,'personal_menu_identity_invalid');
+    await wait(async()=>{const s=await state();return s.windowVisible===true&&s.inputValue===words&&s.oneWindow?.personalization?.appliedRevision===revision;},'personal_menu_revision_changed');
+    await wait(async()=>{const e=await elements();if(privateMarker)check(!JSON.stringify(e.elements).toLowerCase().includes(privateMarker),'private_view_title_or_identity_exposed');
+      const rs=e.elements?.filter((r:Json)=>r.semanticId===expected.id)??[];return e.semanticSurface==='scriptList'&&rs.length===1&&matchesPersonalChoice(rs[0],expected);},'personal_exact_menu_row_not_ready');
+    const b=await req({type:'batch',target,commands:[{type:'selectBySemanticId',semanticId:expected.id,submit:false}]},'batchResult');
+    check(b.success&&b.results?.length===1&&b.results[0].command==='selectBySemanticId'&&b.results[0].success,'personal_menu_selection_refused');
+    return expected;
+  };
   const applyText=async(words:string,label:string,revision:string)=>{
     await filter(words);
-    const ready=async()=>{const s=await state();return s.windowVisible===true && s.inputValue===words && s.oneWindow.personalization?.appliedRevision===revision && s.oneWindow.enterArmed===false && s.oneWindow.enter?.id?.startsWith('personal/launcher/'+revision+'/') && s.oneWindow.enter.label===label;};
+    const expected=await selectMenu(label==='Apply'?'pin':'undo',revision,words);
+    const ready=async()=>{const s=await state();return s.windowVisible===true && s.inputValue===words && s.oneWindow.personalization?.appliedRevision===revision && s.oneWindow.enterArmed===false && s.oneWindow.enter?.id===expected.key && s.oneWindow.enter.label===label;};
     try { await wait(ready,'personal_row_not_ready'); }
     catch (failure) {
       if(!(failure instanceof SmokeFault) || failure.code!=='personal_row_not_ready') throw failure;
@@ -40,12 +50,12 @@ export async function personalControls(kit:InstalledKit){
       throw new SmokeFault('personal_not_ready_visible_input_owns_text_rev_armed_target_label_row_sel_'+flags.map(Number).join(''));
     }
     const e=await elements();
-    const selected=e.elements?.filter((r:Json)=>r.role==='row'&&r.selected===true&&!r.actionDisabled&&r.selectable);check(selected?.length===1 && (label==='Apply'?selected[0].text==='Use brighter text for Stays open':selected[0].text==='Undo my last launcher change'),'personal_wrong_selected_row');
+    const selected=e.elements?.filter((r:Json)=>r.role==='row'&&r.selected===true&&!r.actionDisabled&&r.selectable);check(selected?.length===1 && matchesPersonalChoice(selected[0],expected),'personal_wrong_selected_row');
     check(await ready(),'personal_selection_changed');await key('enter');
   };
   const adopted=async(rev:string,matches:(s:Json)=>boolean)=>wait(async()=>{const s=await state();const a=s.oneWindow?.personalization;return s.inputValue==='' && a?.scope==='runningWindow' && a.appliedRevision===rev && matches(a.effective);},'personal_live_revision_not_adopted');
   const selectPane=async(semanticId:string)=>{const b=await req({type:'batch',target,commands:[{type:'selectBySemanticId',semanticId,submit:false}]},'batchResult');check(b.success && b.results?.length===1 && b.results[0].command==='selectBySemanticId' && b.results[0].success,'pane_selection_refused');};
-  return {applyText,adopted,state,filter,key,elements,selectPane};
+  return {applyText,adopted,state,filter,key,elements,selectMenu,selectPane};
 }
 const inspect=(a:Author)=>{const r=a({op:'inspect'});check(r.scope==='stored'&&r.safeMode===false&&r.state?.enabled===true,'personal_stored_state_missing');return r.state;};
 export type PersonalCheckpoint={workspace:string; pinId:string; selectionId:string; selectionRevision:string};

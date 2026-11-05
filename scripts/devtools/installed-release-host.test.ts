@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ARCHIVE,
-  authorizeInstalledCommand,
+  authorizeInstalledCommand, personalChoiceTarget, matchesPersonalChoice,
   STABILITY_STARTER,
   correlated,
   EXE,
@@ -90,6 +90,16 @@ const release = {
 };
 
 describe("installed-release admission and provenance (no host authority)", () => {
+  test('a launcher choice must be both measured and bound to the matching revision, and selection never submits',()=>{
+    const rev='a'.repeat(64), t=personalChoiceTarget('undo',rev)!, ctx={revision:rev,choices:['undo'] as const,ids:new Set([t.id])};
+    const cmd={type:'batch',target:{type:'instance',id:'main',generation:3},commands:[{type:'selectBySemanticId',semanticId:t.id,submit:false}]};
+    expect(matchesPersonalChoice({role:'row',selectable:true,semanticId:t.id,text:t.label},t)).toBe(true);
+    expect(matchesPersonalChoice({role:'row',selectable:true,semanticId:t.id,text:'Neighbor'},t)).toBe(false);
+    expect(personalChoiceTarget('pin','stock')?.id).toBe('main-list-row:v2:f2b0de8791de057ad9dc0050efb4ae49396cb95b47d88d07f4aafc60c0a4ec1f');
+    authorizeInstalledCommand(cmd,'/unused',false,undefined,ctx);
+    for(const bad of [{...ctx,ids:new Set<string>()},{...ctx,revision:'b'.repeat(64)},{...ctx,choices:['panes'] as const}])expect(()=>authorizeInstalledCommand(cmd,'/unused',false,undefined,bad)).toThrow();
+    expect(()=>authorizeInstalledCommand({...cmd,commands:[{...cmd.commands[0],submit:true}]},'/unused',false,undefined,ctx)).toThrow();
+  });
   test('diagnoses anonymous API refusal without recording bodies or sensitive headers', () => {
     const now = 1793880000 * 1000;
     expect(publicApiFailure('actions/runs/5/attempts/1/jobs?per_page=100',403,
