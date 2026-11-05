@@ -185,7 +185,7 @@ impl ScriptListApp {
             status_kind: None,
             action_disabled: None,
             style: None,
-        })
+        }.redact_text(protocol::ElementContentKind::UserContent))
     }
 
     /// What `@` attached, as chips after the subject's in the main input, projected from the

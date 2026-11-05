@@ -24,6 +24,8 @@ If you have a known-good copy of the original file, quit Kit before restoring it
 
 Type **Make a list of my pinned notes called Reading shelf**, then choose **Create “Reading shelf”**. Type **view reading shelf** to open it. For all notes with the latest changes first, try **Make a list of my notes newest first named Recently edited**. For a read-only list of panes, try **Make a list of Herdr panes that need me called Attention** and pair a space before opening it. These requests work without a model. A name already in use is not overwritten. A configured launcher author can compose other lists from the installed schema. The view uses Kit’s normal input and rows. Saving it does not open a note or read its contents. Type **my views** or **view reading** in the launcher, select the list and press Return. Type to narrow its titles and press Return to open the selected note. If the note was renamed, unpinned from a pinned-only list, or moved outside the result limit, Kit asks you to choose again instead of opening a different result. Escape returns from the editor to the same filtered list; Escape again returns to the launcher.
 
+Kit shows the title you chose in the launcher. In passive `getElements` snapshots, an authored list row and its header expose private measurements rather than the title. Select a row by its current semantic ID. To read the declaration itself, use the workspace’s `--personalize inspect` or an authorized launcher reader.
+
 Check `describe` for `views.schema` first. If it is absent, this version of Kit cannot create personal lists. Preview the following change before saving it. For `apply`, use the workspace and revision from `inspect` and generate a fresh version-4 request ID:
 
 ```json
