@@ -154,7 +154,7 @@ pub const SK_PATH_ENV: &str = "SK_PATH";
 /// Result of setup process
 #[derive(Debug)]
 pub struct SetupResult {
-    /// Whether ~/.scriptkit didn't exist before this run
+    /// Whether this run created a new, non-migrated workspace root.
     pub is_fresh_install: bool,
     /// Path to ~/.scriptkit (or SK_PATH override, or fallback if home dir couldn't be resolved)
     pub kit_path: PathBuf,
@@ -298,7 +298,8 @@ pub fn themes_dir() -> PathBuf {
 /// Migrate from legacy ~/.kenv to new ~/.scriptkit structure
 ///
 /// This function handles one-time migration from the old directory structure:
-/// - Moves ~/.kenv contents to ~/.scriptkit
+/// - Requires a missing default workspace and an entirely recognized legacy tree
+/// - Keeps imported logs in ~/.scriptkit/logs/legacy-v1, separate from live logs
 /// - Moves ~/.kenv/scripts to ~/.scriptkit/plugins/main/scripts
 /// - Moves ~/.kenv/scriptlets to ~/.scriptkit/plugins/main/scriptlets
 /// - Creates a symlink ~/.kenv -> ~/.scriptkit for backwards compatibility
@@ -306,120 +307,186 @@ pub fn themes_dir() -> PathBuf {
 /// Returns true if migration was performed, false if not needed
 #[instrument(level = "info", name = "migrate_from_kenv")]
 pub fn migrate_from_kenv() -> bool {
+    migration_home().is_some_and(|home| migrate_from_kenv_in(&home, &get_kit_path()))
+}
+
+mod legacy_move;
+
+fn migration_home() -> Option<PathBuf> {
     if crate::runtime_policy::is_owned_evaluation()
-        || matches!(
-            std::env::var(SK_PATH_ENV),
-            Err(std::env::VarError::NotUnicode(_))
-        )
+        || matches!(std::env::var(SK_PATH_ENV), Err(std::env::VarError::NotUnicode(_)))
     {
-        return false;
+        None
+    } else {
+        dirs::home_dir()
     }
-    dirs::home_dir().is_some_and(|home| migrate_from_kenv_in(&home, &get_kit_path()))
 }
 
 fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
-    let new_scriptkit = home.join(".scriptkit");
-    // An alternate kit has no authority to inspect, move or remove the default workspace.
-    if !home.is_absolute() || kit_path != new_scriptkit {
-        return false;
+    let mut warnings = Vec::new();
+    let result = import_legacy(home, kit_path, &mut warnings);
+    for message in warnings {
+        warn!("{message}");
     }
-    let old_kenv = home.join(".kenv");
-    // Claim only a pristine destination. Never traverse an indirect legacy root.
-    if !fs::symlink_metadata(&old_kenv).is_ok_and(|m| m.is_dir())
-        || !matches!(fs::symlink_metadata(&new_scriptkit), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
-    {
-        return false;
+    match result {
+        Ok(root) => root.is_some(),
+        Err(error) => {
+            warn!(%error, "Legacy import stopped");
+            false
+        }
     }
+}
 
-    // Decide on the entire migration before the first mutation. A mixed v1 kit
-    // (.git, subkits, other files, links, special files) stays intact for manual
-    // import. Never silently consume only the part we happen to understand.
-    let plan = (|| -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
+// No plan leaves the legacy kit where it is. Return the actual destination
+// handle on success. An interrupted move stops this launch before defaults or services.
+const IMPORT_MARKER: &str = ".scriptkit-v1-import-in-progress";
+
+fn check_import_idle(home: &Path) -> std::io::Result<()> {
+    use std::io::{Error, ErrorKind};
+    match fs::symlink_metadata(home.join(IMPORT_MARKER)) {
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+        Ok(_) => Err(Error::new(ErrorKind::WouldBlock, "A legacy import is active or was interrupted. Check ~/.kenv and ~/.scriptkit before starting Kit again.")),
+    }
+}
+
+fn import_legacy(home: &Path, kit_path: &Path, warnings: &mut Vec<String>) -> std::io::Result<Option<legacy_move::Directory>> {
+    use std::ffi::OsString;
+    use std::io::{self, ErrorKind};
+    let old_kenv = home.join(".kenv");
+    if !home.is_absolute() || kit_path != home.join(".scriptkit") { return Ok(None); }
+    check_import_idle(home)?;
+    if !matches!(fs::symlink_metadata(kit_path), Err(e) if e.kind() == ErrorKind::NotFound)
+        || !fs::symlink_metadata(&old_kenv).is_ok_and(|m| m.is_dir())
+    {
+        return Ok(None);
+    }
+    struct Entry { name: OsString, original: fs::Metadata, plugin: bool, archive: bool }
+    let legacy = legacy_move::Directory::open(&old_kenv)?;
+    let plan = (|| -> io::Result<Vec<Entry>> {
         let mut moves = Vec::new();
         for entry in fs::read_dir(&old_kenv)? {
             let entry = entry?;
             let name = entry.file_name();
-            let kind = entry.file_type()?;
-            let target = match name.to_str() {
-                Some("scripts" | "scriptlets") if kind.is_dir() => {
-                    new_scriptkit.join("plugins/main").join(&name)
-                }
-                Some("logs" | "cache" | "db" | "sdk") if kind.is_dir() => new_scriptkit.join(&name),
-                Some(
-                    "config.ts"
-                    | "theme.json"
-                    | "tsconfig.json"
-                    | "package.json"
-                    | "settings.json"
-                    | ".gitignore"
-                    | "frecency.json"
-                    | "store.json"
-                    | "server.json"
-                    | "agent-token"
-                    | "notes.db"
-                    | "ai-chats.db"
-                    | "clipboard-history.db",
-                ) if kind.is_file() => new_scriptkit.join(&name),
-                _ => {
-                    return Err(std::io::Error::other(
-                        "unrecognized or indirect legacy entry",
-                    ))
-                }
+            let original = fs::symlink_metadata(entry.path())?;
+            let (plugin, archive) = match name.to_str() {
+                Some("scripts" | "scriptlets") if original.is_dir() => (true, false),
+                // The current session truncates logs/latest-session.jsonl. Never
+                // make an imported log the destination of a new logging session.
+                Some("logs") if original.is_dir() => (false, true),
+                Some("cache" | "db" | "sdk") if original.is_dir() => (false, false),
+                Some("config.ts" | "theme.json" | "tsconfig.json" | "package.json"
+                    | "settings.json" | ".gitignore" | "frecency.json" | "store.json"
+                    | "server.json" | "agent-token" | "notes.db" | "ai-chats.db"
+                    | "clipboard-history.db") if original.is_file() => (false, false),
+                _ => return Err(io::Error::other("unrecognized or indirect legacy entry")),
             };
-            moves.push((entry.path(), target));
+            moves.push(Entry { name, original, plugin, archive });
         }
-        for (i, entry) in walkdir::WalkDir::new(&old_kenv)
-            .follow_links(false)
-            .into_iter()
-            .enumerate()
-        {
-            let kind = entry?.file_type();
+        for (i, entry) in walkdir::WalkDir::new(&old_kenv).follow_links(false).into_iter().enumerate() {
+            let entry = entry?;
+            let kind = entry.file_type();
             if i >= 16_384 || (!kind.is_file() && !kind.is_dir()) {
-                return Err(std::io::Error::other("large or indirect legacy tree"));
+                return Err(io::Error::other("large or indirect legacy tree"));
+            }
+            #[cfg(unix)]
+            if kind.is_file() {
+                use std::os::unix::fs::MetadataExt;
+                if fs::symlink_metadata(entry.path())?.nlink() != 1 {
+                    return Err(io::Error::other("linked legacy file"));
+                }
             }
         }
+        legacy.check()?;
         Ok(moves)
     })();
     let Ok(plan) = plan else {
-        warn!("Legacy workspace left intact; import its scripts manually");
-        return false;
+        warnings.push("Legacy workspace left intact; import its scripts manually".into());
+        return Ok(None);
     };
-    if let Err(error) = fs::create_dir(&new_scriptkit)
-        .and_then(|_| fs::create_dir_all(new_scriptkit.join("plugins/main")))
-    {
-        warn!(%error, "Couldn't prepare a new kit for migration");
-        return false;
+    if plan.is_empty() { return Ok(None); }
+    if !cfg!(any(target_os = "macos", target_os = "linux", windows)) {
+        warnings.push("Automatic legacy import is unavailable; import scripts manually".into());
+        return Ok(None);
     }
-    for (source, destination) in plan {
-        if !matches!(fs::symlink_metadata(&destination), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
-        {
-            warn!("Migration stopped at an occupied destination; both workspaces retained");
-            return false;
+    // Publish the hold BEFORE the destination exists. A second default launch
+    // must not see a half-imported kit as an ordinary upgrade and seed defaults.
+    // Do not remove this on Drop: a crash or transfer error needs human recovery.
+    let marker_path = home.join(IMPORT_MARKER);
+    create_kit_dir(&marker_path).map_err(|e| if e.kind() == ErrorKind::AlreadyExists {
+        io::Error::new(ErrorKind::WouldBlock, "Another legacy import is active or needs recovery")
+    } else { e })?;
+    let marker = legacy_move::Directory::open(&marker_path)?;
+    let release_marker = || { marker.check()?; fs::remove_dir(&marker_path) };
+    // No legacy entry moved if another launch or editor won the destination.
+    if let Err(e) = create_kit_dir(kit_path) {
+        release_marker()?;
+        return if e.kind() == ErrorKind::AlreadyExists { Ok(None) } else { Err(e) };
+    }
+    let kit = legacy_move::Directory::open(kit_path)?;
+    let transfer = (|| -> io::Result<()> {
+        let plugins_path = kit_path.join("plugins");
+        create_kit_dir(&plugins_path)?;
+        let plugins = legacy_move::Directory::open(&plugins_path)?;
+        let main_path = plugins_path.join("main");
+        create_kit_dir(&main_path)?;
+        let main = legacy_move::Directory::open(&main_path)?;
+        for entry in plan {
+            marker.check()?;
+            kit.check()?;
+            plugins.check()?;
+            if entry.archive {
+                // Keep archived diagnostics inside the normal log exclusion.
+                let log_path = kit_path.join("logs");
+                create_kit_dir(&log_path)?;
+                let logs = legacy_move::Directory::open(&log_path)?;
+                // Even a v1 kit with a custom root .gitignore should not offer
+                // the archive's private contents to an ordinary git add.
+                let ignore = logs.path().join(".gitignore");
+                use std::io::Write as _;
+                fs::File::create_new(ignore)?.write_all(b"*\n")?;
+                legacy.move_entry(&entry.name, &entry.original, &logs, "legacy-v1".as_ref())?;
+            } else {
+                legacy.move_entry(&entry.name, &entry.original, if entry.plugin { &main } else { &kit }, &entry.name)?;
+            }
         }
-        // Rename the actual entry, not the contents of a possibly redirected directory.
-        if let Err(error) = fs::rename(source, destination) {
-            warn!(%error, "Migration stopped; both workspaces retained");
-            return false;
-        }
+        kit.check()?;
+        plugins.check()?;
+        main.check()?;
+        legacy.check()?;
+        // Never recursively remove a legacy root. A newly arrived entry stops here.
+        fs::remove_dir(&old_kenv)
+    })();
+    transfer.map_err(|e| io::Error::new(e.kind(), format!("Legacy import stopped. Inspect both ~/.kenv and ~/.scriptkit before another launch: {e}")))?;
+    #[cfg(unix)]
+    if let Err(e) = std::os::unix::fs::symlink(kit_path, &old_kenv) {
+        warnings.push(format!("Imported the legacy files but could not create the ~/.kenv shortcut: {e}"));
     }
-    // Non-recursive removal is also safe if new files arrived since preflight.
-    if let Err(error) = fs::remove_dir(&old_kenv) {
-        warn!(%error, "Leaving the remaining legacy workspace in place");
-        return false;
-    }
+    kit.check()?;
+    release_marker()?;
+    Ok(Some(kit))
+}
 
-    // Create symlink for backwards compatibility (Unix only)
+fn create_kit_dir(path: &Path) -> std::io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
-        if let Err(e) = std::os::unix::fs::symlink(&new_scriptkit, &old_kenv) {
-            warn!(error = %e, "Failed to create ~/.kenv symlink for backwards compatibility");
-        } else {
-            info!("Created ~/.kenv -> ~/.scriptkit symlink for backwards compatibility");
-        }
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
     }
+    builder.create(path)
+}
 
-    info!("Migration from ~/.kenv to ~/.scriptkit complete");
-    true
+// Only the launch that actually creates the leaf gets to seed first-run files.
+fn claim_kit_root(path: &Path) -> std::io::Result<bool> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
+    match create_kit_dir(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && path.is_dir() => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 // --- merged from part_003.rs ---
 /// Ensure the ~/.scriptkit environment is properly set up.
@@ -462,34 +529,49 @@ fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
 /// `SetupResult` with information about the setup process.
 #[instrument(level = "info", name = "ensure_kit_setup")]
 pub fn ensure_kit_setup() -> SetupResult {
-    let mut warnings = Vec::new();
-
     let kit_dir = get_kit_path();
+    setup_workspace(&kit_dir, migration_home().as_deref(), false, || {}).unwrap_or_else(|error| SetupResult {
+        is_fresh_install: false,
+        kit_path: kit_dir,
+        warnings: vec![format!("Could not prepare the workspace: {error}")],
+    })
+}
 
-    // Check if this is a fresh install before we create anything
-    let is_fresh_install = !kit_dir.exists();
+/// Normal app launch. The logger and PID registry remain per-home, not in an
+/// arbitrary SK_PATH. No callback or service touches the default root before
+/// migration and fresh-root selection have settled.
+pub fn prepare_workspace_for_launch(start_diagnostics: impl FnOnce()) -> std::io::Result<SetupResult> {
+    setup_before_diagnostics(&get_kit_path(), migration_home().as_deref(), start_diagnostics)
+}
 
-    // Log if using SK_PATH override
+fn setup_before_diagnostics(kit_dir: &Path, legacy_home: Option<&Path>, start_diagnostics: impl FnOnce()) -> std::io::Result<SetupResult> {
+    setup_workspace(kit_dir, legacy_home, true, start_diagnostics)
+}
+
+fn setup_workspace(kit_dir: &Path, home: Option<&Path>, allow_import: bool, start_diagnostics: impl FnOnce()) -> std::io::Result<SetupResult> {
+    let default_home = home.filter(|h| h.is_absolute() && kit_dir == h.join(".scriptkit"));
+    let mut warnings = Vec::new();
+    if let Some(home) = default_home { check_import_idle(home)?; }
+    let imported = if let Some(home) = default_home.filter(|_| allow_import) { import_legacy(home, kit_dir, &mut warnings)? } else { None };
+    let migrated = imported.is_some();
+    let (fresh, claimed) = if let Some(root) = imported {
+        (false, Some(root))
+    } else {
+        let fresh = claim_kit_root(kit_dir)?;
+        (fresh, fresh.then(|| legacy_move::Directory::open(kit_dir)).transpose()?)
+    };
+    // Pair the preflight with a check AFTER observing or claiming the leaf. A
+    // concurrent importer can have created both its hold and its root in between.
+    if let Some(home) = default_home { check_import_idle(home)?; }
+    start_diagnostics();
+    if let Some(claimed) = claimed { claimed.check()?; }
+    if migrated { info!("Migrated from ~/.kenv to ~/.scriptkit"); }
+    Ok(install_workspace_files(kit_dir.to_owned(), fresh, warnings))
+}
+
+fn install_workspace_files(kit_dir: PathBuf, is_fresh_install: bool, mut warnings: Vec<String>) -> SetupResult {
     if std::env::var(SK_PATH_ENV).is_ok() {
-        info!(
-            kit_path = %kit_dir.display(),
-            "Using SK_PATH override"
-        );
-    }
-
-    // Ensure root kit directory exists first
-    if let Err(e) = fs::create_dir_all(&kit_dir) {
-        warnings.push(format!(
-            "Failed to create kit root {}: {}",
-            kit_dir.display(),
-            e
-        ));
-        // If we can't create the root, there's not much else we can safely do.
-        return SetupResult {
-            is_fresh_install,
-            kit_path: kit_dir,
-            warnings,
-        };
+        info!(kit_path = %kit_dir.display(), "Using SK_PATH override");
     }
 
     // Seed the user-themes directory so save/load operations don't race the
@@ -1556,15 +1638,7 @@ await div(`
   </div>
 `);
 "#;
-        if let Err(e) = fs::write(&hello_script_path, hello_script) {
-            warnings.push(format!(
-                "Failed to create sample script {}: {}",
-                hello_script_path.display(),
-                e
-            ));
-        } else {
-            info!(path = %hello_script_path.display(), "Created sample script");
-        }
+        write_string_if_missing(&hello_script_path, hello_script, warnings, "sample script");
     }
 
     // Create hello-world.md scriptlet bundle
@@ -1642,15 +1716,7 @@ echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
 echo "Shell: $SHELL"
 ```
 "#;
-        if let Err(e) = fs::write(&hello_scriptlet_path, hello_scriptlet) {
-            warnings.push(format!(
-                "Failed to create sample scriptlet bundle {}: {}",
-                hello_scriptlet_path.display(),
-                e
-            ));
-        } else {
-            info!(path = %hello_scriptlet_path.display(), "Created sample scriptlet bundle");
-        }
+        write_string_if_missing(&hello_scriptlet_path, hello_scriptlet, warnings, "sample scriptlet bundle");
     }
 
     // Create hello-world.claude.md agent
@@ -1671,15 +1737,7 @@ When the user asks for help:
 
 Be conversational but efficient. Focus on solving the user's immediate needs.
 "#;
-        if let Err(e) = fs::write(&hello_agent_path, hello_agent) {
-            warnings.push(format!(
-                "Failed to create sample agent {}: {}",
-                hello_agent_path.display(),
-                e
-            ));
-        } else {
-            info!(path = %hello_agent_path.display(), "Created sample agent");
-        }
+        write_string_if_missing(&hello_agent_path, hello_agent, warnings, "sample agent");
     }
 
     // Create README.md at kit root
@@ -1864,15 +1922,7 @@ export SK_PATH=~/my-scripts
 
 Happy scripting! 🚀
 "##;
-        if let Err(e) = fs::write(&readme_path, readme) {
-            warnings.push(format!(
-                "Failed to create README {}: {}",
-                readme_path.display(),
-                e
-            ));
-        } else {
-            info!(path = %readme_path.display(), "Created README.md");
-        }
+        write_string_if_missing(&readme_path, readme, warnings, "README.md");
     }
 }
 // --- merged from part_006.rs ---

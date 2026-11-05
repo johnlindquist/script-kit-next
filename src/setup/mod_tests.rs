@@ -83,6 +83,138 @@ mod tests {
         drop(lock);
     }
 
+    // The callback opens the real per-home startup log files, not a global
+    // logger, process registry or GUI in the test runner's own home.
+    fn disk_diagnostics(home: &std::path::Path) {
+        use std::io::Write;
+        let (all, latest) = crate::logging::session_files(&home.join(".scriptkit/logs"), 0);
+        all.unwrap().write_all(b"new session\n").unwrap();
+        latest.unwrap().write_all(b"new session\n").unwrap();
+    }
+
+    #[test]
+    fn normal_workspace_startup_seeds_only_the_launch_that_creates_the_root() {
+        with_sk_path(|home| {
+            let kit = home.join(".scriptkit");
+            std::env::set_var(SK_PATH_ENV, &kit);
+            let launch = || setup_before_diagnostics(&kit, Some(home), || disk_diagnostics(home)).unwrap();
+            let first = launch();
+            assert!(first.is_fresh_install);
+            assert!(first.warnings.is_empty(), "{:?}", first.warnings);
+            let starter = kit.join("plugins/main/scripts/hello-world.ts");
+            assert!(fs::read_to_string(&starter).unwrap().contains("Hello World"));
+            fs::remove_file(&starter).unwrap();
+            fs::write(kit.join("config.ts"), "export default { editorFontSize: 27 };\n").unwrap();
+            let second = launch();
+            assert!(!second.is_fresh_install);
+            assert!(!starter.exists());
+            assert_eq!(fs::read_to_string(kit.join("config.ts")).unwrap(), "export default { editorFontSize: 27 };\n");
+        });
+    }
+
+    #[test]
+    fn normal_workspace_startup_imports_scripts_and_keeps_the_v1_session_log() {
+        with_sk_path(|home| {
+            let kit = home.join(".scriptkit");
+            std::env::set_var(SK_PATH_ENV, &kit);
+            let legacy = home.join(".kenv");
+            fs::create_dir_all(legacy.join("scripts")).unwrap();
+            fs::create_dir(legacy.join("logs")).unwrap();
+            fs::write(legacy.join("scripts/keep.ts"), "// my script").unwrap();
+            fs::write(legacy.join("config.ts"), "export default { editorFontSize: 29 };\n").unwrap();
+            fs::write(legacy.join("logs/latest-session.jsonl"), "v1 history\n").unwrap();
+            let result = setup_before_diagnostics(&kit, Some(home), || disk_diagnostics(home)).unwrap();
+            assert!(!result.is_fresh_install);
+            assert!(result.warnings.is_empty(), "{:?}", result.warnings);
+            assert_eq!(fs::read_to_string(kit.join("plugins/main/scripts/keep.ts")).unwrap(), "// my script");
+            assert_eq!(fs::read_to_string(kit.join("config.ts")).unwrap(), "export default { editorFontSize: 29 };\n");
+            assert_eq!(fs::read_to_string(kit.join("legacy-logs/latest-session.jsonl")).unwrap(), "v1 history\n");
+            assert_eq!(fs::read_to_string(kit.join("logs/latest-session.jsonl")).unwrap(), "new session\n");
+            #[cfg(unix)]
+            assert_eq!(fs::read_link(legacy).unwrap(), kit);
+        });
+    }
+
+    #[test]
+    fn normal_workspace_startup_never_imports_into_an_existing_or_alternate_kit() {
+        for alternate in [false, true] {
+            with_sk_path(|home| {
+                let default = home.join(".scriptkit");
+                let kit = if alternate { home.join("another kit") } else { default.clone() };
+                std::env::set_var(SK_PATH_ENV, &kit);
+                let legacy = home.join(".kenv/scripts/old.ts");
+                fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+                fs::write(&legacy, "// original").unwrap();
+                if !alternate { fs::create_dir(&kit).unwrap(); }
+                let result = setup_before_diagnostics(&kit, Some(home), || disk_diagnostics(home)).unwrap();
+                assert_eq!(result.is_fresh_install, alternate);
+                assert_eq!(fs::read_to_string(legacy).unwrap(), "// original");
+                assert!(!kit.join("plugins/main/scripts/old.ts").exists());
+                if alternate { assert!(!default.join("plugins").exists()); }
+            });
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn normal_workspace_startup_keeps_a_linked_legacy_tree_for_manual_import() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        with_sk_path(|home| {
+            let kit = home.join(".scriptkit");
+            std::env::set_var(SK_PATH_ENV, &kit);
+            let legacy = home.join(".kenv");
+            fs::create_dir_all(legacy.join("logs")).unwrap();
+            let note = home.join("private.md");
+            fs::write(&note, "keep this\n").unwrap();
+            fs::set_permissions(&note, fs::Permissions::from_mode(0o640)).unwrap();
+            let link = legacy.join("logs/latest-session.jsonl");
+            fs::hard_link(&note, &link).unwrap();
+            let result = setup_before_diagnostics(&kit, Some(home), || disk_diagnostics(home)).unwrap();
+            assert!(result.is_fresh_install);
+            assert!(result.warnings.iter().any(|w| w.contains("Legacy workspace left intact")));
+            assert!(!legacy.is_symlink());
+            assert_eq!(fs::metadata(link).unwrap().ino(), fs::metadata(&note).unwrap().ino());
+            assert_eq!(fs::read_to_string(&note).unwrap(), "keep this\n");
+            assert_eq!(fs::metadata(note).unwrap().mode() & 0o7777, 0o640);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn normal_workspace_startup_refuses_a_displaced_root_before_seeding() {
+        with_sk_path(|home| {
+            let kit = home.join(".scriptkit");
+            std::env::set_var(SK_PATH_ENV, &kit);
+            let result = setup_before_diagnostics(&kit, Some(home), || {
+                fs::rename(&kit, home.join("displaced")).unwrap();
+                fs::create_dir(&kit).unwrap();
+                fs::write(kit.join("keep"), "rival").unwrap();
+            });
+            assert!(result.is_err());
+            assert!(!kit.join("plugins").exists());
+            assert_eq!(fs::read_to_string(kit.join("keep")).unwrap(), "rival");
+        });
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+    #[test]
+    fn normal_workspace_startup_legacy_transfer_never_replaces_a_competing_entry() {
+        for directory in [false, true] {
+            let temp = TempDir::new().unwrap();
+            let a = temp.path().join("v1"); let b = temp.path().join("new kit");
+            fs::create_dir(&a).unwrap(); fs::create_dir(&b).unwrap();
+            let (src,dest) = (a.join("item"), b.join("item"));
+            if directory { fs::create_dir(&src).unwrap(); } else { fs::write(&src, b"original").unwrap(); }
+            let expected = fs::symlink_metadata(&src).unwrap();
+            let from = legacy_move::Directory::open(&a).unwrap();
+            let to = legacy_move::Directory::open(&b).unwrap();
+            if directory { fs::create_dir(&dest).unwrap(); } else { fs::write(&dest, b"rival").unwrap(); }
+            assert!(from.move_entry("item".as_ref(), &expected, &to, "item".as_ref()).is_err());
+            assert!(src.exists() && dest.exists());
+            if !directory { assert_eq!(fs::read(src).unwrap(), b"original"); assert_eq!(fs::read(dest).unwrap(), b"rival"); }
+        }
+    }
+
     /// Test that plugin directories live under plugins/
     /// Expected structure: ~/.scriptkit/plugins/main/scripts, ~/.scriptkit/plugins/main/scriptlets
     #[test]

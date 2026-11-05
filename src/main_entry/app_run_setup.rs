@@ -1,6 +1,12 @@
 {
-    initialize_startup_diagnostics();
-    let setup_result = prepare_startup_environment();
+    let setup_result = match prepare_startup_environment() {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            // An incomplete import is not an existing kit to repair with defaults.
+            eprintln!("Script Kit could not prepare the workspace: {error}");
+            std::process::exit(1);
+        }
+    };
 
     let startup_boot_started = std::time::Instant::now();
     let startup_profile = crate::startup_profile::StartupProfile::from_env();

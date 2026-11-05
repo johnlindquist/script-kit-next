@@ -44,31 +44,17 @@ use serde_json::{Map, Value};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fmt::Write as FmtWrite;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-/// Restrict a log file to owner read/write (0600). Best-effort: a log with
-/// looser permissions is not worth aborting startup over, and `.mode()` on
-/// `OpenOptions` only applies when the file is freshly created, so this also
-/// tightens logs left behind by an older build.
-fn harden_log_file_permissions(path: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(err) = fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
-            eprintln!(
-                "[SCRIPT-KIT-GPUI] warning: could not restrict log permissions on {}: {err}",
-                path.display()
-            );
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = path;
-}
+mod disk;
+pub(crate) use disk::session_files;
+#[cfg(test)]
+use disk::rotate_if_oversized as rotate_log_if_oversized;
 use tracing::field::{Field, Visit};
 use tracing::{Level, Subscriber};
 use tracing_appender::non_blocking::WorkerGuard;
@@ -843,19 +829,12 @@ pub fn is_capture_enabled() -> bool {
 /// Returns the path to the capture file.
 pub fn start_capture() -> anyhow::Result<PathBuf> {
     let log_dir = get_log_dir();
-    fs::create_dir_all(&log_dir)?;
-
-    // Create timestamped filename: capture-2026-01-11T08-37-28.jsonl
+    // A timestamp is readable; the exclusive suffix distinguishes captures in the same second.
     let now = SystemTime::now();
     let timestamp = chrono::DateTime::<chrono::Utc>::from(now)
         .format("%Y-%m-%dT%H-%M-%S")
         .to_string();
-    let filename = format!("capture-{}.jsonl", timestamp);
-    let path = log_dir.join(&filename);
-
-    let file = OpenOptions::new().create(true).append(true).open(&path)?;
-    // Logs can capture user content; keep them owner-only (0600).
-    harden_log_file_permissions(&path);
+    let (path, file) = disk::capture_file(&log_dir, &timestamp)?;
 
     let session = CaptureSession {
         file,
@@ -990,33 +969,6 @@ fn open_writer_or_sink(
         })
 }
 
-/// Rotate `path` to `<path>.1` (replacing the previous rotation) when it
-/// exceeds `max_bytes`. One generation is enough: the append-forever log
-/// exists for post-hoc cross-session queries; `latest-session.jsonl` is the
-/// per-launch surface. `max_bytes == 0` disables rotation.
-fn rotate_log_if_oversized(path: &std::path::Path, max_bytes: u64) {
-    if max_bytes == 0 {
-        return;
-    }
-    let Ok(meta) = fs::metadata(path) else {
-        return;
-    };
-    if meta.len() <= max_bytes {
-        return;
-    }
-    let mut rotated_os = path.as_os_str().to_owned();
-    rotated_os.push(".1");
-    let rotated = PathBuf::from(rotated_os);
-    match fs::rename(path, &rotated) {
-        Ok(()) => eprintln!(
-            "[SCRIPT-KIT-GPUI] Rotated oversized log ({} bytes) to {}",
-            meta.len(),
-            rotated.display()
-        ),
-        Err(e) => eprintln!("[LOGGING] Failed to rotate {}: {}", path.display(), e),
-    }
-}
-
 /// Internal initialization that returns a LoggingGuard.
 /// This is used by init() to store the guard in LOGGING_GUARD.
 fn init_internal() -> LoggingGuard {
@@ -1031,11 +983,7 @@ fn init_internal() -> LoggingGuard {
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    // Create log directory
     let log_dir = get_log_dir();
-    if let Err(e) = fs::create_dir_all(&log_dir) {
-        eprintln!("[LOGGING] Failed to create log directory: {}", e);
-    }
 
     let log_path = log_dir.join("script-kit-gpui.jsonl");
     let session_path = log_dir.join("latest-session.jsonl");
@@ -1047,46 +995,24 @@ fn init_internal() -> LoggingGuard {
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(128 * 1024 * 1024);
-    rotate_log_if_oversized(&log_path, rotate_cap);
-
-    // Store session log path for panic hook and public access
-    let _ = SESSION_LOG_PATH.set(session_path.clone());
+    let (file, session_file) = session_files(&log_dir, rotate_cap);
+    let panic_file = session_file.as_ref().ok().and_then(|f| f.try_clone().ok());
 
     // Initialize session ID
     let sid = SESSION_ID
         .get_or_init(|| Uuid::new_v4().to_string())
         .clone();
 
-    // Always print session log path (useful in both AI and non-AI modes)
-    eprintln!("========================================");
-    eprintln!("[SCRIPT-KIT-GPUI] Session log: {}", session_path.display());
-    eprintln!("[SCRIPT-KIT-GPUI] Full log:    {}", log_path.display());
-    eprintln!(
-        "[SCRIPT-KIT-GPUI] Copy for AI:  cat {} | pbcopy",
-        session_path.display()
-    );
-    eprintln!("========================================");
-
-    // Open append-forever log file
-    let file = open_writer_or_sink(
-        OpenOptions::new().create(true).append(true).open(&log_path),
-        "log file",
-    );
-
-    // Open session log file (truncated on each launch)
-    let session_file = open_writer_or_sink(
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&session_path),
-        "session log file",
-    );
-
-    // These JSONL logs can capture user content (queries, prompts, command
-    // lines); keep them owner-only (0600) rather than inheriting umask.
-    harden_log_file_permissions(&log_path);
-    harden_log_file_permissions(&session_path);
+    if session_file.is_ok() {
+        let _ = SESSION_LOG_PATH.set(session_path.clone());
+        eprintln!("[SCRIPT-KIT-GPUI] Session log: {}", session_path.display());
+        eprintln!("[SCRIPT-KIT-GPUI] Copy for AI:  cat {} | pbcopy", session_path.display());
+    }
+    if file.is_ok() {
+        eprintln!("[SCRIPT-KIT-GPUI] Full log:    {}", log_path.display());
+    }
+    let file = open_writer_or_sink(file, "log file");
+    let session_file = open_writer_or_sink(session_file, "session log file");
 
     // Create non-blocking writers for both files
     let (non_blocking_append, file_guard) = tracing_appender::non_blocking(file);
@@ -1184,17 +1110,15 @@ fn init_internal() -> LoggingGuard {
             location
         );
 
-        // Safety net: write directly to session log (tracing may not flush)
-        if let Some(path) = SESSION_LOG_PATH.get() {
+        // Tracing may not flush. Never reopen a replaced session name on panic.
+        if let Some(mut file) = panic_file.as_ref() {
             let timestamp = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
             let escaped_msg = message.replace('\\', "\\\\").replace('"', "\\\"");
             let json = format!(
                 r#"{{"timestamp":"{}","level":"ERROR","target":"panic","correlation_id":"panic","message":"PANIC: {} at {}","fields":{{"event_type":"panic","location":"{}"}}}}"#,
                 timestamp, escaped_msg, location, location
             );
-            if let Ok(mut f) = OpenOptions::new().append(true).open(path) {
-                let _ = writeln!(f, "{}", json);
-            }
+            let _ = writeln!(file, "{}", json);
         }
 
         // Call original hook (prints to stderr)

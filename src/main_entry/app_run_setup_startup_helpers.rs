@@ -24,7 +24,7 @@ fn initialize_startup_diagnostics() {
     );
 }
 
-fn prepare_startup_environment() -> setup::SetupResult {
+fn prepare_startup_environment() -> std::io::Result<setup::SetupResult> {
     // Fail-loud-at-startup validation of the trigger-builtin registry.
     // A duplicate alias or a typoed canonical id would previously only
     // surface as a silent runtime no-op — see Run 7 Pass #8/#9.
@@ -32,15 +32,9 @@ fn prepare_startup_environment() -> setup::SetupResult {
         panic!("invalid triggerBuiltin registry detected at startup: {e}");
     }
 
-    // Migrate from legacy ~/.kenv to new ~/.scriptkit structure (one-time migration)
-    // This must happen BEFORE ensure_kit_setup() so the new path is used
-    if setup::migrate_from_kenv() {
-        logging::log("APP", "Migrated from ~/.kenv to ~/.scriptkit");
-    }
-
-    // Ensure ~/.scriptkit environment is properly set up (directories, SDK, config, etc.)
-    // This is idempotent - it creates missing directories and files without overwriting user configs
-    let setup_result = setup::ensure_kit_setup();
+    // Diagnostics create per-home log files. Workspace setup decides migration and
+    // claims the root first, then starts diagnostics before installing any assets.
+    let setup_result = setup::prepare_workspace_for_launch(initialize_startup_diagnostics)?;
     if setup_result.is_fresh_install {
         logging::log(
             "APP",
@@ -110,7 +104,7 @@ fn prepare_startup_environment() -> setup::SetupResult {
         }
     }
 
-    setup_result
+    Ok(setup_result)
 }
 
 fn initialize_startup_background_services(loaded_config: &config::Config) {
