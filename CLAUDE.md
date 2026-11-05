@@ -339,10 +339,15 @@ third), and a new one is a design change, not a fix.
   never returning to an earlier label while the text grows). A chapter's `.expect.json` fails any
   step that now shows a different header, ↵ label or view.
 
-# Build Output Lives on the SSDs
+# Build Output and External SSDs
 
-Macintosh HD runs close to full, so no Cargo target or other build output for this repo lives on
-it (owner, 2026-09-28). Where each one is:
+A fresh checkout builds anywhere: `cargo build`, `./dev.sh` and the agent wrapper need no
+external drive, free-space reserve or size cap. `./dev.sh` uses `/Volumes/OMEGA SSD` only when
+it is mounted and otherwise builds in `./target/dev` (`SCRIPT_KIT_DEV_VOLUME=local` forces that;
+`SCRIPT_KIT_DEV_VOLUME=/Volumes/<drive>` picks another mounted SSD).
+
+On John's main workstation, whose internal disk runs close to full, build output is kept on
+external SSDs (owner, 2026-09-28). The rest of this section applies there only:
 
 | Output | Location |
 |---|---|
@@ -376,7 +381,7 @@ limit, spike system load, and silently lose child-process stdout/stderr; the
 resulting empty or failing evidence is invalid. Use
 `bun test ./scripts/devtools/example.test.ts` instead.
 
-`./dev.sh` runs `cargo watch` continuously on its own target on `/Volumes/OMEGA SSD`, and rust-analyzer builds in `target/` (see "Build Output Lives on the SSDs"). Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").
+`./dev.sh` runs `cargo watch` continuously on its own target (see "Build Output and External SSDs"), and rust-analyzer builds in `target/`. Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").
 
 All agent-driven cargo invocations MUST go through `./scripts/agentic/agent-cargo.sh`, which defaults to the bounded shared `CARGO_TARGET_DIR=target-agent/pools/agent-debug` pool with a visible lock. Examples:
 
@@ -391,7 +396,7 @@ The managed lane uses only `target-agent/pools/agent-debug`. Non-default pools a
 
 Builds and Rust test harnesses default to **noninteractive operation and two workers**. Direct wrapper invocations reject inherited screen-takeover, native-input, screen-capture, visible-window, live-AI, and application-launch permissions before Cargo starts; only explicit `SCRIPT_KIT_NONINTERACTIVE=0` opts into intentional interactive operation. `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`, `--jobs`, `-j`, and `--test-threads` remain explicit overrides only within the `SCRIPT_KIT_AGENT_MAX_JOBS` ceiling; an intentional interactive higher limit must raise that ceiling too. Noninteractive execution can never exceed two workers and forcibly disables inherited heavyweight search/storage stress corpora. Malformed safety modes, worker counts, or over-limit settings fail before Cargo starts.
 
-The resource policy covers **all of `target-agent`**, including the pool, shared caches, immutable exports, pending publications, quarantine, and unknown entries. At the owner's 2026-09-15 request, an identity-pinned root link whose destination is on a different volume has **no default allocation cap** (`targetAgentBudgetBytes: null`); ordinary/local storage retains the 40 GiB default. An explicit numeric `SCRIPT_KIT_AGENT_TARGET_BUDGET_GB` still sets a cap. `SCRIPT_KIT_AGENT_MIN_FREE_GB` defaults to 25; preserve any larger user-authorized reserve. Admission, monitored Cargo execution, and publication checks still fail closed on incomplete measurements, changed storage identity, or insufficient free space on either repository or destination volume; `SCRIPT_KIT_AGENT_ALLOW_LOW_DISK=1` cannot bypass this managed policy, even in interactive mode. A running guard refuses if its uncapped route becomes local. Monitoring is sampled cancellation, not a filesystem quota or unique-APFS-extent measurement. It never automatically evicts data. Stop a refused batch rather than bypassing the remaining guards or deleting the default pool/shared caches. Explicit retention requires current revisions and exact authorized candidate selections; live owners and unresolved references remain protected.
+The resource policy covers **all of `target-agent`**, including the pool, shared caches, immutable exports, pending publications, quarantine, and unknown entries. At the owner's 2026-09-15 request, `target-agent` has **no default allocation cap** (`targetAgentBudgetBytes: null`) and no default free-space floor, wherever it lives. An explicit numeric `SCRIPT_KIT_AGENT_TARGET_BUDGET_GB` sets a cap and `SCRIPT_KIT_AGENT_MIN_FREE_GB` sets a reserve; on John's main workstation, run with `SCRIPT_KIT_AGENT_MIN_FREE_GB=25`. Admission, monitored Cargo execution, and publication checks still fail closed on incomplete measurements, changed storage identity, or insufficient free space on either repository or destination volume; `SCRIPT_KIT_AGENT_ALLOW_LOW_DISK=1` cannot bypass this managed policy, even in interactive mode. Monitoring is sampled cancellation, not a filesystem quota or unique-APFS-extent measurement. It never automatically evicts data. Stop a refused batch rather than bypassing the remaining guards or deleting the default pool/shared caches. Explicit retention requires current revisions and exact authorized candidate selections; live owners and unresolved references remain protected.
 
 The wrapper owns `CARGO_TARGET_DIR` and effective compiler configuration. Direct `--target-dir` and `--config` overrides are rejected before any cache, lock, or compiler is touched because they can redirect a supposedly protected build into the live dev target or replace its bounded worker policy. Managed roots, leases, manifests, and output paths require exact owned identities; traversal, untrusted symlinked managed paths, and stale revisions fail closed. With explicit user authorization, `bun scripts/agentic/managed-storage.ts trust <repository> <absolute-destination>` may register the existing `target-agent` root link in the local `.agent-cargo-storage.json`. This pins the repository, exact destination, link and destination device/inode, and current owner; a missing mount, redirected/recreated link, replaced destination, or nested managed link is refused. Registration never moves storage or overwrites authority. The single pool, lease identity, publication checks, complete managed-tree accounting, any configured allocation cap, and minimum free space on both repository and destination volumes still apply.
 

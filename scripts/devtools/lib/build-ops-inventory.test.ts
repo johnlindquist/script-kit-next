@@ -815,18 +815,15 @@ for (const reason of ["timeout", "incomplete", "budget", "free", "resume", "iden
   expect(result.compilerPauses?.resumed).toBe(0); expect(g.refusals).toHaveLength(1);
 });
 
-test("an uncapped guard refuses when its pinned external route becomes local storage", async () => {
-  const f = externalFixture(8192), g = guardFixture(f.root); observedVolume(2 * GiB);
-  const guard = g.start(requireBuildAdmission(f.root));
-  try {
-    g.worker.answer(sample(8192)); await microtasks();
-    expect(g.refusals).toEqual([]);
-    fs.unlinkSync(join(f.root, "target-agent"));
-    fs.mkdirSync(join(f.root, "target-agent"));
-    await g.advance(1_000);
-    expect(g.refusals.map(error => error.code)).toEqual(["resource_policy_conflict"]);
-    expect(await guard.stop()).toMatchObject({ complete: false, workerClosed: true });
-  } finally { await guard.stop(); }
+test("a plain checkout has no default allocation cap or free-space floor", () => {
+  const root = fixture(); file(root, "target-agent/shared/payload"); observedVolume(1);
+  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB; delete process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB;
+  const admitted = requireBuildAdmission(root);
+  expect(admitted.targetAgentBudgetBytes).toBeNull();
+  expect(admitted.minimumFreeBytes).toBe(0);
+  expect(admitted.withinLimits).toBe(true);
+  process.env.SCRIPT_KIT_AGENT_MIN_FREE_GB = "1";
+  expect(refusal(() => requireBuildAdmission(root)).code).toBe("resource_free_space_below_floor");
 });
 
 test("guard samples bounded summaries, admits one scan in flight, and closes timers and worker once", async () => {

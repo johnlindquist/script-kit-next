@@ -338,18 +338,17 @@ function targetAgentBudget(root: string): number | null {
   let stat: Stats | undefined;
   try { stat = lstatSync(path); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  if (stat?.isSymbolicLink()) {
-    const route = trustedManagedRootLink(path);
-    // Only an identity-pinned root on another volume is uncapped.
-    if (route.destinationDevice !== route.linkDevice) return null;
-  }
-  return 40 * 1024 ** 3;
+  // A redirected root must still be the registered, identity-pinned link.
+  if (stat?.isSymbolicLink()) trustedManagedRootLink(path);
+  // No default cap: set SCRIPT_KIT_AGENT_TARGET_BUDGET_GB to bound the pool.
+  return null;
 }
 
 export function buildLimits(root: string) {
   return {
     targetAgentBudgetBytes: targetAgentBudget(root),
-    minimumFreeBytes: byteLimit("SCRIPT_KIT_AGENT_MIN_FREE_GB", 25),
+    // No default floor: set SCRIPT_KIT_AGENT_MIN_FREE_GB to keep a reserve.
+    minimumFreeBytes: byteLimit("SCRIPT_KIT_AGENT_MIN_FREE_GB", 0),
     freeSampleTimeoutMs: positiveLimit("SCRIPT_KIT_AGENT_FREE_SAMPLE_TIMEOUT_MS", 2_000, 1, 60_000),
     compilerWorkers: 2, nativeWorkersWithinEachCompiler: 1, testWorkers: 2,
     logBytesPerTask: 4 * 1024 ** 2,
