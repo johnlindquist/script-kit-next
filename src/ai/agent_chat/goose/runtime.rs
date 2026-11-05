@@ -13,8 +13,8 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
 use serde_json::{json, Value};
+use std::process::Command;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::ai::agent_chat::approval::AgentApprovalMode;
@@ -403,26 +403,20 @@ async fn run_event_loop(
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        // Own process group so orphan cleanup can reap goose and any tool
-        // processes it spawned; kill_on_drop covers early returns.
-        .process_group(0)
-        .kill_on_drop(true);
+        .stderr(Stdio::piped());
 
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
-        Err(error) => {
-            let failure = crate::ai::reliability::spawn_failure(
-                ProtocolComponent::Goose,
-                &format!("failed to spawn goose: {error}"),
-            );
-            fail_commands_until_closed(rx, failure).await;
-            return Ok(());
-        }
-    };
-    let _registration = child.id().map(|pid| {
-        crate::process_manager::ChildRegistration::register(pid, &spec.command.to_string_lossy())
-    });
+    let (mut child, _group) =
+        match crate::process_manager::model_group::ModelGroup::spawn_async(cmd) {
+            Ok(child) => child,
+            Err(error) => {
+                let failure = crate::ai::reliability::spawn_failure(
+                    ProtocolComponent::Goose,
+                    &format!("failed to spawn goose: {error}"),
+                );
+                fail_commands_until_closed(rx, failure).await;
+                return Ok(());
+            }
+        };
     let mut stdin = child.stdin.take().context("goose stdin unavailable")?;
     let stdout = child.stdout.take().context("goose stdout unavailable")?;
     let stderr = child.stderr.take().context("goose stderr unavailable")?;
@@ -1677,6 +1671,14 @@ async fn stop_child(child: &mut tokio::process::Child) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn model_group_follows_owner_goose() {
+        crate::process_manager::model_group_tests::check_parent_loss(|program| {
+            GooseRuntime::spawn(GooseLaunchSpec::new(program, program.parent().unwrap())).unwrap()
+        });
+    }
 
     #[test]
     fn goose_runtime_is_an_agent_chat_connection() {

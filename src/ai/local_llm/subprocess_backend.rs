@@ -60,9 +60,6 @@ enum HelperRequest {
     Cancel {
         id: u64,
     },
-    Shutdown {
-        id: u64,
-    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -121,13 +118,11 @@ impl LoadedLocalLlm {
 }
 
 struct HelperClient {
-    child: Mutex<Child>,
+    child: Option<Child>,
     stdin: Mutex<Option<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<HelperResponse>>>>,
     next_id: AtomicU64,
-    /// Tracks the helper with the global process manager for quit-time and
-    /// post-crash reaping; dropping this client unregisters it.
-    _registration: crate::process_manager::ChildRegistration,
+    group: crate::process_manager::model_group::ModelGroup,
 }
 
 impl HelperClient {
@@ -139,19 +134,8 @@ impl HelperClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
-        // Own process group so orphan cleanup / kill_all can reap the helper.
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        let mut child = command
-            .spawn()
+        let (mut child, group) = crate::process_manager::model_group::ModelGroup::spawn(command)
             .with_context(|| format!("spawn ghost llm helper {}", helper_path.display()))?;
-        let registration = crate::process_manager::ChildRegistration::register(
-            child.id(),
-            &helper_path.to_string_lossy(),
-        );
         let stdin = child
             .stdin
             .take()
@@ -180,11 +164,11 @@ impl HelperClient {
             })
             .context("spawn ghost llm helper reader thread")?;
         Ok(Self {
-            child: Mutex::new(child),
+            child: Some(child),
             stdin: Mutex::new(Some(stdin)),
             pending,
             next_id: AtomicU64::new(1),
-            _registration: registration,
+            group,
         })
     }
 
@@ -282,15 +266,22 @@ impl HelperClient {
     }
 }
 
+#[cfg(test)]
+#[test]
+fn model_group_follows_owner_ghost() {
+    crate::process_manager::model_group_tests::check_parent_loss(|_| {
+        HelperClient::spawn().unwrap()
+    });
+}
+
 impl Drop for HelperClient {
     fn drop(&mut self) {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let _ = self.write_request(&HelperRequest::Shutdown { id });
-        if let Ok(mut stdin) = self.stdin.lock() {
-            let _ = stdin.take();
-        }
-        if let Ok(mut child) = self.child.lock() {
-            let _ = child.wait();
+        self.stdin
+            .get_mut()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
+        if let Some(child) = self.child.take() {
+            self.group.finish_after_eof(child);
         }
     }
 }
@@ -300,8 +291,7 @@ impl HelperRequest {
         match self {
             HelperRequest::Load { id, .. }
             | HelperRequest::Generate { id, .. }
-            | HelperRequest::Cancel { id }
-            | HelperRequest::Shutdown { id } => *id,
+            | HelperRequest::Cancel { id } => *id,
         }
     }
 }
