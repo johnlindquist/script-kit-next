@@ -10,6 +10,12 @@
 //! - Bulk kill for graceful shutdown
 //!
 
+pub(crate) mod model_group;
+#[cfg(unix)]
+pub use model_group::run_if_requested as run_model_group_monitor_if_requested;
+#[cfg(all(test, unix))]
+pub(crate) mod model_group_tests;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,12 +30,23 @@ pub static PROCESS_MANAGER: LazyLock<ProcessManager> = LazyLock::new(ProcessMana
 /// Information about a tracked child process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessInfo {
-    /// Process ID
+    /// Stop target: the private group leader for a supervised model, otherwise the tracked PID.
     pub pid: u32,
+    /// Actual model executable, for inspection only. Never a persisted signalling authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_pid: Option<u32>,
     /// Path to the script being executed
     pub script_path: String,
     /// Timestamp when the process was started
     pub started_at: DateTime<Utc>,
+}
+impl ProcessInfo {
+    pub(crate) fn pid_label(&self) -> String {
+        match self.model_pid {
+            Some(model) => format!("PID {model} • group {}", self.pid),
+            None => format!("PID {}", self.pid),
+        }
+    }
 }
 /// Thread-safe process manager for tracking bun script processes
 #[derive(Debug, Clone)]
@@ -229,8 +246,13 @@ impl ProcessManager {
     ///
     /// This adds the process to the in-memory map and persists to disk.
     pub fn register_process(&self, pid: u32, script_path: &str) {
+        self.register_process_info(pid, script_path, None);
+    }
+
+    fn register_process_info(&self, pid: u32, script_path: &str, model_pid: Option<u32>) {
         let info = ProcessInfo {
             pid,
+            model_pid,
             script_path: script_path.to_string(),
             started_at: Utc::now(),
         };
@@ -306,8 +328,8 @@ impl ProcessManager {
 
         for process in processes.iter().take(limit) {
             lines.push(format!(
-                "PID {} • {} • started {}",
-                process.pid,
+                "{} • {} • started {}",
+                process.pid_label(),
                 process.script_path,
                 crate::formatting::format_absolute_datetime(process.started_at)
             ));
@@ -848,10 +870,14 @@ impl ChildRegistration {
     /// the user's real ~/.scriptkit tracking files (a live app instance shares
     /// them).
     pub fn register(pid: u32, command_path: &str) -> Self {
+        Self::for_group(pid, command_path, None)
+    }
+
+    fn for_group(pid: u32, command_path: &str, model_pid: Option<u32>) -> Self {
         #[cfg(not(test))]
-        PROCESS_MANAGER.register_process(pid, command_path);
+        PROCESS_MANAGER.register_process_info(pid, command_path, model_pid);
         #[cfg(test)]
-        let _ = command_path;
+        let _ = (command_path, model_pid);
         Self { pid }
     }
 }
@@ -1119,6 +1145,7 @@ mod tests {
     fn test_process_info_serialization() {
         let info = ProcessInfo {
             pid: 42,
+            model_pid: None,
             script_path: "/path/to/script.ts".to_string(),
             started_at: Utc::now(),
         };
@@ -1254,6 +1281,7 @@ mod tests {
         // No dedicated group: this still exercises the owned PID fallback.
         let record = ProcessInfo {
             pid: orphan_pid,
+            model_pid: None,
             script_path: fixture_path.to_string_lossy().into_owned(),
             started_at: Utc::now(),
         };

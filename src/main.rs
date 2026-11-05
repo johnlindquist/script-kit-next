@@ -417,6 +417,10 @@ include!("main_entry/app_run_setup_startup_helpers.rs");
 mod installation_check;
 
 fn main() {
+    #[cfg(unix)]
+    if let Some(code) = script_kit_gpui::process_manager::run_model_group_monitor_if_requested() {
+        std::process::exit(code);
+    }
     if let Some(result) = design_evaluation::run_if_requested() {
         if result.is_err() {
             eprintln!("owned_evaluation_failed");

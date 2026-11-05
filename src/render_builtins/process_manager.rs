@@ -77,6 +77,7 @@ impl ScriptListApp {
     ) -> bool {
         process.script_path.to_lowercase().contains(filter_lower)
             || process.pid.to_string().contains(filter_lower)
+            || process.model_pid.is_some_and(|pid| pid.to_string().contains(filter_lower))
     }
 
     fn process_manager_filtered_entries<'a>(
@@ -489,7 +490,7 @@ impl ScriptListApp {
                                 );
 
                                 let description =
-                                    format!("PID {} • running {}", process_info.pid, duration_str);
+                                    format!("{} • running {}", process_info.pid_label(), duration_str);
 
                                 let click_entity = click_entity_handle.clone();
                                 let click_handler =

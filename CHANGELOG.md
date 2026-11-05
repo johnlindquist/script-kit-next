@@ -1,5 +1,9 @@
 # Script Kit changelog
 
+## Unreleased · Model process cleanup
+
+If Kit is force-quit on macOS, the Goose, ghost-text, and embedding processes it started stop without waiting for another Kit launch. Tools that remain in the engine’s process group stop with it. Process Manager distinguishes the engine PID from the group controlled by Stop. This does not scan for or kill unrelated copies of those programs. [Issue #56](https://github.com/johnlindquist/script-kit-next/issues/56).
+
 ## 0.1.31 · A dependable Return action
 
 [Release notes and installation checks](docs/releases/v0.1.31.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.

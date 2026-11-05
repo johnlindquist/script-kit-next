@@ -320,6 +320,7 @@ pub(crate) fn mount_main_fixture(
         "main.process-manager" => {
             app.cached_processes = vec![crate::process_manager::ProcessInfo {
                 pid: 2_000_000_001,
+                model_pid: None,
                 script_path: root
                     .join("scripts/launch-alpha.ts")
                     .to_string_lossy()

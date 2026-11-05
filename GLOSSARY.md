@@ -154,7 +154,7 @@ Searchable utility lists available directly from the launcher.
 | :--- | :--- | :--- | :--- |
 | **Clipboard History** | Searchable history of clipboard entries. | `ClipboardHistoryView` | [clipboard.rs](src/render_builtins/clipboard.rs) & [clipboard_history/mod.rs](src/clipboard_history/mod.rs) |
 | **Emoji Picker** | Panel for searching and inserting emojis. | `EmojiPickerView` | [emoji_picker.rs](src/render_builtins/emoji_picker.rs) |
-| **Process Manager** | Search tool to view and kill system processes. | `ProcessManager` | [process_manager.rs](src/render_builtins/process_manager.rs) |
+| **Process Manager** | Inspect or stop Kit-owned processes, not arbitrary system PIDs. A model row names its engine PID and the private group targeted by Stop. | `ProcessManager`, `ModelGroup` | [process_manager.rs](src/render_builtins/process_manager.rs), [group ownership](src/process_manager/model_group.rs) |
 | **Window Switcher** | Switch focus between active application windows. | `WindowSwitcher` | [window_switcher.rs](src/render_builtins/window_switcher.rs) |
 | **App Launcher** | Search and launch installed local applications. | `AppLauncher` | [app_launcher.rs](src/render_builtins/app_launcher.rs) |
 | **Notes Browse** | List and search local Markdown notes. | `NotesBrowseView` | [notes_browse.rs](src/render_builtins/notes_browse.rs) |
