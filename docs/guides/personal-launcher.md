@@ -2,6 +2,8 @@
 
 Type **Customize Kit** for examples. Pick one to put its words in the input, then edit the request or press Return on the proposed change. Picking an example does not save anything.
 
+You can speak the request, too. With [Dictation](dictation.md) set up, choose **Dictate into Kit** and say **Keep my launcher minimal**. Stop recording to put the words in Kit’s input. Edit them if necessary, then press Return on **Show just scripts on the launcher home** to save. Saying the same words while dictating into a note just writes them in the note; it does not change the launcher.
+
 Type **Make “Stays open” brighter** in the launcher. The **Customize Kit** row names the edit. Press Return to apply it. Pin the window with ⌘⇧P to see the label; the input and pin icon keep their usual appearance. **Make the pinned label bold only while dictating** changes its weight without losing the brighter color. It uses the recording indicator, not the microphone or transcript.
 
 Want a quieter starting point? Type **Keep my launcher minimal** and press Return on **Show just scripts on the launcher home**. Open Kit with an empty input to see your scripts and scriptlets instead of subject tabs, apps and suggestions. Required setup still appears. Nothing is uninstalled: type a name to search normally, including apps and notes. This choice survives closing and restarting Kit. **Restore the standard launcher** brings the tabs and suggestions back without changing your other preferences. Agents can preview or set `launcher.home.mode` to `minimal` or `standard`.
