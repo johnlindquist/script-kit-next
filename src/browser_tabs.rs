@@ -1201,6 +1201,23 @@ const frontPid = () => {{ const front = $.NSWorkspace.sharedWorkspace.frontmostA
 mod tests {
     use super::*;
 
+    // These tests exercise the real search entry points, which share one process-wide
+    // snapshot. Hold the fixture for the whole scenario, not just its individual writes.
+    struct SnapshotFixture {
+        _owner: parking_lot::MutexGuard<'static, ()>,
+    }
+    impl Drop for SnapshotFixture {
+        fn drop(&mut self) {
+            reset_root_browser_tabs_snapshot_for_test();
+        }
+    }
+    fn snapshot_fixture() -> SnapshotFixture {
+        static OWNER: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+        let guard = OWNER.lock();
+        reset_root_browser_tabs_snapshot_for_test();
+        SnapshotFixture { _owner: guard }
+    }
+
     #[test]
     fn owned_tab_snapshots_and_resets_require_runtime_authority() {
         assert!(owned_root_browser_tabs_snapshot(Ok(Vec::new())).is_err());
@@ -1351,6 +1368,7 @@ mod tests {
 
     #[test]
     fn universal_search_finds_late_open_tabs_from_the_first_character() {
+        let _fixture = snapshot_fixture();
         let base = BrowserTabInfo {
             identity: None,
             browser_name: "Google Chrome".into(),
@@ -1388,12 +1406,11 @@ mod tests {
         config.browser_tabs.scan_limit = None;
         config.browser_tabs.providers = vec![crate::config::BrowserTabProvider::Chrome];
         assert!(search("z", &config).is_empty());
-        reset_root_browser_tabs_snapshot_for_test();
     }
 
     #[test]
     fn expired_root_browser_tab_snapshot_returns_stale_rows() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         let tab = BrowserTabInfo {
             identity: None,
             browser_name: "Google Chrome".into(),
@@ -1410,18 +1427,17 @@ mod tests {
 
         let rows = cached_root_browser_tabs_snapshot(1);
         assert_eq!(rows.as_ref(), &vec![tab]);
-        reset_root_browser_tabs_snapshot_for_test();
     }
 
     #[test]
     fn missing_root_browser_tab_snapshot_returns_empty_rows() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         assert!(cached_root_browser_tabs_snapshot(1).is_empty());
     }
 
     #[test]
     fn direct_browser_tabs_lookup_is_snapshot_only_and_keeps_permissive_matching() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         let previous_rows = Arc::new(vec![BrowserTabInfo {
             identity: None,
             browser_name: "Google Chrome".into(),
@@ -1474,12 +1490,11 @@ mod tests {
                 &previous_rows
             ));
         }
-        reset_root_browser_tabs_snapshot_for_test();
     }
 
     #[test]
     fn cold_direct_browser_tabs_lookup_cannot_start_an_unowned_refresh() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         let before = root_browser_tabs_snapshot_status();
         let options = RootBrowserTabsSectionOptions {
             enabled: true,
@@ -1575,7 +1590,7 @@ mod tests {
 
     #[test]
     fn root_browser_tabs_refresh_completion_advances_generation_and_stores_rows() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         let before = root_browser_tabs_snapshot_status();
         let refresh =
             try_begin_root_browser_tabs_refresh(30_000, 1, "test").expect("refresh should start");
@@ -1603,7 +1618,6 @@ mod tests {
             cached_root_browser_tabs_snapshot(30_000).as_ref(),
             &vec![tab]
         );
-        reset_root_browser_tabs_snapshot_for_test();
     }
 
     #[test]
@@ -1624,7 +1638,7 @@ mod tests {
 
     #[test]
     fn cached_root_browser_tabs_snapshot_does_not_block_on_refresh_lock() {
-        reset_root_browser_tabs_snapshot_for_test();
+        let _fixture = snapshot_fixture();
         let _guard = ROOT_BROWSER_TAB_SNAPSHOT.lock().expect("snapshot lock");
         let started = Instant::now();
         let rows = cached_root_browser_tabs_snapshot(1);
