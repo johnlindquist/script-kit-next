@@ -251,6 +251,22 @@ publish('saved.json',{nonce,old:old.value,wasDefault:old.isDefault,value:saved.v
 `;
 }
 
+// Script labels are authored content. The public element protocol gives them a process-private
+// fingerprint, unlike the literal labels of built-ins. The signed starter bytes and the exact
+// source-owned row ID bind the target; no private label or fingerprint needs to leave this Mac.
+export function installedStarterObservation(rows: Row[], semanticId: string) {
+  const exact = rows.filter(row => row.semanticId === semanticId);
+  const row = exact.length === 1 ? exact[0] : undefined;
+  const name = row?.content?.text;
+  const measuredName = row?.text == null && row?.value == null &&
+    name?.contentKind === 'externalContent' && name.rawContentReturned === false &&
+    name.charLength === 'Hello World'.length && name.byteLength === Buffer.byteLength('Hello World') &&
+    typeof name.fingerprint === 'string' && /^sha256:[0-9a-f]{64}$/.test(name.fingerprint);
+  return { exactRows: exact.length, scriptRows: rows.filter(r => r.kind === 'script').length,
+    measuredName, ready: measuredName && row?.role === 'row' && row.kind === 'script' &&
+      row.selectable === true && !row.actionDisabled };
+}
+
 export async function runInstalledJourneys(kit: InstalledKit) {
   const checkpoints: Record<string, ReturnType<typeof inventory>> = {};
   const passed: string[] = [];
@@ -409,8 +425,11 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       const checkStarter = () => requireProof(digest(readFileSync(file)) === sha256, 'starter-bytes-disagree');
       checkStarter();
       await batch({ type: 'setInput', text: 'Hello World' });
-      await observe(elements, r => r.semanticSurface === 'scriptList' && r.elements.some((x: Row) =>
-        x.semanticId === semanticId && x.role === 'row' && x.text === 'Hello World' && x.selectable && !x.actionDisabled), 'starter-not-in-launcher');
+      await observe(elements, r => {
+        const observed = installedStarterObservation(r.elements, semanticId);
+        evidence.starterRow = observed;
+        return r.semanticSurface === 'scriptList' && observed.ready;
+      }, 'starter-not-in-launcher');
       checkStarter();
       await batch({ type: 'selectBySemanticId', semanticId, submit: true });
       await observe(state, s => s.windowVisible === true && s.promptType === 'arg' &&

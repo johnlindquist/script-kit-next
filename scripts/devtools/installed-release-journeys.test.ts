@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { runInstalledJourneys } from './installed-release-journeys';
+import { installedStarterObservation, runInstalledJourneys } from './installed-release-journeys';
 
 type Obj = Record<string, any>;
 const domainRows = [
@@ -231,7 +231,8 @@ async function exercise(
                 ...(invalid ? [{ role: 'alert', semanticId: 'panel:form-error-0' }] : []),
               ]
             : options.starter && input === 'Hello World'
-              ? [{ ...commandRows[0], text: 'Hello World', kind: 'script', semanticId: starter.semanticId }]
+              ? [{ role: 'row', kind: 'script', selectable: true, semanticId: starter.semanticId,
+                    content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'1'.repeat(64) } } }]
               : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
     return {
       projectionQuality: 'complete',
@@ -409,6 +410,16 @@ describe('installed release journeys — controlled transport fixtures only', ()
       expect(result.humanSteps).toHaveLength(7);
       expect(seen).toContain('run');
     });
+  it('requires the exact unique enabled script row and a measured label, not a matching cleartext title', () => {
+    const row = { semanticId: 'exact', role: 'row', kind: 'script', selectable: true,
+      content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'a'.repeat(64) } } };
+    expect(installedStarterObservation([row], 'exact').ready).toBe(true);
+    for (const rows of [[{ ...row, semanticId:'lookalike' }], [row, row], [{ ...row, text:'Hello World' }],
+      [{ ...row, actionDisabled:'main_menu_query_pending' }], [{ ...row, kind:'snippet' }],
+      [{ ...row, content:{ text:{ ...row.content.text, byteLength:10 } } }]]) {
+      expect(installedStarterObservation(rows, 'exact').ready).toBe(false);
+    }
+  });
   it('runs the matched starter before writing the test note, and reopens the launcher after it closes', async () => {
     const { result } = await exercise({ starter: true });
     expect(result.status).toBe('pass');
