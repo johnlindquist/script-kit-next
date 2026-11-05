@@ -116,21 +116,21 @@ fn load_items(
             Ok(SourceSnapshot {
                 items: notes
                     .into_iter()
-                    .map(|(id, title, updated, pinned)| Item {
-                        id: id.to_string(),
-                        title: if title.trim().is_empty() {
+                    .map(|note| Item {
+                        id: note.id.to_string(),
+                        title: if note.title.trim().is_empty() {
                             "Untitled note".into()
                         } else {
-                            title
+                            note.title
                         },
                         detail: match detail {
                             NoteDetail::None => None,
-                            NoteDetail::Pinned => pinned.then(|| "Pinned".into()),
+                            NoteDetail::Pinned => note.pinned.then(|| "Pinned".into()),
                             NoteDetail::LastChanged => {
-                                Some(format!("Changed {}", updated.format("%b %-d")))
+                                Some(format!("Changed {}", note.updated.format("%b %-d")))
                             }
                         },
-                        icon: if pinned { "starfilled" } else { "file" },
+                        icon: if note.pinned { "starfilled" } else { "file" },
                     })
                     .collect(),
                 pair_id: None,

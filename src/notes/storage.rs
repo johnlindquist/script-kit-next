@@ -1961,13 +1961,21 @@ pub fn get_note(id: NoteId) -> Result<Option<Note>> {
     Ok(result)
 }
 
+/// The title-only projection used by personal lists. No note body leaves storage.
+pub(crate) struct PersonalNoteTitle {
+    pub(crate) id: NoteId,
+    pub(crate) title: String,
+    pub(crate) updated: DateTime<Utc>,
+    pub(crate) pinned: bool,
+}
+
 /// Rows for a deliberately opened personal title list. Never load note bodies or use FTS.
 /// Filter and order are chosen from the installed vocabulary; neither is executable SQL.
 pub(crate) fn personal_note_titles(
     pinned: bool,
     alphabetical: bool,
     limit: u8,
-) -> Result<Vec<(NoteId, String, DateTime<Utc>, bool)>> {
+) -> Result<Vec<PersonalNoteTitle>> {
     ensure_notes_db_open()?;
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
@@ -1983,7 +1991,12 @@ pub(crate) fn personal_note_titles(
     while let Some(row) = rows.next()? {
         let id = NoteId::parse(&row.get::<_, String>(0)?).context("Invalid note identity")?;
         let changed = DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)?.with_timezone(&Utc);
-        result.push((id, row.get(1)?, changed, row.get::<_, bool>(3)?));
+        result.push(PersonalNoteTitle {
+            id,
+            title: row.get(1)?,
+            updated: changed,
+            pinned: row.get(3)?,
+        });
     }
     Ok(result)
 }
