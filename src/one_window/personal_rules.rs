@@ -2,6 +2,7 @@
 //! reducer as one snapshot. Each submitted row pins the workspace, revision and typed operation.
 use crate::ScriptListApp;
 use gpui::Context;
+use sha2::{Digest, Sha256};
 use sk_one_window::{personal::LauncherRules, window::subject_tabs::TabsEvent, Event, Row};
 use sk_personal::{
     speech::{self, Reading},
@@ -130,10 +131,64 @@ impl ScriptListApp {
         adoption["scope"] = "runningWindow".into();
         adoption
     }
+    pub(super) fn personal_examples(&self, text: &str) -> Vec<Row> {
+        speech::examples(text)
+            .iter()
+            .map(|(id, title, words)| {
+                Row::new(format!("personal/example/{id}"), *title)
+                    .with_head("Customize Kit")
+                    .with_icon("settings")
+                    .with_sub(*words)
+                    .with_enter_label("Try example")
+            })
+            .collect()
+    }
+
     pub(super) fn personal_rule_row(&self, text: &str) -> Option<Row> {
         let read = speech::read(text)?;
         let state = self.one_window_host.personal.state.as_ref();
         let rev = state.map_or("unavailable", |s| s.revision.as_str());
+        if let Reading::Change(Change::PutView { view }) = &read {
+            let collision = state.is_some_and(|s| s.views.iter().any(|v| v.id == view.id));
+            let preview = match view.list {
+                sk_personal::views::ListSpec::Notes {
+                    filter: sk_personal::views::NoteFilter::Pinned,
+                    ..
+                } => "Pinned note titles · Return opens the selected note",
+                sk_personal::views::ListSpec::Notes { .. } => {
+                    "Note titles · Return opens the selected note"
+                }
+                sk_personal::views::ListSpec::Panes { .. } => {
+                    "Read-only pane metadata · Requires a paired Herdr space"
+                }
+            };
+            let sub = if collision {
+                "Choose another name to keep the existing list"
+            } else if state.is_some_and(|s| !s.enabled) {
+                "Saved lists stay hidden while customizations are disabled"
+            } else {
+                preview
+            };
+            let fingerprint = Sha256::digest(serde_json::to_vec(view).ok()?);
+            return Some(
+                Row::new(
+                    format!("{PREFIX}{rev}/create/{fingerprint:x}"),
+                    if collision {
+                        format!("A list named “{}” already exists", view.title)
+                    } else {
+                        format!("Create “{}”", view.title)
+                    },
+                )
+                .with_head("Customize Kit")
+                .with_icon("list")
+                .with_sub(sub)
+                .with_enter_label(if collision {
+                    "Choose name"
+                } else {
+                    "Save list"
+                }),
+            );
+        }
         let label = match &read {
             Reading::Why(_) => "Explain my launcher setting",
             Reading::Change(c) => speech::label(c),
@@ -180,6 +235,16 @@ impl ScriptListApp {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("Personal launcher settings are unavailable"))?;
         let change = match read {
+            Reading::Change(Change::PutView { ref view })
+                if state.views.iter().any(|v| v.id == view.id) =>
+            {
+                self.one_window_notice(
+                    crate::line_notice::INFO,
+                    "That list already exists. Type a different name.",
+                    cx,
+                );
+                return Ok(());
+            }
             Reading::Change(c) => c,
             Reading::UndoLast => Change::Undo {
                 of: state
@@ -296,11 +361,13 @@ impl ScriptListApp {
                             );
                         } else {
                             let label = match change {
-                                Change::Edit { .. } => "Launcher preference saved",
-                                Change::PutView { .. } => "Personal view saved",
-                                Change::RemoveView { .. } => "Personal view removed",
-                                Change::Enable => "Personal launcher rules enabled",
-                                Change::Disable => "Using the stock launcher",
+                                Change::Edit { .. } => "Launcher preference saved".to_owned(),
+                                Change::PutView { view } => {
+                                    format!("Saved “{}” · type my views to open it", view.title)
+                                }
+                                Change::RemoveView { .. } => "Personal view removed".to_owned(),
+                                Change::Enable => "Personal launcher rules enabled".to_owned(),
+                                Change::Disable => "Using the stock launcher".to_owned(),
                                 Change::Undo { .. } => unreachable!(),
                             };
                             app.one_window_done_undoable(

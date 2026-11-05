@@ -1,5 +1,7 @@
 # Change how your launcher works
 
+Type **Customize Kit** for examples. Pick one to put its words in the input, then edit the request or press Return on the proposed change. Picking an example does not save anything.
+
 Type **Make “Stays open” brighter** in the launcher. The **Customize Kit** row names the edit. Press Return to apply it. Pin the window with ⌘⇧P to see the label; the input and pin icon keep their usual appearance. **Make the pinned label bold only while dictating** changes its weight without losing the brighter color. It uses the recording indicator, not the microphone or transcript.
 
 Want a quieter starting point? Type **Keep my launcher minimal** and press Return on **Show just scripts on the launcher home**. Open Kit with an empty input to see your scripts and scriptlets instead of subject tabs, apps and suggestions. Required setup still appears. Nothing is uninstalled: type a name to search normally, including apps and notes. This choice survives closing and restarting Kit. **Restore the standard launcher** brings the tabs and suggestions back without changing your other preferences. Agents can preview or set `launcher.home.mode` to `minimal` or `standard`.
@@ -18,7 +20,7 @@ If you have a known-good copy of the original file, quit Kit before restoring it
 
 ## Make a personal list
 
-Ask a launcher author for a list such as “My pinned notes, alphabetically, with the date each one changed.” The view uses Kit’s normal input and rows. Saving it does not open a note or read its contents. Type **my views** or **view reading** in the launcher, select the list and press Return. Type to narrow its titles and press Return to open the selected note. If the note was renamed, unpinned from a pinned-only list, or moved outside the result limit, Kit asks you to choose again instead of opening a different result. Escape returns from the editor to the same filtered list; Escape again returns to the launcher.
+Type **Make a list of my pinned notes called Reading shelf**, then choose **Create “Reading shelf”**. Type **view reading shelf** to open it. For all notes with the latest changes first, try **Make a list of my notes newest first named Recently edited**. For a read-only list of panes, try **Make a list of Herdr panes that need me called Attention** and pair a space before opening it. These requests work without a model. A name already in use is not overwritten. A configured launcher author can compose other lists from the installed schema. The view uses Kit’s normal input and rows. Saving it does not open a note or read its contents. Type **my views** or **view reading** in the launcher, select the list and press Return. Type to narrow its titles and press Return to open the selected note. If the note was renamed, unpinned from a pinned-only list, or moved outside the result limit, Kit asks you to choose again instead of opening a different result. Escape returns from the editor to the same filtered list; Escape again returns to the launcher.
 
 Check `describe` for `views.schema` first. If it is absent, this version of Kit cannot create personal lists. Preview the following change before saving it. For `apply`, use the workspace and revision from `inspect` and generate a fresh version-4 request ID:
 

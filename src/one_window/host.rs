@@ -743,7 +743,11 @@ impl ScriptListApp {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
         }
-        for row in self.personal_view_rows(text) {
+        for row in self
+            .personal_examples(text)
+            .into_iter()
+            .chain(self.personal_view_rows(text))
+        {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
         }
@@ -974,6 +978,7 @@ impl ScriptListApp {
         }
         if sk_one_window::font_preference::read(&text).is_some()
             || sk_personal::speech::read(&text).is_some()
+            || !sk_personal::speech::examples(&text).is_empty()
         {
             self.one_window_cancel_jev();
             queue.push_back(Event::Jev {
@@ -1136,6 +1141,14 @@ impl ScriptListApp {
             .strip_prefix(sk_one_window::contract::ALL_RESULTS_KEY)
         {
             return self.one_window_open_all_results(query, cx);
+        }
+        if let Some(id) = row.key.strip_prefix("personal/example/") {
+            let (_, _, words) = sk_personal::speech::examples(&self.filter_text)
+                .iter()
+                .find(|(example, _, _)| *example == id)
+                .ok_or_else(|| anyhow::anyhow!("This example is no longer selected"))?;
+            self.one_window_set_input((*words).into(), cx);
+            return Ok(());
         }
         if row.key.starts_with("personal/view/") {
             return self.open_personal_view(&row, cx);

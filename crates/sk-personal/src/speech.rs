@@ -1,6 +1,34 @@
 //! Small offline grammar for deliberate launcher requests; arbitrary or compound prose is not
 //! approval to change a setting. External authors may also use the typed catalog directly.
+mod lists;
 use super::Change;
+
+/// Picking an example only fills the input. The person can edit it before selecting Apply or Save.
+pub fn examples(input: &str) -> &'static [(&'static str, &'static str, &'static str)] {
+    if !["customize kit", "customise kit", "personalize kit"]
+        .iter()
+        .any(|s| input.trim().eq_ignore_ascii_case(s))
+    {
+        return &[];
+    }
+    &[
+        (
+            "list",
+            "Make a personal list",
+            "Make a list of my pinned notes called Reading shelf",
+        ),
+        (
+            "home",
+            "Change my launcher home",
+            "Keep my launcher minimal",
+        ),
+        (
+            "selection",
+            "Change my first selection action",
+            "Put today’s note first for selected text",
+        ),
+    ]
+}
 use sk_one_window::personal::{ClipboardAction, Edit, HomeMode, SelectionAction, TextRole, Weight};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reading {
@@ -59,6 +87,9 @@ pub fn read(input: &str) -> Option<Reading> {
     if input.len() > 280 {
         return None;
     } // Never interpret an arbitrary document as instructions.
+    if let Some(view) = lists::requested(input) {
+        return Some(Reading::Change(Change::PutView { view }));
+    }
     let normalized = input
         .trim()
         .trim_end_matches(['.', '!', '?'])
