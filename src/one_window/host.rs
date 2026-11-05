@@ -1308,6 +1308,10 @@ impl ScriptListApp {
             "agentOwns": self.one_window.agent_owns(),
             "subjectTabs": self.subject_tab_elements(),
             "personalization": self.personal_observation(),
+            "personalList": match self.one_window_hosted_view() {
+                Some(super::views::HostedView::Personal(list)) => Some(list.observation()),
+                _ => None,
+            },
             "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
             "enterArmed": self.one_window_enter_arming(),

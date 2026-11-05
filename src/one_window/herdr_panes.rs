@@ -1,7 +1,7 @@
 //! A person opening a declared view may read one deliberately paired space. The only
 //! executable text is the read-only module embedded at compile time, never workspace JS.
 //! Its provider-facing worker runs under a per-request deny-default macOS sandbox.
-use super::personal_views::SourceSnapshot;
+use super::personal_views::{SourceIssue, SourceSnapshot};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sk_one_window::personal_list::Item;
@@ -12,7 +12,7 @@ const PROGRAM: &str = concat!(
     include_str!("../../scripts/herdr-pane-read.mjs"),
     "\nconst [root, expectedWorkspace, query, pairId] = JSON.parse(await Bun.stdin.text());\nconsole.log(JSON.stringify(listPaired(root, expectedWorkspace, query, pairId)));\n"
 );
-const UNVERIFIED: &str = "Kit couldn't verify the shared pane list";
+const UNVERIFIED: SourceIssue = SourceIssue::Unverified("Kit couldn't verify the shared pane list");
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -65,25 +65,51 @@ fn project(
     filter: PaneFilter,
     detail: PaneDetail,
     limit: u8,
-) -> Result<SourceSnapshot, &'static str> {
+) -> Result<SourceSnapshot, SourceIssue> {
     let reply: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| UNVERIFIED)?;
     match reply["state"].as_str() {
-        Some("notPaired") => return Err("No authorized Herdr pane source is connected"),
-        Some("unavailable") => return Err("The shared Herdr space is unavailable"),
+        Some("notPaired") => {
+            return Err(SourceIssue::Unavailable(
+                "No authorized Herdr pane source is connected",
+            ))
+        }
+        Some("unavailable") => {
+            return Err(SourceIssue::Unavailable(
+                "The shared Herdr space is unavailable",
+            ))
+        }
         Some("renewalRequired") => {
-            return Err("Unpair the old pane share and make a new offer for this Kit workspace.")
+            return Err(SourceIssue::Stale(
+                "Unpair the old pane share and make a new offer for this Kit workspace.",
+            ))
         }
         Some("noFreshReply") => {
-            return Err("Herdr didn't return a fresh pane list. Reopen the view to check again.")
+            return Err(SourceIssue::Stale(
+                "Herdr didn't return a fresh pane list. Reopen the view to check again.",
+            ))
         }
         Some("supersededRequest") => {
-            return Err("A newer read replaced this one. Reopen the pane list.")
+            return Err(SourceIssue::Stale(
+                "A newer read replaced this one. Reopen the pane list.",
+            ))
         }
         Some("pairingBusy" | "pairingChanged" | "workspaceChanged") => {
-            return Err("The pane pairing changed. Reopen the view.")
+            return Err(SourceIssue::Stale(
+                "The pane pairing changed. Reopen the view.",
+            ))
         }
         Some("safeMode" | "agentContextDenied") => {
-            return Err("Pane sharing is off in this context")
+            return Err(SourceIssue::Disabled("Pane sharing is off in this context"))
+        }
+        Some("unsupportedRequest" | "unsupportedPlatform") => {
+            return Err(SourceIssue::Unsupported(
+                "This pane source does not support the request",
+            ))
+        }
+        Some("readerUnavailable") => {
+            return Err(SourceIssue::Unavailable(
+                "The pane reader is unavailable in this session",
+            ))
         }
         Some("ready") => (),
         _ => return Err(UNVERIFIED),
@@ -152,18 +178,16 @@ fn project(
             icon: "terminal",
         });
     }
-    let empty = items
-        .is_empty()
-        .then_some(if filter == PaneFilter::NeedsAttention {
-            "No panes need attention"
-        } else {
-            "No live panes in the shared space"
-        });
+    let empty_label = if filter == PaneFilter::NeedsAttention {
+        "No panes need attention"
+    } else {
+        "No live panes in the shared space"
+    };
     Ok(SourceSnapshot {
         items,
         pair_id: Some(r.pair_id),
         more: r.more,
-        message: empty,
+        empty_label,
     })
 }
 
@@ -176,10 +200,10 @@ pub(super) fn read(
     sort: PaneSort,
     detail: PaneDetail,
     limit: u8,
-) -> Result<SourceSnapshot, &'static str> {
+) -> Result<SourceSnapshot, SourceIssue> {
     use crate::runtime_policy::{check, ExternalEffect};
     if !cfg!(target_os = "macos") {
-        return Err("This pane source requires macOS");
+        return Err(SourceIssue::Unsupported("This pane source requires macOS"));
     }
     if sk_personal::api::safe_mode()
         || [
@@ -191,7 +215,7 @@ pub(super) fn read(
         .iter()
         .any(|k| std::env::var_os(k).is_some())
     {
-        return Err("Pane sharing is off in this context");
+        return Err(SourceIssue::Disabled("Pane sharing is off in this context"));
     }
     // A private evaluator cannot cross into the user's Herdr, even if a fixture mentions it.
     // Leave the passive not-paired state observable without invoking Bun or probing the OS.
@@ -206,16 +230,20 @@ pub(super) fn read(
     }
     if matches!(std::fs::symlink_metadata(pair_dir),Err(e) if e.kind()==std::io::ErrorKind::NotFound)
     {
-        return Err("No authorized Herdr pane source is connected");
+        return Err(SourceIssue::Unavailable(
+            "No authorized Herdr pane source is connected",
+        ));
     }
     if std::env::var_os("SCRIPT_KIT_NONINTERACTIVE").is_some_and(|s| s != "0")
         || std::env::var_os("CI").is_some_and(|s| s != "0" && s != "false")
         || check(ExternalEffect::ExternalStorage).is_err()
         || check(ExternalEffect::Process).is_err()
     {
-        return Err("Pane sharing is off in this context");
+        return Err(SourceIssue::Disabled("Pane sharing is off in this context"));
     }
-    let bun = crate::setup::resolve_bun().ok_or("The pane reader needs a direct Bun executable")?;
+    let bun = crate::setup::resolve_bun().ok_or(SourceIssue::Unavailable(
+        "The pane reader needs a direct Bun executable",
+    ))?;
     let input = serde_json::to_vec(&(
         root.to_str().ok_or(UNVERIFIED)?,
         workspace,
@@ -249,7 +277,7 @@ pub(super) fn read(
             5,
             32768,
         ))
-        .map_err(|_| "The pane reader is unavailable in this session")?;
+        .map_err(|_| SourceIssue::Unavailable("The pane reader is unavailable in this session"))?;
     project(&out, workspace, expected_pair, filter, detail, limit)
 }
 
@@ -274,16 +302,21 @@ mod tests {
         };
         let good = read(&reply, &pair).unwrap();
         assert!(good.items.is_empty());
-        assert_eq!(good.message, Some("No panes need attention"));
+        assert_eq!(good.empty_label, "No panes need attention");
         assert!(read(&reply, &"c".repeat(32)).is_err());
-        for state in [
-            "notPaired",
-            "unavailable",
-            "noFreshReply",
-            "pairingChanged",
-            "unverifiedSource",
+        for (state, expected) in [
+            ("notPaired", "unavailable"),
+            ("unavailable", "unavailable"),
+            ("noFreshReply", "stale"),
+            ("pairingChanged", "stale"),
+            ("safeMode", "disabled"),
+            ("unsupportedRequest", "unsupported"),
+            ("unverifiedSource", "unverified"),
         ] {
-            assert!(read(&json!({"state":state}), &pair).is_err());
+            let issue = read(&json!({"state":state}), &pair)
+                .err()
+                .expect("not a ready reply");
+            assert_eq!(issue.status().0, expected);
         }
     }
     #[test]

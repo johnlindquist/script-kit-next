@@ -32,7 +32,7 @@ Check `describe` for `views.schema` first. If it is absent, this version of Kit 
 {"op":"putView","view":{"id":"reading","title":"My pinned notes","limit":24,"list":{"source":"kit.noteTitles","filter":"pinned","sort":"title","detail":"lastChanged","enter":"openNote"}}}
 ```
 
-A view name is not a filesystem path. A list can show up to 48 rows, and a workspace can keep eight views. Sorting and filtering happen before the row limit; typing in an open view narrows that bounded list. Saving a different declaration with the same ID updates the view. Undo restores its previous definition without changing any note. Pane recipes do not grant access to Herdr: an unconnected source shows an unavailable message, never a substitute list.
+A view name is not a filesystem path. A list can show up to 48 rows, and a workspace can keep eight views. Sorting and the declared source filter happen before the row limit. When more titles exist, the header says **first N**. Typing narrows that bounded list; an empty source is different from a search that matches none of its titles. Saving a different declaration with the same ID updates the view. Undo restores its previous definition without changing any note. Pane recipes do not grant access to Herdr: an unconnected source shows an unavailable message, never a substitute list.
 
 ## Share a read-only Herdr pane list
 
@@ -80,6 +80,8 @@ printf '%s\n' '{"request":"Make the cold first key faster","proof":"Compare time
 ```
 
 The result identifies the invoked executable by version and SHA-256. Match the hash to the signed release manifest or a verified local build reference before creating a separate worktree. In that worktree, use `bun scripts/devtools/devtools.ts build-ops act app-build --features owned-ui-evaluation --artifact-out .test-output/candidate.reference.json` with a new reference path. Compare both versions using the same disposable workspace and the action named in the request. Keep the working installation unchanged. A plan does not build or switch anything; a compiled candidate is not an installer. A launcher author cannot grant itself build, installation, microphone or desktop access.
+
+An open personal list exposes `getState.oneWindow.personalList`: its source, state, limit, truncation flag, bounded source count, visible count, and selected element ID. These fields do not contain titles or pane addresses. `empty` means the source replied with zero matching rows; `noMatches` means the typed filter hid every row in a nonempty snapshot. `unavailable`, `stale`, `disabled`, `unsupported`, and `unverified` do not mean empty. In `getElements`, a status row carries `statusKind` and is not selectable. A metadata-only pane can be highlighted, but its row reports `actionDisabled: "personal_list_read_only"`.
 
 ## Local authoring API
 
