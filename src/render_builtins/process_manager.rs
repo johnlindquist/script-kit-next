@@ -6,7 +6,7 @@ enum ProcessManagerTerminateAction {
 impl ProcessManagerTerminateAction {
     fn success_hud(self, script_name: &str) -> String {
         match self {
-            Self::StopSelectedProcess => format!("Stopped {script_name}"),
+            Self::StopSelectedProcess => format!("Stopping {script_name}"),
         }
     }
 
@@ -489,8 +489,8 @@ impl ScriptListApp {
                                     process_info.started_at,
                                 );
 
-                                let description =
-                                    format!("{} • running {}", process_info.pid_label(), duration_str);
+                                let activity = if process_info.model_pid.is_some() { "tracked" } else { "running" };
+                                let description = format!("{} • {} {}", process_info.pid_label(), activity, duration_str);
 
                                 let click_entity = click_entity_handle.clone();
                                 let click_handler =

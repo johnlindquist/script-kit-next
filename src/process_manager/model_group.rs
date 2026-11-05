@@ -53,8 +53,12 @@ impl ModelGroup {
             // No exec is allowed until the child is in this specific group and its monitor is armed.
             monitor.bind(&mut command);
             let (child, model_pid) = spawn(command)?;
-            let registration =
-                ChildRegistration::for_group(monitor.pid(), &program.to_string_lossy(), model_pid);
+            let registration = ChildRegistration::for_group(
+                monitor.pid(),
+                &program.to_string_lossy(),
+                model_pid,
+                Some(monitor.instance()),
+            );
             (
                 child,
                 Self {
@@ -137,6 +141,7 @@ mod unix {
         child: Option<Child>,
         control: UnixStream,
         pid: i32,
+        instance: uuid::Uuid,
     }
     impl Monitor {
         pub(super) fn prepare(label: &OsStr) -> io::Result<Self> {
@@ -151,8 +156,12 @@ mod unix {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
             let parent = std::process::id().to_string();
+            let instance = uuid::Uuid::new_v4();
             #[cfg(not(test))]
-            cmd.arg(FLAG).arg(parent).arg(label);
+            cmd.arg(FLAG)
+                .arg(parent)
+                .arg(instance.to_string())
+                .arg(label);
             #[cfg(test)]
             {
                 let _ = label;
@@ -168,7 +177,11 @@ mod unix {
                 pid: child.id() as i32,
                 child: Some(child),
                 control,
+                instance,
             })
+        }
+        pub(super) fn instance(&self) -> uuid::Uuid {
+            self.instance
         }
         pub(super) fn pid(&self) -> u32 {
             self.pid as u32
@@ -220,12 +233,18 @@ mod unix {
         let parent = rest.next().and_then(|s| s.to_str()?.parse::<i32>().ok());
         // The inert label is solely for the existing Process Manager identity/display.
         // It is never used as a path or a kill target. A malformed invocation never starts Kit.
-        match (parent, rest.next(), rest.next()) {
-            (Some(p), Some(label), None) if !label.is_empty() => {
+        let instance = rest
+            .next()
+            .and_then(|s| uuid::Uuid::parse_str(s.to_str()?).ok());
+        match (parent, instance, rest.next(), rest.next()) {
+            (Some(p), Some(_), Some(label), None) if !label.is_empty() => {
                 Some(if watch(p).is_ok() { 0 } else { 70 })
             }
             _ => Some(64),
         }
+    }
+    pub(super) fn matches_guard(cmd: &[OsString], label: &str, instance: uuid::Uuid) -> bool {
+        matches!(cmd, [_,flag,owner,token,path] if flag==FLAG && owner.to_str().and_then(|s|s.parse::<u32>().ok()).is_some_and(|p|p>1) && token.to_str().and_then(|s| uuid::Uuid::parse_str(s).ok())==Some(instance) && path==OsStr::new(label))
     }
     fn watch(parent: i32) -> io::Result<()> {
         let me = std::process::id() as i32;
@@ -351,6 +370,11 @@ mod unix {
             }
         }
     }
+}
+
+#[cfg(unix)]
+pub(super) fn matches_guard(cmd: &[std::ffi::OsString], label: &str, instance: uuid::Uuid) -> bool {
+    unix::matches_guard(cmd, label, instance)
 }
 
 #[cfg(unix)]
