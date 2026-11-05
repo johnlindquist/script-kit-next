@@ -142,29 +142,16 @@ impl ScriptListApp {
         key: Key,
         cx: &mut Context<Self>,
     ) -> Vec<Event> {
-        let top = self
-            .one_window
-            .views()
-            .top()
-            .map(|top| top.name.clone())
-            .unwrap_or_default();
-        match top.as_str() {
-            FORM | ANSWER => self.one_window_hosted_key(key, cx),
-            super::reading::READING if key == Key::Enter => {
+        match self.one_window_hosted_view() {
+            Some(HostedView::Form(_) | HostedView::Answer(_)) => {
+                self.one_window_hosted_key(key, cx)
+            }
+            Some(HostedView::Reading(_)) if key == Key::Enter => {
                 vec![Event::View(ViewOp::Back), Event::Key(Key::Enter)]
             }
-            super::reading::READING => Vec::new(),
-            super::notes::NOTES => self.one_window_notes_list_key(key, cx),
-            super::personal_views::NAME => self.personal_view_key(key, cx),
-            _ => {
-                tracing::info!(
-                    target: "script_kit::one_window",
-                    event = "effect_not_hosted",
-                    view = %top,
-                    key = ?key,
-                );
-                Vec::new()
-            }
+            Some(HostedView::Reading(_)) | None => Vec::new(),
+            Some(HostedView::Notes(_)) => self.one_window_notes_list_key(key, cx),
+            Some(HostedView::Personal(_)) => self.personal_view_key(key, cx),
         }
     }
 

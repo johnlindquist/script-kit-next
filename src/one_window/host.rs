@@ -355,15 +355,7 @@ impl ScriptListApp {
                                 key,
                             )));
                         }
-                        Some(top)
-                            if [
-                                super::views::FORM,
-                                super::views::ANSWER,
-                                super::notes::NOTES,
-                                super::reading::READING,
-                            ]
-                            .contains(&top.name.as_str()) =>
-                        {
+                        Some(_) if self.one_window_hosted_view().is_some() => {
                             queue.extend(self.one_window_hosted_view_key(key, cx));
                         }
                         _ => self.one_window_ledger_effect(Effect::ViewKey(key), cx),
