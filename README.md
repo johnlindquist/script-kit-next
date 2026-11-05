@@ -4,6 +4,17 @@ Script Kit is a programmable Mac launcher for you and the agents you authorize. 
 
 This native rewrite of [Script Kit](https://scriptkit.com) uses Zed’s [GPUI](https://gpui.rs) framework. The app and scripting SDK live in this repository. [See the October changelog and screenshots.](CHANGELOG.md)
 
+## Quick Start
+
+1. On an Apple silicon Mac, open the [latest GitHub release](https://github.com/johnlindquist/script-kit-next/releases/latest) and download **Script-Kit-macos.zip** under **Assets**, not a **Source code** archive.
+2. Unzip the download, move **Script Kit.app** to **Applications**, and open it from Finder. Kit sets up its workspace. You don’t need to clone the repository, create a scripts folder, or replace your settings.
+
+### Your First Script
+
+Install [Bun](https://bun.sh) to run TypeScript scripts. Press **⌘;** (or your configured shortcut), choose **New Script**, and follow the [Hello Kit walkthrough](docs/guides/getting-started.md#run-your-first-script). Choose **World** in your script to see **Hello, world!** No Rust toolchain or AI account is needed.
+
+Already using Kit? Keep your workspace. You can [change the launcher shortcut](docs/guides/getting-started.md#the-main-hotkey) without replacing the rest of your settings. If you have a `~/.kenv` folder, see [upgrading from v1](docs/guides/getting-started.md#upgrading-from-a-v1-kit). To work on the app itself, start with [Development](#development).
+
 ## Project Goals
 
 ### Complete Rewrite with GPUI
@@ -72,9 +83,7 @@ Offline intent regression coverage runs with
 `./scripts/agentic/agent-cargo.sh test --lib intent::`. Recorded Jev answers exercise plan
 composition, not the accuracy or latency of the current hosted model. For a live pinned-model score, see [Measuring readings](docs/guides/jev-intent.md#measuring-readings).
 
-## Quick Start
-
-New to Script Kit GPUI? Start with the user guides:
+## Guides
 
 - [Getting Started](docs/guides/getting-started.md)
 - [Feature Tour](docs/guides/feature-tour.md)
@@ -86,73 +95,6 @@ New to Script Kit GPUI? Start with the user guides:
 - [Preview a Save-sheet filename](docs/guides/desktop-filename.md)
 - [Permissions](docs/guides/permissions.md)
 - [Computer Use](docs/guides/computer-use.md)
-
-### Prerequisites
-
-- **macOS** (Linux/Windows support planned)
-- **Rust 1.98.0** - Pinned by `rust-toolchain.toml`; install with https://rustup.rs
-- **Bun** - Install from https://bun.sh
-- **Python 3, CMake, and Ninja** for development storage admission and native builds (`brew install cmake ninja`).
-- **cargo-watch** (optional, for hot reload):
-  ```bash
-  cargo install cargo-watch
-  ```
-
-### Setup
-
-This is interactive **operator setup**. Agents should use [Owned native agent workflow](#owned-native-agent-workflow), not launch the raw binary below.
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/johnlindquist/script-kit-next.git script-kit-gpui
-   cd script-kit-gpui
-   ```
-
-2. **Create the kit directory**
-   ```bash
-   mkdir -p ~/.scriptkit/plugins/main
-   ```
-
-3. **Build and run**
-   ```bash
-   cargo build --release
-   ./target/release/script-kit-gpui
-   ```
-
-   Or for development with hot reload:
-   ```bash
-   ./dev.sh
-   ```
-
-4. **Configure your hotkey** (optional)
-   
-   Create `~/.scriptkit/config.ts`:
-   ```typescript
-   export default {
-     hotkey: {
-       modifiers: ["meta"],  // Cmd on macOS
-       key: "Semicolon"      // Press Cmd+; to toggle
-     }
-   };
-   ```
-
-### Your First Script
-
-Create `~/.scriptkit/plugins/main/scripts/hello.ts`:
-
-```typescript
-import "@scriptkit/sdk";
-
-export const metadata = {
-  name: "Hello World",
-  description: "My first script"
-};
-
-const name = await arg("What's your name?");
-await div(`<h1 class="text-4xl p-8">Hello, ${name}!</h1>`);
-```
-
-Press your hotkey, type "hello", and press Enter.
 
 ## Writing Scripts
 
@@ -401,6 +343,12 @@ Native model samples are not WindowServer pixels. Hidden fixtures apply choices
 in memory without native replay or operator preference writes.
 
 ## Development
+
+<a id="setup"></a>
+
+### Prerequisites
+
+To [build the Mac app from source](docs/guides/getting-started.md#build-from-source-contributors), install the [pinned Rust toolchain](rust-toolchain.toml), [Bun](https://bun.sh), Python 3, CMake, and Ninja. For the optional [hot-reload watcher](#hot-reload), you also need `cargo-watch` and a writable external build volume. For automated work use the [owned native agent workflow](#owned-native-agent-workflow), not an interactive launch.
 
 ### Standalone Spotlight glass demo
 

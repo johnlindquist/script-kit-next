@@ -91,6 +91,71 @@ function discoveryEnv(baseUrl: string) {
   };
 }
 
+describe("agent skill installation", () => {
+  it("does not turn a directory link and '..' into a different skills directory", async () => {
+    const { mkdirSync, readFileSync } = await import("node:fs");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-skill-destination-")));
+    const env = { SK_PATH: root, HOME: root, SCRIPT_KIT_MCP_ENDPOINT: undefined, SCRIPT_KIT_MCP_SERVER_JSON: undefined,
+      SCRIPT_KIT_MCP_TOKEN: undefined, SCRIPT_KIT_AGENT_CREDENTIAL: undefined };
+    try {
+      const neighbor = join(root, "skills"), actual = join(root, "another", "skills"), inner = join(root, "another", "inner");
+      for (const p of [neighbor, actual, inner]) mkdirSync(p, { recursive: true });
+      symlinkSync(inner, join(root, "through"), "dir"); writeFileSync(join(root, "not-a-dir"), "file");
+      for (const component of ["through", "missing", "not-a-dir"]) {
+        await expect(runCli(["install-skill", root + "/" + component + "/../skills"], env)).rejects.toThrow("without '..'");
+        expect(existsSync(join(neighbor, "script-kit"))).toBe(false);
+        expect(existsSync(join(actual, "script-kit"))).toBe(false);
+      }
+      const alias = join(root, "agent skills 資料 "), dir = join(actual, "script-kit"), file = join(dir, "SKILL.md");
+      symlinkSync(actual, alias, "dir");
+      expect(await runCli(["install-skill", alias], env)).toEqual({ success: true, data: { installed: dir } });
+      expect(readFileSync(file)).toEqual(readFileSync(new URL("../skills/script-kit/SKILL.md", import.meta.url)));
+      writeFileSync(file, "My existing skill");
+      await expect(runCli(["install-skill", alias], env)).rejects.toThrow("not replaced");
+      expect(readFileSync(file, "utf8")).toBe("My existing skill");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it("checks the skill source before reserving the destination and preserves its exact UTF-8 bytes", async () => {
+    const { mkdirSync, readFileSync } = await import("node:fs");
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-skill-source-")));
+    try {
+      const bin = join(root, "bin"), share = join(root, "share", "external-agent"), directory = join(root, "skills");
+      for (const p of [bin, share, directory]) mkdirSync(p, { recursive: true });
+      const entry = join(bin, "scriptkit.ts"), src = join(share, "SKILL.md"), dest = join(directory, "script-kit");
+      copyFileSync(new URL("./mcp-cli.ts", import.meta.url), entry);
+      copyFileSync(new URL("./agent-bridge-cli.ts", import.meta.url), join(bin, "agent-bridge-cli.ts"));
+      const install = (target = directory, ...flags: string[]) => Bun.spawnSync([process.execPath, "--config=/dev/null", "--no-env-file", "--no-install", "--no-macros", ...flags, entry, "install-skill", target],
+        { cwd: root, env: { HOME: root, SK_PATH: root, PATH: "/usr/bin:/bin" } });
+      const checkRefusal = () => {
+        const r = install(); expect(r.exitCode).not.toBe(0); expect(existsSync(dest)).toBe(false);
+        expect(r.stdout.toString()).toContain("No skill was installed");
+      };
+      checkRefusal();
+      const marker = join(root, "unrelated-file"); writeFileSync(marker, "Not agent instructions");
+      symlinkSync(marker, src); checkRefusal(); rmSync(src);
+      writeFileSync(src, Buffer.from([0x96])); checkRefusal();
+      const original = Buffer.from("\ufeff---\r\nname: cafe\u0301 🧪\r\n---\r\n");
+      writeFileSync(src, original); expect(install().exitCode).toBe(0);
+      expect(readFileSync(join(dest, "SKILL.md"))).toEqual(original);
+
+      // Another writer can keep the same inode and byte count. Change the real file
+      // immediately after the installer's write, without touching the test runner's fs.
+      const racing = join(root, "racing-skills"), hook = join(root, "writer.cjs"), written = join(racing, "script-kit", "SKILL.md");
+      mkdirSync(racing);
+      writeFileSync(hook,
+        `const fs = require('node:fs'), put = fs.writeFileSync.bind(fs), p = ${JSON.stringify(written)};
+        fs.writeFileSync = (fd, ...args) => { const result = put(fd, ...args);
+          if (fs.existsSync(p) && (fd === p || (typeof fd === 'number' && fs.fstatSync(fd).ino === fs.statSync(p).ino)))
+            put(p, Buffer.alloc(fs.statSync(p).size, 88));
+          return result; }; require('node:module').syncBuiltinESMExports();`);
+      const contested = install(racing, "--preload", hook);
+      expect(contested.exitCode).not.toBe(0); expect(contested.stdout.toString()).toContain("Could not confirm");
+      expect(readFileSync(written)).toEqual(Buffer.alloc(original.length, 88));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
 describe("workspace path identity", () => {
   const local = { SCRIPT_KIT_MCP_ENDPOINT: undefined, SCRIPT_KIT_MCP_SERVER_JSON: undefined, SCRIPT_KIT_MCP_TOKEN: undefined, SCRIPT_KIT_AGENT_CREDENTIAL: undefined };
 
@@ -782,6 +847,39 @@ describe("mcp-cli", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("agent text input", () => {
+  it("rejects malformed stdin before calling Kit and preserves literal Unicode", () => {
+    const bridge = JSON.stringify(new URL("./agent-bridge-cli.ts", import.meta.url).href);
+    const probe = `
+      import { agent } from ${bridge};
+      let calls = 0;
+      const rpc = async (_, params) => {
+        calls++;
+        const text = JSON.stringify({ body: params.arguments.body });
+        return { result: { content: [{ type: "text", text }] } };
+      };
+      try {
+        const { body } = await agent(["note", "save", "00000000-0000-4000-8000-000000000001"], rpc);
+        console.log(JSON.stringify({ calls, body }));
+      } catch (error) { console.log(JSON.stringify({ calls, error: error.message })); }
+    `;
+    const read = (input: Uint8Array) => {
+      const home = mkdtempSync(join(tmpdir(), "kit-stdin-"));
+      try {
+        const child = Bun.spawnSync([process.execPath, "--config=/dev/null", "--no-install", "--no-env-file", "--no-macros", "-e", probe], {
+          stdin: input, timeout: 4000,
+          env: { SCRIPT_KIT_MCP_TOKEN: "fixture-only", HOME: home, TMPDIR: home, CI: "1", SCRIPT_KIT_NONINTERACTIVE: "1" },
+        });
+        expect(child.exitCode).toBe(0);
+        return JSON.parse(child.stdout.toString());
+      } finally { rmSync(home, { recursive: true, force: true }); }
+    };
+    expect(read(Uint8Array.of(0x61, 0xc3, 0x28))).toEqual({ calls: 0, error: "Input must be valid UTF-8. No request was sent." });
+    const text = "\uFEFFRésumé 🧪 \uFFFD\r\n";
+    expect(read(new TextEncoder().encode(text))).toEqual({ calls: 1, body: text });
   });
 });
 

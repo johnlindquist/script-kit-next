@@ -229,20 +229,6 @@ fn handle_api_key_completion_uses_deferred_resize() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn enable_claude_code_in_config_recovers_from_validation_failure() {
-    let content = execution_helpers_content();
-
-    assert!(
-        content.contains("ConfigWriteError::ValidationFailed"),
-        "Expected enable_claude_code_in_config to handle validation failure"
-    );
-    assert!(
-        content.contains("editor::recover_from_backup("),
-        "Expected enable_claude_code_in_config to attempt backup recovery on validation failure"
-    );
-}
-
-#[test]
 fn enable_claude_code_in_config_checks_claude_cli_availability() {
     let content = execution_helpers_content();
 

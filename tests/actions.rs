@@ -2058,28 +2058,6 @@ fn scratch_pad_execution_helpers_use_named_failure_states() {
 }
 
 #[test]
-fn claude_code_enable_helper_uses_named_failure_state() {
-    let content = fs::read_to_string("src/app_execute/execution_helpers.rs")
-        .expect("Failed to read execution helper handler");
-
-    assert!(
-        content.contains("enum ClaudeCodeEnableAction")
-            && content.contains("EnableProvider")
-            && content.contains("let enable_action = ClaudeCodeEnableAction::EnableProvider"),
-        "Claude Code enable flow should be driven by a named action state"
-    );
-    assert!(
-        content.contains("enable_action.validation_restored_message()")
-            && content.contains("enable_action.validation_no_backup_message(&reason)")
-            && content.contains("enable_action.validation_recovery_failed_message(&reason, &recover_err)")
-            && content.contains("enable_action.write_failure_message(&e)")
-            && content.contains("format!(\"Failed to enable Claude Code: {reason}. No backup available.\")")
-            && content.contains("format!(\"Failed to enable Claude Code: {error}\")"),
-        "Claude Code enable recovery and write failures should derive visible copy from the named action state"
-    );
-}
-
-#[test]
 fn menu_syntax_execution_uses_named_feedback_states() {
     let content = fs::read_to_string("src/app_execute/menu_syntax_execution.rs")
         .expect("Failed to read menu syntax execution handler");

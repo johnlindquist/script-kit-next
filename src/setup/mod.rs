@@ -1256,9 +1256,37 @@ fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<Strin
 /// The rename is atomic on most filesystems, so readers will either see the
 /// old content or the new content, never a partial write.
 fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
-    if fs::symlink_metadata(path)
-        .is_ok_and(|metadata| metadata.is_file() && metadata.len() == contents.len() as u64)
-        && fs::read(path).is_ok_and(|existing| existing == contents.as_bytes())
+    write_setup_asset(path, contents, warnings, label, false);
+}
+
+fn write_executable_string_if_changed(
+    path: &Path,
+    contents: &str,
+    warnings: &mut Vec<String>,
+    label: &str,
+) {
+    write_setup_asset(path, contents, warnings, label, true);
+}
+
+fn write_setup_asset(
+    path: &Path,
+    contents: &str,
+    warnings: &mut Vec<String>,
+    label: &str,
+    executable: bool,
+) {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    #[cfg(not(unix))]
+    let _ = executable;
+
+    if fs::symlink_metadata(path).is_ok_and(|metadata| {
+        #[cfg(unix)]
+        if executable && metadata.permissions().mode() & 0o755 != 0o755 {
+            return false;
+        }
+        metadata.is_file() && metadata.len() == contents.len() as u64
+    }) && fs::read(path).is_ok_and(|existing| existing == contents.as_bytes())
     {
         return;
     }
@@ -1297,7 +1325,22 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
         return;
     }
 
-    // Atomic rename - this is atomic on most filesystems
+    // Set the mode on the file we wrote. A failed rename can leave a private
+    // directory or link at the destination; a successful rename can be followed
+    // by another writer. Neither gives us permission to chmod the name there.
+    #[cfg(unix)]
+    if executable {
+        if let Err(error) = temp
+            .as_file()
+            .set_permissions(fs::Permissions::from_mode(0o755))
+        {
+            warnings.push(format!(
+                "Failed to make the new {label} executable: {error}"
+            ));
+            return;
+        }
+    }
+
     if let Err(e) = temp.persist(path) {
         warnings.push(format!(
             "Failed to publish {} ({}): {}",
@@ -1311,42 +1354,6 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
     }
 }
 
-fn write_executable_string_if_changed(
-    path: &Path,
-    contents: &str,
-    warnings: &mut Vec<String>,
-    label: &str,
-) {
-    write_string_if_changed(path, contents, warnings, label);
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-
-        match fs::metadata(path) {
-            Ok(metadata) => {
-                let mut permissions = metadata.permissions();
-                if permissions.mode() & 0o755 != 0o755 {
-                    permissions.set_mode(0o755);
-                    if let Err(error) = fs::set_permissions(path, permissions) {
-                        warnings.push(format!(
-                            "Failed to mark {} executable ({}): {}",
-                            label,
-                            path.display(),
-                            error
-                        ));
-                    }
-                }
-            }
-            Err(error) => warnings.push(format!(
-                "Failed to stat {} for executable permissions ({}): {}",
-                label,
-                path.display(),
-                error
-            )),
-        }
-    }
-}
 /// Ensure tsconfig.json has proper TypeScript/Bun settings (merge-safe)
 /// The tsconfig lives at ~/.scriptkit/plugins/tsconfig.json, SDK at ~/.scriptkit/sdk/
 ///

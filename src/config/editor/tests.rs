@@ -693,6 +693,528 @@ fn test_validate_structure_missing_satisfies() {
 // Test: write_config_safely (using temp directories)
 // ==========================================================================
 
+// Use the real native writer in a disposable directory. An explicit missing Bun
+// pin selects its structural validator; these tests neither run a user's config
+// nor discover and launch a different Bun from their environment.
+const PERSONAL_CONFIG: &str =
+    "export default { editorFontSize: 21, /* my key */ ai: {} } satisfies Config;\n";
+const OLD_BACKUP: &[u8] = b"export default { editorFontSize: 12 } satisfies Config;\n";
+
+#[test]
+fn enabling_claude_code_changes_only_the_switch_and_keeps_the_original_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let original = concat!(
+        "// Workspace preferences — exact bytes matter.\r\n",
+        "export default { editorFontSize: 21, \"claudeCode\": {\r\n",
+        "  'enabled': false /* only this switch */, path: '/example/bin/claude',\r\n",
+        "  permissionMode: 'plan', allowedTools: 'Read', addDirs: ['/example/docs'],\r\n",
+        "  futureOption: false, // not ours to change\r\n",
+        "} } satisfies Config;\r\n",
+    );
+    let enabled = original.replacen(
+        "false /* only this switch */",
+        "true /* only this switch */",
+        1,
+    );
+    std::fs::write(&config, original).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    let missing_bun = dir.path().join("missing-bun");
+    let apply = || enable_claude_code_safely(&config, missing_bun.to_str());
+    assert_eq!(apply().unwrap(), WriteOutcome::Written);
+    assert_eq!(std::fs::read(&config).unwrap(), enabled.as_bytes());
+    assert_eq!(std::fs::read(&backup).unwrap(), original.as_bytes());
+    assert_eq!(apply().unwrap(), WriteOutcome::AlreadySet);
+    assert_eq!(std::fs::read(&config).unwrap(), enabled.as_bytes());
+    assert_eq!(std::fs::read(&backup).unwrap(), original.as_bytes());
+    assert!(!dir.path().join("config.ts.settings-lock").exists());
+}
+
+#[test]
+fn enabling_claude_code_adds_a_missing_switch_to_the_actual_default_object() {
+    for (before, after) in [
+        ("export default {} as Config;", "export default { claudeCode: { enabled: true } } as Config;"),
+        ("export default { claudeCode: {} } satisfies Config;", "export default { claudeCode: { enabled: true } } satisfies Config;"),
+        ("export default { claudeCode: {// label\npath: pickPath(),} } satisfies Config;", "export default { claudeCode: { enabled: true, // label\npath: pickPath(),} } satisfies Config;"),
+        ("export const other = {claudeCode: {enabled: false}};\nexport default { theme: getTheme() } satisfies Config;", "export const other = {claudeCode: {enabled: false}};\nexport default { claudeCode: { enabled: true }, theme: getTheme() } satisfies Config;"),
+    ] {
+        assert_eq!(enable_claude_code(before), EditResult::Modified(after.into()));
+        validate_structure(after).unwrap();
+        assert_eq!(enable_claude_code(after), EditResult::AlreadySet);
+    }
+}
+
+#[test]
+fn enabling_claude_code_refuses_ambiguous_or_dynamic_switches_without_touching_a_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    for body in [
+        "claudeCode: provider()",
+        "claudeCode: {enabled: chooseMode(), path: '/example/claude'}",
+        "claudeCode: {enabled: true, ...overrides}",
+        "claudeCode: {enabled: false, 'enabled': true}",
+        "claudeCode: {}, 'claudeCode': {}",
+        "claudeCode: { [key]: false }",
+        "claudeCode: { get enabled() { return false } }",
+        "claudeCode: { enabled }",
+        "...defaults, claudeCode: {}",
+    ] {
+        let before = format!("export default {{ {body} }} satisfies Config;\n");
+        std::fs::write(&config, &before).unwrap();
+        std::fs::write(&backup, OLD_BACKUP).unwrap();
+        assert!(
+            matches!(
+                enable_claude_code_safely(&config, dir.path().join("missing-bun").to_str()),
+                Err(ConfigWriteError::EditFailed(_))
+            ),
+            "{body}"
+        );
+        assert_eq!(std::fs::read(&config).unwrap(), before.as_bytes());
+        assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+        assert!(!dir.path().join("config.ts.settings-lock").exists());
+    }
+}
+
+#[test]
+fn an_already_enabled_reply_cannot_acknowledge_settings_changed_during_the_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let before = "export default { claudeCode: { enabled: true } } satisfies Config;";
+    let newer = before.replace("true", "false");
+    std::fs::write(&config, before).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    let result = edit_config_source(
+        &config,
+        |old| {
+            let proposal = enable_claude_code(old);
+            assert_eq!(proposal, EditResult::AlreadySet);
+            std::fs::write(&config, &newer).unwrap();
+            proposal
+        },
+        |_| panic!("a no-op should not need a provider or validator"),
+    );
+    assert!(matches!(result, Err(ConfigWriteError::IoError(_))));
+    assert_eq!(std::fs::read(&config).unwrap(), newer.as_bytes());
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_syntax_check_never_runs_the_config_or_its_macro() {
+    // The release toolchain provides Bun. Missing Bun is not a passing result
+    // for this test; tests of the structural fallback use an explicit missing pin.
+    let bun = super::super::resolve_bun(None).expect("Bun required for the native syntax test");
+    let pin = Some(bun.to_str().unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    let ordinary = dir.path().join("ordinary-ran");
+    let called = dir.path().join("macro-ran");
+    let module = dir.path().join("size.ts");
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let js_path = |p: &Path| serde_json::to_string(p).unwrap();
+    let source = format!("import {{writeFileSync}} from 'node:fs';\nwriteFileSync({}, 'ran');\nconst n: number = 19; export default {{editorFontSize:n}} satisfies Config;\n", js_path(&ordinary));
+    validate_typescript(&source, pin).unwrap();
+    assert!(!ordinary.exists());
+    // Still reject errors that a grammar-only check can miss, without echoing
+    // a personal value from the compiler's annotated source line.
+    // The bad tail must be seen even when the prefix exceeds a pipe buffer.
+    let large = format!("//{}\n", "世界🎙️".repeat(32_000));
+    validate_typescript(&format!("{large}{source}"), pin).unwrap();
+    let failure = validate_typescript(
+        &format!("{large}const n = 19; const n = 'private-settings-marker'; export default {{n}};"),
+        pin,
+    )
+    .unwrap_err();
+    assert!(!failure.contains("private-settings-marker"));
+    std::fs::write(&module, format!("import {{writeFileSync}} from 'node:fs'; export function size() {{ writeFileSync({}, 'ran'); return 27; }}", js_path(&called))).unwrap();
+    let proposal = format!("import {{size}} from {} with {{type:'macro'}};\nexport default {{editorFontSize:size()}} satisfies Config;\n", js_path(&module));
+    std::fs::write(&config, PERSONAL_CONFIG).unwrap();
+    std::fs::write(&backup, &proposal).unwrap();
+    assert!(matches!(
+        recover_from_backup(&config, pin),
+        Err(ConfigWriteError::ValidationFailed(_))
+    ));
+    assert!(!called.exists());
+    assert_eq!(std::fs::read(&config).unwrap(), PERSONAL_CONFIG.as_bytes());
+    assert_eq!(std::fs::read(&backup).unwrap(), proposal.as_bytes());
+    assert!(!dir.path().join("config.ts.settings-lock").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_a_zero_exit_with_a_checker_error_cannot_publish() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    std::fs::write(&config, PERSONAL_CONFIG).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    let bun = dir.path().join("bun");
+    std::fs::write(&bun, "#!/bin/sh\n/bin/cat >/dev/null\nprintf 'Error resolving private-settings-marker\\n' >&2\nexit 0\n").unwrap();
+    std::fs::set_permissions(&bun, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let Err(ConfigWriteError::ValidationFailed(reason)) =
+        enable_claude_code_safely(&config, bun.to_str())
+    else {
+        panic!("a failed check was treated as a safe settings edit");
+    };
+    assert!(!reason.contains("private-settings-marker"));
+    assert_eq!(std::fs::read(&config).unwrap(), PERSONAL_CONFIG.as_bytes());
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+    assert!(!dir.path().join("config.ts.settings-lock").exists());
+}
+
+#[test]
+fn native_preference_structural_errors_locate_but_do_not_quote_private_unicode() {
+    // The old 30-byte diagnostic slice of this ERROR node split a UTF-8 scalar.
+    let source = r#"export default { "🎙️🎙️🎙️private-settings-marker": <<< true;"#;
+    let err = validate_structure(source).unwrap_err();
+    assert!(err.contains("line ") && err.contains("column "));
+    assert!(!err.contains("private") && !err.contains('🎙'));
+}
+
+#[test]
+fn native_preference_unreadable_text_is_not_a_new_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let original =
+        b"// my comment: \xff\nexport default { editorFontSize: 21 } satisfies Config;\n";
+    std::fs::write(&config, original).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    let no_bun = dir.path().join("missing-bun");
+    let result = enable_claude_code_safely(&config, no_bun.to_str());
+    assert!(matches!(result, Err(ConfigWriteError::IoError(_))));
+    assert_eq!(std::fs::read(&config).unwrap(), original);
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+    assert!(!dir.path().join("config.ts.settings-lock").exists());
+}
+
+#[cfg(unix)]
+fn only_settings_draft(lock: &SettingsLock) -> std::path::PathBuf {
+    let mut entries = std::fs::read_dir(&lock.path).unwrap();
+    let path = entries.next().unwrap().unwrap().path();
+    assert!(entries.next().is_none());
+    path
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_disturbed_drafts_cannot_replace_settings_or_their_backup() {
+    use std::fs;
+    use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
+    // Pause between the real preparation and publication phases; no timing hook or Bun required.
+    for target in ["replace", "create", "backup"] {
+        for event in [
+            "unchanged",
+            "same bytes, new inode",
+            "rewrite",
+            "chmod",
+            "symlink",
+            "hardlink",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let config = root.path().join("config.ts");
+            let backup = config.with_extension("ts.bak");
+            if target != "create" {
+                fs::write(&config, PERSONAL_CONFIG).unwrap();
+            }
+            fs::write(&backup, OLD_BACKUP).unwrap();
+            let lock = SettingsLock::acquire(&config).unwrap();
+            let lock_name = lock.path.clone();
+            let dest = if target == "backup" { &backup } else { &config };
+            let original = config_snapshot(dest).unwrap();
+            let next = if target == "backup" {
+                PERSONAL_CONFIG.to_owned()
+            } else {
+                format!(
+                    "// {}\n{}",
+                    "a".repeat(9_000),
+                    PERSONAL_CONFIG.replace("21", "27")
+                )
+            };
+            let draft = ConfigDraft::prepare(&lock, next.as_bytes()).unwrap();
+            let name = only_settings_draft(&lock);
+            let retired = root.path().join("original-draft");
+            match event {
+                "unchanged" => {}
+                "same bytes, new inode" => {
+                    fs::rename(&name, &retired).unwrap();
+                    fs::copy(&retired, &name).unwrap();
+                    assert_ne!(
+                        fs::metadata(&retired).unwrap().ino(),
+                        fs::metadata(&name).unwrap().ino()
+                    );
+                }
+                "rewrite" => {
+                    let mut bytes = next.as_bytes().to_vec();
+                    *bytes.last_mut().unwrap() = b'!'; // same length, including beyond the first chunk
+                    fs::write(&name, bytes).unwrap();
+                }
+                "chmod" => fs::set_permissions(&name, fs::Permissions::from_mode(0o644)).unwrap(),
+                "symlink" => {
+                    fs::rename(&name, &retired).unwrap();
+                    symlink(&retired, &name).unwrap(); // follows back to the right inode: still not our name
+                }
+                "hardlink" => fs::hard_link(&name, &retired).unwrap(),
+                _ => unreachable!(),
+            }
+            let observed = || {
+                let m = fs::symlink_metadata(&name).unwrap();
+                (m.ino(), m.mode(), m.nlink(), fs::read(&name).unwrap())
+            };
+            let named = observed();
+            let outcome = if target == "backup" {
+                draft.publish(dest, original.as_ref())
+            } else {
+                draft.publish_edit(dest, original.as_ref())
+            };
+            drop(lock);
+            if event == "unchanged" {
+                outcome.unwrap();
+                assert_eq!(fs::read(dest).unwrap(), next.as_bytes());
+                assert_eq!(fs::metadata(dest).unwrap().ino(), named.0);
+                if target == "replace" {
+                    assert_eq!(fs::read(&backup).unwrap(), PERSONAL_CONFIG.as_bytes());
+                }
+                if target == "create" {
+                    assert_eq!(fs::read(&backup).unwrap(), OLD_BACKUP);
+                }
+                assert!(!lock_name.exists());
+                continue;
+            }
+            assert!(
+                matches!(outcome, Err(ConfigWriteError::IoError(_))),
+                "{target}/{event}"
+            );
+            assert_eq!(
+                observed(),
+                named,
+                "must not delete or repair a changed draft"
+            );
+            assert_eq!(fs::read(&backup).unwrap(), OLD_BACKUP);
+            if target == "create" {
+                assert_eq!(
+                    fs::symlink_metadata(&config).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound
+                );
+            } else {
+                assert_eq!(fs::read(&config).unwrap(), PERSONAL_CONFIG.as_bytes());
+            }
+            assert_eq!(fs::read_dir(&lock_name).unwrap().count(), 1);
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_late_destination_change_cleans_only_the_owned_draft() {
+    let root = tempfile::tempdir().unwrap();
+    let config = root.path().join("config.ts");
+    let lock = SettingsLock::acquire(&config).unwrap();
+    let lock_name = lock.path.clone();
+    let draft = ConfigDraft::prepare(&lock, PERSONAL_CONFIG.as_bytes()).unwrap();
+    std::fs::write(&config, b"newer writer").unwrap();
+    assert!(draft.publish(&config, None).is_err());
+    assert!(std::fs::read_dir(&lock_name).unwrap().next().is_none());
+    drop(lock);
+    assert!(!lock_name.exists());
+    assert_eq!(std::fs::read(&config).unwrap(), b"newer writer");
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_replaced_lock_keeps_both_writers_drafts() {
+    let root = tempfile::tempdir().unwrap();
+    let config = root.path().join("config.ts");
+    let lock = SettingsLock::acquire(&config).unwrap();
+    let draft = ConfigDraft::prepare(&lock, PERSONAL_CONFIG.as_bytes()).unwrap();
+    let old_lock = root.path().join("displaced-lock");
+    let name = only_settings_draft(&lock);
+    std::fs::rename(&lock.path, &old_lock).unwrap();
+    std::fs::create_dir(&lock.path).unwrap();
+    std::fs::write(&name, b"the other writer").unwrap();
+    assert!(draft.publish(&config, None).is_err());
+    drop(lock);
+    assert_eq!(std::fs::read(&name).unwrap(), b"the other writer");
+    assert_eq!(
+        std::fs::read(old_lock.join(name.file_name().unwrap())).unwrap(),
+        PERSONAL_CONFIG.as_bytes()
+    );
+    assert!(!config.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_unsafe_config_or_backup_never_changes_the_other_file() {
+    use std::os::unix::fs::{symlink, MetadataExt};
+    for link_config in [false, true] {
+        for kind in ["symlink", "hardlink", "directory", "dangling"] {
+            let dir = tempfile::tempdir().unwrap();
+            let config = dir.path().join("config.ts");
+            let backup = config.with_extension("ts.bak");
+            let (target, other) = if link_config {
+                (&config, &backup)
+            } else {
+                (&backup, &config)
+            };
+            let original_other = if link_config {
+                OLD_BACKUP
+            } else {
+                PERSONAL_CONFIG.as_bytes()
+            };
+            std::fs::write(other, original_other).unwrap();
+            let neighbor = dir.path().join("separate.ts");
+            if kind != "dangling" {
+                std::fs::write(&neighbor, PERSONAL_CONFIG.replace("21", "19")).unwrap();
+            }
+            match kind {
+                "hardlink" => std::fs::hard_link(&neighbor, target).unwrap(),
+                "directory" => std::fs::create_dir(target).unwrap(),
+                _ => symlink(&neighbor, target).unwrap(),
+            }
+            let ino = std::fs::symlink_metadata(target).unwrap().ino();
+            let result =
+                enable_claude_code_safely(&config, dir.path().join("missing-bun").to_str());
+            assert!(
+                matches!(result, Err(ConfigWriteError::IoError(_))),
+                "{link_config}/{kind}: {result:?}"
+            );
+            assert_eq!(std::fs::symlink_metadata(target).unwrap().ino(), ino);
+            assert_eq!(std::fs::read(other).unwrap(), original_other);
+            if kind == "dangling" {
+                assert!(!neighbor.exists());
+            } else {
+                assert_eq!(
+                    std::fs::read_to_string(neighbor).unwrap(),
+                    PERSONAL_CONFIG.replace("21", "19")
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn native_preference_honors_the_sdk_lock_then_backs_up_the_original() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let lock = dir.path().join("config.ts.settings-lock");
+    let no_bun = dir.path().join("missing-bun");
+    std::fs::write(&config, PERSONAL_CONFIG).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    std::fs::create_dir(&lock).unwrap();
+    let change = || {
+        write_json_property_safely(
+            &config,
+            "ai",
+            &serde_json::json!({"selectedModelId":"my-model"}),
+            no_bun.to_str(),
+        )
+    };
+    assert!(matches!(change(), Err(ConfigWriteError::IoError(_))));
+    assert!(lock.is_dir());
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), PERSONAL_CONFIG);
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+    std::fs::remove_dir(lock).unwrap();
+    assert_eq!(change().unwrap(), WriteOutcome::Written);
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), PERSONAL_CONFIG);
+    assert_eq!(
+        std::fs::read_to_string(&config).unwrap(),
+        PERSONAL_CONFIG.replace("ai: {}", "ai: {\"selectedModelId\":\"my-model\"}")
+    );
+}
+
+#[test]
+fn native_preference_rejected_candidate_does_not_install_the_old_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let invalid = format!("{PERSONAL_CONFIG}const unfinished = ;\n");
+    std::fs::write(&config, &invalid).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    assert!(enable_claude_code_safely(&config, dir.path().join("missing-bun").to_str()).is_err());
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), invalid);
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_does_not_overwrite_a_file_replaced_during_validation() {
+    for prior in [None, Some(PERSONAL_CONFIG)] {
+        for arrived in [
+            PERSONAL_CONFIG.to_string(),
+            PERSONAL_CONFIG.replace("21", "24"),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let config = dir.path().join("config.ts");
+            let backup = config.with_extension("ts.bak");
+            if let Some(prior) = prior {
+                std::fs::write(&config, prior).unwrap();
+            }
+            std::fs::write(&backup, OLD_BACKUP).unwrap();
+            let result = edit_config_file(
+                &config,
+                &ConfigProperty::new("ai", "{ enabled: true }"),
+                |_| {
+                    let replacement = dir.path().join("replacement.ts");
+                    std::fs::write(&replacement, &arrived).unwrap();
+                    std::fs::rename(replacement, &config).unwrap();
+                    Ok(())
+                },
+            );
+            assert!(matches!(result, Err(ConfigWriteError::IoError(_))));
+            assert_eq!(std::fs::read_to_string(&config).unwrap(), arrived);
+            assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_preference_losing_its_lock_cannot_publish_or_release_the_replacement() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let lock = dir.path().join("config.ts.settings-lock");
+    std::fs::write(&config, PERSONAL_CONFIG).unwrap();
+    std::fs::write(&backup, OLD_BACKUP).unwrap();
+    let result = edit_config_file(
+        &config,
+        &ConfigProperty::new("ai", "{} /*different*/"),
+        |_| {
+            std::fs::rename(&lock, dir.path().join("old-lock")).unwrap();
+            std::fs::create_dir(&lock).unwrap();
+            Ok(())
+        },
+    );
+    assert!(matches!(result, Err(ConfigWriteError::IoError(_))));
+    assert!(lock.is_dir(), "the new owner still holds its lock");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), PERSONAL_CONFIG);
+    assert_eq!(std::fs::read(&backup).unwrap(), OLD_BACKUP);
+}
+
+#[cfg(unix)]
+#[test]
+fn explicit_config_recovery_does_not_follow_a_linked_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("config.ts");
+    let backup = config.with_extension("ts.bak");
+    let neighbor = dir.path().join("elsewhere.ts");
+    std::fs::write(&config, b"recover me").unwrap();
+    std::fs::write(&neighbor, OLD_BACKUP).unwrap();
+    std::os::unix::fs::symlink(&neighbor, &backup).unwrap();
+    assert!(matches!(
+        recover_from_backup(&config, dir.path().join("missing-bun").to_str()),
+        Err(ConfigWriteError::IoError(_))
+    ));
+    assert_eq!(std::fs::read(&config).unwrap(), b"recover me");
+    assert_eq!(std::fs::read_link(backup).unwrap(), neighbor);
+    assert_eq!(std::fs::read(&neighbor).unwrap(), OLD_BACKUP);
+}
+
 #[test]
 fn test_write_config_safely_creates_file_when_missing() {
     let dir = tempfile::TempDir::new().unwrap();

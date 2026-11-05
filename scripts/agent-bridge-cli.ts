@@ -10,6 +10,7 @@ import {
 	opendirSync,
 	openSync,
 	readFileSync,
+	readSync,
 	realpathSync,
 	statSync,
 	unlinkSync,
@@ -23,9 +24,9 @@ const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 function requireOk(condition: unknown, message: string): asserts condition {
 	if (!condition) throw Error(message);
 }
-export function agentDoc(stub = false): string {
+function agentDocPath(stub: boolean): string {
 	const checkout = basename(import.meta.dir) === "scripts";
-	const file = checkout
+	return checkout
 		? join(
 				import.meta.dir,
 				stub ? "../skills/script-kit/SKILL.md" : "../kit-init/agent-manual.md",
@@ -35,7 +36,9 @@ export function agentDoc(stub = false): string {
 				"../share/external-agent",
 				stub ? "SKILL.md" : "manual.md",
 			);
-	return readFileSync(file, "utf8");
+}
+export function agentDoc(stub = false): string {
+	return readFileSync(agentDocPath(stub), "utf8");
 }
 function privateFile(path: string, privateOnly = true, limit = 4096): Buffer {
 	const fd = openSync(
@@ -169,20 +172,71 @@ function withGrantFile(path: string, collision: string, use: (fd: number, stillO
 		catch (e) { if (stillOurs()) unlinkSync(path); throw e; }
 	} finally { closeSync(fd); }
 }
+function installAgentSkill(requested: string) {
+	// The caller may deliberately use a directory link. Resolve that selection once,
+	// then use the physical parent; do not follow the alias again to place the file.
+	const parent = realpathSync.native(requested);
+	const selected = statSync(requested, { bigint: true });
+	const id = fileIdentity(selected);
+	const parentStillSelected = () => {
+		const named = statSync(requested, { bigint: true, throwIfNoEntry: false });
+		const physical = lstatSync(parent, { bigint: true, throwIfNoEntry: false });
+		return named?.isDirectory() && physical?.isDirectory() && fileIdentity(named) === id && fileIdentity(physical) === id;
+	};
+	requireOk(selected.isDirectory() && parentStillSelected(), "Choose an existing skills directory.");
+
+	let stub: Buffer;
+	try {
+		stub = privateFile(agentDocPath(true), false, 262144);
+		requireOk(stub.length > 0 && stub.length <= 262144, "Invalid skill size");
+		new TextDecoder("utf-8", { fatal: true }).decode(stub);
+	} catch {
+		throw Error("Kit needs a readable, nonempty, direct UTF-8 skill file (up to 256 KiB). No skill was installed.");
+	}
+	requireOk(parentStillSelected(), "The selected skills directory changed. No skill was installed.");
+	const dir = join(parent, "script-kit");
+	try { mkdirSync(dir, { mode: 0o700 }); }
+	catch (e) {
+		if ((e as NodeJS.ErrnoException).code === "EEXIST") throw Error("A script-kit entry already exists in that skills directory. It was not replaced.");
+		throw e;
+	}
+
+	const unconfirmed = "Could not confirm the skill installation. Inspect the selected script-kit directory before trying again.";
+	try {
+		const created = lstatSync(dir, { bigint: true });
+		const folderStillOurs = () => {
+			const named = lstatSync(dir, { bigint: true, throwIfNoEntry: false });
+			return named?.isDirectory() && fileIdentity(named) === fileIdentity(created) && parentStillSelected();
+		};
+		requireOk(created.isDirectory() && folderStillOurs(), unconfirmed);
+		const file = join(dir, "SKILL.md"), fd = openSync(file, "wx+", 0o600);
+		try {
+			const opened = fstatSync(fd, { bigint: true });
+			const fileStillOurs = () => {
+				const named = lstatSync(file, { bigint: true, throwIfNoEntry: false });
+				return named?.isFile() && named.nlink === 1n && fileIdentity(named) === fileIdentity(opened) && folderStillOurs();
+			};
+			requireOk(fileStillOurs(), unconfirmed);
+			writeFileSync(fd, stub);
+			const saved = Buffer.alloc(stub.length);
+			for (let pos = 0; pos < saved.length;) {
+				const n = readSync(fd, saved, pos, saved.length - pos, pos);
+				requireOk(n > 0, unconfirmed);
+				pos += n;
+			}
+			requireOk(saved.equals(stub) && fstatSync(fd).size === stub.length && fileStillOurs(), unconfirmed);
+		} finally { closeSync(fd); }
+	} catch { throw Error(unconfirmed); } // Never remove an entry that another installer may now own.
+	return { installed: dir };
+}
+
 export function operator(args: string[], root: string) {
 	const [verb, name, ...rest] = args;
 	if (verb === "install-skill") {
-		requireOk(
-			isAbsolute(name ?? "") && !rest.length,
-			"Usage: scriptkit install-skill /absolute/skills/directory",
-		);
-		const dir = join(name, "script-kit");
-		mkdirSync(dir, { mode: 0o700 });
-		writeFileSync(join(dir, "SKILL.md"), agentDoc(true), {
-			mode: 0o600,
-			flag: "wx",
-		});
-		return { installed: dir };
+		requireOk(typeof name === "string" && isAbsolute(name) && !rest.length &&
+			!name.split(process.platform === "win32" ? /[\\/]/ : "/").includes(".."),
+			"Choose an existing absolute skills directory without '..'. No skill was installed.");
+		return installAgentSkill(name);
 	}
 	if (verb === "inspect-command") {
 		requireOk(
@@ -293,7 +347,14 @@ export async function agent(args: string[], rpc: Rpc) {
 			requireOk((n += p.length) <= limit, "Input exceeds byte limit");
 			parts.push(p);
 		}
-		return Buffer.concat(parts).toString("utf8");
+		// Decode after the last chunk: a multibyte character can span pipe writes.
+		const bytes = Buffer.concat(parts, n);
+		try {
+			// A leading U+FEFF in a note or handoff is part of its text.
+			return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+		} catch {
+			throw Error("Input must be valid UTF-8. No request was sent.");
+		}
 	};
 	requireOk(!extra.length, "Too many arguments");
 	if (verb === "discover" && !a) {

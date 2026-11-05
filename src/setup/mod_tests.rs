@@ -3,6 +3,57 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    #[test]
+    fn setup_cli_leaves_a_conflicting_directory_private() {
+        use std::os::unix::fs::PermissionsExt;
+
+        with_sk_path(|root| {
+            let target = root.join("bin/scriptkit");
+            fs::create_dir_all(&target).unwrap();
+            fs::set_permissions(&target, fs::Permissions::from_mode(0o700)).unwrap();
+            fs::write(target.join("keep"), b"unrelated contents").unwrap();
+
+            let result = ensure_kit_setup();
+            assert!(result.warnings.iter().any(|w| w.contains("bin/scriptkit")));
+            assert_eq!(
+                fs::metadata(&target).unwrap().permissions().mode() & 0o7777,
+                0o700
+            );
+            assert_eq!(
+                fs::read(target.join("keep")).unwrap(),
+                b"unrelated contents"
+            );
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn setup_cli_repairs_only_its_own_command_and_keeps_a_ready_copy() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+        let scratch = TempDir::new().unwrap();
+        let other = scratch.path().join("private copy");
+        let target = scratch.path().join("scriptkit");
+        fs::write(&other, b"command").unwrap();
+        fs::set_permissions(&other, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::hard_link(&other, &target).unwrap();
+
+        let mut warnings = Vec::new();
+        write_executable_string_if_changed(&target, "command", &mut warnings, "bin/scriptkit");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let installed = fs::metadata(&target).unwrap();
+        assert_eq!(installed.mode() & 0o7777, 0o755);
+        assert_eq!(fs::read(&target).unwrap(), b"command");
+        let original = fs::metadata(&other).unwrap();
+        assert_eq!(original.mode() & 0o7777, 0o600);
+        assert_ne!(original.ino(), installed.ino());
+
+        write_executable_string_if_changed(&target, "command", &mut warnings, "bin/scriptkit");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(fs::metadata(&target).unwrap().ino(), installed.ino());
+    }
+
     /// Run a test body while holding the shared SK_PATH lock.
     /// Automatically sets SK_PATH to `kit_root` and restores it on exit.
     pub(super) fn with_sk_path<F: FnOnce(&std::path::Path)>(f: F) {

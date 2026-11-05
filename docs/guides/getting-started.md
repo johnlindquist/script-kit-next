@@ -4,7 +4,7 @@ Use the Mac app to run a TypeScript file from the launcher. You don’t need a s
 
 ## Start with the Mac app
 
-Download the Mac app ZIP from [GitHub Releases](https://github.com/johnlindquist/script-kit-next/releases), not one of GitHub’s source archives. Unzip it, move **Script Kit.app** to Applications, and open it from Finder. Install [Bun](https://bun.sh) to run scripts.
+On an Apple silicon Mac, download **Script-Kit-macos.zip** from the **Assets** section of the [latest GitHub release](https://github.com/johnlindquist/script-kit-next/releases/latest), not a **Source code** archive. Unzip it, move **Script Kit.app** to **Applications**, and open it from Finder. Install [Bun](https://bun.sh) to run TypeScript scripts. Let Kit set up its workspace; if you already have one, keep your scripts and `config.ts` in place.
 
 <a id="3-your-first-script"></a>
 
@@ -27,6 +27,8 @@ Press **⌘;**, search for **Hello Kit**, and run it. Choose **World** to see **
 **Where is the file?** New Script uses the workspace Kit has open. Your scripts folder is `plugins/main/scripts/` inside it: `~/.scriptkit/plugins/main/scripts/` by default, or `<SK_PATH>/plugins/main/scripts/` if you configured another workspace. If the editor didn’t open, open the newly created `.ts` file there. If you create a script by hand, choose an unused filename in that same folder.
 
 If you set `SK_PATH`, quote the entire folder name, including any spaces. For scripts and settings commands, use an absolute path without `..` (a direct symlink is fine). From inside the intended folder, `pwd -P` shows its physical path. To use the default again, run `unset SK_PATH` rather than setting it to an empty string. Kit’s settings helper, CLI and SDK then use `.scriptkit` under your actual home directory, without interpreting dollar signs in its name. If you supply a custom `HOME`, give its absolute path without `..`. The settings SDK also checks that home before looking for `~/.bun/bin/bun` under Node; a fully explicit `BUN_PATH` and `SK_PATH` do not depend on that lookup.
+
+`SK_PATH` selects a workspace; it is not a sandbox. The Mac app keeps its session logs and process records under `~/.scriptkit` even when you select another workspace. Use a separate account or a disposable Mac if you need those kept apart too.
 
 ### If Kit can't find Bun
 
@@ -58,7 +60,9 @@ If `config.ts` ends with a type annotation, start `as` or `satisfies` on the sam
 
 ### Upgrading from a v1 kit
 
-Automatic migration runs only for the default home and a recognized legacy layout. If `~/.kenv` also contains a Git repository, subkits, links, or other unrecognized content, Kit leaves that workspace in place. Keep your old files and use **Migrate v1 Scripts** to review what to bring across. Choosing another `SK_PATH` does not migrate the default home.
+If your scripts from `~/.kenv` do not appear, keep that folder and open **Migrate v1 Scripts** to scan `~/.kenv/scripts`. On the report, Return starts **Port all**, not just the highlighted script. Press Esc to leave the report without starting a port.
+
+Automatic migration requires a recognized legacy layout and no existing `~/.scriptkit`. It skips a legacy kit with a Git repository, subkits, links, or other unrecognized content. Do not delete an existing workspace to trigger migration. Selecting an alternate workspace with `SK_PATH` skips the default home’s legacy import.
 
 <a id="2-the-main-hotkey"></a>
 
@@ -149,4 +153,4 @@ cargo build --release
 ./target/release/script-kit-gpui
 ```
 
-For hot reload, install `cargo-watch` with `cargo install cargo-watch` and run `./dev.sh` in the checkout. These steps are not needed to write or run personal scripts.
+For the optional development watcher, see [Hot Reload](../../README.md#hot-reload) for the external-volume requirements and startup command. None of these build steps are needed to write or run personal scripts.

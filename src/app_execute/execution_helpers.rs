@@ -45,50 +45,9 @@ impl ScratchPadExecutionAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClaudeCodeEnableAction {
-    EnableProvider,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ApiKeyCompletionOutcome {
     Saved,
     NotSaved,
-}
-
-impl ClaudeCodeEnableAction {
-    fn validation_restored_message(self) -> &'static str {
-        match self {
-            Self::EnableProvider => {
-                "Failed to enable Claude Code (invalid config). Backup restored."
-            }
-        }
-    }
-
-    fn validation_no_backup_message(self, reason: impl std::fmt::Display) -> String {
-        match self {
-            Self::EnableProvider => {
-                format!("Failed to enable Claude Code: {reason}. No backup available.")
-            }
-        }
-    }
-
-    fn validation_recovery_failed_message(
-        self,
-        reason: impl std::fmt::Display,
-        recover_error: impl std::fmt::Display,
-    ) -> String {
-        match self {
-            Self::EnableProvider => {
-                format!("Failed to enable Claude Code: {reason}. Recovery failed: {recover_error}")
-            }
-        }
-    }
-
-    fn write_failure_message(self, error: impl std::fmt::Display) -> String {
-        match self {
-            Self::EnableProvider => format!("Failed to enable Claude Code: {error}"),
-        }
-    }
 }
 
 impl ApiKeyCompletionOutcome {
@@ -301,11 +260,14 @@ impl ScriptListApp {
     pub fn enable_claude_code_in_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::config::editor::{self, ConfigWriteError, WriteOutcome};
 
-        let enable_action = ClaudeCodeEnableAction::EnableProvider;
-        tracing::info!(message = %"Enabling Claude Code in config.ts");
-
-        let config_path =
-            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
+        tracing::info!("Enabling Claude Code in config.ts");
+        let config_path = crate::setup::config_ts_path();
+        if let Some(policy) = crate::runtime_policy::owned_evaluation() {
+            if policy.require_owned_path(&config_path).is_err() {
+                self.notice_failed("Can't change settings outside this workspace", cx);
+                return;
+            }
+        }
         let bun_path = self.config.bun_path.as_deref();
 
         match editor::enable_claude_code_safely(&config_path, bun_path) {
@@ -318,35 +280,32 @@ impl ScriptListApp {
             Ok(WriteOutcome::AlreadySet) => {
                 tracing::info!(message = %"Claude Code already enabled in config.ts");
             }
-            Err(ConfigWriteError::ValidationFailed(reason)) => {
-                tracing::info!(message = %&format!("Config validation failed: {}", reason));
-                // Attempt to recover from backup
-                match editor::recover_from_backup(&config_path, bun_path) {
-                    Ok(true) => {
-                        tracing::info!(message = %"Config restored from backup after validation failure",
-                        );
-                        self.notice_failed(enable_action.validation_restored_message(), cx);
-                    }
-                    Ok(false) => {
-                        self.notice_failed(enable_action.validation_no_backup_message(&reason), cx);
-                    }
-                    Err(recover_err) => {
-                        tracing::info!(message = %&format!("Backup recovery also failed: {}", recover_err),
-                        );
-                        self.notice_failed(
-                            enable_action.validation_recovery_failed_message(&reason, &recover_err),
-                            cx,
-                        );
-                    }
-                }
+            Err(error) => {
+                // The candidate was never published. An old backup is not a rollback
+                // for a rejected proposal; restoring it can erase newer user edits.
+                let reason = match error {
+                    ConfigWriteError::ValidationFailed(_) => "config_validation_failed",
+                    ConfigWriteError::EditFailed(_) => "config_edit_refused",
+                    ConfigWriteError::IoError(_) => "config_write_unavailable",
+                };
+                tracing::warn!(reason, "Could not enable Claude Code");
+                self.notice_failed(
+                    "Couldn't enable Claude Code. Check config.ts in this workspace",
+                    cx,
+                );
                 return;
             }
-            Err(e) => {
-                let message = enable_action.write_failure_message(&e);
-                tracing::info!(message = %message);
-                self.notice_failed(message, cx);
-                return;
-            }
+        }
+
+        // A no-op edit can succeed without Bun. That is not permission for an
+        // owned evaluation to probe a real provider or execute its configured CLI.
+        if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process).is_err() {
+            self.one_window_notice(
+                crate::line_notice::DONE,
+                "Claude Code is enabled in config.ts. CLI not checked".to_string(),
+                cx,
+            );
+            return;
         }
 
         // Reload config and rebuild provider registry in background

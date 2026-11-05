@@ -12,6 +12,8 @@ Use the workspace the operator selected. If `SK_PATH` is set, it must expand to 
 
 ## Save a quiet note
 
+Pipe UTF-8 text for notes, handoffs, replies and command JSON. The CLI checks the input before sending it. If the file uses another encoding, convert it from that encoding first; Kit won’t silently replace unreadable bytes. The CLI input limit is 65,536 bytes.
+
 Choose a fresh UUID **before** the first save (e.g. `uuidgen`); keep it with the task. Pipe literal Markdown to `scriptkit agent note save <uuid>` on stdin. No window opens and no clipboard is read or changed. `scriptkit agent note status <uuid>` checks the same caller's note, including canonical-file readback. Compare `body` to the requested text. Reusing an ID with different words is a conflict, never an overwrite. After a lost reply check status; missing is not proof that an earlier request never ran. Do not create another ID automatically. Requires `notes:quiet`; it does not grant general Notes access.
 
 ## Receive an explicitly shared selection

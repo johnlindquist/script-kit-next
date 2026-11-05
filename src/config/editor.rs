@@ -250,27 +250,20 @@ fn find_object_in_export<'a>(
     None
 }
 
-/// Walk AST to collect ERROR node descriptions for diagnostics.
-fn collect_ast_errors(node: tree_sitter::Node, content: &str, out: &mut String) {
-    if node.is_error() || node.is_missing() {
-        let start = node.start_position();
-        let end_byte = node.end_byte().min(node.start_byte() + 30);
-        let text = &content[node.start_byte()..end_byte];
-        if !out.is_empty() {
-            out.push_str("; ");
-        }
-        out.push_str(&format!(
-            "line {}:{} near '{}'",
-            start.row + 1,
-            start.column,
-            text.replace('\n', "\\n")
-        ));
+/// A location is useful; a snippet of a private setting is not. Follow only
+/// the first error branch, without slicing UTF-8 at a diagnostic byte limit.
+fn error_position(mut node: tree_sitter::Node<'_>) -> tree_sitter::Point {
+    while !node.is_error() && !node.is_missing() {
+        let mut cursor = node.walk();
+        let Some(child) = node
+            .children(&mut cursor)
+            .find(|n| n.has_error() || n.is_missing())
+        else {
+            break;
+        };
+        node = child;
     }
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i as u32) {
-            collect_ast_errors(child, content, out);
-        }
-    }
+    node.start_position()
 }
 
 /// Find the export default object and return insertion info using tree-sitter AST.
@@ -355,25 +348,71 @@ fn insert_property(content: &str, info: &InsertInfo, property: &ConfigProperty) 
     result
 }
 
-/// Enable Claude Code in a config file
-///
-/// This is a convenience function that adds `claudeCode: { enabled: true }` to the config.
-/// Used in tests; production code uses `enable_claude_code_safely`.
-#[allow(dead_code)]
+/// Enable only the provider switch. Its executable, permissions, tools and
+/// extra directories are separate decisions, not defaults to reinstall.
 pub fn enable_claude_code(content: &str) -> EditResult {
-    // Use inline format for cleaner insertion
-    // The trailing comma is added by insert_property
-    let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
-    add_property(content, &property)
+    fn propose(content: &str) -> Result<EditResult, String> {
+        if content.is_empty() {
+            return Ok(EditResult::Modified(generate_fresh_config(
+                &ConfigProperty::new("claudeCode", "{ enabled: true }"),
+            )));
+        }
+        let tree = parse_typescript(content)?;
+        let object = literal_default_object(tree.root_node(), content)?;
+        let Some(provider) =
+            unique_literal_member(object, content, "claudeCode", "duplicate claudeCode")?
+        else {
+            return Ok(prepend_member(
+                content,
+                object,
+                "claudeCode: { enabled: true }",
+            ));
+        };
+        if provider.kind() != "object" {
+            return Err("claudeCode must be a literal object for this edit".into());
+        }
+        let Some(switch) =
+            unique_literal_member(provider, content, "enabled", "duplicate enabled")?
+        else {
+            return Ok(prepend_member(content, provider, "enabled: true"));
+        };
+        match switch.kind() {
+            "true" => Ok(EditResult::AlreadySet),
+            "false" => {
+                let mut next = content.to_owned();
+                next.replace_range(switch.byte_range(), "true");
+                Ok(EditResult::Modified(next))
+            }
+            _ => Err("claudeCode.enabled is not a literal boolean".into()),
+        }
+    }
+    propose(content).unwrap_or_else(EditResult::Failed)
+}
+
+// Insert after the opening brace; never move a comment, consume a trailing
+// comma, or add a comma before the first member of an empty object.
+fn prepend_member(content: &str, object: tree_sitter::Node, member: &str) -> EditResult {
+    let at = object.start_byte() + 1;
+    let rest = &content[at..object.end_byte() - 1];
+    let suffix = if rest.is_empty() {
+        " "
+    } else if rest.starts_with(char::is_whitespace) {
+        ","
+    } else {
+        ", "
+    };
+    let mut next = content.to_owned();
+    next.insert_str(at, &format!(" {member}{suffix}"));
+    EditResult::Modified(next)
 }
 
 // --- merged from part_02.rs ---
-use std::io::Write;
 
-/// Validate TypeScript content by attempting compilation with bun.
-///
-/// Writes content to a temp .ts file and runs `bun build` on it.
-/// Returns Ok(()) if valid, Err with details if invalid.
+#[cfg(unix)]
+#[path = "editor/syntax.rs"]
+mod syntax;
+
+/// Check the proposed bytes without executing the config or its compile-time macros.
 pub fn validate_typescript(content: &str, bun_path: Option<&str>) -> Result<(), String> {
     let bun = super::resolve_bun(bun_path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::PermissionDenied {
@@ -383,27 +422,16 @@ pub fn validate_typescript(content: &str, bun_path: Option<&str>) -> Result<(), 
         }
     })?;
 
-    let tmp = tempfile::Builder::new()
-        .suffix(".ts")
-        .tempfile()
-        .map_err(|e| format!("Failed to create temp file: {}", e))?;
-
-    std::fs::write(tmp.path(), content).map_err(|e| format!("Failed to write temp file: {}", e))?;
-
-    let output = std::process::Command::new(bun)
-        .arg("build")
-        .arg("--target=bun")
-        .arg("--no-bundle")
-        .arg(tmp.path())
-        .arg("--outfile=/dev/null")
-        .output()
-        .map_err(|e| format!("Failed to run bun: {}", e))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("TypeScript compilation failed: {}", stderr.trim()))
+    #[cfg(unix)]
+    {
+        syntax::check(&bun, content)
+    }
+    #[cfg(not(unix))]
+    {
+        // Without a descriptor-backed entry point, use the existing structural
+        // check, not an executable build or a mutable source pathname.
+        let _ = bun;
+        validate_structure(content)
     }
 }
 
@@ -425,19 +453,15 @@ pub fn validate_structure(content: &str) -> Result<(), String> {
 
     // Check for parse errors (syntax errors, corruption, etc.)
     if root.has_error() {
-        let mut error_msg = String::new();
-        collect_ast_errors(root, content, &mut error_msg);
-        if !error_msg.is_empty() {
-            return Err(format!("TypeScript parse errors: {}", error_msg));
-        }
-        return Err("TypeScript parse errors detected".into());
+        let at = error_position(root);
+        return Err(format!(
+            "TypeScript parse error at line {}, byte column {}",
+            at.row + 1,
+            at.column + 1
+        ));
     }
 
-    // Find export_statement and its object
-    let export = find_export_statement(root).ok_or("No export statement found in AST")?;
-
-    find_object_in_export(export, content)
-        .ok_or_else(|| "Could not find config object in export statement".to_string())?;
+    literal_default_object(root, content)?;
 
     let trimmed = content.trim();
     if !trimmed.contains("satisfies Config;") && !trimmed.contains("as Config;") {
@@ -519,12 +543,11 @@ pub(crate) fn parse_static_config(content: &str) -> Result<serde_json::Value, St
     decode_static_config_value(object, content, 0)
 }
 
-/// Inspect only an unambiguous top-level literal pin before evaluating config.ts.
-/// Other values may be expressions. A spread/computed key can redefine the pin;
-/// leave those configs to normal Bun evaluation rather than guessing a target.
-pub(super) fn bootstrap_bun_pin(content: &str) -> Result<Option<String>, &'static str> {
-    let tree = parse_typescript(content).map_err(|_| "invalid TypeScript")?;
-    let root = tree.root_node();
+// A named export may precede the default. Only the latter is Kit's config.
+fn literal_default_object<'a>(
+    root: tree_sitter::Node<'a>,
+    content: &str,
+) -> Result<tree_sitter::Node<'a>, &'static str> {
     if root.has_error() {
         return Err("invalid TypeScript");
     }
@@ -539,8 +562,18 @@ pub(super) fn bootstrap_bun_pin(content: &str) -> Result<Option<String>, &'stati
     if exports.next().is_some() {
         return Err("ambiguous default export");
     }
-    let object = find_object_in_export(export, content).ok_or("nonliteral default export")?;
-    let mut pin = None;
+    find_object_in_export(export, content).ok_or("nonliteral default export")
+}
+
+// Do not guess through spreads, computed names, getters or duplicate target keys.
+// Values of unrelated named properties need not be evaluated or rewritten.
+fn unique_literal_member<'a>(
+    object: tree_sitter::Node<'a>,
+    content: &str,
+    name: &str,
+    duplicate: &'static str,
+) -> Result<Option<tree_sitter::Node<'a>>, &'static str> {
+    let mut found = None;
     let mut cursor = object.walk();
     for child in object.named_children(&mut cursor) {
         if child.kind() == "comment" {
@@ -558,25 +591,35 @@ pub(super) fn bootstrap_bun_pin(content: &str) -> Result<Option<String>, &'stati
             "string" => decode_static_config_string(text).map_err(|_| "nonliteral key")?,
             _ => return Err("nonliteral key"),
         };
-        if key == "bun_path" {
-            if pin.is_some() {
-                return Err("duplicate bun_path");
+        if key == name {
+            if found.is_some() {
+                return Err(duplicate);
             }
-            let value = child.child_by_field_name("value").ok_or("missing value")?;
-            if value.kind() != "string" {
-                return Err("nonliteral bun_path");
-            }
-            pin = Some(
-                decode_static_config_string(
-                    value
-                        .utf8_text(content.as_bytes())
-                        .map_err(|_| "invalid key or value")?,
-                )
-                .map_err(|_| "nonliteral bun_path")?,
-            );
+            found = Some(child.child_by_field_name("value").ok_or("missing value")?);
         }
     }
-    Ok(pin)
+    Ok(found)
+}
+
+/// Inspect only an unambiguous top-level literal pin before evaluating config.ts.
+/// Other values may be expressions. A spread/computed key can redefine the pin;
+/// leave those configs to normal Bun evaluation rather than guessing a target.
+pub(super) fn bootstrap_bun_pin(content: &str) -> Result<Option<String>, &'static str> {
+    let tree = parse_typescript(content).map_err(|_| "invalid TypeScript")?;
+    let object = literal_default_object(tree.root_node(), content)?;
+    let Some(value) = unique_literal_member(object, content, "bun_path", "duplicate bun_path")?
+    else {
+        return Ok(None);
+    };
+    if value.kind() != "string" {
+        return Err("nonliteral bun_path");
+    }
+    let text = value
+        .utf8_text(content.as_bytes())
+        .map_err(|_| "invalid key or value")?;
+    decode_static_config_string(text)
+        .map(Some)
+        .map_err(|_| "nonliteral bun_path")
 }
 
 fn decode_static_config_string(text: &str) -> Result<String, String> {
@@ -710,136 +753,236 @@ fn decode_static_config_value(
     }
 }
 
-fn atomic_write_with_secure_tempfile(
-    config_path: &Path,
-    content: &str,
-) -> Result<(), ConfigWriteError> {
-    let parent = config_path.parent().ok_or_else(|| {
-        ConfigWriteError::IoError(format!(
-            "config_atomic_write_missing_parent: target={}",
-            config_path.display()
-        ))
-    })?;
+// Native edits and the installed settings CLI both own config.ts. Use the same
+// exclusive directory; never break another writer's lock on a timer.
+struct SettingsLock {
+    path: std::path::PathBuf,
+    #[cfg(unix)]
+    directory: std::fs::File,
+}
 
-    let mut temp_file = tempfile::Builder::new()
-        .prefix(".config-write.")
-        .suffix(".tmp")
-        .tempfile_in(parent)
-        .map_err(|e| {
-            ConfigWriteError::IoError(format!(
-                "config_atomic_write_tempfile_create_failed: target={} error={}",
-                config_path.display(),
+impl SettingsLock {
+    fn acquire(file: &Path) -> std::io::Result<Self> {
+        let mut name = file.as_os_str().to_owned();
+        name.push(".settings-lock");
+        let path = std::path::PathBuf::from(name);
+        let mut builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                std::io::Error::new(
+                    e.kind(),
+                    "Settings writer busy; inspect the lock if a writer crashed",
+                )
+            } else {
                 e
-            ))
+            }
         })?;
+        #[cfg(unix)]
+        let directory = {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+                .open(&path)?
+        };
+        Ok(Self {
+            path,
+            #[cfg(unix)]
+            directory,
+        })
+    }
 
-    temp_file.write_all(content.as_bytes()).map_err(|e| {
-        ConfigWriteError::IoError(format!(
-            "config_atomic_write_tempfile_write_failed: target={} error={}",
-            config_path.display(),
-            e
-        ))
-    })?;
+    fn confirm(&self) -> std::io::Result<()> {
+        let entry = std::fs::symlink_metadata(&self.path)?;
+        let same = entry.is_dir();
+        #[cfg(unix)]
+        let same = {
+            use std::os::unix::fs::MetadataExt;
+            let owner = self.directory.metadata()?;
+            same && (entry.dev(), entry.ino()) == (owner.dev(), owner.ino())
+        };
+        if !same {
+            return Err(std::io::Error::other("Settings writer lock was replaced"));
+        }
+        Ok(())
+    }
+}
 
-    temp_file.flush().map_err(|e| {
-        ConfigWriteError::IoError(format!(
-            "config_atomic_write_tempfile_flush_failed: target={} error={}",
-            config_path.display(),
-            e
-        ))
-    })?;
+impl Drop for SettingsLock {
+    fn drop(&mut self) {
+        if self.confirm().is_err() {
+            return;
+        }
+        if let Err(e) = std::fs::remove_dir(&self.path) {
+            tracing::warn!(kind = ?e.kind(), "Could not remove settings writer lock");
+        }
+    }
+}
 
-    temp_file.persist(config_path).map_err(|e| {
-        ConfigWriteError::IoError(format!(
-            "config_atomic_write_rename_failed: from={} to={} error={}",
-            e.file.path().display(),
-            config_path.display(),
-            e.error
-        ))
-    })?;
+impl From<std::io::Error> for ConfigWriteError {
+    fn from(error: std::io::Error) -> Self {
+        Self::IoError(error.to_string())
+    }
+}
 
+const MAX_CONFIG_BYTES: u64 = 2 * 1024 * 1024; // same limit as scripts/config-document.ts
+
+#[derive(PartialEq, Eq)]
+struct ConfigSnapshot {
+    bytes: Vec<u8>,
+    #[cfg(unix)]
+    identity: (u64, u64, u32),
+}
+
+fn config_snapshot(path: &Path) -> std::io::Result<Option<ConfigSnapshot>> {
+    use std::io::{Error, ErrorKind, Read};
+    if !crate::atomic_file::inspect_private_file(path)? {
+        return Ok(None);
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options.open(path)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.len() > MAX_CONFIG_BYTES {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Settings must be a regular file of at most 2 MiB",
+        ));
+    }
+    #[cfg(unix)]
+    let identity = {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() != 1 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "Settings must not be hard-linked",
+            ));
+        }
+        (meta.dev(), meta.ino(), meta.mode())
+    };
+    let mut bytes = Vec::new();
+    file.take(MAX_CONFIG_BYTES + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_CONFIG_BYTES {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Settings grew beyond 2 MiB",
+        ));
+    }
+    Ok(Some(ConfigSnapshot {
+        bytes,
+        #[cfg(unix)]
+        identity,
+    }))
+}
+
+fn config_text(snapshot: &ConfigSnapshot) -> Result<&str, ConfigWriteError> {
+    std::str::from_utf8(&snapshot.bytes)
+        .map_err(|_| ConfigWriteError::IoError("Settings are not valid UTF-8".into()))
+}
+
+fn confirm_snapshot(
+    path: &Path,
+    original: Option<&ConfigSnapshot>,
+) -> Result<(), ConfigWriteError> {
+    if config_snapshot(path)?.as_ref() != original {
+        return Err(ConfigWriteError::IoError(
+            "Settings changed during edit; reread before saving".into(),
+        ));
+    }
     Ok(())
 }
 
-/// Safely modify config.ts: edit in memory, validate, backup, atomic-write.
-///
-/// This is the single entry point for all config file modifications.
-/// Guarantees:
-/// 1. Output is valid TypeScript (validated by bun, fallback to structural)
-/// 2. A backup exists before overwriting
-/// 3. The write is atomic (temp file + rename)
+#[path = "editor/draft.rs"]
+mod draft;
+use draft::ConfigDraft;
+
+fn validate_proposal(source: &str, bun_path: Option<&str>) -> Result<(), ConfigWriteError> {
+    match validate_typescript(source, bun_path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.starts_with("Failed to run bun") => {
+            validate_structure(source).map_err(ConfigWriteError::ValidationFailed)
+        }
+        Err(e) => Err(ConfigWriteError::ValidationFailed(e)),
+    }
+}
+
+/// Validate a proposed edit without publishing it. Back up the exact original
+/// before replacing a nonempty file. An absent file is created exclusively.
 pub fn write_config_safely(
     config_path: &Path,
     property: &ConfigProperty,
     bun_path: Option<&str>,
 ) -> Result<WriteOutcome, ConfigWriteError> {
-    // Step 1: Ensure parent directory exists
-    if let Some(parent) = config_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ConfigWriteError::IoError(format!(
-                    "Failed to create directory {}: {}",
-                    parent.display(),
-                    e
-                ))
-            })?;
-        }
-    }
+    edit_config_file(config_path, property, |next| {
+        validate_proposal(next, bun_path)
+    })
+}
 
-    // Step 2: Read existing content
-    let content = std::fs::read_to_string(config_path).unwrap_or_default();
-
-    // Step 3: Produce new content
-    let (new_content, was_empty) = if content.is_empty() {
-        (generate_fresh_config(property), true)
-    } else {
-        match add_property(&content, property) {
-            EditResult::Modified(new_content) => (new_content, false),
-            EditResult::AlreadySet => return Ok(WriteOutcome::AlreadySet),
-            EditResult::Failed(reason) => {
-                return Err(ConfigWriteError::EditFailed(reason));
-            }
-        }
-    };
-
-    // Step 4: Validate the new content
-    let validation_result = validate_typescript(&new_content, bun_path);
-    match &validation_result {
-        Ok(()) => { /* bun says it's valid */ }
-        Err(bun_err) => {
-            if bun_err.starts_with("Failed to run bun") {
-                // bun unavailable - fall back to structural validation
-                tracing::warn!("bun unavailable for validation, using structural check");
-                validate_structure(&new_content).map_err(ConfigWriteError::ValidationFailed)?;
+fn edit_config_file(
+    config_path: &Path,
+    property: &ConfigProperty,
+    validate: impl FnOnce(&str) -> Result<(), ConfigWriteError>,
+) -> Result<WriteOutcome, ConfigWriteError> {
+    edit_config_source(
+        config_path,
+        |content| {
+            if content.is_empty() {
+                EditResult::Modified(generate_fresh_config(property))
             } else {
-                // bun ran but TypeScript is invalid - do NOT write
-                return Err(ConfigWriteError::ValidationFailed(bun_err.clone()));
+                add_property(content, property)
             }
-        }
+        },
+        validate,
+    )
+}
+
+fn edit_config_source(
+    config_path: &Path,
+    propose: impl FnOnce(&str) -> EditResult,
+    validate: impl FnOnce(&str) -> Result<(), ConfigWriteError>,
+) -> Result<WriteOutcome, ConfigWriteError> {
+    if let Some(dir) = config_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
     }
-
-    // Step 5: Backup existing file (if non-empty)
-    if !content.is_empty() {
-        let backup_path = config_path.with_extension("ts.bak");
-        if let Err(e) = std::fs::copy(config_path, &backup_path) {
-            tracing::warn!(
-                error = %e,
-                path = %backup_path.display(),
-                "Failed to create config backup"
-            );
-        } else {
-            tracing::info!(path = %backup_path.display(), "Config backup saved");
+    let lock = SettingsLock::acquire(config_path)?;
+    let original = config_snapshot(config_path)?;
+    let content = original
+        .as_ref()
+        .map(config_text)
+        .transpose()?
+        .unwrap_or("");
+    let next = match propose(content) {
+        EditResult::Modified(text) => text,
+        EditResult::AlreadySet => {
+            lock.confirm()?;
+            confirm_snapshot(config_path, original.as_ref())?;
+            return Ok(WriteOutcome::AlreadySet);
         }
+        EditResult::Failed(why) => return Err(ConfigWriteError::EditFailed(why)),
+    };
+    if next.len() as u64 > MAX_CONFIG_BYTES {
+        return Err(ConfigWriteError::EditFailed(
+            "Settings would exceed 2 MiB".into(),
+        ));
     }
-
-    // Step 6: Atomic write (randomized tempfile in same directory + rename)
-    atomic_write_with_secure_tempfile(config_path, &new_content)?;
-
-    if was_empty {
-        Ok(WriteOutcome::Created)
+    validate(&next)?;
+    confirm_snapshot(config_path, original.as_ref())?;
+    ConfigDraft::prepare(&lock, next.as_bytes())?.publish_edit(config_path, original.as_ref())?;
+    Ok(if content.is_empty() {
+        WriteOutcome::Created
     } else {
-        Ok(WriteOutcome::Written)
-    }
+        WriteOutcome::Written
+    })
 }
 
 /// Enable Claude Code in config.ts using the safe write path.
@@ -847,8 +990,9 @@ pub fn enable_claude_code_safely(
     config_path: &Path,
     bun_path: Option<&str>,
 ) -> Result<WriteOutcome, ConfigWriteError> {
-    let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
-    write_config_safely(config_path, &property, bun_path)
+    edit_config_source(config_path, enable_claude_code, |next| {
+        validate_proposal(next, bun_path)
+    })
 }
 
 pub fn write_json_property_safely<T: serde::Serialize>(
@@ -869,49 +1013,22 @@ pub fn write_json_property_safely<T: serde::Serialize>(
     write_config_safely(config_path, &property, bun_path)
 }
 
-/// Attempt to recover config.ts from its backup.
-///
-/// Returns Ok(true) if recovery succeeded, Ok(false) if no backup exists.
+/// Explicitly recover config.ts from its backup. Never call this merely because
+/// validation rejected a proposed edit: that edit has not changed the file.
 pub fn recover_from_backup(
     config_path: &Path,
     bun_path: Option<&str>,
 ) -> Result<bool, ConfigWriteError> {
     let backup_path = config_path.with_extension("ts.bak");
-
-    if !backup_path.exists() {
+    let Some(backup) = config_snapshot(&backup_path)? else {
         return Ok(false);
-    }
-
-    let backup_content = std::fs::read_to_string(&backup_path)
-        .map_err(|e| ConfigWriteError::IoError(format!("Failed to read backup: {}", e)))?;
-
-    // Validate backup before restoring
-    let validation_result = validate_typescript(&backup_content, bun_path);
-    match &validation_result {
-        Ok(()) => {}
-        Err(bun_err) => {
-            if bun_err.starts_with("Failed to run bun") {
-                validate_structure(&backup_content).map_err(|e| {
-                    ConfigWriteError::ValidationFailed(format!("Backup is also invalid: {}", e))
-                })?;
-            } else {
-                return Err(ConfigWriteError::ValidationFailed(format!(
-                    "Backup is also invalid: {}",
-                    bun_err
-                )));
-            }
-        }
-    }
-
-    // Atomic write of backup content
-    atomic_write_with_secure_tempfile(config_path, &backup_content)?;
-
-    tracing::info!(
-        path = %config_path.display(),
-        backup = %backup_path.display(),
-        "Config restored from backup"
-    );
-
+    };
+    let lock = SettingsLock::acquire(config_path)?;
+    let original = config_snapshot(config_path)?;
+    validate_proposal(config_text(&backup)?, bun_path)?;
+    let draft = ConfigDraft::prepare(&lock, &backup.bytes)?;
+    confirm_snapshot(&backup_path, Some(&backup))?;
+    draft.publish(config_path, original.as_ref())?;
     Ok(true)
 }
 
