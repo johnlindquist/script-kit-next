@@ -11,14 +11,36 @@ import {
 } from "./installed-release-contract";
 
 // Public, anonymous HTTPS only. No gh token, shell, or arbitrary release-provided URL.
+// Never echo a response body, a redirected URL or arbitrary header text into the job log.
+export function publicApiFailure(path: string, status: number, headers: Headers, now: number) {
+  const endpoint = path.startsWith('actions/runs/') ? (path.includes('/jobs?') ? 'jobs' : 'run') : 'release';
+  const reset = headers.get('x-ratelimit-reset') ?? '', retry = headers.get('retry-after') ?? '';
+  const limited = status === 429 || (status === 403 && headers.get('x-ratelimit-remaining') === '0');
+  const until = limited && /^\d{10}$/.test(reset) ? Number(reset) : null;
+  const waitMs = (limited || status === 503) && /^\d{1,4}$/.test(retry) ? Number(retry)*1000+1000 :
+    until !== null && until*1000 >= now ? until*1000-now+1000 : null;
+  return { code: `public_${endpoint}_http_${status}${limited ? '_limited' : ''}${until === null ? '' : '_reset_'+until}`, waitMs };
+}
 export async function publicJson(path: string): Promise<Json> {
-  const res = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
+  const read = () => fetch(`https://api.github.com/repos/${REPO}/${path}`, {
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
     redirect: "error",
     credentials: "omit",
     signal: AbortSignal.timeout(20_000),
   });
-  check(res.ok && res.body, "public_api_unavailable", "blocked");
+  let res = await read();
+  if (!res.ok) {
+    const {code, waitMs} = publicApiFailure(path,res.status,res.headers,Date.now());
+    await res.body?.cancel();
+    check(waitMs !== null && waitMs > 0 && waitMs <= 60_000, code, 'blocked');
+    await new Promise(resolve => setTimeout(resolve,waitMs));
+    res = await read(); // One bounded, read-only retry after the server's stated wait, never a write.
+    if (!res.ok) {
+      const failure = publicApiFailure(path,res.status,res.headers,Date.now());
+      await res.body?.cancel(); check(false,failure.code,'blocked');
+    }
+  }
+  check(res.body, 'public_api_empty_body', 'blocked');
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   for await (const chunk of res.body) {

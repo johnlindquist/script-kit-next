@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { verifySourceVersion } from "./lib/installed-release-distribution";
+import { publicApiFailure, verifySourceVersion } from "./lib/installed-release-distribution";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,6 +90,13 @@ const release = {
 };
 
 describe("installed-release admission and provenance (no host authority)", () => {
+  test('diagnoses anonymous API refusal without recording bodies or sensitive headers', () => {
+    const now = 1793880000 * 1000;
+    expect(publicApiFailure('actions/runs/5/attempts/1/jobs?per_page=100',403,
+      new Headers({'x-ratelimit-remaining':'0','x-ratelimit-reset':'1793880020'}),now)).toEqual({code:'public_jobs_http_403_limited_reset_1793880020',waitMs:21000});
+    expect(publicApiFailure('actions/runs/5/attempts/1',404,new Headers(),now)).toEqual({code:'public_run_http_404',waitMs:null});
+    expect(publicApiFailure('contents/something',403,new Headers({'retry-after':'PRIVATE'}),now)).toEqual({code:'public_release_http_403',waitMs:null});
+  });
   test("local CLI refuses before any output creation, even with hosted-looking env", () => {
     const root = mkdtempSync(join(tmpdir(), "installed-refusal-"));
     try {
