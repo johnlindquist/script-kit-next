@@ -119,7 +119,7 @@ mod tests {
         assert!(claim(Some(&id), &a).is_ok());
         denied();
         assert!(next.present(7));
-        assert!(next.resolve(7, Some(a)));
+        assert!(next.resolve(7, Some(a.clone())));
         next.close();
         denied();
         assert!(!next.present(8));
