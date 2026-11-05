@@ -737,12 +737,14 @@ impl AgentChatThread {
                     model_id.unwrap_or(crate::ai::agent_chat::profiles::QUICK_AI_MODEL),
                 ),
             },
-            AgentChatSessionPolicy::Full => AiSurfaceIdentity::AgentChat {
-                profile_id: ProfileId::from(profile_id),
-                provider_id: Self::provider_id_from_model(model_id),
-                model_id: model_id.map(ModelId::from),
-                cwd_fingerprint: Fingerprint(redacted_fingerprint(&cwd.to_string_lossy())),
-            },
+            AgentChatSessionPolicy::Full | AgentChatSessionPolicy::LauncherAuthor(_) => {
+                AiSurfaceIdentity::AgentChat {
+                    profile_id: ProfileId::from(profile_id),
+                    provider_id: Self::provider_id_from_model(model_id),
+                    model_id: model_id.map(ModelId::from),
+                    cwd_fingerprint: Fingerprint(redacted_fingerprint(&cwd.to_string_lossy())),
+                }
+            }
         }
     }
 
@@ -2457,6 +2459,10 @@ impl AgentChatThread {
     fn should_stage_brain_recall(&self) -> bool {
         !self.is_provider_free_fixture()
             && !crate::runtime_policy::is_owned_evaluation()
+            && self
+                .session_policy
+                .admit_context(super::capabilities::AgentChatContextClass::History)
+                .is_ok()
             && self.profile_id == crate::ai::agent_chat::profiles::BUILTIN_BRAIN_PROFILE_ID
     }
 

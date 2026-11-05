@@ -8,6 +8,8 @@ Migrated from the retired imps/ fleet (codex-imps runtime) on 2026-07-04.
 
 ## App-independent domain ownership
 
+- `crates/sk-personal` owns versioned changes, requests, recovery and the local authoring API. `crates/sk-one-window/src/personal.rs` and `window/subject_tabs.rs` own native roles, action order and dispatch; `src/one_window/personal_rules.rs` is the app adapter.
+- `crates/sk-one-window/src/font_preference{.rs,/change.rs}` owns the offline font reading and guarded setting change. The main-window host and MCP settings helper are adapters; the `personal_settings` domain test runs the real helper without linking GPUI.
 - `crates/sk-color/src/alpha.rs` owns authored alpha bytes, normalized opacity
   quantization, RGB packing, and their unit and compile-fail contracts.
   `src/theme/alpha.rs` and `src/theme/types.rs` preserve the app imports.

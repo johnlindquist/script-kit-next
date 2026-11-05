@@ -585,7 +585,12 @@ impl OneWindow {
         if ev.is_user() {
             self.user_at = Some(now);
         }
-        let focus = if ev.is_user() || self.user_turn(now) {
+        // A saved preference may finish loading after the subject was first painted. Its
+        // implicit top action follows the new order; a row the user chose keeps its identity,
+        // including when the settings callback arrives in the same turn as that choice.
+        let new_rules = matches!(&ev, Event::Subjects(TabsEvent::Personal(_)));
+        let untouched_top = new_rules && !self.chose && self.list.sel == 0;
+        let focus = if ev.is_user() || (self.user_turn(now) && !new_rules) {
             None
         } else {
             self.focus()
@@ -601,7 +606,18 @@ impl OneWindow {
         {
             self.refresh_rows();
         }
-        if changed_page && !self.chose && self.tabs_visible() && self.text.is_empty() {
+        let changed_default = untouched_top
+            && focus.as_ref().is_some_and(|old| {
+                old.row.key.starts_with("subject/")
+                    && self.list.pinned.first().is_some_and(|new| {
+                        new.key.starts_with("subject/") && new.key != old.row.key
+                    })
+            });
+        if (changed_page || changed_default)
+            && !self.chose
+            && self.tabs_visible()
+            && self.text.is_empty()
+        {
             self.list.sel = 0;
             if focus.is_some() {
                 self.guard.arm(now);

@@ -62,7 +62,7 @@ pub(crate) use storage::{
     init_notes_db, invalidate_owned_root_notes_search_freshness,
     invalidate_root_notes_search_cache, list_note_cart_items, list_note_cart_items_deduped,
     note_editor_content_from_file, note_file_path, notes_brain_days_dir, notes_changed_on,
-    notes_substrate, owned_root_notes_search_snapshot, pinned_root_notes,
+    notes_substrate, owned_root_notes_search_snapshot, personal_note_titles, pinned_root_notes,
     read_root_notes_search_snapshot, reset_owned_root_notes_search, root_notes_query_is_eligible,
     root_notes_search_cache_is_fresh, root_notes_search_fresh_cache_status, save_note,
     save_note_cart_item, search_notes, search_root_notes_meta, search_root_notes_meta_cached,

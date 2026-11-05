@@ -32,6 +32,8 @@ pub(crate) enum AgentChatToolPolicy {
     Full,
     /// Only the canonical web-search tool ([`WEB_SEARCH_TOOL_ID`]) may run.
     WebSearchOnly,
+    /// Only Kit's launcher catalog; Apply is distinct from Read.
+    LauncherAuthor(sk_personal::api::Endpoint),
 }
 
 impl AgentChatToolPolicy {
@@ -42,6 +44,11 @@ impl AgentChatToolPolicy {
         match self {
             Self::Full => true,
             Self::WebSearchOnly => tool_id == WEB_SEARCH_TOOL_ID,
+            Self::LauncherAuthor(access) => {
+                use sk_personal::api::Endpoint::{Apply, Read};
+                tool_id == Read.profile_tool()
+                    || (access == Apply && tool_id == Apply.profile_tool())
+            }
         }
     }
 
@@ -51,7 +58,7 @@ impl AgentChatToolPolicy {
     /// policy forbids — reject it before showing UI rather than trusting the
     /// request's display fields.
     pub(crate) const fn allows_permission_prompts(self) -> bool {
-        matches!(self, Self::Full)
+        matches!(self, Self::Full | Self::LauncherAuthor(_))
     }
 }
 
@@ -146,6 +153,8 @@ pub(crate) enum AgentChatSessionPolicy {
     Full,
     /// Quick AI: zero-context — text paste and web search only.
     QuickAi,
+    /// A named profile granted only launcher tools; no context or recall.
+    LauncherAuthor(sk_personal::api::Endpoint),
 }
 
 impl AgentChatSessionPolicy {
@@ -160,7 +169,7 @@ impl AgentChatSessionPolicy {
     pub(crate) fn capabilities(self) -> AgentChatCapabilities {
         match self {
             Self::Full => AgentChatCapabilities::FULL,
-            Self::QuickAi => AgentChatCapabilities::QUICK_AI,
+            Self::QuickAi | Self::LauncherAuthor(_) => AgentChatCapabilities::QUICK_AI,
         }
     }
 
@@ -197,6 +206,7 @@ impl AgentChatSessionPolicy {
         match self {
             Self::Full => AgentChatToolPolicy::Full,
             Self::QuickAi => AgentChatToolPolicy::WebSearchOnly,
+            Self::LauncherAuthor(access) => AgentChatToolPolicy::LauncherAuthor(access),
         }
     }
 
@@ -220,8 +230,12 @@ impl AgentChatSessionPolicy {
     ) -> Result<(), ContextAdmissionError> {
         match (self, class) {
             (Self::Full, _) => Ok(()),
-            (Self::QuickAi, AgentChatContextClass::UserAuthoredText) => Ok(()),
-            (Self::QuickAi, _) => Err(ContextAdmissionError::DeniedBySessionPolicy),
+            (Self::QuickAi | Self::LauncherAuthor(_), AgentChatContextClass::UserAuthoredText) => {
+                Ok(())
+            }
+            (Self::QuickAi | Self::LauncherAuthor(_), _) => {
+                Err(ContextAdmissionError::DeniedBySessionPolicy)
+            }
         }
     }
 }
@@ -285,6 +299,36 @@ impl AgentChatCapabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_launcher_author_neither_recalls_notes_nor_inherits_other_chat_tools() {
+        use sk_personal::api::Endpoint::{Apply, Read};
+        for grant in [Read, Apply] {
+            let p = AgentChatSessionPolicy::LauncherAuthor(grant);
+            assert!(p
+                .admit_context(AgentChatContextClass::UserAuthoredText)
+                .is_ok());
+            for class in [
+                AgentChatContextClass::History,
+                AgentChatContextClass::FocusedApplication,
+                AgentChatContextClass::LocalFile,
+                AgentChatContextClass::Ambient,
+            ] {
+                assert!(p.admit_context(class).is_err());
+            }
+            assert!(
+                !p.allows_automatic_transcript_retention() && !p.allows_retained_thread_reuse()
+            );
+            let tools = p.tool_policy();
+            assert!(tools.allows_tool("launcher_read"));
+            assert_eq!(tools.allows_tool("launcher_apply"), grant == Apply);
+            assert!(
+                !tools.allows_tool("bash")
+                    && !tools.allows_tool("read")
+                    && !tools.allows_tool("web_search")
+            );
+        }
+    }
 
     #[test]
     fn quick_ai_denies_context_affordances() {

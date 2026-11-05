@@ -22,6 +22,14 @@ A small set of symbols says part of a sentence exactly, turning the input into a
 | `!` | Exit to Quick Terminal |
 | `?` | Exit to Help |
 
+To change the native pinned label or which subject action comes first, see [Change how your launcher works](personal-launcher.md).
+
+## Change editor or terminal text size
+
+Type **Set my editor text to 20 pixels** or **Use 18px text in the terminal**. Choose the **Customize Kit** row and press Return. It shows the current size before you change it. Whole-pixel sizes from 8 through 72 are supported; the edit needs Bun but no AI account. Only the named prompt's text changes, not the launcher or other applications. Open that prompt to use the saved size.
+
+While the change is in the status line, press ⌘Z with the input empty to restore the previous setting. Undo won't overwrite a later config edit. An agent with scoped settings access can use `kit/config_get` to read `editorFontSize` or `terminalFontSize` and pass its revision to `kit/config_set` as `expectedRevision`.
+
 ## Prompt-Builder Sigils
 
 `@`, `/`, `|`, `.`, and `>` each claim the sigil plus one word; everything else stays free text, so you can compose:

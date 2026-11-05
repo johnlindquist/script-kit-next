@@ -195,6 +195,7 @@ mod tests {
             scriptlet_count: 5,
             filter_text: Some("test".to_string()),
             selected_index: Some(3),
+            ..Default::default()
         };
 
         let result = read_resource("kit://state", &[], &[], Some(&app_state));

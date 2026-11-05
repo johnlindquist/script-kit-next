@@ -12,6 +12,8 @@ scripts/config-document.ts
 scripts/config-schema.ts
 scripts/mcp-cli.ts
 scripts/agent-bridge-cli.ts
+scripts/herdr-pane-read.mjs
+scripts/herdr-panes.mjs
 skills/script-kit/SKILL.md
 scripts/examples/menu-syntax
 .cargo

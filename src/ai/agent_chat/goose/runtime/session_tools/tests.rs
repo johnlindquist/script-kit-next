@@ -4,6 +4,16 @@ use serde_json::{json, Value};
 /// Feed the real ACP handshake replies over its request channel. Observe when a
 /// session actually becomes eligible for warm acquisition or a first prompt.
 fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<String>) {
+    session(extensions, load, remaining, None, &[])
+}
+
+fn session(
+    extensions: Value,
+    load: Value,
+    remaining: &[&str],
+    author: Option<sk_personal::api::Endpoint>,
+    kit_tools: &[&str],
+) -> (bool, Vec<String>) {
     let (out_tx, mut out_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut connection = Connection {
         shared: std::sync::Arc::new(parking_lot::Mutex::new(Shared::default())),
@@ -16,6 +26,7 @@ fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<S
         let mut session = None;
         let mut spec = GooseLaunchSpec::new("/fixture/goose", "/fixture");
         spec.recipe = json!({"extensions":extensions});
+        spec.launcher_author = author;
         let ready = ensure_session(&mut connection, &spec, &mut session)
             .await
             .is_ok();
@@ -28,6 +39,7 @@ fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<S
         ready
     };
     let remaining: Vec<String> = remaining.iter().map(|s| (*s).to_owned()).collect();
+    let kit_tools: Vec<String> = kit_tools.iter().map(|s| (*s).to_owned()).collect();
     let engine = async move {
         let mut methods = Vec::new();
         while let Some(request) = out_rx.recv().await {
@@ -46,11 +58,13 @@ fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<S
                     json!({})
                 }
                 "_goose/unstable/tools/list" => {
-                    assert_eq!(
-                        params,
-                        &json!({"sessionId":expected_session,"extensionName":"developer"})
-                    );
-                    json!({"tools":remaining.iter().map(|name|json!({"name":name})).collect::<Vec<_>>()})
+                    assert_eq!(params["sessionId"], expected_session);
+                    let names = match params["extensionName"].as_str() {
+                        Some("developer") => &remaining,
+                        Some("scriptkit") if author.is_some() => &kit_tools,
+                        _ => panic!("unexpected extension inventory"),
+                    };
+                    json!({"tools":names.iter().map(|name|json!({"name":name})).collect::<Vec<_>>()})
                 }
                 "session/set_mode" => json!({}),
                 _ => panic!("unexpected call: {method}"),
@@ -75,6 +89,25 @@ fn handshake(extensions: Value, load: Value, remaining: &[&str]) -> (bool, Vec<S
             let ready = client.await;
             (ready, peer.await.unwrap())
         })
+}
+
+#[test]
+fn author_cannot_start_with_a_missing_tool_or_an_unrequested_writer() {
+    use sk_personal::api::Endpoint::{Apply, Read};
+    let ready = |access, names: &[&str]| {
+        session(
+            json!([{"name":"scriptkit"}]),
+            json!([{"name":"scriptkit","success":true}]),
+            &[],
+            Some(access),
+            names,
+        )
+        .0
+    };
+    let read = &["scriptkit__launcher_read"];
+    let both = &["scriptkit__launcher_read", "scriptkit__launcher_apply"];
+    assert!(ready(Read, read) && ready(Apply, both));
+    assert!(!ready(Read, both) && !ready(Apply, read) && !ready(Read, &[]));
 }
 
 #[test]

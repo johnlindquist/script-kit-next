@@ -56,6 +56,9 @@ pub struct ResourceContent {
 /// Application state exposed via kit://state resource
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppStateResource {
+    /// Only a separately authorized launcher read projects this. Never expose it in kit://state.
+    #[serde(skip)]
+    pub launcher: Option<sk_personal::api::Adoption>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_prompt: Option<String>,
     /// Whether the app window is visible

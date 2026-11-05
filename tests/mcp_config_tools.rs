@@ -106,6 +106,42 @@ fn config_write_context() -> McpRuntimeContext {
 }
 
 #[test]
+fn local_text_size_request_persists_and_undo_respects_the_next_writer() {
+    with_temp_config(
+        "local_text_size_request_persists_and_undo_respects_the_next_writer",
+        |path| {
+            use script_kit_gpui::mcp_config_tools::font;
+            let ask = sk_one_window::font_preference::read("Use 22px text in my editor").unwrap();
+            let base = b"export default { /* kept */ terminalFontSize: 14 };\n";
+            std::fs::write(path, base).unwrap();
+            let read = |key| {
+                first_tool_text(&call_tool(
+                    "kit/config_get",
+                    json!({"key":key}),
+                    Some(&config_read_context()),
+                ))["result"]["data"]
+                    .clone()
+            };
+            let undo = font::apply(ask, 16.).unwrap().unwrap();
+            assert_eq!(read("editorFontSize")["value"], 22);
+            assert_eq!(read("terminalFontSize")["value"], 14);
+            assert!(font::apply(ask, 22.).unwrap().is_none());
+            assert!(font::apply(ask, 16.).is_err());
+            assert_eq!(undo.restore().unwrap(), None);
+            assert_eq!(read("editorFontSize")["isDefault"], true);
+            let undo = font::apply(ask, 16.).unwrap().unwrap();
+            let human=b"export default { editorFontSize: 19, terminalFontSize: 21 }; // saved elsewhere\n";
+            std::fs::write(path, human).unwrap();
+            assert!(undo.restore().is_err());
+            assert_eq!(std::fs::read(path).unwrap(), human);
+            let undo = font::apply(ask, 19.).unwrap().unwrap();
+            assert_eq!(undo.restore().unwrap(), Some(19.));
+            assert_eq!(std::fs::read(path).unwrap(), human);
+        },
+    );
+}
+
+#[test]
 fn config_tools_are_listed_before_generic_kit_fallback() {
     with_temp_config(
         "config_tools_are_listed_before_generic_kit_fallback",

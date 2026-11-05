@@ -23,6 +23,19 @@ impl BoundLaunch {
         user_mcp: &[Value],
     ) -> Self {
         let mut spec = launch.spec.clone();
+        spec.launcher_author = launch.tools.launcher_author();
+        if spec.launcher_author.is_some() {
+            // Goose reads project and global hint files before a model call even
+            // when no file tool is granted. Override only this child process.
+            spec.env.insert("CONTEXT_FILE_NAMES".into(), "[]".into());
+            spec.hidden_session = true;
+        }
+        // A dedicated launcher writer reviews each save, independent of ordinary chat settings.
+        let mode = if spec.launcher_author == Some(sk_personal::api::Endpoint::Apply) {
+            AgentApprovalMode::AskBeforeChanges
+        } else {
+            mode
+        };
         spec.approval_mode = mode;
         spec.env
             .insert("GOOSE_MODE".into(), mode.goose_mode().into());
@@ -79,6 +92,10 @@ impl BoundLaunch {
             );
             current
         };
+        anyhow::ensure!(
+            spec.launcher_author.is_none() || endpoint.is_some(),
+            "The launcher authoring connection is unavailable"
+        );
         let root = launch_spec::goose_root_from_env(&spec.env);
         launch_spec::ensure_goose_root(&root)
             .context("Could not prepare the session’s extension policy")?;
@@ -91,16 +108,20 @@ impl BoundLaunch {
                 let extensions = spec.recipe["extensions"]
                     .as_array_mut()
                     .ok_or_else(|| anyhow::anyhow!("Invalid bound agent recipe"))?;
-                let policy_id = mcp_agent_tools::register_policy(self.policy.clone());
-                spec.agent_policy_id = Some(policy_id.clone());
-                extensions.insert(
-                    0,
-                    recipe::script_kit_extension(&recipe::ScriptKitToolsEndpoint {
-                        uri: endpoint.uri,
-                        bearer_token: endpoint.token,
-                        policy_id,
-                    }),
+                let policy_id = mcp_agent_tools::register_bound_policy(
+                    self.policy.clone(),
+                    spec.launcher_author == Some(sk_personal::api::Endpoint::Apply),
                 );
+                spec.agent_policy_id = Some(policy_id.clone());
+                let mut extension = recipe::script_kit_extension(&recipe::ScriptKitToolsEndpoint {
+                    uri: endpoint.uri,
+                    bearer_token: endpoint.token,
+                    policy_id,
+                });
+                if spec.launcher_author.is_some() {
+                    extension["available_tools"] = serde_json::json!(self.policy.allowed_tools);
+                }
+                extensions.insert(0, extension);
             } else {
                 tracing::warn!(target:"script_kit::agent_chat",event="goose_script_kit_tools_unavailable",profile_id=%self.profile_id,"Session starts without Script Kit tools");
             }

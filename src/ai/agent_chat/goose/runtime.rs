@@ -39,6 +39,7 @@ use super::protocol::{
 };
 use super::recipe::recipe_deeplink;
 
+mod launcher_approval;
 mod session_tools;
 use super::sign_in::{self, LeaderLease, SignInRole};
 
@@ -282,6 +283,7 @@ struct ActiveTurn {
     event_tx: AgentChatEventTx,
     trace: PhaseTrace,
     tool_policy: AgentChatToolPolicy,
+    launcher_review: Option<Arc<crate::mcp_agent_tools::LauncherReviewTurn>>,
     /// A provider failure goose reported as assistant text; the turn ends as
     /// this failure even though goose then stops with `end_turn`.
     provider_failure: Option<crate::ai::reliability::AppFailureRecord>,
@@ -552,6 +554,17 @@ async fn run_event_loop(
                     event_tx: event_tx.clone(),
                     trace: trace.clone(),
                     tool_policy: request.tool_policy,
+                    launcher_review: spec
+                        .agent_policy_id
+                        .as_deref()
+                        .filter(|_| {
+                            spec.owns_agent_policy
+                                && request.tool_policy
+                                    == AgentChatToolPolicy::LauncherAuthor(
+                                        sk_personal::api::Endpoint::Apply,
+                                    )
+                        })
+                        .and_then(crate::mcp_agent_tools::start_launcher_review),
                     provider_failure: None,
                 });
                 if connection
@@ -596,6 +609,9 @@ async fn run_event_loop(
                     (Some(active), Some(session_id)) if active.ui_thread_id == ui_thread_id => {
                         // A user Stop is cancellation, not an error: record it
                         // before goose answers so it never reads as a failure.
+                        if let Some(turn) = &active.launcher_review {
+                            turn.close();
+                        }
                         active.trace.terminal(TurnOutcome::Cancelled, None);
                         let _ = connection
                             .out_tx
@@ -610,6 +626,9 @@ async fn run_event_loop(
                 }
             }
             GooseCommand::SetApprovalMode { mode } => {
+                if spec.launcher_author == Some(sk_personal::api::Endpoint::Apply) {
+                    continue;
+                }
                 shared.lock().approval_mode = mode;
                 if let Some(state) = session.as_ref() {
                     let result = connection
@@ -706,7 +725,7 @@ async fn ensure_session<'a>(
                 ),
             ));
         };
-        session_tools::verify(connection, &spec.recipe, &created, session_id).await?;
+        session_tools::verify(connection, spec, &created, session_id).await?;
         connection.shared.lock().session_id = Some(session_id.to_string());
         let mut state = SessionState {
             session_id: session_id.to_string(),
@@ -883,6 +902,7 @@ async fn read_stdout(
                 }
                 if citation_turn != active.prompt_request_id {
                     citation_turn = active.prompt_request_id;
+                    tool_names.clear();
                     in_citation = false;
                 }
                 remember_tool_name(&mut tool_names, update);
@@ -896,7 +916,11 @@ async fn read_stdout(
                     "session/request_permission" => {
                         let (active, mode) = {
                             let shared = shared.lock();
-                            (shared.active_turn.clone(), shared.approval_mode)
+                            let session = params.get("sessionId").and_then(Value::as_str);
+                            let active = shared.active_turn.clone().filter(|_| {
+                                session.is_some() && session == shared.session_id.as_deref()
+                            });
+                            (active, shared.approval_mode)
                         };
                         let named = with_known_tool_name(&params, &tool_names);
                         let params = named.unwrap_or(params);
@@ -908,12 +932,27 @@ async fn read_stdout(
                             PermissionRoute::Answer(outcome) => response(&id, outcome),
                             PermissionRoute::AskUser => match active {
                                 Some(active) => {
-                                    tokio::spawn(ask_user_permission(
-                                        id,
-                                        params,
-                                        active.event_tx,
-                                        out_tx.clone(),
-                                    ));
+                                    if launcher_approval::is_write(active.tool_policy, &params) {
+                                        let turn = active
+                                            .launcher_review
+                                            .as_ref()
+                                            .map(Arc::downgrade)
+                                            .unwrap_or_default();
+                                        tokio::spawn(launcher_approval::ask(
+                                            id,
+                                            params,
+                                            active.event_tx,
+                                            out_tx.clone(),
+                                            turn,
+                                        ));
+                                    } else {
+                                        tokio::spawn(ask_user_permission(
+                                            id,
+                                            params,
+                                            active.event_tx,
+                                            out_tx.clone(),
+                                        ));
+                                    }
                                     continue;
                                 }
                                 None => response(&id, permission_outcome(&params, false)),
@@ -1012,6 +1051,9 @@ fn permission_route(
     if !policy.allows_tool(&tool_name) {
         return PermissionRoute::Answer(permission_outcome(params, false));
     }
+    if launcher_approval::is_write(policy, params) {
+        return PermissionRoute::AskUser;
+    }
     if !policy.allows_permission_prompts()
         || mode.allows_without_asking(&tool_name)
         || is_bookkeeping_tool(&tool_name)
@@ -1037,22 +1079,33 @@ async fn ask_user_permission(
 ) {
     let (reply_tx, reply_rx) = async_channel::bounded(1);
     let request = approval_request(&params, reply_tx);
+    let choice = wait_for_permission(request, reply_rx, event_tx).await;
+    let _ = out_tx.send(response(&id, selected_or_cancelled(choice)));
+}
+
+async fn wait_for_permission(
+    request: crate::ai::agent_chat::ui::AgentChatApprovalRequest,
+    reply_rx: async_channel::Receiver<Option<String>>,
+    event_tx: AgentChatEventTx,
+) -> Option<String> {
     let sent = tokio::time::timeout(
         SEND_TIMEOUT,
         event_tx.send(AgentChatEvent::ApprovalRequested(Box::new(request))),
     )
     .await
     .is_ok_and(|sent| sent.is_ok());
-    let choice = if sent {
+    if sent {
         reply_rx.recv().await.ok().flatten()
     } else {
         None
-    };
-    let outcome = match choice {
+    }
+}
+
+fn selected_or_cancelled(choice: Option<String>) -> Value {
+    match choice {
         Some(option_id) => json!({ "outcome": { "outcome": "selected", "optionId": option_id } }),
         None => json!({ "outcome": { "outcome": "cancelled" } }),
-    };
-    let _ = out_tx.send(response(&id, outcome));
+    }
 }
 
 /// The question as the chat shows it: what the tool is and what it would do.
@@ -1323,7 +1376,7 @@ async fn fork_before(
             ),
         ));
     };
-    session_tools::verify(connection, &spec.recipe, &forked, session_id).await?;
+    session_tools::verify(connection, spec, &forked, session_id).await?;
     {
         let mut shared = connection.shared.lock();
         shared.session_id = Some(session_id.to_string());
@@ -1351,28 +1404,10 @@ async fn fork_before(
 
 /// A fixed answer to goose's permission request.
 fn permission_outcome(params: &Value, allowed: bool) -> Value {
-    let wanted = if allowed {
-        ["allow_once", "allow_always"]
-    } else {
-        ["reject_once", "reject_always"]
-    };
-    let option_id = params
-        .get("options")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .find(|option| {
-            option
-                .get("kind")
-                .and_then(Value::as_str)
-                .is_some_and(|kind| wanted.contains(&kind))
-        })
-        .and_then(|option| option.get("optionId"))
-        .and_then(Value::as_str);
-    match option_id {
-        Some(option_id) => json!({ "outcome": { "outcome": "selected", "optionId": option_id } }),
-        None => json!({ "outcome": { "outcome": "cancelled" } }),
-    }
+    // Never turn an automatic answer into a standing grant or refusal. Goose offers
+    // allow_always first; array order is not a preference for a lasting decision.
+    let wanted = if allowed { "allow_once" } else { "reject_once" };
+    selected_or_cancelled(launcher_approval::once(params, wanted))
 }
 
 /// Trace one event through the shared phase vocabulary. This is the single
@@ -1594,6 +1629,9 @@ fn is_reveal_chunk(event: &AgentChatEvent) -> bool {
 }
 
 async fn deliver_terminal(active: ActiveTurn, event: AgentChatEvent) {
+    if let Some(turn) = &active.launcher_review {
+        turn.close();
+    }
     trace_event(&active.trace, &event);
     // A blocked consumer must not hold transport teardown forever.
     let _ = tokio::time::timeout(SEND_TIMEOUT, active.event_tx.send(event)).await;

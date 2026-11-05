@@ -1673,6 +1673,8 @@ impl ScriptListApp {
             pin.semantic_id = crate::one_window::slot_line::WINDOW_PINNED_ID.to_string();
             pin.element_type = protocol::ElementType::Panel;
             pin.role = Some("window-state".to_string());
+            let style=self.personal_pin_style();
+            pin.value=Some(format!("{}/{}",match style.text_role {sk_one_window::personal::TextRole::Primary=>"primary",sk_one_window::personal::TextRole::Muted=>"muted"},if style.semibold {"semibold"} else {"regular"}));
             pin.index = None;
             pin.selectable = Some(false);
             let at = outcome

@@ -353,7 +353,12 @@ impl AgentChatThread {
             .and_then(|id| request.options.iter().find(|opt| opt.option_id == id))
         {
             Some(option) => format!(
-                "Permission granted \u{00b7} {} \u{00b7} {}",
+                "Permission {} \u{00b7} {} \u{00b7} {}",
+                if option.is_reject() {
+                    "denied"
+                } else {
+                    "granted"
+                },
                 tool_title,
                 option.summary_label()
             ),

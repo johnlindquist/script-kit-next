@@ -73,6 +73,7 @@ pub(crate) struct SlotLineView {
     pub(crate) dim: SlotDim,
     /// The window stays open when it loses focus (⌘⇧P); drawn as a pin at the right end.
     pub(crate) pinned: bool,
+    pub(crate) pin_style: sk_one_window::personal::PinStyle,
 }
 
 impl SlotLineView {
@@ -89,6 +90,7 @@ impl SlotLineView {
             style,
             dim: dimmer.toward(style.opacity),
             pinned,
+            pin_style: window.personal_rules().pin(false),
         }
     }
 
@@ -191,7 +193,9 @@ impl SlotLineView {
                         .map(|(key, label)| render_hint(theme, def, key, label)),
                 )
             })
-            .when(self.pinned, |row| row.child(render_pinned(theme, def)))
+            .when(self.pinned, |row| {
+                row.child(render_pinned(theme, def, self.pin_style))
+            })
             .when_some(line.progress, |row, progress| {
                 row.child(
                     div()
@@ -248,7 +252,11 @@ pub(crate) fn render_hint(
 }
 
 /// The window's own state, not the line's: a Lucide pin and what it means, at the right end.
-pub(crate) fn render_pinned(theme: &crate::theme::Theme, def: MainMenuThemeDef) -> AnyElement {
+pub(crate) fn render_pinned(
+    theme: &crate::theme::Theme,
+    def: MainMenuThemeDef,
+    style: sk_one_window::personal::PinStyle,
+) -> AnyElement {
     use gpui_component::IconNamed;
     let tokens = def.slot_line;
     div()
@@ -260,7 +268,13 @@ pub(crate) fn render_pinned(theme: &crate::theme::Theme, def: MainMenuThemeDef) 
         .items_center()
         .gap(px(def.footer.metrics.content_gap))
         .text_size(px(tokens.hint_font_size))
-        .text_color(rgb(theme.colors.text.muted))
+        .text_color(rgb(match style.text_role {
+            sk_one_window::personal::TextRole::Muted => theme.colors.text.muted,
+            sk_one_window::personal::TextRole::Primary => theme.colors.text.primary,
+        }))
+        .when(style.semibold, |label| {
+            label.font_weight(gpui::FontWeight::SEMIBOLD)
+        })
         .child(
             svg()
                 .path(crate::icons::LucideIcon::Pin.path())

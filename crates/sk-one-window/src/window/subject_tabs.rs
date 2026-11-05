@@ -24,6 +24,8 @@ pub enum TabsEvent {
         copy: Option<Box<TabSource>>,
     },
     Observe(TabSource),
+    /// One validated settings snapshot. Never changes the identity of a subject observation.
+    Personal(crate::personal::LauncherRules),
     /// Explicit paste can reach a copy even when not offered passively.
     Paste(TabSource),
     Pick(String),
@@ -34,6 +36,7 @@ pub struct SubjectPage {
     pub id: String,
     pub source: Arc<TabSource>,
     observed: Ms,
+    first: Option<&'static str>,
 }
 impl SubjectPage {
     pub fn age(&self, now: Ms) -> Ms {
@@ -77,21 +80,23 @@ impl SubjectPage {
         )
     }
     pub fn rows(&self) -> Vec<Row> {
-        self.source
-            .rows
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(i, mut row)| {
-                row.key = format!("subject/{}/{}", self.id, row.key);
-                row.head = (i == 0).then(|| self.source.subject.title.clone());
-                row
-            })
-            .collect()
+        let mut rows = self.source.rows.clone();
+        if let Some(at) = self
+            .first
+            .and_then(|key| rows.iter().position(|r| r.key == key))
+        {
+            rows[..=at].rotate_right(1);
+        }
+        for (i, row) in rows.iter_mut().enumerate() {
+            row.key = format!("subject/{}/{}", self.id, row.key);
+            row.head = (i == 0).then(|| self.source.subject.title.clone());
+        }
+        rows
     }
 }
 #[derive(Clone, Debug, Default)]
 pub(super) struct Tabs {
+    personal: crate::personal::LauncherRules,
     pub enabled: bool,
     serial: u64,
     live: Vec<SubjectPage>,
@@ -136,12 +141,16 @@ impl Tabs {
         self.live.push(SubjectPage {
             id: id.clone(),
             observed: now,
+            first: None,
             source: Arc::new(s),
         });
         id
     }
 }
 impl OneWindow {
+    pub fn personal_rules(&self) -> crate::personal::LauncherRules {
+        self.tabs.personal
+    }
     pub fn tabs_enabled(&self) -> bool {
         self.tabs.enabled
     }
@@ -170,6 +179,9 @@ impl OneWindow {
             })
             .cloned()
             .collect();
+        for page in &mut pages {
+            page.first = self.tabs.personal.first(page.source.subject.kind);
+        }
         pages.sort_by_key(|p| {
             (
                 p.age(self.now),
@@ -207,6 +219,7 @@ impl OneWindow {
             pages.push(SubjectPage {
                 id: format!("run-{}", e.id),
                 observed: self.now,
+                first: None,
                 source: Arc::new(TabSource {
                     subject: entry_subject(e, words::LAST),
                     body: Arc::from(e.said.as_str()),
@@ -295,6 +308,9 @@ impl OneWindow {
                 for s in [window, copy.map(|s| *s)].into_iter().flatten() {
                     self.tabs.put(now, s);
                 }
+            }
+            TabsEvent::Personal(rules) => {
+                self.tabs.personal = rules;
             }
             TabsEvent::Observe(s) => {
                 self.tabs.put(now, s);

@@ -614,6 +614,28 @@ pub fn ensure_kit_setup() -> SetupResult {
         &mut warnings,
         "share/external-agent/prepare-handout.ts",
     );
+    // Explicit pairing only. Installing Kit must never install a mod into Herdr, mount it,
+    // select a space, or create a grant. The person chooses what to share.
+    for (name, source) in [
+        (
+            "bin/herdr-panes.mjs",
+            include_str!("../../scripts/herdr-panes.mjs"),
+        ),
+        (
+            "bin/herdr-pane-read.mjs",
+            include_str!("../../scripts/herdr-pane-read.mjs"),
+        ),
+        (
+            "share/herdr-pane-metadata/main.js",
+            include_str!("../../kit-init/integrations/herdr-pane-metadata/main.js"),
+        ),
+        (
+            "share/herdr-pane-metadata/mod.json",
+            include_str!("../../kit-init/integrations/herdr-pane-metadata/mod.json"),
+        ),
+    ] {
+        write_string_if_changed(&kit_dir.join(name), source, &mut warnings, name);
+    }
     let scriptkit_cli_path = kit_dir.join("bin").join("scriptkit");
     write_executable_string_if_changed(
         &scriptkit_cli_path,

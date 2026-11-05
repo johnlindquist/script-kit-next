@@ -20,6 +20,10 @@ pub(crate) fn spawn_hosted_thread(
     let agent_launch =
         crate::ai::agent_chat::launch::resolve_selected_launch(&ai_preferences, &profile_ctx)
             .map_err(|error| error.to_string())?;
+    let session_policy = match agent_launch.goose.tools.launcher_author() {
+        Some(access) => super::capabilities::AgentChatSessionPolicy::LauncherAuthor(access),
+        None => super::capabilities::AgentChatSessionPolicy::Full,
+    };
     let manager = crate::ai::agent_chat::launch::warm_session_manager();
     // Acquire-or-cold-spawn instead of prepare+acquire: when the warm slot for
     // this key is already leased to a live thread (e.g. starting a second
@@ -49,7 +53,7 @@ pub(crate) fn spawn_hosted_thread(
                 launch_requirements: requirements,
                 available_models: agent_launch.available_models.clone(),
                 selected_model_id: agent_launch.selected_model_id.clone(),
-                session_policy: super::capabilities::AgentChatSessionPolicy::Full,
+                session_policy,
             },
             cx,
         )

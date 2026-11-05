@@ -33,6 +33,8 @@ pub(crate) struct OneWindowHost {
     wake_at: Option<Ms>,
     published_subject_page: Option<String>,
     pub(crate) tab_hints: bool,
+    pub(super) editing_font: bool,
+    pub(super) personal: super::personal_rules::PersonalHost,
     pub(crate) front_probe: Option<crate::frontmost_app_tracker::TrackedApp>,
     /// The current show-time window observation; titles and PIDs alone are not action targets.
     pub(crate) observed_front: Option<(
@@ -741,6 +743,17 @@ impl ScriptListApp {
         let mut names: Vec<(Row, &SearchResult)> = Vec::new();
         let mut fallbacks: Vec<(u8, Row, &SearchResult)> = Vec::new();
         let mut results = HashMap::new();
+        if let Some(row) = self
+            .personal_rule_row(text)
+            .or_else(|| self.personal_font_row(text))
+        {
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
+        for row in self.personal_view_rows(text) {
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
         if let Some((row, result)) = self.one_window_capture_row(text) {
             results.insert(row.key.clone(), result);
             rows.push(row);
@@ -966,6 +979,16 @@ impl ScriptListApp {
         if !self.one_window_owns(&text) || self.one_window.list().jev.is_down_for(&text) {
             return;
         }
+        if sk_one_window::font_preference::read(&text).is_some()
+            || sk_personal::speech::read(&text).is_some()
+        {
+            self.one_window_cancel_jev();
+            queue.push_back(Event::Jev {
+                rows: Vec::new(),
+                text,
+            });
+            return;
+        }
         if let Some(plan) = self
             .intent_tab_browser()
             .and_then(|app| crate::intent::engine::named_tab_plan(&text, app))
@@ -1121,6 +1144,15 @@ impl ScriptListApp {
         {
             return self.one_window_open_all_results(query, cx);
         }
+        if row.key.starts_with("personal/view/") {
+            return self.open_personal_view(&row, cx);
+        }
+        if super::personal_rules::is_rule_row(&row) {
+            return self.run_personal_rule(&row, cx);
+        }
+        if super::personal_settings::is_font_row(&row) {
+            return self.run_personal_font(&row, cx);
+        }
         if self.one_window_route_work(&row, cx) {
             return Ok(());
         }
@@ -1257,6 +1289,7 @@ impl ScriptListApp {
             "chipAt": self.one_window.chip_at(),
             "agentOwns": self.one_window.agent_owns(),
             "subjectTabs": self.subject_tab_elements(),
+            "personalization": self.personal_observation(),
             "header": self.one_window_drawn_header(),
             "enter": self.one_window.enter_target(self.one_window_host.now),
             "enterArmed": self.one_window_enter_arming(),

@@ -2541,6 +2541,9 @@ impl ScriptListApp {
         app.sync_list_state();
         app.validate_selection_bounds(cx);
         app.rebuild_main_window_preflight_if_needed();
+        if app.main_services.is_production() || crate::runtime_policy::is_owned_evaluation() {
+            cx.spawn(async move |this,cx| {let _=this.update(cx,|app,cx|app.reload_personal_rules(cx));}).detach();
+        }
 
         app
     }

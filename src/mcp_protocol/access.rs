@@ -3,6 +3,9 @@ use super::bridge;
 use crate::{mcp_control, mcp_kit_tools};
 
 pub(super) fn tool(name: &str, scopes: &[String]) -> bool {
+    if let Some(endpoint) = sk_personal::api::Endpoint::from_mcp(name) {
+        return scopes.iter().any(|s| s == endpoint.scope());
+    }
     if name.starts_with("kit/handoff_") {
         return bridge::handoff::permitted(name, scopes);
     }

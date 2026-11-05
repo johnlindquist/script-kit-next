@@ -620,7 +620,9 @@ impl ScriptListApp {
             main_window_run_footer_button(
                 run_label,
                 footer_disabled,
-                self.shortcut_submit_block_reason().or_else(|| {
+                self.personal_submit_block_reason()
+                    .or_else(|| self.shortcut_submit_block_reason())
+                    .or_else(|| {
                     self.one_window.views().top().filter(|v| v.name == sk_one_window::chat::VIEW)
                         .and_then(|_| self.one_window.chat()?.activity_label())
                 }),
@@ -1615,6 +1617,10 @@ impl ScriptListApp {
     /// Same accessible destination and shortcut hints as the painted line. Live speech is
     /// a local preview, not part of the passive protocol projection.
     pub(crate) fn observable_prompt_header(&self)->crate::one_window::slot_line::SlotLineView {let mut header=self.prompt_header_context();if self.cursor_dictation_pending(){header.line.sub.clear();}header}
+    pub(crate) fn personal_pin_style(&self) -> sk_one_window::personal::PinStyle {
+        let recording = self.one_window_host.cursor_voice.active.as_ref().is_some_and(|s| !s.stopped) || crate::dictation::is_dictation_recording();
+        self.one_window.personal_rules().pin(recording)
+    }
     pub(crate) fn prompt_header_context(&self) -> crate::one_window::slot_line::SlotLineView {
         let mut header=crate::one_window::slot_line::SlotLineView::of(
             &self.one_window,
@@ -1622,6 +1628,7 @@ impl ScriptListApp {
             self.one_window_clock(),
             self.is_pinned,
         );
+        header.pin_style = self.personal_pin_style();
         if let Some(s)=self.one_window_host.cursor_voice.active.as_ref(){
             header.line.kind=sk_one_window::SlotKind::Typing;header.line.icon="mic".into();header.line.label.clear();header.line.title=if s.stopped{"Finishing dictation".into()}else{s.route.title(&s.label)};header.line.sub=s.partial.split_whitespace().collect::<Vec<_>>().join(" ");header.line.progress=None;header.line.lit=true;header.line.failed=false;header.line.hints=Vec::new();
             if s.journal_failed.load(std::sync::atomic::Ordering::Acquire){header.line.sub="Audio recovery unavailable".into();}

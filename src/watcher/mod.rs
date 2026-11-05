@@ -122,6 +122,7 @@ fn interruptible_sleep(duration: Duration, stop_flag: &std::sync::atomic::Atomic
 #[derive(Debug, Clone)]
 pub enum ConfigReloadEvent {
     Reload,
+    PersonalRules,
 }
 /// Event emitted when theme needs to be reloaded
 #[derive(Debug, Clone)]
@@ -183,6 +184,7 @@ where
 pub struct ConfigWatcher {
     tx: Option<Sender<ConfigReloadEvent>>,
     watcher: Option<ConfigGenericWatcher>,
+    personal: Option<ConfigGenericWatcher>,
 }
 
 impl ConfigWatcher {
@@ -196,6 +198,7 @@ impl ConfigWatcher {
             Self {
                 tx: Some(tx),
                 watcher: None,
+                personal: None,
             },
             rx,
         )
@@ -227,11 +230,13 @@ impl ConfigWatcher {
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
+        // The standalone config-watcher/shutdown probes do not prepare new personal directories.
+        let watch_personal = settings_source == "startup_preloaded_config";
         log_watcher_settings_start("config", settings_source, settings);
         let target_path = crate::setup::config_ts_path();
 
         let mut watcher = build_single_file_reload_watcher(
-            tx,
+            tx.clone(),
             "config",
             target_path,
             ConfigReloadEvent::Reload,
@@ -239,6 +244,22 @@ impl ConfigWatcher {
         );
         watcher.start()?;
         self.watcher = Some(watcher);
+        if watch_personal && !sk_personal::api::safe_mode() {
+            if let Ok(path) =
+                sk_personal::Store::open(&crate::setup::get_kit_path()).and_then(|s| s.watch_file())
+            {
+                let mut personal = build_single_file_reload_watcher(
+                    tx,
+                    "personal-launcher",
+                    path,
+                    ConfigReloadEvent::PersonalRules,
+                    settings,
+                );
+                if personal.start().is_ok() {
+                    self.personal = Some(personal);
+                }
+            }
+        }
         Ok(())
     }
 }

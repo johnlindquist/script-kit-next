@@ -13,7 +13,9 @@
 mod app;
 mod changes;
 mod files;
+mod launcher_review;
 mod web;
+pub(crate) use launcher_review::{start_launcher_review, LauncherReviewTurn};
 
 pub(crate) use changes::{ChangeSummary, RevertReport};
 
@@ -118,18 +120,26 @@ impl AgentToolPolicy {
 struct PolicyState {
     policy: AgentToolPolicy,
     searches_this_turn: u8,
+    // None: ordinary explicitly granted profile. Some(empty): dedicated writer, no live turn.
+    launcher_review: Option<std::sync::Weak<LauncherReviewTurn>>,
 }
 
 static REGISTRY: LazyLock<Mutex<HashMap<String, PolicyState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+#[cfg(test)]
 pub(crate) fn register_policy(policy: AgentToolPolicy) -> String {
+    register_bound_policy(policy, false)
+}
+
+pub(crate) fn register_bound_policy(policy: AgentToolPolicy, review_writes: bool) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     REGISTRY.lock().insert(
         id.clone(),
         PolicyState {
             policy,
             searches_this_turn: 0,
+            launcher_review: review_writes.then(std::sync::Weak::new),
         },
     );
     id
@@ -399,6 +409,19 @@ fn tool_list(policy: Option<&AgentToolPolicy>) -> Vec<Value> {
         .filter(|tool| policy.allows(tool.name))
         .map(|tool| listed_tool(tool.name, tool.description, (tool.schema)(), tool.read_only))
         .collect();
+    for endpoint in [
+        sk_personal::api::Endpoint::Read,
+        sk_personal::api::Endpoint::Apply,
+    ] {
+        if policy.allows(endpoint.profile_tool()) {
+            listed.push(listed_tool(
+                endpoint.profile_tool(),
+                endpoint.description(),
+                endpoint.schema(),
+                endpoint == sk_personal::api::Endpoint::Read,
+            ));
+        }
+    }
     if policy.allows(APP_TOOLS_ID) {
         listed.extend(
             app::tools().into_iter().map(|tool| {
@@ -434,6 +457,34 @@ fn call_tool(
         .and_then(Value::as_str)
         .unwrap_or_default();
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
+    if let Some(endpoint) = [
+        sk_personal::api::Endpoint::Read,
+        sk_personal::api::Endpoint::Apply,
+    ]
+    .into_iter()
+    .find(|e| e.profile_tool() == name)
+    {
+        if !policy_for(policy_id).is_some_and(|p| p.allows(endpoint.profile_tool())) {
+            return tool_error("scope_denied");
+        }
+        if endpoint == sk_personal::api::Endpoint::Apply {
+            if let Err(code) = launcher_review::claim(policy_id, &args) {
+                return tool_error(code);
+            }
+        }
+        let result = crate::mcp_protocol::personal::call(
+            endpoint,
+            args,
+            sk_personal::Author::ConfiguredAgent,
+            runtime.and_then(|r| r.kit_runtime_bridge.as_deref()),
+        );
+        return match result {
+            Ok(body) => {
+                json!({"content":[{"type":"text","text":body.to_string()}],"isError":false})
+            }
+            Err(code) => tool_error(code),
+        };
+    }
     let builtin = TOOLS.iter().any(|tool| tool.name == name);
     if !builtin {
         let app_tool = policy_for(policy_id)
@@ -537,6 +588,50 @@ mod tests {
         );
         assert_eq!(unknown["result"]["tools"], json!([]));
         unregister_policy(&id);
+    }
+
+    #[test]
+    fn a_configured_launcher_reader_cannot_apply_or_inherit_broad_tools() {
+        let id = register_policy(policy(&["launcher_read"], None));
+        let listed = rpc(
+            Some(&id),
+            json!({"jsonrpc":"2.0","id":1,"method":"tools/list"}),
+        );
+        let names = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["launcher_read"]);
+        for (name, args) in [
+            ("launcher_apply", json!({"op":"apply"})),
+            ("launcher_read", json!({"op":"apply"})),
+            ("write", json!({})),
+        ] {
+            let reply = rpc(
+                Some(&id),
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":name,"arguments":args}}),
+            );
+            assert_eq!(reply["result"]["isError"], true);
+        }
+        let reply = rpc(
+            Some(&id),
+            json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"launcher_read","arguments":{"op":"describe"}}}),
+        );
+        let body: Value =
+            serde_json::from_str(reply["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(body["data"]["schemaVersion"], 1);
+        unregister_policy(&id);
+        let broad = register_policy(policy(&["app"], None));
+        for name in ["launcher_read", "launcher_apply"] {
+            let reply = rpc(
+                Some(&broad),
+                json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":name,"arguments":{"op":"describe"}}}),
+            );
+            assert_eq!(reply["result"]["content"][0]["text"], "scope_denied");
+        }
+        unregister_policy(&broad);
     }
 
     #[test]

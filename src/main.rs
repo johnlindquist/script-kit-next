@@ -415,6 +415,7 @@ fn open_note_in_main_window(
 
 include!("main_entry/app_run_setup_startup_helpers.rs");
 mod installation_check;
+mod personalization_cli;
 
 fn main() {
     if let Some(result) = design_evaluation::run_if_requested() {
@@ -424,7 +425,7 @@ fn main() {
         }
         return;
     }
-    if installation_check::run_if_requested() {
+    if personalization_cli::run_if_requested() || installation_check::run_if_requested() {
         return;
     }
     script_kit_gpui::install_main_window_visibility_transition_hook(

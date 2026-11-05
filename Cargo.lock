@@ -7815,6 +7815,7 @@ dependencies = [
  "sk-clipboard",
  "sk-color",
  "sk-one-window",
+ "sk-personal",
  "sk-protocol",
  "sk-storage",
  "smallvec",
@@ -8228,6 +8229,20 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "sk-personal"
+version = "0.1.0"
+dependencies = [
+ "rustix 1.1.4",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sk-one-window",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]

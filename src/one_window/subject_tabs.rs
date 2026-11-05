@@ -236,6 +236,7 @@ impl ScriptListApp {
         token: u64,
         cx: &mut Context<Self>,
     ) {
+        self.reload_personal_rules(cx);
         let window = window.or_else(|| {
             Some(TabSource {
                 subject: Subject {

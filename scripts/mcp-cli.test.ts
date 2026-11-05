@@ -4,6 +4,8 @@ import {
   copyFileSync,
   existsSync,
   mkdtempSync,
+  mkdirSync,
+  readFileSync,
   readlinkSync,
   realpathSync,
   rmSync,
@@ -13,6 +15,138 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMcpCli } from "./mcp-cli";
+
+import { agent, operator } from "./agent-bridge-cli";
+
+const stockLauncherRules = { pinnedText:"muted", pinnedWeight:"regular", selectionFirst:null, clipboardFirst:null };
+
+describe("scoped launcher author", () => {
+  it("requires explicit grants, pins the operation to the selected verb, and never retries a refusal", async () => {
+    const dir=mkdtempSync(join(tmpdir(),"kit-launcher-client-")),file=join(dir,"credential");
+    const previous=process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+    try {
+      expect(()=>operator(["grant-agent","wild",file,"launcher:*"],dir)).toThrow();
+      expect(existsSync(file)).toBe(false);
+      operator(["grant-agent","reader",file,"launcher:read"],dir);
+      expect(JSON.parse(readFileSync(join(dir,"agents/reader.json"),"utf8")).scopes).toEqual(["launcher:read"]);
+      process.env.SCRIPT_KIT_AGENT_CREDENTIAL=file;
+      const seen:any[]=[];
+      const rpc=async(method:string, params:any, token:string)=>{
+        expect(method).toBe("tools/call"); expect(token).toBe(readFileSync(file,"utf8").trim());seen.push(params);
+        const denied=params.name==="kit/launcher_apply";
+        const state={workspace:"a".repeat(64),revision:"stock",enabled:true,declared:stockLauncherRules,effective:stockLauncherRules,undo:null};
+        const data=params.arguments.op==="preview"?{scope:"preview",wouldStore:{...state,enabled:false}}:{scope:"stored",safeMode:false,state};
+        return {result:{isError:denied,content:[{type:"text",text:JSON.stringify(denied?{ok:false,error:{code:"scope_denied"}}:{ok:true,data})}]}};
+      };
+      const body=(v:unknown)=>(async function*(){yield JSON.stringify(v);})();
+      await expect(agent(["launcher","inspect",""],rpc,body(null))).rejects.toThrow("Usage:");
+      expect(await agent(["launcher","inspect"],rpc,body(null))).toMatchObject({scope:"stored",state:{revision:"stock"}});
+      await agent(["launcher","preview"],rpc,body({change:{op:"disable"}}));
+      await expect(agent(["launcher","preview"],rpc,body({op:"apply",change:{op:"disable"}}))).rejects.toThrow("Expected one JSON field");
+      await expect(agent(["launcher","apply"],rpc,body({request:{requestId:"fixture"}}))).rejects.toThrow("scope_denied");
+      expect(seen).toEqual([{name:"kit/launcher_read",arguments:{op:"inspect"}},{name:"kit/launcher_read",arguments:{op:"preview",change:{op:"disable"}}},{name:"kit/launcher_apply",arguments:{op:"apply",request:{requestId:"fixture"}}}]);
+    } finally {if(previous===undefined)delete process.env.SCRIPT_KIT_AGENT_CREDENTIAL;else process.env.SCRIPT_KIT_AGENT_CREDENTIAL=previous;rmSync(dir,{recursive:true,force:true});}
+  });
+});
+
+describe("launcher receipt identity", () => {
+  const id = "9b78c807-2234-4b67-a504-ff7952cab7dd", other = "8ea40dac-f986-4b15-83a5-bd19ff64e4bc";
+  const workspace = "a".repeat(64), first = "b".repeat(64), later = "c".repeat(64);
+  const state = (revision: string, enabled = true) => ({ workspace, revision, enabled, declared:stockLauncherRules, effective:stockLauncherRules, undo:id });
+  const request = { workspace, expectedRevision: "stock", requestId: id.toUpperCase(), change: { op: "disable" } };
+  const success = { requestId: id, appliedRevision: first, replayed: false, state: state(first, false) };
+  async function exercise(fn: (send: (verb: string, body: unknown, data: unknown) => Promise<unknown>) => Promise<void>) {
+    const old = process.env.SCRIPT_KIT_MCP_TOKEN, credential = process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+    delete process.env.SCRIPT_KIT_AGENT_CREDENTIAL; process.env.SCRIPT_KIT_MCP_TOKEN = "synthetic-receipt-test";
+    try {
+      await fn(async (verb, body, data) => {
+        let calls = 0;
+        try {
+          return await agent(["launcher",verb],async () => {
+            calls++;
+            return {result:{content:[{type:"text",text:JSON.stringify({ok:true,data})}]}};
+          },(async function*(){if(body!==null)yield JSON.stringify(body);})());
+        } finally { expect(calls).toBe(1); }
+      });
+    } finally {
+      if(old===undefined)delete process.env.SCRIPT_KIT_MCP_TOKEN;else process.env.SCRIPT_KIT_MCP_TOKEN=old;
+      if(credential!==undefined)process.env.SCRIPT_KIT_AGENT_CREDENTIAL=credential;
+    }
+  }
+  it("does not report a stored change for another request, workspace or revision", async () => {
+    await exercise(async send => {
+      for (const bad of [{...success,requestId:other},{...success,state:{...state(first),workspace:later}},
+        {...success,state:state(later)},{...success,replayed:"true"},{...success,appliedRevision:"stock"}]) {
+        await expect(send("apply",{request},{scope:"stored",result:bad})).rejects.toThrow(/status/i);
+      }
+      await expect(send("apply",{request},{scope:"preview",result:success})).rejects.toThrow(/status/i);
+      await expect(send("apply",{request:{...request,expectedRevision:first}},{scope:"stored",result:success})).rejects.toThrow(/status/i);
+    });
+  });
+  it("accepts an original commit and a replay whose current state has since advanced", async () => {
+    await exercise(async send => {
+      for(const result of [success,{...success,replayed:true,state:state(later)}]) {
+        const data={scope:"stored",result};expect(await send("apply",{request},data)).toEqual(data);
+      }
+    });
+  });
+  it("compares the requested list with the proposed or just-committed declaration, not a later replay snapshot", async () => {
+    await exercise(async send => {
+      const list = { source:"kit.noteTitles", filter:"pinned", sort:"title", detail:"lastChanged", enter:"openNote" };
+      const view = { id:"reading", title:"Reading list", limit:8, list };
+      const change = { op:"putView", view }, remove = { op:"removeView", id:view.id };
+      const exact = { list, limit:8, title:view.title, id:view.id }; // JSON member order is not identity.
+      const wider = { ...view, list:{ ...list, filter:"all" } };
+      const preview = (views: unknown) => ({scope:"preview",wouldStore:{...state(first),views}});
+      expect(await send("preview",{change},preview([exact]))).toEqual(preview([exact]));
+      for (const views of [[wider],[],[view,view],null]) await expect(send("preview",{change},preview(views))).rejects.toThrow();
+      for (const views of [[view],[null],null]) await expect(send("preview",{change:remove},preview(views))).rejects.toThrow();
+      const empty={scope:"preview",wouldStore:state(first)};
+      expect(await send("preview",{change:remove},empty)).toEqual(empty);
+      const reply = (views: unknown[], replayed: boolean, now = first) => ({scope:"stored",result:{...success,replayed,state:{...state(now),views}}});
+      for (const replayed of [false,true]) await expect(send("apply",{request:{...request,change}},reply([wider],replayed))).rejects.toThrow(/status/i);
+      await expect(send("apply",{request:{...request,change:remove}},reply([view],false))).rejects.toThrow(/status/i);
+      for (const result of [reply([exact],false),reply([],true,later)]) expect(await send("apply",{request:{...request,change}},result)).toEqual(result);
+    });
+  });
+  it("checks the requested switch or rule while distinguishing inactive rules from effective ones", async () => {
+    await exercise(async send => {
+      for (const enabled of [true,false]) {
+        const change={op:enabled?"enable":"disable"}, mismatch=state(first,!enabled);
+        await expect(send("preview",{change},{scope:"preview",wouldStore:mismatch})).rejects.toThrow();
+        await expect(send("apply",{request:{...request,change}},{scope:"stored",result:{...success,state:mismatch}})).rejects.toThrow(/status/i);
+      }
+      for (const [target,field,value] of [
+        ["launcher.header.pinned-label.textRole","pinnedText","primary"], ["launcher.header.pinned-label.weight","pinnedWeight","semiboldWhileDictating"],
+        ["launcher.subject.selection.firstAction","selectionFirst","note"], ["launcher.subject.clipboard.firstAction","clipboardFirst",null],
+      ] as const) {
+        const change = {op:"edit",edit:{target,value}};
+        const proposed=(enabled:boolean,declared:Record<string,unknown>,effective:Record<string,unknown>)=>({scope:"preview",wouldStore:{...state(first,enabled),declared,effective}});
+        const set = {...stockLauncherRules,[field]:value};
+        await expect(send("preview",{change},proposed(false,{},set))).rejects.toThrow();
+        await expect(send("preview",{change},proposed(true,set,{}))).rejects.toThrow();
+        for(const r of [proposed(false,set,stockLauncherRules),proposed(true,set,set)]) expect(await send("preview",{change},r)).toEqual(r);
+      }
+    });
+  });
+  it("distinguishes a preview, stored state, running window, status and explanation", async () => {
+    await exercise(async send => {
+      const stored={scope:"stored",safeMode:false,state:state(first)};
+      const preview={scope:"preview",wouldStore:state(first,false)};
+      expect(await send("inspect",null,stored)).toEqual(stored);
+      expect(await send("preview",{change:{op:"disable"}},preview)).toEqual(preview);
+      expect(await send("live",null,{scope:"runningWindow",available:false})).toEqual({scope:"runningWindow",available:false});
+      await expect(send("inspect",null,preview)).rejects.toThrow();
+      await expect(send("preview",{change:{op:"disable"}},stored)).rejects.toThrow();
+      await expect(send("live",null,stored)).rejects.toThrow();
+      await expect(send("live",null,{scope:"runningWindow",available:true})).rejects.toThrow();
+      const status={requestId:id,storedRevision:later,status:"committed"};
+      expect(await send("status",{requestId:id.toUpperCase()},status)).toEqual(status);
+      await expect(send("status",{requestId:other},status)).rejects.toThrow();
+      await expect(send("why",{target:"launcher.header.pinned-label.weight"},{target:"launcher.header.pinned-label.textRole",origin:"stock",revision:first})).rejects.toThrow();
+    });
+  });
+});
 
 const originalFetch = globalThis.fetch;
 // These fixtures never preconnect or open a socket, including with Bun's extended fetch type.
@@ -69,6 +203,141 @@ async function runCli(args: string[], env: Record<string, string | undefined>) {
     }
   }
 }
+
+async function launcherToolFixture(route: string, tool: string, args: {op: string; [key: string]: unknown}, result: unknown) {
+  let calls = 0;
+  const check = (params: unknown) => { calls++; expect(params).toEqual({name:tool,arguments:args}); };
+  const mock = startMockMcp(wire => { check(wire.params); return {jsonrpc:"2.0",id:wire.id,result}; });
+  const previous = process.env.SCRIPT_KIT_MCP_TOKEN, file = process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+  delete process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
+  process.env.SCRIPT_KIT_MCP_TOKEN = "test-token";
+  try {
+    if (route === "named") return await runCli(["mcp","call",tool,JSON.stringify(args)],{SCRIPT_KIT_MCP_ENDPOINT:mock.url.href});
+    const { op, ...input } = args;
+    return await agent(["launcher",op],async (method, params) => {
+      expect(method).toBe("tools/call"); check(params); return {result};
+    },(async function*(){yield JSON.stringify(input);})());
+  } finally {
+    mock.stop();
+    if (previous === undefined) delete process.env.SCRIPT_KIT_MCP_TOKEN; else process.env.SCRIPT_KIT_MCP_TOKEN=previous;
+    if (file !== undefined) process.env.SCRIPT_KIT_AGENT_CREDENTIAL=file;
+    expect(calls).toBe(1);
+  }
+}
+
+describe("effective launcher rules and the next Undo", () => {
+  const requestId = "dc2a64d7-7a79-47c6-b47a-72f9cb917873", tip = "9d8732a9-a4da-46aa-879a-bc50dd396cf9";
+  const workspace = "a".repeat(64), appliedRevision = "b".repeat(64), newer = "c".repeat(64);
+  const declared = {...stockLauncherRules,pinnedWeight:"semiboldWhileDictating",selectionFirst:"note"};
+  const state = { workspace, revision:appliedRevision, declared, effective:stockLauncherRules, enabled:false, undo:requestId };
+  for (const route of ["typed","named"]) {
+    const call = (verb:string, change:unknown, snapshot:unknown, replayed=false) => {
+      const request = {workspace,expectedRevision:"stock",requestId,change};
+      const args = verb === "apply" ? {op:verb,request} : {op:verb,change};
+      const result = {requestId,appliedRevision,replayed,state:snapshot};
+      const body = {ok:true,data:verb === "apply" ? {scope:"stored",result} : {scope:"preview",wouldStore:snapshot}};
+      return launcherToolFixture(route,verb === "apply" ? "kit/launcher_apply" : "kit/launcher_read",args,
+        {structuredContent:body,isError:false,content:[{type:"text",text:JSON.stringify(body)}]});
+    };
+    it(route+": the stock workspace cannot name a change to Undo", async () => {
+      const inspect = (undo:string|null) => {
+        const body = {ok:true,data:{scope:"stored",safeMode:false,state:{...state,revision:"stock",enabled:true,
+          declared:stockLauncherRules,effective:stockLauncherRules,undo}}};
+        return launcherToolFixture(route,"kit/launcher_read",{op:"inspect"},{content:[{type:"text",text:JSON.stringify(body)}]});
+      };
+      await expect(inspect(tip)).rejects.toMatchObject({code:"launcher_read_unverified"});
+      expect(await inspect(null)).toBeDefined();
+    });
+    it(route+": disabled declarations are kept, not effective; enabling restores them", async () => {
+      for (const verb of ["preview","apply"]) {
+        const code = verb === "apply" ? "launcher_apply_unverified" : "launcher_read_unverified";
+        await expect(call(verb,{op:"disable"},{...state,effective:declared})).rejects.toMatchObject({code});
+        await expect(call(verb,{op:"enable"},{...state,enabled:true})).rejects.toMatchObject({code});
+        expect(await call(verb,{op:"disable"},state)).toBeDefined();
+        expect(await call(verb,{op:"enable"},{...state,enabled:true,effective:declared})).toBeDefined();
+      }
+    });
+    it(route+": a new save names itself for Undo; a later replay describes the current tip", async () => {
+      for (const replayed of [false,true]) {
+        await expect(call("apply",{op:"disable"},{...state,undo:tip},replayed)).rejects.toMatchObject({code:"launcher_apply_unverified"});
+        expect(await call("apply",{op:"disable"},state,replayed)).toBeDefined();
+      }
+      expect(await call("apply",{op:"disable"},{...state,revision:newer,undo:tip,enabled:true,effective:declared},true)).toBeDefined();
+    });
+    it(route+": Undo preview names the current tip; the save consumes it", async () => {
+      const change = {op:"undo",of:tip.toUpperCase()};
+      await expect(call("preview",change,state)).rejects.toMatchObject({code:"launcher_read_unverified"});
+      expect(await call("preview",change,{...state,undo:tip})).toBeDefined();
+      for (const undo of [tip,requestId,undefined,"not-a-uuid"])
+        await expect(call("apply",change,{...state,undo})).rejects.toMatchObject({code:"launcher_apply_unverified"});
+      for (const undo of [null,"8544bdb9-2443-4b14-a38d-759614f04a6e"])
+        expect(await call("apply",change,{...state,undo})).toBeDefined();
+    });
+  }
+});
+
+describe("reconciling a launcher save by its original request ID", () => {
+  const requestId = "9d8732a9-a4da-46aa-879a-bc50dd396cf9";
+  const args = {op:"status",requestId:requestId.toUpperCase()};
+  const status = (value: string, revision: string) => ({ok:true,data:{requestId,status:value,storedRevision:revision}});
+  const rev = "a".repeat(64), committed = status("committed",rev), unknown = status("unknown",rev);
+  const reply = (body: unknown, extra = {}) => ({content:[{type:"text",text:JSON.stringify(body)}],...extra});
+  for (const route of ["typed","named"]) {
+    const read = (result: unknown) => launcherToolFixture(route,"kit/launcher_read",args,result);
+    it(route + ": cannot confirm a save from a conflicting reply, foreign UUID or empty active history", async () => {
+      const denied = {ok:false,error:{code:"scope_denied"}};
+      for (const bad of [reply(committed,{structuredContent:unknown}),reply(status("committed","stock")),
+        reply({...committed,data:{...committed.data,requestId:"4da13210-6fb8-48b1-b178-c3e9678dda6f"}}),
+        reply({...committed,error:denied.error}),reply(committed,{isError:true}),reply(denied,{isError:false}),
+        reply(denied,{isError:true,structuredContent:committed}),reply(committed,{isError:"false"})]) {
+        await expect(read(bad)).rejects.toMatchObject({code:"launcher_read_unverified",message:expect.stringContaining("status receipt")});
+      }
+    });
+    it(route + ": preserves valid history statuses, the response shape, and an actual read refusal", async () => {
+      for (const body of [committed,unknown,status("unknown","stock"),status("notInActiveHistory","stock"),status("notInActiveHistory",rev)]) {
+        const result = reply(body,{isError:false,structuredContent:body});
+        expect(await read(result)).toEqual(route==="typed" ? body.data : {success:true,data:{jsonrpc:"2.0",id:expect.any(String),result}});
+      }
+      await expect(read(reply({ok:false,error:{code:"scope_denied"}},{isError:true}))).rejects.toThrow("scope_denied");
+      await expect(read(reply({ok:false,error:{code:"private_fixture_diagnostic"}},{isError:true}))).rejects.toThrow(/^Launcher read refused$/);
+    });
+  }
+});
+
+describe("launcher save outcomes", () => {
+  const request = { workspace: "a".repeat(64), expectedRevision: "stock", requestId: "dc2a64d7-7a79-47c6-b47a-72f9cb917873", change: {op:"disable"} };
+  const args = {op:"apply",request};
+  const revision = "b".repeat(64);
+  const stored = { scope:"stored",result:{ requestId:request.requestId,appliedRevision:revision,replayed:false,
+    state:{workspace:request.workspace,revision,enabled:false,declared:stockLauncherRules,effective:stockLauncherRules,undo:request.requestId} } };
+  const reply = (isError: unknown, body: unknown) => ({isError,content:[{type:"text",text:JSON.stringify(body)}]});
+  it("reports a local routing refusal before any request goes out", async () => {
+    let calls = 0;
+    startMockMcp(() => { calls++; throw Error("unexpected dispatch"); });
+    await expect(runCli(["mcp","call","kit/launcher_apply",JSON.stringify(args)], {
+      SCRIPT_KIT_MCP_ENDPOINT:"https://not-local.example/rpc", SCRIPT_KIT_MCP_TOKEN:"test-token",
+    })).rejects.toMatchObject({code:"mcp_request_not_sent"});
+    expect(calls).toBe(0);
+  });
+  for (const route of ["typed","named"]) {
+    const send = (result: unknown) => launcherToolFixture(route,"kit/launcher_apply",args,result);
+    it(`${route}: a post-save error, contradictory flags or another request's receipt cannot settle this write`, async () => {
+      for (const r of [reply(true,{ok:false,error:{code:"storage_unavailable"}}),reply(true,{ok:false,error:{code:"stale_revision"}}),
+        reply(false,{ok:false,error:{code:"scope_denied"}}),reply(true,{ok:true,data:stored}),reply("false",{ok:true,data:stored}),
+        {...reply(false,{ok:true,data:stored}),structuredContent:{ok:false,error:{code:"scope_denied"}}},
+        reply(false,{ok:true,data:stored,error:{code:"storage_unavailable"}}),reply(false,{ok:true,data:{...stored,result:{...stored.result,requestId:"00000000-0000-4000-8000-000000000000"}}})]) {
+        await expect(send(r)).rejects.toMatchObject({code:"launcher_apply_unverified",message:expect.stringContaining("original requestId")});
+      }
+      const error = await send(reply(true,{ok:false,error:{code:"private_fixture_label"}})).then(()=>null, e=>e);
+      expect(error.code).toBe("launcher_apply_unverified"); expect(error.message).not.toContain("private_fixture_label");
+    });
+    it(`${route}: keeps an actual scope refusal distinct and preserves the successful response format`, async () => {
+      await expect(send(reply(true,{ok:false,error:{code:"scope_denied"}}))).rejects.toThrow("scope_denied");
+      const ok = reply(false,{ok:true,data:stored});
+      expect(await send(ok)).toEqual(route==="typed" ? stored : {success:true,data:{jsonrpc:"2.0",id:expect.any(String),result:ok}});
+    });
+  }
+});
 
 function discoveryEnv(baseUrl: string) {
   const dir = mkdtempSync(join(tmpdir(), "script-kit-mcp-cli-"));
@@ -204,6 +473,82 @@ describe("workspace path identity", () => {
       for (const base of [logical, physical]) expect(existsSync(join(base, "kit/reader"))).toBe(false);
       expect(existsSync(join(physical, "agents/reader.json"))).toBe(false);
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe("local pane pairing", () => {
+  it.skipIf(process.platform !== "darwin")("withdrawal retires only the observed provider grant, even when the exchange pathname is reused", async () => {
+    const { linkSync, lstatSync, renameSync, unlinkSync } = await import("node:fs");
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), "kit-withdraw-"));
+    try {
+      const kit = join(dir, "kit"), other = join(dir, "other"), home = join(dir, "herdr");
+      for (const p of [kit, other, home]) mkdirSync(p, { mode: 0o700 });
+      const run = (root: string, env: Record<string, string>, ...args: string[]) => {
+        const child = Bun.spawnSync([process.execPath, "--config=/dev/null", "--no-env-file", "--no-install", "--no-macros",
+          join(import.meta.dir, "mcp-cli.ts"), "panes", ...args], {
+          cwd: dir,
+          env: { HOME: dir, TMPDIR: dir, SK_PATH: root, PATH: "/usr/bin:/bin", SCRIPT_KIT_NONINTERACTIVE: "1", ...env },
+        });
+        const reply = JSON.parse(child.stdout.toString());
+        expect(child.exitCode).toBe(reply.success ? 0 : 1);
+        return reply.data;
+      };
+      const cli = (...args: string[]) => run(kit, {}, ...args);
+      const exchange = join(home, "kit-pane-share-v1"), grant = join(exchange, "grant.json");
+      expect(cli("offer-status", home).state).toBe("noOffer");
+      expect(existsSync(exchange)).toBe(false);
+      const first = cli("offer", home, "first");
+      expect(first.offerId).toMatch(/^[a-f0-9]{64}$/);
+      expect(cli("offer-status", home)).toEqual(first);
+      renameSync(exchange, join(home, "earlier-offer"));
+      const second = cli("offer", home, "second");
+      const original = readFileSync(grant), inode = lstatSync(grant).ino;
+      expect(cli("withdraw", home, first.offerId).state).toBe("offerChanged");
+      expect(run(other, {}, "withdraw", home, second.offerId).state).toBe("offerWorkspaceMismatch");
+      expect(run(kit, { SCRIPT_KIT_AGENT_CREDENTIAL: "" }, "withdraw", home, second.offerId).state).toBe("agentContextDenied");
+      linkSync(grant, join(dir, "other-name"));
+      expect(cli("withdraw", home, second.offerId).state).toBe("unverifiedSource");
+      unlinkSync(join(dir, "other-name"));
+      expect(readFileSync(grant)).toEqual(original);
+      const withdrawn = run(kit, { SCRIPT_KIT_PERSONAL_SAFE_MODE: "1" }, "withdraw", home, second.offerId);
+      expect(withdrawn).toMatchObject({ state: "withdrawn", offerId: second.offerId, space: "second", workspace: first.workspace });
+      expect(withdrawn).not.toHaveProperty("marker");
+      expect(lstatSync(grant).ino).toBe(inode);
+      expect(JSON.parse(readFileSync(grant, "utf8"))).toEqual({ ...JSON.parse(original.toString()), capability: null });
+      const changed = lstatSync(grant, { bigint: true }).mtimeNs;
+      expect(cli("offer-status", home)).toEqual(withdrawn);
+      expect(cli("withdraw", home, second.offerId)).toEqual(withdrawn);
+      expect(lstatSync(grant, { bigint: true }).mtimeNs).toBe(changed);
+      expect(cli("offer", home, "new").state).toBe("offerExists");
+      expect(readFileSync(join(exchange, "in/request.json"), "utf8")).toBe("{}");
+      expect(existsSync(join(kit, "db"))).toBe(false);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  it("does not let a scoped credential offer a space or reach the request file", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-pane-author-")));
+    try {
+      for (const args of [["offer",root,"sp1"],["pair",join(root,"out"),"sp1"],["list"],["unpair","a".repeat(32)]]) {
+        await expect(runCli(["panes", ...args], {SK_PATH:root, SCRIPT_KIT_AGENT_CREDENTIAL:join(root,"not-a-credential")})).rejects.toThrow("agentContextDenied");
+      }
+      expect(existsSync(join(root,"kit-pane-share-v1"))).toBe(false);
+      expect(existsSync(join(root,"db"))).toBe(false);
+    } finally { rmSync(root,{recursive:true,force:true}); }
+  });
+  it.skipIf(process.platform !== "darwin")("creates only a new offer; a foreign space in a marker cannot pair", async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "kit-pane-pair-")));
+    const kit = join(root,"kit"), home=join(root,"source"), env={SK_PATH:kit};
+    for(const p of [kit,join(kit,"db"),home])mkdirSync(p,{mode:0o700});
+    try {
+      expect(await runCli(["panes","status"],env)).toMatchObject({success:true,data:{state:"notPaired"}});
+      const result = await runCli(["panes","offer",home,"sp1"],env) as {data:{marker:string;source:string}};
+      const grant = join(home,"kit-pane-share-v1/grant.json"), original=readFileSync(grant);
+      await expect(runCli(["panes","offer",home,"sp2"],env)).rejects.toThrow("offerExists");
+      expect(readFileSync(grant)).toEqual(original);
+      writeFileSync(result.data.marker,JSON.stringify({v:1,state:"listening",source:result.data.source,space:"sp2",capability:"herdr.panes.metadata"}),{mode:0o600});
+      await expect(runCli(["panes","pair",result.data.marker,"sp1"],env)).rejects.toThrow("unverifiedSource");
+      expect(readFileSync(join(home,"kit-pane-share-v1/in/request.json"),"utf8")).toBe("{}");
+      expect(existsSync(join(kit,"db/herdr-panes-v1/pair.json"))).toBe(false);
+    } finally { rmSync(root,{recursive:true,force:true}); }
   });
 });
 

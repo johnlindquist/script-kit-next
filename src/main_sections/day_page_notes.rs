@@ -12,6 +12,8 @@ pub(crate) enum DayPageBack {
     Leave,
     /// To the Notes list the note was picked from.
     NotesList,
+    /// Restore the authored list, its query, and its selected row.
+    PersonalView,
 }
 
 /// How long typing has to pause before a ghost suggestion shows.
@@ -304,7 +306,11 @@ impl DayPageView {
         if let Some((_, label)) = self.trail.last() {
             return Some(format!("Back to {label}"));
         }
-        (self.back == DayPageBack::NotesList).then(|| "Back to Notes".to_string())
+        match self.back {
+            DayPageBack::NotesList => Some("Back to Notes".to_string()),
+            DayPageBack::PersonalView => Some("Back to my view".to_string()),
+            DayPageBack::Leave => None,
+        }
     }
 
     fn show_note_target(
@@ -456,6 +462,7 @@ impl DayPageView {
                     app.reset_to_script_list(cx);
                     app.one_window_open_notes_list(String::new(), cx);
                 }
+                DayPageBack::PersonalView => app.return_to_personal_list(window, cx),
                 DayPageBack::Leave => app.go_back_or_close(window, cx),
             });
         });

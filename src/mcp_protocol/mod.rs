@@ -21,6 +21,7 @@ pub(crate) mod bridge;
 #[cfg(test)]
 mod bridge_tests;
 pub(crate) mod desktop_fill;
+pub(crate) mod personal;
 use crate::mcp_clipboard_tools;
 use crate::mcp_computer_use_tools;
 use crate::mcp_config_tools;
@@ -373,6 +374,10 @@ pub async fn handle_request_with_runtime_context(
                         .as_str()
                         .is_some_and(|n| access::tool(n, &ctx.token_scopes))
                 });
+                rows.extend(personal::definitions(
+                    &ctx.token_scopes,
+                    ctx.desktop_principal.as_deref(),
+                ));
                 rows.extend(
                     bridge::commands::catalog(&ctx.token_scopes)
                         .1
@@ -611,6 +616,20 @@ async fn handle_tools_call_with_runtime_parts(
         .cloned()
         .unwrap_or(serde_json::json!({}));
 
+    if let Some(endpoint) = sk_personal::api::Endpoint::from_mcp(tool_name) {
+        let result = if personal::permitted(endpoint, &token_scopes, desktop_principal.as_deref()) {
+            personal::call(
+                endpoint,
+                arguments,
+                sk_personal::Author::ConnectedAgent,
+                kit_runtime_bridge,
+            )
+        } else {
+            Err("scope_denied")
+        };
+        mcp_control::bridge_audit(&trace_id, tool_name, result.as_ref().err().copied());
+        return JsonRpcResponse::success(request.id, bridge::reply(result));
+    }
     if tool_name.starts_with("kit/handoff_") {
         let result = desktop_principal
             .as_deref()
@@ -2277,6 +2296,7 @@ mod tests {
                 scriptlet_count: 3,
                 filter_text: Some("test".to_string()),
                 selected_index: Some(2),
+                ..Default::default()
             };
 
             let request = JsonRpcRequest {
@@ -2342,6 +2362,7 @@ mod tests {
                 scriptlet_count: 1,
                 filter_text: None,
                 selected_index: None,
+                ..Default::default()
             };
 
             // Test all three resources work with full context

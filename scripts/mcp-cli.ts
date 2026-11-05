@@ -39,9 +39,18 @@ type DiscoveryInfo = {
 
 type CliResult =
   | { success: true; data: unknown }
-  | { success: false; error: string };
+  | { success: false; error: string; errorCode?: "launcher_apply_unverified" | "launcher_read_unverified" | "mcp_request_not_sent" | "pane_source_refused"; data?: unknown };
 
 class CliFailure extends Error {}
+class PaneSourceFailure extends CliFailure {
+  constructor(readonly state: string) {
+    super(state === "offerWorkspaceMismatch" ? "This offer belongs to another Kit workspace. Set SK_PATH to the workspace that made it." :
+      state === "renewalRequired" ? "This pane share needs a new offer. Check panes status, retire the old share, then offer and pair again." :
+      state === "offerChanged" || state === "withdrawalUnverified" ? "Check panes offer-status for the intended Herdr home before withdrawing anything else." :
+      state === "incompleteOffer" || state === "unverifiedOffer" ? "Kit could not verify the grant in this exchange. Inspect it before making a new offer." : `Pane source: ${state}`);
+  }
+}
+class McpRequestNotSent extends CliFailure { readonly code = "mcp_request_not_sent"; }
 
 function usage() {
   return [
@@ -49,7 +58,7 @@ function usage() {
     "",
     "Usage:",
     "  scriptkit --help | --skill",
-    "  scriptkit agent discover | note | run | available | take | reply | away",
+    "  scriptkit agent discover | launcher | note | run | available | take | reply | away",
     "  scriptkit install-skill <skills-directory> | inspect-command <name>",
     "  scriptkit grant-agent <name> <private-credential-file> <scope> ...",
     "  scriptkit mcp tools",
@@ -58,6 +67,10 @@ function usage() {
     "  scriptkit mcp read <resource-uri>",
     "  scriptkit mcp rpc <method> [json-params]",
     "  scriptkit install-command [target-path]",
+    "  scriptkit panes offer <absolute-herdr-home> <local-space-id>",
+    "  scriptkit panes offer-status <absolute-herdr-home> | withdraw <absolute-herdr-home> <offer-id>",
+    "  scriptkit panes pair <absolute-listening-file> <local-space-id> | unpair <pair-id>",
+    "  scriptkit panes status | list [all|needsAttention title|attentionFirst limit]",
     "",
     "Examples:",
     "  scriptkit mcp tools",
@@ -384,11 +397,16 @@ function installCommand(args: string[]): CliResult | string {
 }
 
 export async function rpc(method: string, params: unknown, explicitToken?:string): Promise<unknown> {
-  const scopedFile=envValue("SCRIPT_KIT_AGENT_CREDENTIAL");
-  if(explicitToken===undefined && scopedFile) explicitToken=(await import("./agent-bridge-cli.ts")).credentialToken(scopedFile);
-  const { endpoint, token } = resolveEndpointAndToken(explicitToken);
-  const timeoutMs = mcpRequestTimeoutMs();
-  const maximumResponseBytes = mcpMaxResponseBytes();
+  let endpoint: string, token: string, timeoutMs: number, maximumResponseBytes: number;
+  try {
+    const scopedFile = envValue("SCRIPT_KIT_AGENT_CREDENTIAL");
+    if (explicitToken === undefined && scopedFile) explicitToken = (await import("./agent-bridge-cli.ts")).credentialToken(scopedFile);
+    ({ endpoint, token } = resolveEndpointAndToken(explicitToken));
+    timeoutMs = mcpRequestTimeoutMs();
+    maximumResponseBytes = mcpMaxResponseBytes();
+  } catch (error) {
+    throw new McpRequestNotSent(error instanceof Error ? error.message : "MCP request setup failed");
+  }
   const requestId = `script-kit-mcp-cli-${crypto.randomUUID()}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -484,6 +502,13 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     }
     return {success:true,data:bridge.operator(argv,dirname(discoveryPath()))};
   }
+  if (rawCommand === "panes") {
+    if (["SCRIPT_KIT_AGENT_CREDENTIAL", "SCRIPT_KIT_MCP_TOKEN", "SCRIPT_KIT_MCP_ENDPOINT", "SCRIPT_KIT_MCP_SERVER_JSON"].some(k => Object.hasOwn(process.env, k))) throw new PaneSourceFailure("agentContextDenied");
+    const { paneCommand } = await import("./herdr-panes.mjs");
+    const result = paneCommand(rest, dirname(discoveryPath()));
+    if (["paired", "offered", "unpaired", "ready", "withdrawn"].includes(result.state) || (rest[0] === "offer-status" && result.state === "noOffer") || (rest[0] === "status" && ["safeMode", "notPaired", "renewalRequired"].includes(result.state))) return { success: true, data: result };
+    throw new PaneSourceFailure(result.state);
+  }
   if (rawCommand === "install-command") {
     return installCommand(rest);
   }
@@ -509,10 +534,14 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     if (!first) {
       fail("call requires a tool name");
     }
-    data = await rpc("tools/call", {
-      name: first,
-      arguments: parseJsonArg(second, {}),
-    });
+    const parameters = parseJsonArg(second, {});
+    const send = () => rpc("tools/call", { name: first, arguments: parameters });
+    if (first === "kit/launcher_apply" || first === "kit/launcher_read") {
+      const { checkedLauncherApply, checkedLauncherRead } = await import("./agent-bridge-cli.ts");
+      const check = first === "kit/launcher_apply" ? checkedLauncherApply : checkedLauncherRead;
+      return { success: true, data: (await check(parameters, send)).response };
+    }
+    data = await send();
     if ((data as {result?:{isError?:boolean}}).result?.isError) {
       let code="tool_error";try {const v=JSON.parse((data as any).result.content[0].text);if(typeof v.error?.code==="string"&&/^[a-z_]{1,64}$/.test(v.error.code))code=v.error.code;}catch{}
       fail(`Script Kit tool ${first} refused the call: ${code}`);
@@ -548,6 +577,9 @@ if (import.meta.main) {
     print({
       success: false,
       error: error instanceof Error ? error.message : String(error),
+      ...(error instanceof PaneSourceFailure ? {errorCode: "pane_source_refused", data: {state: error.state}} : error instanceof McpRequestNotSent ? {errorCode: error.code} :
+        error instanceof Error && "code" in error && (error.code === "launcher_apply_unverified" || error.code === "launcher_read_unverified")
+          ? { errorCode: error.code } : {}),
     });
     process.exit(error instanceof CliFailure ? 1 : 1);
   });

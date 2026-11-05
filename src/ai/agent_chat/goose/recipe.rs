@@ -52,6 +52,8 @@ pub(crate) fn tool_host(tool_id: &str) -> Option<ToolHost> {
         "write" => ToolHost::ScriptKit("write"),
         "edit" | "hashline_edit" => ToolHost::ScriptKit("edit"),
         "app" => ToolHost::ScriptKit("app"),
+        "launcher_read" => ToolHost::ScriptKit(sk_personal::api::Endpoint::Read.profile_tool()),
+        "launcher_apply" => ToolHost::ScriptKit(sk_personal::api::Endpoint::Apply.profile_tool()),
         "bash" | "shell" => ToolHost::Developer("shell"),
         "subagents" | "delegate" => ToolHost::Platform("summon"),
         "skills" => ToolHost::Platform("skills"),
@@ -92,6 +94,31 @@ pub(crate) struct RecipeTools {
     pub platform: Vec<&'static str>,
     pub user_mcp: bool,
     pub unknown: Vec<String>,
+}
+
+impl RecipeTools {
+    /// Only an explicit, dedicated reader or reader/writer is a launcher author.
+    /// Ordinary profiles, even ones with extra tools, keep their existing behavior.
+    pub(crate) fn launcher_author(&self) -> Option<sk_personal::api::Endpoint> {
+        use sk_personal::api::Endpoint::{Apply, Read};
+        if !self.developer.is_empty()
+            || !self.platform.is_empty()
+            || self.user_mcp
+            || !self.unknown.is_empty()
+            || !self.script_kit.contains(&Read.profile_tool())
+            || self
+                .script_kit
+                .iter()
+                .any(|&id| id != Read.profile_tool() && id != Apply.profile_tool())
+        {
+            return None;
+        }
+        Some(if self.script_kit.contains(&Apply.profile_tool()) {
+            Apply
+        } else {
+            Read
+        })
+    }
 }
 
 pub(crate) fn recipe_tools(tool_ids: &[String]) -> RecipeTools {
@@ -346,6 +373,41 @@ mod tests {
         assert_eq!(tools.script_kit, vec!["web_search"]);
         assert_eq!(extensions[0]["headers"][AGENT_POLICY_HEADER], "policy-1");
         assert_eq!(recipe["settings"]["goose_provider"], "chatgpt_codex");
+    }
+
+    #[test]
+    fn an_explicit_launcher_author_profile_gets_no_shell_files_or_ambient_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        let profiles = dir.path().join("profiles");
+        std::fs::create_dir(&profiles).unwrap();
+        std::fs::write(profiles.join("launcher-author.md"),"---\nname: Launcher author\nmodel: ollama/local\ntools: launcher_read, launcher_apply\nno-session: true\n---\nUse only this workspace’s launcher catalog.\n").unwrap();
+        let context = AgentChatProfileContext {
+            kit_path: dir.path().into(),
+        };
+        let profile = crate::ai::agent_chat::mdflow_profiles::resolved_mdflow_profiles(&context)
+            .into_iter()
+            .find(|p| p.name == "Launcher author")
+            .unwrap();
+        let tools = recipe_tools(&profile_tool_ids(&profile).unwrap());
+        assert_eq!(tools.script_kit, ["launcher_read", "launcher_apply"]);
+        assert!(
+            tools.unknown.is_empty()
+                && tools.developer.is_empty()
+                && tools.platform.is_empty()
+                && !tools.user_mcp
+        );
+        let recipe = build_recipe(RecipeInput {
+            profile: &profile,
+            provider: Some("ollama"),
+            model: Some("local"),
+            tools: &tools,
+            endpoint: Some(&endpoint()),
+            user_mcp: &[json!({"type":"stdio","name":"unrelated"})],
+        });
+        let extensions = recipe["extensions"].as_array().unwrap();
+        assert_eq!(extensions.len(), 1);
+        assert_eq!(extensions[0]["name"], SCRIPT_KIT_TOOLS_EXTENSION);
+        assert_eq!(extensions[0]["headers"][AGENT_POLICY_HEADER], "policy-1");
     }
 
     #[test]

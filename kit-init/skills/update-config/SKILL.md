@@ -9,6 +9,10 @@ The active workspace is `$SK_PATH`, or `~/.scriptkit` when unset. Use `kit/confi
 
 The installed CLI in `$SK_PATH/sdk/config-cli.ts` and adjacent `kit-sdk-config.ts` SDK use the same data-only writer. The writer supports a literal default-exported object (including the stock type import, comments and `satisfies Config`). Executable or ambiguous TypeScript, unreviewed paths and changes that would discard comments are refused. A refusal leaves the file alone: do not bypass it with a script, a regex replacement, or by importing the user's config. Executable paths, MCP server definitions, credentials, permissions and remote access are manual settings, not ordinary agent preferences.
 
+## Launcher behavior versus a global setting
+
+To brighten only the pinned “Stays open” label or put an existing action first for one subject, use the launcher preference catalog, not `theme.json` or `config.ts`. Profiles explicitly granted `launcher_read` can inspect, preview, explain, and read the adopted revision. Only `launcher_apply` can save a revision-bound request. If these tools are unavailable, say so; do not reach for shell access. Editor and terminal text size still use the ordinary config settings.
+
 ## Files That Matter
 
 | File | Purpose | Reload |

@@ -156,6 +156,26 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                 word: None,
             })
             .collect(),
+        HostedView::Personal(list) if list.data.rows().len() == 0 => vec![ViewRow {
+            id: "personal-list:status".into(),
+            title: list.message.unwrap_or("No matching titles").into(),
+            description: None,
+            icon: "info",
+            selected: false,
+            word: None,
+        }],
+        HostedView::Personal(list) => list
+            .data
+            .rows()
+            .map(|r| ViewRow {
+                id: list.row_id(&r.id),
+                title: r.title.clone(),
+                description: r.detail.clone(),
+                icon: r.icon,
+                selected: list.data.selected() == Some(r),
+                word: None,
+            })
+            .collect(),
         HostedView::Reading(reading) => reading
             .rows
             .iter()
@@ -280,6 +300,10 @@ impl ScriptListApp {
         for (ix, row) in rows.into_iter().enumerate() {
             let selector = format!("list-row:{}", row.id);
             let form_field = row.id.starts_with("form-field:").then(|| row.id.clone());
+            let personal_item = row
+                .id
+                .starts_with("personal-item:")
+                .then(|| (row.id.clone(), row.selected, !matches!(self.one_window_hosted_view(), Some(HostedView::Personal(l)) if l.read_only())));
             let stage_action = row
                 .id
                 .starts_with("staged:")
@@ -338,6 +362,17 @@ impl ScriptListApp {
                                     app.focus_main_filter(window, cx);
                                 }
                             }))
+                    })
+                    .when_some(personal_item, |d, (id, selected, can_submit)| {
+                        d.cursor_pointer().on_click(cx.listener(
+                            move |app, event: &gpui::ClickEvent, _, cx| {
+                                let submit = crate::ui_foundation::should_submit_selected_row_click(
+                                    selected,
+                                    event.click_count(),
+                                );
+                                let _ = app.pick_personal_view_item(&id, can_submit && submit, cx);
+                            },
+                        ))
                     })
                     .when_some(stage_action, |d, (id, selected)| {
                         d.cursor_pointer().on_click(cx.listener(
@@ -525,9 +560,9 @@ impl ScriptListApp {
                 ElementContentKind::UserContent,
             );
             el.semantic_id = row.id;
-            if view.is_none() {
+            if view.is_none() || matches!(view, Some(HostedView::Personal(_))) {
                 el.role = Some("row".into());
-                el.selectable = Some(true);
+                el.selectable = Some(el.semantic_id != "personal-list:status");
             }
             el
         }));

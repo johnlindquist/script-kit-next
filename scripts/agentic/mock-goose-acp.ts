@@ -94,7 +94,7 @@ const toolCall = process.env.MOCK_GOOSE_TOOL_CALL;
 let provider = "chatgpt_codex";
 let model = "gpt-5.4";
 let sessionCounter = 0;
-const developerBySession = new Map<string, string[]>();
+const toolsBySession = new Map<string, Record<string, string[]>>();
 
 function write(message: unknown): void {
 	process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -176,7 +176,10 @@ async function handle(message: Record<string, unknown>): Promise<void> {
 			const sessionId = `mock-session-${sessionCounter}`;
 			const extensions = Array.isArray(recipe?.extensions) ? recipe.extensions : [];
 			const developer = extensions.find((entry) => entry.name === "developer");
-			developerBySession.set(sessionId, developer?.available_tools ?? []);
+			const kit = extensions.find((entry) => entry.name === "scriptkit");
+			toolsBySession.set(sessionId, { developer: developer?.available_tools ?? [],
+				scriptkit: (kit?.available_tools ?? []).map((name: string) => `scriptkit__${name}`),
+			});
 			write({
 				jsonrpc: "2.0", id,
 				result: { sessionId, configOptions: configOptions(), _meta: {
@@ -186,8 +189,10 @@ async function handle(message: Record<string, unknown>): Promise<void> {
 			return;
 		}
 		case "_goose/unstable/tools/list": {
-			const names = developerBySession.get(String(params.sessionId));
-			if (!names || params.extensionName !== "developer") {
+			const owner = params.extensionName;
+			const names = (owner === "developer" || owner === "scriptkit")
+				? toolsBySession.get(String(params.sessionId))?.[owner] : undefined;
+			if (!names) {
 				write({ jsonrpc: "2.0", id, error: {code: -32602, message: "Unsupported inventory"} });
 			} else {
 				write({ jsonrpc: "2.0", id, result: {tools: names.map((name) => ({name}))} });

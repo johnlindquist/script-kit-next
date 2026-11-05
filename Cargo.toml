@@ -5,6 +5,7 @@ members = [
     "crates/sk-clipboard",
     "crates/sk-color",
     "crates/sk-one-window",
+    "crates/sk-personal",
     "crates/sk-protocol",
     "crates/sk-storage",
 ]
@@ -81,6 +82,7 @@ test = false  # Standalone visual proof-of-concept, no test surface
 sk-clipboard = { path = "crates/sk-clipboard" }
 sk-color = { path = "crates/sk-color" }
 sk-one-window = { path = "crates/sk-one-window" }
+sk-personal = { path = "crates/sk-personal" }
 sk-protocol = { path = "crates/sk-protocol" }
 sk-storage = { path = "crates/sk-storage" }
 gpui = { package = "gpui-pre", version = "=0.3.6", features = ["test-support"] }

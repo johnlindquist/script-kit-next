@@ -23,6 +23,7 @@ pub(crate) enum HostedView {
     Form(Form),
     Answer(Answer),
     Notes(super::notes::NotesList),
+    Personal(super::personal_views::List),
     Reading(super::reading::ReadingView),
 }
 
@@ -32,6 +33,7 @@ impl HostedView {
             HostedView::Form(_) => FORM,
             HostedView::Answer(_) => ANSWER,
             HostedView::Notes(_) => super::notes::NOTES,
+            HostedView::Personal(_) => super::personal_views::NAME,
             HostedView::Reading(_) => super::reading::READING,
         }
     }
@@ -49,6 +51,7 @@ impl HostedView {
             },
             HostedView::Answer(_) => "Answer".into(),
             HostedView::Notes(list) => list.label(),
+            HostedView::Personal(list) => list.label(),
             HostedView::Reading(_) => "How Jev reads it".into(),
         }
     }
@@ -58,6 +61,7 @@ impl HostedView {
             HostedView::Form(form) => form.enter(),
             HostedView::Answer(answer) => answer.enter(),
             HostedView::Notes(list) => list.enter(),
+            HostedView::Personal(list) => list.enter(),
             HostedView::Reading(reading) => reading.enter(),
         }
     }
@@ -72,6 +76,7 @@ impl HostedView {
                 _ => 1,
             },
             HostedView::Notes(list) => list.found.len().max(1),
+            HostedView::Personal(list) => list.data.rows().len().max(1),
             HostedView::Reading(reading) => reading.rows.len(),
         }
     }
@@ -150,6 +155,7 @@ impl ScriptListApp {
             }
             super::reading::READING => Vec::new(),
             super::notes::NOTES => self.one_window_notes_list_key(key, cx),
+            super::personal_views::NAME => self.personal_view_key(key, cx),
             _ => {
                 tracing::info!(
                     target: "script_kit::one_window",
@@ -222,7 +228,10 @@ impl ScriptListApp {
                 })
                 .map_err(|_| "one_window_copy_failed")
             }),
-            HostedView::Answer(_) | HostedView::Notes(_) | HostedView::Reading(_) => None,
+            HostedView::Answer(_)
+            | HostedView::Notes(_)
+            | HostedView::Reading(_)
+            | HostedView::Personal(_) => None,
         };
         let mut events = Vec::new();
         if let Some(words) = caret_words {
@@ -310,6 +319,7 @@ impl ScriptListApp {
                 };
             }
             HostedView::Notes(list) => list.typed(text),
+            HostedView::Personal(list) => list.typed(text),
             HostedView::Reading(view) => {
                 let words = reading.as_deref().map(|plan| plan.words.as_slice());
                 *view = super::reading::ReadingView::new(

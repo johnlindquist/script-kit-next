@@ -87,11 +87,11 @@ fn plan<'a>(recipe: &'a Value, response: &Value) -> Result<Plan<'a>, SessionFail
 
 pub(super) async fn verify(
     connection: &mut Connection,
-    recipe: &Value,
+    spec: &super::GooseLaunchSpec,
     response: &Value,
     session_id: &str,
 ) -> Result<(), SessionFailure> {
-    let plan = plan(recipe, response)?;
+    let plan = plan(&spec.recipe, response)?;
     if plan.remove_ambient_developer {
         let method = "_goose/unstable/session/extensions/remove";
         connection
@@ -105,16 +105,46 @@ pub(super) async fn verify(
     }
     // Read the actual tools on this exact session. A successful removal reply,
     // an extension name, and the recipe echoed by the engine are not readback.
+    read_exact_tools(
+        connection,
+        session_id,
+        DEVELOPER,
+        &plan.allowed_developer_tools,
+    )
+    .await?;
+    if let Some(access) = spec.launcher_author {
+        use sk_personal::api::Endpoint;
+        let mut required = BTreeSet::from(["scriptkit__launcher_read"]);
+        if access == Endpoint::Apply {
+            required.insert("scriptkit__launcher_apply");
+        }
+        read_exact_tools(
+            connection,
+            session_id,
+            super::super::recipe::SCRIPT_KIT_TOOLS_EXTENSION,
+            &required,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+async fn read_exact_tools(
+    connection: &mut Connection,
+    session_id: &str,
+    owner: &str,
+    required: &BTreeSet<&str>,
+) -> Result<(), SessionFailure> {
     let method = "_goose/unstable/tools/list";
     let inventory = connection
         .call(
             method,
-            json!({"sessionId":session_id,"extensionName":DEVELOPER}),
+            json!({"sessionId":session_id,"extensionName":owner}),
             CONFIG_TIMEOUT,
         )
         .await
         .map_err(|e| Box::new(e.failure(method)))?;
-    let invalid = || incompatible("engine Developer tools differ from the bound grant");
+    let invalid = || incompatible("engine tools differ from the bound session grant");
     let tools = inventory["tools"].as_array().ok_or_else(invalid)?;
     let mut actual = BTreeSet::new();
     for tool in tools {
@@ -122,7 +152,7 @@ pub(super) async fn verify(
             return Err(invalid());
         }
     }
-    if actual != plan.allowed_developer_tools {
+    if &actual != required {
         return Err(invalid());
     }
     Ok(())

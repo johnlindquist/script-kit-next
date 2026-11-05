@@ -100,7 +100,7 @@ fn check() -> Result<Value> {
     );
     let settings_proof = if let Some(bun) = crate::setup::resolve_bun() {
         let pin = bun.to_str().context("Settings runtime path is not UTF-8")?;
-        Some(settings::verify(&config, &original, |args| {
+        let mut run = |args: &[&str]| -> Result<(Option<i32>, Value)> {
             let out = crate::setup::settings_cli_command(Some(pin))
                 .map_err(anyhow::Error::msg)?
                 .args(args)
@@ -109,13 +109,31 @@ fn check() -> Result<Value> {
                 out.status.code(),
                 serde_json::from_slice(&out.stdout).context("Invalid settings helper response")?,
             ))
-        })?)
+        };
+        let proof = settings::verify(&config, &original, &mut run)?;
+        let after = fs::read(&config)?;
+        let previous_font = f32::from(proof.value);
+        // The personal release separately exercises its real launcher reading and Undo.
+        let choice = sk_one_window::font_preference::read("Use 21px text in the editor")
+            .context("Missing local text-size reading")?;
+        let undo = crate::mcp_config_tools::font::apply(choice, previous_font)?
+            .context("Text-size edit did not produce an undo")?;
+        let (exit, changed) = run(&["get", "editorFontSize"])?;
+        ensure!(
+            exit == Some(0) && changed["success"] == true && changed["data"]["value"] == 21,
+            "Text-size readback failed"
+        );
+        ensure!(
+            undo.restore()? == Some(previous_font) && fs::read(&config)? == after,
+            "Text-size undo failed"
+        );
+        Some(proof)
     } else {
         None
     };
     let sdk_hash = format!("{:x}", Sha256::digest(&sdk));
     private.close()?;
     Ok(
-        json!({"schemaVersion":1,"version":env!("CARGO_PKG_VERSION"),"packaged":packaged,"freshWorkspace":true,"sdkSha256":sdk_hash,"starterScriptsIndexed":scripts.len(),"userEditsPreserved":true,"settingsTransaction":if settings_proof.is_some(){"verified"}else{"bun_unavailable"},"settingsProof":settings_proof,"scratchRemoved":true}),
+        json!({"schemaVersion":1,"version":env!("CARGO_PKG_VERSION"),"packaged":packaged,"freshWorkspace":true,"sdkSha256":sdk_hash,"starterScriptsIndexed":scripts.len(),"userEditsPreserved":true,"settingsTransaction":if settings_proof.is_some(){"verified"}else{"bun_unavailable"},"launcherTextPreferenceTransaction":if settings_proof.is_some(){"verified"}else{"bun_unavailable"},"settingsProof":settings_proof,"scratchRemoved":true}),
     )
 }

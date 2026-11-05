@@ -78,6 +78,9 @@ fn more_of(thread: &AgentChatThread) -> Vec<Row> {
                 .with_icon("sparkles"),
         );
     }
+    if reviews_each_save(thread) {
+        return rows;
+    }
     let current = AgentApprovalMode::current();
     rows.extend(
         AgentApprovalMode::ALL
@@ -137,6 +140,13 @@ fn tools_of(thread: &AgentChatThread) -> Vec<Tool> {
         .collect()
 }
 
+fn reviews_each_save(thread: &AgentChatThread) -> bool {
+    thread.session_policy()
+        == crate::ai::agent_chat::ui::capabilities::AgentChatSessionPolicy::LauncherAuthor(
+            sk_personal::api::Endpoint::Apply,
+        )
+}
+
 /// What the model asks before it goes on.
 fn asks_of(thread: &AgentChatThread) -> Option<Asks> {
     let request = thread.pending_permission.as_ref()?;
@@ -153,10 +163,20 @@ fn asks_of(thread: &AgentChatThread) -> Option<Asks> {
                 .map(str::to_string)
         })
         .filter(|detail| *detail != request.title);
+    let launcher_review = request
+        .preview
+        .as_ref()
+        .filter(|p| p.kind == crate::ai::agent_chat::ui::AgentChatApprovalPreviewKind::LauncherSave)
+        .and_then(|p| p.summary.clone());
     Some(Asks {
         id: request.id,
         title: request.title.clone(),
-        detail,
+        detail: if launcher_review.is_some() {
+            None
+        } else {
+            detail
+        },
+        launcher_review,
         choices: request
             .options
             .iter()
@@ -330,6 +350,9 @@ impl ScriptListApp {
         let model = self.one_window_host.work.chat.as_mut()?;
         let thread = model.thread.clone();
         if let Some(id) = key.strip_prefix(APPROVAL_KEY_PREFIX) {
+            if reviews_each_save(thread.read(cx)) {
+                return None;
+            }
             let mode = AgentApprovalMode::from_id(id)?;
             thread.read(cx).set_approval_mode(mode);
             if let Err(error) = mode.remember() {

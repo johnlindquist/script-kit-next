@@ -28,6 +28,8 @@ pub(crate) fn launch_warm_key(
         "thinking": spec.thinking,
         "hidden": spec.hidden_session,
         "gooseRoot": spec.env.get("GOOSE_PATH_ROOT"),
+        "contextFiles": spec.env.get("CONTEXT_FILE_NAMES"),
+        "launcherAuthor": spec.launcher_author.map(|access| access.profile_tool()),
         "approval": spec.approval_mode.id(),
         "profile": profile,
         "endpoint": endpoint,

@@ -20,7 +20,46 @@ assert(
 		kit === join(root, "home/.scriptkit") &&
 		realpathSync(process.cwd()) === realpathSync(root),
 );
+// This is the installed external CLI talking to the real, isolated Kit HTTP server.
+// A headless server must report no adopted window, even when its disk transaction succeeds.
+function launcher(credential: string, op: string, fields?: object) {
+	const r = Bun.spawnSync(
+		[join(kit, "bin/scriptkit"), "agent", "launcher", op],
+		{
+			cwd: root,
+			env: { ...process.env, SCRIPT_KIT_AGENT_CREDENTIAL: credential },
+			stdin: Buffer.from(fields ? JSON.stringify(fields) : ""),
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: 5000,
+		},
+	);
+	assert.equal(r.exitCode, 0, r.stderr.toString() + r.stdout.toString());
+	return JSON.parse(r.stdout.toString()).data;
+}
 if (process.env.SK_BRIDGE_COLD_READ === "1") {
+	const personal = JSON.parse(
+		readFileSync(join(root, "launcher-cold.json"), "utf8"),
+	);
+	const s = launcher(personal.credential, "inspect").state;
+	assert.equal(s.revision, personal.revision);
+	assert.equal(s.effective.selectionFirst, "note");
+	assert.equal(s.undo, personal.id);
+	const why = launcher(personal.credential, "why", {
+		target: "launcher.subject.selection.firstAction",
+	});
+	assert.equal(why.origin, "connectedAgent");
+	assert.equal(why.requestId, personal.id);
+	const undo = launcher(personal.credential, "apply", {
+		request: {
+			workspace: s.workspace,
+			expectedRevision: s.revision,
+			requestId: randomUUID(),
+			change: { op: "undo", of: s.undo },
+		},
+	}).result;
+	assert.equal(undo.state.effective.selectionFirst, null);
+	assert.equal(undo.state.undo, null);
 	const saved = JSON.parse(
 		readFileSync(join(root, "restart-proof.json"), "utf8"),
 	);
@@ -95,6 +134,65 @@ ok(["grant-agent", "two", b.SCRIPT_KIT_AGENT_CREDENTIAL, "notes:quiet"]);
 const d = ok(["agent", "discover"], "", a);
 assert(d.tools.some((x: any) => x.name === "kit/quiet_note_save"));
 assert(!d.tools.some((x: any) => x.name === "kit/scripts_run"));
+assert(!d.tools.some((x: any) => String(x.name).startsWith("kit/launcher_")));
+const launcherCredential = join(creds, "launcher"),
+	authorEnv = { SCRIPT_KIT_AGENT_CREDENTIAL: launcherCredential };
+ok([
+	"grant-agent",
+	"launcher",
+	launcherCredential,
+	"launcher:read",
+	"launcher:apply",
+]);
+const listed = ok(["agent", "discover"], "", authorEnv).tools.map(
+	(v: any) => v.name,
+);
+assert(
+	listed.includes("kit/launcher_read") &&
+		listed.includes("kit/launcher_apply") &&
+		!listed.includes("kit/quiet_note_save"),
+);
+const stock = launcher(launcherCredential, "inspect").state;
+assert.equal(stock.revision, "stock");
+const catalog = launcher(launcherCredential, "describe");
+const target = catalog.targets.find(
+	(v: any) => v.id === "launcher.subject.selection.firstAction",
+);
+assert(target.values.includes("note"));
+const edit = { op: "edit", edit: { target: target.id, value: "note" } },
+	requestId = randomUUID();
+const preview = launcher(launcherCredential, "preview", { change: edit });
+assert.equal(preview.wouldStore.effective.selectionFirst, "note");
+const args = {
+	request: {
+		workspace: stock.workspace,
+		expectedRevision: stock.revision,
+		requestId,
+		change: edit,
+	},
+};
+assert.notEqual(
+	invoke(["agent", "launcher", "apply"], JSON.stringify(args), a).exitCode,
+	0,
+);
+const wrote = launcher(launcherCredential, "apply", args).result;
+assert(!wrote.replayed);
+assert.equal(wrote.state.effective.selectionFirst, "note");
+assert.equal(
+	launcher(launcherCredential, "status", { requestId }).status,
+	"committed",
+);
+assert(launcher(launcherCredential, "apply", args).result.replayed);
+assert.equal(launcher(launcherCredential, "live").available, false);
+writeFileSync(
+	join(root, "launcher-cold.json"),
+	JSON.stringify({
+		credential: launcherCredential,
+		id: requestId,
+		revision: wrote.appliedRevision,
+	}),
+	{ flag: "wx", mode: 0o600 },
+);
 assert(!d.resources.some((x: any) => x.uri === "kit://clipboard-history"));
 const id = randomUUID(),
 	body = "# Synthetic bridge note\n\nDo not send. Keep the original name.";

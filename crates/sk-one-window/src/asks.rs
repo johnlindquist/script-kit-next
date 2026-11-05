@@ -44,12 +44,22 @@ pub struct Asks {
     /// What it wants to do: "Run rm -rf build", "Edit src/main.rs".
     pub title: String,
     pub detail: Option<String>,
+    /// Full Kit-validated proposal, displayed above both choices (never a clipped row subtitle).
+    pub launcher_review: Option<String>,
     pub choices: Vec<Choice>,
 }
 
 const KEY_PREFIX: &str = "ask:";
 
 impl Asks {
+    fn choice_key(&self, id: &str) -> String {
+        if self.launcher_review.is_some() {
+            format!("{KEY_PREFIX}{}:{id}", self.id)
+        } else {
+            format!("{KEY_PREFIX}{id}")
+        }
+    }
+
     /// The choices as rows: a one-time yes, a lasting yes, then no.
     pub fn rows(&self) -> Vec<Row> {
         let mut choices: Vec<&Choice> = self.choices.iter().collect();
@@ -57,7 +67,7 @@ impl Asks {
         choices
             .into_iter()
             .map(|c| {
-                let row = Row::new(format!("{KEY_PREFIX}{}", c.id), c.label.clone())
+                let row = Row::new(self.choice_key(&c.id), c.label.clone())
                     .with_icon(if c.allows { "check" } else { "close" })
                     .with_enter_label(format!(
                         "{}: {}",
@@ -74,7 +84,10 @@ impl Asks {
     }
 
     pub fn choice_of(&self, key: &str) -> Option<String> {
-        key.strip_prefix(KEY_PREFIX).map(str::to_string)
+        self.choices
+            .iter()
+            .find(|choice| self.choice_key(&choice.id) == key)
+            .map(|choice| choice.id.clone())
     }
 
     /// The first way to say no; `None` cancels when the model offers none.
@@ -96,6 +109,7 @@ mod tests {
             id: 1,
             title: "Edit README.md".into(),
             detail: Some("+3 −1".into()),
+            launcher_review: None,
             choices: vec![
                 Choice::new("reject", "Reject", false),
                 Choice::new("always", "Always allow", true).lasting(),
@@ -111,5 +125,24 @@ mod tests {
         assert_eq!(rows[2].enter_words(), "Don't allow: Edit README.md");
         assert_eq!(asks.deny().as_deref(), Some("reject"));
         assert_eq!(asks.choice_of(&rows[1].key).as_deref(), Some("always"));
+    }
+
+    #[test]
+    fn an_old_save_row_cannot_answer_a_replacement_proposal() {
+        let mut asks = Asks {
+            id: 8,
+            title: "Change your launcher".into(),
+            detail: None,
+            launcher_review: Some("Only while dictating".into()),
+            choices: vec![
+                Choice::new("once", "Save once", true),
+                Choice::new("no", "Don’t save", false),
+            ],
+        };
+        let old = asks.rows()[0].key.clone();
+        asks.id = 9;
+        assert!(asks.choice_of(&old).is_none());
+        assert_eq!(asks.choice_of(&asks.rows()[0].key).as_deref(), Some("once"));
+        assert_eq!(asks.deny().as_deref(), Some("no"));
     }
 }

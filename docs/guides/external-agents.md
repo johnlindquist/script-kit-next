@@ -2,6 +2,8 @@
 
 Stay in your agent's current conversation. Kit can save a quiet Markdown note, run a particular version of a trusted personal script, or share one selected passage with a named local Herdr agent. No mouse, clipboard fallback, or second chat is involved.
 
+The [personal launcher API](personal-launcher.md#local-authoring-api) lets a local author change a named header role or subject action order, with an expected revision and durable Undo. It does not need an agent session or access to selected text.
+
 ## Give an agent just the operations it needs
 
 ### Put this workspace’s command on your PATH

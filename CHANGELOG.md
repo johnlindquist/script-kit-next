@@ -1,5 +1,11 @@
 # Script Kit changelog
 
+## Unreleased · Personal launcher
+
+Type **Make “Stays open” brighter** or **Put today’s note first for selected text**, then choose **Customize Kit**. Changing the order does not save the selection. Type **Undo my last launcher change** to restore the previous rule.
+
+[Personal launcher guide](docs/guides/personal-launcher.md) · [External agent access](docs/guides/external-agents.md)
+
 ## 0.1.29 · A dependable Return action
 
 [Release notes and installation checks](docs/releases/v0.1.29.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.

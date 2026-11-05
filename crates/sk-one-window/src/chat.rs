@@ -543,9 +543,12 @@ impl Chat {
         } else if self.sign_in.is_some() {
             return ChatKey::SignIn(row.key == SIGN_IN_KEY);
         } else if let Some(asks) = &self.asks {
-            return ChatKey::Answer {
-                id: asks.id,
-                choice: asks.choice_of(&row.key),
+            return match asks.choice_of(&row.key) {
+                Some(choice) => ChatKey::Answer {
+                    id: asks.id,
+                    choice: Some(choice),
+                },
+                None => ChatKey::Nothing,
             };
         }
         match row.key.as_str() {
@@ -743,6 +746,7 @@ mod tests {
             id: 7,
             title: "Run rm -rf build".into(),
             detail: None,
+            launcher_review: None,
             choices: vec![
                 Choice::new("deny", "Reject", false),
                 Choice::new("once", "Allow once", true),

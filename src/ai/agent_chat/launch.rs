@@ -49,9 +49,22 @@ impl AgentChatLaunch {
                 "The goose AI engine is missing. Ship Contents/MacOS/goose in the app bundle or configure ai.gooseBinary / SCRIPT_KIT_GOOSE_BINARY."
             )
         })?;
-        let cwd = cwd_override
-            .or_else(|| profile.cwd.clone())
-            .unwrap_or_else(crate::setup::get_kit_path);
+        let dedicated_author = crate::ai::agent_chat::goose::recipe::profile_tool_ids(&profile)
+            .is_some_and(|ids| {
+                crate::ai::agent_chat::goose::recipe::recipe_tools(&ids)
+                    .launcher_author()
+                    .is_some()
+            });
+        let cwd = if dedicated_author {
+            // The target is the current Kit workspace, never a project directory.
+            crate::setup::get_kit_path()
+                .join("agent-chat")
+                .join("launcher-author")
+        } else {
+            cwd_override
+                .or_else(|| profile.cwd.clone())
+                .unwrap_or_else(crate::setup::get_kit_path)
+        };
         std::fs::create_dir_all(&cwd)
             .with_context(|| format!("Failed to prepare Agent Chat cwd {}", cwd.display()))?;
         let goose = GooseProfileLaunch::from_profile(

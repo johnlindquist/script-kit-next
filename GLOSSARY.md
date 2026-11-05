@@ -8,6 +8,9 @@ There is one window, and you tell it what should happen. The input at the top ne
 
 ## App-independent domain crates
 
+- **Personal launcher rules:** [sk-personal](crates/sk-personal/src/lib.rs) owns local authoring, journal and workspace revisions. [sk-one-window](crates/sk-one-window/src/personal.rs) owns eligible style/action values; the [native adapter](src/one_window/personal_rules.rs) adopts them. [Scoped authoring](src/mcp_protocol/personal.rs) shares that service between explicitly granted external clients and configured Agent Chat profiles. [Guide and agent API](docs/guides/personal-launcher.md).
+- **Personal list views:** [the recipe schema](crates/sk-personal/src/views.rs) defines which source, row detail and action fit together. [Selection rules](crates/sk-one-window/src/personal_list.rs) preserve the chosen identity across arrivals. The [host](src/one_window/personal_views.rs) uses the ordinary view list and a title-only Notes query. [Pane sharing](src/one_window/herdr_panes.rs) reads only a space explicitly paired to this workspace; [the reader](scripts/herdr-pane-read.mjs) also serves the operator CLI. Saving a recipe does not grant source access.
+- **Launcher text-size preferences:** [the reading and transaction](crates/sk-one-window/src/font_preference.rs) own which words name a change, its expected value and undo revision. [The launcher](src/one_window/personal_settings.rs) shows and submits it; [the settings transport](src/mcp_config_tools/font.rs) uses the installed config helper.
 - **Authored alpha and RGB packing:** [sk-color](crates/sk-color/src/alpha.rs)
   owns `AlphaByte`, the typed RGB packer, and `opacity_to_alpha`. The app keeps
   its [theme alpha](src/theme/alpha.rs) and [theme types](src/theme/types.rs)

@@ -52,6 +52,40 @@ fn warm_key_keeps_the_cwd_recipe_and_provider_credential_contract() {
     assert_ne!(key(&launch), original);
 }
 #[test]
+fn a_dedicated_author_needs_an_endpoint_and_disables_ambient_engine_hints() {
+    use sk_personal::api::Endpoint::{Apply, Read};
+    for (grants, expected) in [
+        (&["launcher_read"][..], Some(Read)),
+        (&["launcher_apply", "launcher_read"][..], Some(Apply)),
+        (&["bash", "launcher_read"][..], None),
+        (&["launcher_apply"][..], None),
+    ] {
+        let launch = local_launch(grants);
+        let bound = BoundLaunch::from_snapshot(&launch, Default::default(), None, &[]);
+        assert_eq!(bound.spec.launcher_author, expected);
+        let unrestricted =
+            BoundLaunch::from_snapshot(&launch, AgentApprovalMode::FullAccess, None, &[]);
+        assert_eq!(
+            unrestricted.spec.approval_mode,
+            if expected == Some(Apply) {
+                AgentApprovalMode::AskBeforeChanges
+            } else {
+                AgentApprovalMode::FullAccess
+            }
+        );
+        if expected.is_some() {
+            assert_eq!(
+                bound.spec.env.get("CONTEXT_FILE_NAMES").map(String::as_str),
+                Some("[]")
+            );
+            assert!(bound.for_endpoint(None).is_err());
+        } else {
+            assert!(!bound.spec.env.contains_key("CONTEXT_FILE_NAMES"));
+        }
+    }
+}
+
+#[test]
 fn spawned_endpoint_uses_only_the_bound_policy_and_refuses_a_replaced_listener() {
     let scratch = tempfile::tempdir().unwrap();
     let mut launch = local_launch(&["read"]);

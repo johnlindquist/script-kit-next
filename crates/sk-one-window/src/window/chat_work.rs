@@ -380,6 +380,7 @@ mod tests {
                 id: 3,
                 title: "Run rm -rf build".into(),
                 detail: None,
+                launcher_review: None,
                 choices: vec![
                     Choice::new("once", "Allow once", true),
                     Choice::new("no", "Reject", false),
@@ -417,6 +418,7 @@ mod tests {
                 id: 4,
                 title: "Edit a file".into(),
                 detail: None,
+                launcher_review: None,
                 choices: vec![Choice::new("no", "Reject", false)],
             })),
         );

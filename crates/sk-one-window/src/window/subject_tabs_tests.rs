@@ -28,6 +28,102 @@ fn open(w: &mut OneWindow, now: Ms) {
     );
 }
 #[test]
+fn preference_moves_only_a_real_action_and_enter_keeps_the_observed_subject() {
+    use crate::personal::{ClipboardAction, Edit, LauncherRules, SelectionAction};
+    let mut w = OneWindow::default();
+    let rules = LauncherRules::default()
+        .with(Edit::SelectionFirst(Some(SelectionAction::Note)))
+        .with(Edit::ClipboardFirst(Some(ClipboardAction::Open)));
+    w.handle(0, Event::Subjects(TabsEvent::Personal(rules)));
+    open(&mut w, 1);
+    let mut passage = source(SubjectKind::Selection, "the chosen passage", 0);
+    passage.rows = vec![
+        Row::new("ask", "Ask"),
+        Row::new("note", "Add to note"),
+        Row::new("handoff", "Share"),
+    ];
+    w.handle(2, Event::Subjects(TabsEvent::Observe(passage)));
+    let selected = w.subject_page().unwrap();
+    assert_eq!(
+        selected
+            .rows()
+            .iter()
+            .map(|r| r.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Add to note", "Ask", "Share"]
+    );
+    w.handle(3, Event::Subjects(TabsEvent::Pick(selected.id.clone())));
+    let mut later = source(SubjectKind::Clipboard, "unrelated plain text", 0);
+    later.rows = vec![Row::new("ask", "Ask"), Row::new("note", "Note")];
+    w.handle(600, Event::Subjects(TabsEvent::Observe(later)));
+    let receipt = w.handle(1600, Event::Key(Key::Enter));
+    assert_eq!(
+        receipt.picked.unwrap().0.key,
+        format!("subject/{}/note", selected.id)
+    );
+    assert_eq!(
+        w.page_for_action().unwrap().source.body.as_ref(),
+        "the chosen passage"
+    );
+    let copy = w
+        .subject_pages()
+        .into_iter()
+        .find(|p| p.source.subject.kind == SubjectKind::Clipboard)
+        .unwrap();
+    assert_eq!(
+        copy.rows()
+            .iter()
+            .map(|r| r.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Ask", "Note"],
+        "an absent Open action is never invented"
+    );
+}
+
+#[test]
+fn late_settings_move_only_the_automatic_default_and_guard_return() {
+    use crate::personal::{Edit, LauncherRules, SelectionAction};
+    let mut w = OneWindow::default();
+    open(&mut w, 1);
+    let mut passage = source(SubjectKind::Selection, "the untouched selection", 0);
+    passage.rows = vec![Row::new("ask", "Ask"), Row::new("note", "Add to note")];
+    w.handle(2, Event::Subjects(TabsEvent::Observe(passage)));
+    let page = w.subject_page().unwrap().id;
+    let rules = LauncherRules::default().with(Edit::SelectionFirst(Some(SelectionAction::Note)));
+    let mut chosen = w.clone();
+    chosen.handle(850, Event::Key(Key::Down));
+    chosen.handle(900, Event::Key(Key::Up));
+    for app in [&mut w, &mut chosen] {
+        app.handle(900, Event::Subjects(TabsEvent::Personal(rules)));
+    }
+    assert_eq!(
+        w.list.current_row().unwrap().key,
+        format!("subject/{page}/note")
+    );
+    assert!(
+        w.handle(901, Event::Key(Key::Enter)).picked.is_none(),
+        "a return aimed at the old default cannot send the passage"
+    );
+    assert_eq!(
+        w.handle(1500, Event::Key(Key::Enter)).picked.unwrap().0.key,
+        format!("subject/{page}/note")
+    );
+    assert_eq!(
+        chosen.list.current_row().unwrap().key,
+        format!("subject/{page}/ask")
+    );
+    assert_eq!(
+        chosen
+            .handle(1500, Event::Key(Key::Enter))
+            .picked
+            .unwrap()
+            .0
+            .key,
+        format!("subject/{page}/ask")
+    );
+}
+
+#[test]
 fn late_subjects_do_not_retarget_a_deliberate_pick() {
     let mut w = OneWindow::default();
     open(&mut w, 100);

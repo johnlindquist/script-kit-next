@@ -22,6 +22,8 @@ pub(crate) enum AgentChatApprovalPreviewKind {
     Read,
     /// Tool writes or modifies data (e.g., write file, save, edit).
     Write,
+    /// A revision-bound launcher proposal described by Kit, not by the model.
+    LauncherSave,
     /// Tool runs a command or subprocess.
     Execute,
     /// Fallback for uncategorized tool calls.
@@ -34,7 +36,7 @@ impl AgentChatApprovalPreviewKind {
     pub(crate) fn badge_label(self) -> &'static str {
         match self {
             Self::Read => "Read only",
-            Self::Write => "Writes data",
+            Self::Write | Self::LauncherSave => "Writes data",
             Self::Execute => "Runs command",
             Self::Generic => "Needs approval",
         }
@@ -68,7 +70,7 @@ impl AgentChatApprovalOption {
 
     /// Whether this option grants persistent (session-level) permission.
     pub(crate) fn is_persistent_allow(&self) -> bool {
-        self.kind.contains("Always")
+        self.kind == "AllowAlways"
     }
 }
 

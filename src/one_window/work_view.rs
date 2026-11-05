@@ -275,6 +275,15 @@ impl ScriptListApp {
             rows.push(
                 self.one_window_note(format!("The model asks to {}", lower_first(&asks.title))),
             );
+            if let Some(facts) = &asks.launcher_review {
+                rows.push(
+                    div()
+                        .id("chat-launcher-review")
+                        .debug_selector(|| "chat-launcher-review".into())
+                        .child(self.one_window_note(facts.clone()))
+                        .into_any_element(),
+                );
+            }
         } else if let Some(provider) = c.sign_in.as_ref() {
             rows.push(self.one_window_note(format!(
                 "The model needs you to sign in to {provider} before it can answer"
@@ -673,6 +682,15 @@ impl ScriptListApp {
                         _ => format!("chat-turn:{i}"),
                     };
                     out.push(yours(id, i, &t.text, false));
+                }
+            }
+            if !acting {
+                if let Some(facts) = c.asks.as_ref().and_then(|a| a.launcher_review.as_deref()) {
+                    out.push(ElementInfo {
+                        role: Some("note".into()),
+                        selectable: Some(false),
+                        ..yours("chat-launcher-review".into(), 0, facts, false)
+                    });
                 }
             }
             let (head, next) = c.rows();

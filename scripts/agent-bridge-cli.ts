@@ -1,5 +1,6 @@
 // External agent surface of the scriptkit shim. Operator commands never contact the desktop.
 import { createHash, randomBytes } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
 	constants,
 	closeSync,
@@ -262,7 +263,7 @@ export function operator(args: string[], root: string) {
 	}
 	requireOk(
 		verb === "grant-agent" && label.test(name ?? "") && rest.length >= 2,
-		"Usage: scriptkit grant-agent <name> /private/path/token notes:quiet|handoff:receive|command:<stem>:<sha256> ...",
+		"Usage: scriptkit grant-agent <name> /private/path/token notes:quiet|handoff:receive|launcher:read|launcher:apply|command:<stem>:<sha256> ...",
 	);
 	const [credential, ...scopes] = rest;
 	requireOk(
@@ -270,6 +271,8 @@ export function operator(args: string[], root: string) {
 			scopes.every(
 				(s) =>
 					s === "notes:quiet" ||
+					s === "launcher:read" ||
+					s === "launcher:apply" ||
 					s === "handoff:receive" ||
 					/^handoff:send:[a-z][a-z0-9-]{0,47}$/.test(s) ||
 					commandGrant.test(s),
@@ -316,7 +319,202 @@ export function operator(args: string[], root: string) {
 	};
 }
 type Rpc = (method: string, params: unknown, token: string) => Promise<any>;
-export async function agent(args: string[], rpc: Rpc) {
+class ToolRefusal extends Error {}
+const launcherFields = new Map<string, string | null>([
+	["describe", null],
+	["inspect", null],
+	["live", null],
+	["why", "target"],
+	["status", "requestId"],
+	["preview", "change"],
+	["apply", "request"],
+]);
+const object = (v: unknown): v is Record<string, unknown> =>
+	v !== null && typeof v === "object" && !Array.isArray(v);
+const digest = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
+const revision = (v: unknown) => v === "stock" || digest(v);
+// Store::state and Store::preview expose declared rules even while disabled. The effective
+// rules must be those same declarations when enabled, or LauncherRules::default() when not.
+const stockRules = { pinnedText: "muted", pinnedWeight: "regular", selectionFirst: null, clipboardFirst: null };
+function snapshot(v: unknown): v is Record<string, unknown> {
+	if (!object(v) || !digest(v.workspace) || !revision(v.revision) || typeof v.enabled !== "boolean") return false;
+	const { declared, effective, undo } = v;
+	return object(declared) && object(effective) && Object.keys(stockRules).every(k => Object.hasOwn(declared, k))
+		&& isDeepStrictEqual(effective, v.enabled ? declared : stockRules)
+		&& (undo === null || (v.revision !== "stock" && requestIdentity(undo) !== undefined));
+}
+
+// Rust UUID receipts use the canonical spelling, including for accepted upper-case inputs.
+function requestIdentity(value: unknown): string | undefined {
+	if (typeof value !== "string" || value.length > 45) return;
+	let s = value.toLowerCase();
+	if (s.startsWith("urn:uuid:")) s = s.slice(9);
+	else if (s.startsWith("{") && s.endsWith("}")) s = s.slice(1, -1);
+	if (uuid.test(s) || /^[a-f0-9]{32}$/.test(s)) return s.replaceAll("-", "");
+}
+function sameRequest(a: unknown, b: unknown): boolean {
+	const expected = requestIdentity(a);
+	return expected !== undefined && expected === requestIdentity(b);
+}
+
+// Check the requested declaration, not just a well-shaped snapshot of some change.
+// The store owns validation and history; the client cannot infer prior values for Undo.
+const declaredFields = new Map([
+	["launcher.header.pinned-label.textRole", "pinnedText"],
+	["launcher.header.pinned-label.weight", "pinnedWeight"],
+	["launcher.subject.selection.firstAction", "selectionFirst"],
+	["launcher.subject.clipboard.firstAction", "clipboardFirst"],
+]);
+function reflectsChange(change: unknown, state: Record<string, unknown>, savedId?: unknown): boolean {
+	if (!object(change)) return false;
+	// For the original stored revision, the new non-Undo operation is precisely what can be undone.
+	if (savedId !== undefined && change.op !== "undo" && !sameRequest(savedId, state.undo)) return false;
+	switch (change.op) {
+		case "enable": return state.enabled === true;
+		case "disable": return state.enabled === false;
+		case "edit": {
+			const edit = change.edit;
+			if (!object(edit) || typeof edit.target !== "string" || !Object.hasOwn(edit, "value")) return false;
+			const field = declaredFields.get(edit.target);
+			return field !== undefined && object(state.declared) && state.declared[field] === edit.value
+				&& (state.enabled === false || (object(state.effective) && state.effective[field] === edit.value));
+		}
+		case "putView":
+		case "removeView": {
+			const put = change.op === "putView";
+			const id = put ? (object(change.view) ? change.view.id : undefined) : change.id;
+			// The store omits an empty list; null or malformed members are not evidence of absence.
+			const views = state.views === undefined ? [] : state.views;
+			if (typeof id !== "string" || !Array.isArray(views) || !views.every(v => object(v) && typeof v.id === "string")) return false;
+			const matches = views.filter(v => v.id === id);
+			return put ? matches.length === 1 && isDeepStrictEqual(matches[0], change.view) : matches.length === 0;
+		}
+		case "undo":
+			if (requestIdentity(change.of) === undefined) return false;
+			// Preview keeps the current undo tip. A committed Undo consumes it, exposing the
+			// preceding tip or null. The preceding values aren't independently known here.
+			return savedId === undefined ? sameRequest(state.undo, change.of) :
+				!sameRequest(savedId, change.of) && !sameRequest(state.undo, change.of) && !sameRequest(state.undo, savedId);
+		default: return false;
+	}
+}
+
+// A matching JSON-RPC id binds the network response, not the underlying edit or window.
+function launcherReceipt(verb: string, args: Record<string, unknown>, data: unknown): boolean {
+	if (!object(data)) return false;
+	switch (verb) {
+		case "describe":
+			return data.schemaVersion === 1 && Array.isArray(data.targets) && Array.isArray(data.operations);
+		case "inspect":
+			return data.scope === "stored" && typeof data.safeMode === "boolean" && snapshot(data.state);
+		case "preview":
+			return data.scope === "preview" && snapshot(data.wouldStore) && reflectsChange(args.change, data.wouldStore);
+		case "live": {
+			if (data.scope !== "runningWindow") return false;
+			if (data.available === false) return !Object.hasOwn(data, "adoption");
+			const a = data.adoption;
+			return data.available === true && object(a) && object(a.effective) && typeof a.pendingWrite === "boolean"
+				&& ((a.workspace === null && a.appliedRevision === null) || (digest(a.workspace) && revision(a.appliedRevision)));
+		}
+		case "why":
+			return typeof args.target === "string" && data.target === args.target && typeof data.origin === "string" && revision(data.revision);
+		case "status":
+			return sameRequest(args.requestId, data.requestId) && revision(data.storedRevision)
+				// Stock has no active document or commit chain, even if an orphan journal exists.
+				&& (data.status === "committed" ? digest(data.storedRevision) : data.status === "unknown" || data.status === "notInActiveHistory");
+		case "apply": {
+			const req = args.request, res = data.result;
+			if (data.scope !== "stored" || !object(req) || !object(res) || !snapshot(res.state)) return false;
+			// A replay identifies the ORIGINAL commit, but carries the CURRENT state. A first
+			// application must report its new revision in both places; neither proves UI adoption.
+			return sameRequest(req.requestId, res.requestId) && req.workspace === res.state.workspace
+				&& revision(req.expectedRevision) && digest(res.appliedRevision) && res.appliedRevision !== req.expectedRevision
+				&& digest(res.state.revision) && typeof res.replayed === "boolean"
+				&& (res.state.revision === res.appliedRevision ? reflectsChange(req.change, res.state, req.requestId) : res.replayed);
+		}
+		default: return false;
+	}
+}
+function toolBody(result: unknown, launcher: boolean): Record<string, unknown> {
+	requireOk(object(result) && Array.isArray(result.content) && typeof result.content[0]?.text === "string"
+		&& (!launcher || (result.content.length === 1 && result.content[0].type === "text")), "Invalid tool receipt");
+	let body: unknown;
+	try { body = JSON.parse(result.content[0].text); } catch { throw Error("Invalid tool receipt"); }
+	requireOk(object(body), "Invalid tool receipt");
+	return body;
+}
+
+// Only these store/permission checks are known to end this attempt before publishing the active file.
+// In particular, stale_revision and wrong_workspace can also be raised during the *post*-rename read.
+const beforeSave = new Set(["scope_denied", "safe_mode", "invalid_request", "writer_busy", "nothing_to_undo",
+	"invalid_view", "view_limit", "view_not_found", "unsupported"]);
+const reconcileReasons = new Set(["storage_unavailable", "stale_revision", "wrong_workspace", "unsafe_path",
+	"invalid_document", "request_conflict", "history_limit"]);
+// A read and a write must agree on what the peer actually said. Never pick one
+// of two conflicting MCP representations or credit a success that also carries an error.
+function launcherReply(response: unknown) {
+	if (!object(response) || !object(response.result)) return;
+	const result = response.result;
+	let body: Record<string, unknown>;
+	try { body = toolBody(result, true); } catch { return; }
+	if (Object.hasOwn(result, "structuredContent") && !isDeepStrictEqual(result.structuredContent, body)) return;
+	if (result.isError === true && body.ok === false && !Object.hasOwn(body, "data") && object(body.error) && typeof body.error.code === "string") {
+		return { kind: "failure" as const, code: body.error.code };
+	}
+	if ((result.isError === undefined || result.isError === false) && body.ok === true && !Object.hasOwn(body, "error") && Object.hasOwn(body, "data")) {
+		return { kind: "success" as const, data: body.data };
+	}
+}
+
+class UnverifiedLauncherRead extends Error {
+	readonly code = "launcher_read_unverified";
+	constructor(op?: string) { super("Invalid launcher " + (op ?? "read") + " receipt. No launcher state was verified."); }
+}
+
+export async function checkedLauncherRead(args: unknown, send: () => Promise<unknown>) {
+	const response = await send();
+	const receipt = launcherReply(response);
+	if (receipt?.kind === "failure") {
+		throw new ToolRefusal(beforeSave.has(receipt.code) || reconcileReasons.has(receipt.code) ? receipt.code : "Launcher read refused");
+	}
+	const op = object(args) && typeof args.op === "string" && args.op !== "apply" && launcherFields.has(args.op) ? args.op : undefined;
+	if (receipt?.kind === "success" && op && object(args) && launcherReceipt(op, args, receipt.data)) {
+		return { response, data: receipt.data };
+	}
+	throw new UnverifiedLauncherRead(op);
+}
+
+class UnverifiedLauncherApply extends Error {
+	readonly code = "launcher_apply_unverified";
+	constructor(reason?: string) {
+		super(`Launcher apply could not be verified${reason ? ` (${reason})` : ""}. Check launcher status with the original requestId in the same workspace. Do not resend automatically.`);
+	}
+}
+
+/** Send exactly once. The named MCP CLI preserves its raw envelope on success; the typed CLI returns the stored result. */
+export async function checkedLauncherApply(args: unknown, send: () => Promise<unknown>) {
+	let reason: string | undefined;
+	try {
+		const response = await send();
+		const receipt = launcherReply(response);
+		if (receipt?.kind === "failure") {
+			if (beforeSave.has(receipt.code)) throw new ToolRefusal(receipt.code);
+			if (reconcileReasons.has(receipt.code)) reason = receipt.code;
+		} else if (receipt?.kind === "success" && object(args) && args.op === "apply" && launcherReceipt("apply", args, receipt.data)) {
+			return { response, data: receipt.data };
+		}
+	} catch (error) {
+		// A malformed response, transport failure, or validation exception does not undo a save.
+		if (error instanceof ToolRefusal || (error instanceof Error && "code" in error && error.code === "mcp_request_not_sent")) throw error;
+	}
+	throw new UnverifiedLauncherApply(reason);
+}
+
+export async function agent(
+	args: string[],
+	rpc: Rpc,
+	input: AsyncIterable<Uint8Array | string> = process.stdin,
+) {
 	const [verb, a, b, ...extra] = args;
 	const file = process.env.SCRIPT_KIT_AGENT_CREDENTIAL;
 	const raw = file === undefined ? process.env.SCRIPT_KIT_MCP_TOKEN : credentialToken(file);
@@ -327,22 +525,17 @@ export async function agent(args: string[], rpc: Rpc) {
 	const call = async (name: string, parameters: unknown) => {
 		const r = (await rpc("tools/call", { name, arguments: parameters }, raw))
 			.result;
-		let body;
-		try {
-			body = JSON.parse(r.content[0].text);
-		} catch {
-			throw Error("Invalid tool receipt");
+		const body = toolBody(r, false);
+		if (r.isError || body.ok === false) {
+			const code = object(body.error) ? body.error.code : null;
+			throw new ToolRefusal(typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code) && !code.includes(raw) ? code : "Tool refused");
 		}
-		requireOk(
-			!r.isError && body.ok !== false,
-			body.error?.code ?? "Tool refused",
-		);
 		return body;
 	};
 	const stdin = async (limit = 65536) => {
 		const parts: Buffer[] = [];
 		let n = 0;
-		for await (const chunk of process.stdin) {
+		for await (const chunk of input) {
 			const p = Buffer.from(chunk);
 			requireOk((n += p.length) <= limit, "Input exceeds byte limit");
 			parts.push(p);
@@ -357,6 +550,30 @@ export async function agent(args: string[], rpc: Rpc) {
 		}
 	};
 	requireOk(!extra.length, "Too many arguments");
+	if (verb === "launcher") {
+		const field = launcherFields.get(a);
+		requireOk(
+			field !== undefined && b === undefined,
+			"Usage: scriptkit agent launcher describe|inspect|live|why|status|preview|apply",
+		);
+		const parameters: Record<string, unknown> = { op: a };
+		if (field !== null) {
+			const body = JSON.parse(await stdin());
+			requireOk(
+				body !== null &&
+					typeof body === "object" &&
+					!Array.isArray(body) &&
+					Object.keys(body).length === 1 &&
+					Object.hasOwn(body, field),
+				"Expected one JSON field: " + field,
+			);
+			parameters[field] = body[field];
+		}
+		if (a === "apply") return (await checkedLauncherApply(parameters, () =>
+			rpc("tools/call", { name:"kit/launcher_apply", arguments:parameters }, raw))).data;
+		return (await checkedLauncherRead(parameters, () =>
+			rpc("tools/call", { name:"kit/launcher_read", arguments:parameters }, raw))).data;
+	}
 	if (verb === "discover" && !a) {
 		const tools = (await rpc("tools/list", {}, raw)).result.tools,
 			resources = (await rpc("resources/list", {}, raw)).result.resources;

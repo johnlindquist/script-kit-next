@@ -33,6 +33,8 @@ pub(crate) struct GooseLaunchSpec {
     pub thinking: Option<String>,
     /// Script Kit agent-tools policy registered for this session, if any.
     pub agent_policy_id: Option<String>,
+    /// The dedicated launcher profile requires this exact live tool surface.
+    pub launcher_author: Option<sk_personal::api::Endpoint>,
     /// Whether dropping this runtime releases the policy. Isolated turns
     /// borrow their parent session's policy and must not release it.
     pub owns_agent_policy: bool,
@@ -53,6 +55,7 @@ impl GooseLaunchSpec {
             hidden_session: true,
             thinking: None,
             agent_policy_id: None,
+            launcher_author: None,
             owns_agent_policy: true,
             surface: crate::ai::phase_trace::AiSurface::AgentChat,
             approval_mode: crate::ai::agent_chat::approval::AgentApprovalMode::AskBeforeChanges,

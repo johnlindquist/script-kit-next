@@ -1287,12 +1287,17 @@ app.run(move |cx: &mut App| {
                         .timer(std::time::Duration::from_millis(poll_interval))
                         .await;
 
-                    if config_rx.try_recv().is_ok() {
-                        idle_count = 0; // Reset on activity
-                        logging::log("APP", "Config file changed, reloading");
+                    let mut settings = false;
+                    let mut personal = false;
+                    for event in config_rx.try_iter().take(64) {
+                        match event { watcher::ConfigReloadEvent::Reload => settings=true, watcher::ConfigReloadEvent::PersonalRules => personal=true }
+                    }
+                    if settings || personal {
+                        idle_count = 0;
                         cx.update(|cx| {
                             app_entity_for_config.update(cx, |view, ctx| {
-                                view.update_config(ctx);
+                                if settings { view.update_config(ctx); }
+                                if personal { view.reload_personal_rules(ctx); }
                             });
                         });
                     } else {
@@ -1603,7 +1608,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
     while let Ok(reply)=mcp_state_rx.recv().await {
         cx.update(|cx| {
             let app=state_app.read(cx);
-            let _=reply.send(crate::mcp_resources::AppStateResource {active_prompt:(!matches!(app.current_view,AppView::ScriptList)).then(||app.current_view.app_view_variant().to_string()),visible:script_kit_gpui::is_main_window_visible(), focused:crate::platform::is_main_window_focused(),script_count:app.scripts.len(),scriptlet_count:app.scriptlets.len(),filter_text:None,selected_index:None});
+            let _=reply.send(crate::mcp_resources::AppStateResource {launcher:Some(app.personal_adoption()),active_prompt:(!matches!(app.current_view,AppView::ScriptList)).then(||app.current_view.app_view_variant().to_string()),visible:script_kit_gpui::is_main_window_visible(), focused:crate::platform::is_main_window_focused(),script_count:app.scripts.len(),scriptlet_count:app.scriptlets.len(),filter_text:None,selected_index:None});
         });
     }
 }).detach();

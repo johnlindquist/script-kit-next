@@ -2,6 +2,8 @@ use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod font;
+
 pub const CONFIG_GET_TOOL: &str = "kit/config_get";
 pub const CONFIG_LIST_TOOL: &str = "kit/config_list";
 pub const CONFIG_VALIDATE_TOOL: &str = "kit/config_validate";
@@ -409,6 +411,12 @@ fn run_config_cli(
     action: &'static str,
     args: Vec<String>,
 ) -> Result<(&'static str, Value), (&'static str, ConfigToolError)> {
+    crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::Process).map_err(|e| {
+        (
+            action,
+            ConfigToolError::new(ConfigToolErrorCode::CliUnavailable, e.to_string()),
+        )
+    })?;
     let mut command = crate::setup::settings_cli_command(None).map_err(|message| {
         (
             action,

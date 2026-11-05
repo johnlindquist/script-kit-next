@@ -228,6 +228,10 @@ impl ScriptListApp {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if semantic_id.starts_with("personal-item:") {
+            self.pick_personal_view_item(semantic_id, submit, cx)?;
+            return Ok(semantic_id.to_string());
+        }
         if semantic_id.starts_with("form-field:") {
             anyhow::ensure!(!submit, "select a field, then use the form’s submit action");
             anyhow::ensure!(self.one_window_pick_form_field(semantic_id, cx), "form_field_not_found");
