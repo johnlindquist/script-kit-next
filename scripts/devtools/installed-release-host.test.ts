@@ -8,6 +8,7 @@ import { join } from "node:path";
 import {
   ARCHIVE,
   authorizeInstalledCommand,
+  STABILITY_STARTER,
   correlated,
   EXE,
   ID,
@@ -216,6 +217,13 @@ test("exact correlated response and cleanup identity; late, refused or recycled 
       cdhash: "b".repeat(40),
     }]
   ) expect(sameProcess(wrong, target)).toBe(false);
+});
+
+test("starter submission requires the verified fresh release and its exact source-owned row", () => {
+  const submit = (semanticId: string) => ({ type: "batch", target: { type: "instance", id: "main", generation: 5 }, commands: [{ type: "selectBySemanticId", semanticId, submit: true }] });
+  expect(() => authorizeInstalledCommand(submit(STABILITY_STARTER.semanticId), "/tmp/owned")).toThrow();
+  expect(() => authorizeInstalledCommand(submit("same-name-other-row"), "/tmp/owned", true)).toThrow();
+  expect(() => authorizeInstalledCommand(submit(STABILITY_STARTER.semanticId), "/tmp/owned", true)).not.toThrow();
 });
 
 test("installed transport only permits in-app journey actions, never native or grant requests", () => {

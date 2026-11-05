@@ -21,11 +21,16 @@ import {
 import { release, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { spawnOwnedProcess } from "../../agentic/owned-process";
+import { challengeSettingsSdk, sdkEntry } from "./installed-release-settings-sdk";
+import { challengeSettings, confirmJourneyBytes, releasedSettingsSource, releasedWorkspaceSource, settingsOwners, type SettingsInvocation, type SettingsSources } from "./installed-release-settings";
+import { challengeCommand, releasedBunPin } from "./installed-release-command";
 import { assertNoninteractiveVisualProbe } from "./operator-safety";
 import {
   APP,
   ARCHIVE,
   authorizeInstalledCommand,
+  STABILITY_STARTER,
   check,
   correlated,
   EXE,
@@ -45,6 +50,7 @@ import { assetBytes, fetchPublicRelease, publicJson } from "./installed-release-
 export interface InstalledKit {
   kitPath: string;
   scratchPath: string;
+  freshStarter?: { sha256: string; semanticId: string };
   pid: number;
   send(command: Record<string, any>): Promise<void>;
   request(command: Record<string, any>, expect: string | string[], timeoutMs?: number): Promise<any>;
@@ -328,6 +334,7 @@ async function withInstance<T>(
   cdhash: string,
   record: Json,
   checkpoint: () => void,
+  verifyStarter: boolean,
   body: (kit: InstalledKit) => Promise<T>,
 ): Promise<T> {
   const io = mkdtempSync(`${scratch}/instance-`), fifo = join(io, "stdin"), out = join(io, "stdout");
@@ -399,7 +406,7 @@ async function withInstance<T>(
     function write(command: Json, request: boolean) {
       active();
       assertNoninteractiveVisualProbe("installed-release-send");
-      authorizeInstalledCommand(command, io);
+      authorizeInstalledCommand(command, io, verifyStarter);
       if (command.type === "run") {
         check(
           realpathSync(command.path) === command.path && lstatSync(command.path).isFile(),
@@ -426,6 +433,7 @@ async function withInstance<T>(
     const kit: InstalledKit = {
       kitPath: KIT,
       scratchPath: io,
+      freshStarter: verifyStarter ? STABILITY_STARTER : undefined,
       pid: owner.pid,
       send: async (cmd) => {
         check(!busy, "overlapping_protocol_operation");
@@ -589,7 +597,9 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
       const r: Json = { tag };
       receipt.verifiedInstalls.push(r);
       const installed = await install(tag, plan.runCreatedAt, scratch, r, checkpoint);
-      await withInstance(inspect, scratch, installed.cdhash, r, checkpoint, async (kit) => {
+      const verifyStarter = tag === "v0.1.33" && marker === null;
+      if (verifyStarter) check(installed.release.sourceSha === STABILITY_STARTER.source, "unknown_starter_source");
+      await withInstance(inspect, scratch, installed.cdhash, r, checkpoint, verifyStarter, async (kit) => {
         const workspace = dirIdentity(KIT);
         check(lstatSync(KIT).uid === process.getuid!(), "wrong_workspace_owner");
         if (tag !== plan.tag) {
@@ -646,6 +656,7 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
       });
       check(r.cleanup === "exact_instance_terminated", "owned_runtime_exit_not_verified");
       if (tag !== plan.tag) {
+        await confirmJourneyBytes(r.journeys, personalHash, "prior_installed_data_changed_at_exit");
         // Never overwrite an existing bundle. Archive ONLY our verified, stopped prior install.
         check(
           installed.inode === dirIdentity(APP) &&
@@ -654,6 +665,68 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
         );
         inspect("prior_instance_still_running", ["absent"]);
         moveExclusive(APP, join(installed.localRoot, "owned-prior.app"));
+      }
+      if (tag === plan.tag) {
+        r.stage = "installed-settings-statement-boundary";
+        checkpoint();
+        check(r.cleanup === "exact_instance_terminated" && dirIdentity(APP) === installed.inode &&
+          r.journeys?.status === "pass", "settings_boundary_without_installed_journeys");
+        const workspace = dirIdentity(KIT);
+        const originalData = async (code: string) => {
+          check(dirIdentity(KIT) === workspace, code);
+          await confirmJourneyBytes(r.journeys, personalHash, code);
+        };
+        await originalData("settings_boundary_journey_data_mismatch");
+        const commit = installed.release.sourceSha;
+        const sources = Object.fromEntries(await Promise.all(settingsOwners.map(async name => [name,
+          releasedSettingsSource(name, await publicJson(`contents/scripts/${name}?ref=${commit}`)),
+        ]))) as SettingsSources;
+        const pin = releasedBunPin(await publicJson(`contents/.bun-version?ref=${commit}`));
+        const runHelper = ({args, cwd, env}: SettingsInvocation) => {
+          assertNoninteractiveVisualProbe("installed-release-workspace-child");
+          const p = spawnSync("/usr/bin/sandbox-exec", args, { cwd, env, timeout: 8_000, killSignal: "SIGKILL",
+            maxBuffer: 65536, stdio: ["ignore", "pipe", "pipe"] });
+          check(!p.error && !p.signal, "installed_workspace_challenge_process_failed");
+          return { status: p.status, stdout: p.stdout, stderr: p.stderr };
+        };
+        let result;
+        try {
+          result = challengeSettings(join(KIT, "sdk"), scratch, sources, runHelper);
+        } finally { await originalData("settings_challenge_changed_original_data"); }
+        r.settingsStatementBoundary = { ...result, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
+        r.stage = "installed-command-link";
+        checkpoint();
+        const cli = releasedWorkspaceSource("mcp-cli.ts", await publicJson(`contents/scripts/mcp-cli.ts?ref=${commit}`));
+        let commandResult;
+        try {
+          commandResult = challengeCommand(KIT, scratch, cli, pin, runHelper);
+        } finally { await originalData("command_challenge_changed_original_data"); }
+        r.commandLink = { ...commandResult, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
+        r.stage = "installed-settings-sdk-scope";
+        checkpoint();
+        const entry = releasedWorkspaceSource(sdkEntry, await publicJson(`contents/scripts/${sdkEntry}?ref=${commit}`));
+        let sdkResult;
+        try {
+          sdkResult = await challengeSettingsSdk(join(KIT, "sdk"), scratch, { ...sources, [sdkEntry]: entry }, pin,
+            async ({ cwd, env, args }) => {
+              await originalData("sdk_challenge_changed_original_data");
+              assertNoninteractiveVisualProbe("installed-release-settings-sdk-child");
+              // The SDK itself starts a CLI child. Wait for the whole bounded group, including on failure.
+              const child = await spawnOwnedProcess({ argv: ["/usr/bin/sandbox-exec", ...args], cwd, env,
+                timeoutMs: 8_000, maxOutputBytes: 65_536 });
+              try {
+                child.stdin.end();
+                const [status, out, err] = await Promise.all([child.exited, new Response(child.stdout).arrayBuffer(),
+                  new Response(child.stderr).arrayBuffer()]);
+                return { status, stdout: Buffer.from(out), stderr: Buffer.from(err) };
+              } finally {
+                const cleanup = await child.close();
+                check(cleanup.closed && cleanup.processGroupExited && !cleanup.survivors.length &&
+                  !cleanup.failureCodes.length, "sdk_challenge_group_not_closed");
+              }
+            });
+        } finally { await originalData("sdk_challenge_changed_original_data"); }
+        r.settingsSdkScope = { ...sdkResult, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
       }
       r.stage = "complete";
       checkpoint();

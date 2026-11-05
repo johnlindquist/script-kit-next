@@ -392,14 +392,39 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       // A directly opened wizard resets the list only AFTER the hide transition.
       await observe(state, (s) => s.promptType === 'none', 'startup-wizard-did-not-dismiss');
     }
-    if (!(await state()).windowVisible) {
-      await identity();
-      const ack = await request({ type: 'show' }, 'windowVisibilityAck');
-      requireProof(ack.windowVisible === true, 'show-not-acknowledged');
-      await observe(state, s=>s.windowVisible === true && s.promptType === 'none','launcher-not-visible-after-show');
+    const launcher = async () => {
+      if (!(await state()).windowVisible) {
+        await identity();
+        const ack = await request({ type: 'show' }, 'windowVisibilityAck');
+        requireProof(ack.windowVisible === true, 'show-not-acknowledged');
+      }
+      await waitView('none');
+      requireProof((await identity()).visible === true, 'launcher-not-visible');
+    };
+    await launcher();
+    if (kit.freshStarter) {
+      stage = 'fresh-starter';
+      const { sha256, semanticId } = kit.freshStarter;
+      const file = installedFile(kit.kitPath, 'plugins/main/scripts/hello-world.ts');
+      const checkStarter = () => requireProof(digest(readFileSync(file)) === sha256, 'starter-bytes-disagree');
+      checkStarter();
+      await batch({ type: 'setInput', text: 'Hello World' });
+      await observe(elements, r => r.semanticSurface === 'scriptList' && r.elements.some((x: Row) =>
+        x.semanticId === semanticId && x.role === 'row' && x.text === 'Hello World' && x.selectable && !x.actionDisabled), 'starter-not-in-launcher');
+      checkStarter();
+      await batch({ type: 'selectBySemanticId', semanticId, submit: true });
+      await observe(state, s => s.windowVisible === true && s.promptType === 'arg' &&
+        s.placeholder === "What's your name?" && s.choiceCount === 3 && s.selectedValue === 'World', 'starter-name-prompt-not-observed');
+      await key('enter');
+      await waitView('div');
+      await key('enter');
+      await observe(state, s => s.promptType === 'none', 'starter-did-not-close');
+      await launcher();
+      evidence.freshStarter = { sha256, dispatchedFromLauncher: true, namePromptAnswered: true, displayOpenedAndDismissed: true };
+      await checkpoint('freshStarter');
+      passed.push(stage);
+      stage = 'launcher';
     }
-    await waitView('none');
-    requireProof((await identity()).visible === true, 'launcher-not-visible');
     await batch({ type: 'setInput', text: 'permissions' });
     const filtered = await observe(
       state,
@@ -599,6 +624,7 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       key: 'editorFontSize',
       old: saved.old,
       value: saved.value,
+      revision: saved.revision,
       revisionMatchedDisk: true,
       neighboringBytesRetained: true,
     };

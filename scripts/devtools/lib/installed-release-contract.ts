@@ -144,7 +144,13 @@ export function sameProcess(actual: Identity | null, expected: Identity): boolea
 }
 // This is a task-specific subset of the app's protocol. No OS event injection,
 // clipboard, capture, device/permission requests, settings launch or mock state.
-export function authorizeInstalledCommand(cmd: Json, scratch: string) {
+export const STABILITY_STARTER = Object.freeze({
+  source: "8ec77ff17a7c8520615f1e74630f55a1581d3652",
+  sha256: "2e1dfb2669ec978b50c6080ef18fb9f5a20aa1aefd8dee5c43032df6a97bbc88",
+  // Source-owned script/main row for the default workspace on /Users/runner.
+  semanticId: "main-list-row:v2:64c6ffc7eed5c8f7f1a9ee78d731368cd314204da62103ee751aa4cbf1e72302",
+});
+export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStarter = false) {
   if (
     ["listAutomationWindows", "getState", "getElements", "checkAccessibility", "openNotes", "show"].includes(
       cmd.type,
@@ -182,7 +188,8 @@ export function authorizeInstalledCommand(cmd: Json, scratch: string) {
     const setup = "main-list-row:v2:059f1a69b8c1e700afbeee9dea2a2de81e231afa798f64e77247d04a2eaa0adb";
     const status = "main-list-row:v2:3485d92f119229f9ce4e08bf509f97bb85457fea64d391b0c1cac4494cd9454e";
     check(
-      row.semanticId === setup || (row.semanticId === status && row.submit !== true),
+      row.semanticId === setup || (row.semanticId === status && row.submit !== true) ||
+        (verifyStarter && row.semanticId === STABILITY_STARTER.semanticId && row.submit === true),
       "unreviewed_menu_selection",
     );
   }

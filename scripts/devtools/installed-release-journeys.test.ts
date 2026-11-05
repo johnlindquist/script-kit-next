@@ -50,6 +50,7 @@ async function exercise(
     deviceCount?: number;
     enumerationFailed?: boolean;
     defaultSetting?: boolean;
+    starter?: boolean;
   } = {},
 ) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'installed-journey-test-')));
@@ -58,6 +59,13 @@ async function exercise(
     sdk = join(kitPath, 'sdk');
   mkdirSync(sdk, { recursive: true });
   mkdirSync(scratchPath);
+  const fixtureSource = '// synthetic starter for the controlled transport\n';
+  const starter = { sha256: createHash('sha256').update(fixtureSource).digest('hex'), semanticId: 'fixture-starter' };
+  if (options.starter) {
+    const file = join(kitPath, 'plugins/main/scripts/hello-world.ts');
+    mkdirSync(dirname(file), {recursive: true});
+    writeFileSync(file, options.fault === 'starter-substitution' ? '// wrong bytes' : fixtureSource);
+  }
   const configFile = join(kitPath, 'config.ts');
   writeFileSync(
     configFile,
@@ -135,6 +143,7 @@ async function exercise(
       inputValue: input,
       visibleChoiceCount: input === 'permissions' ? 2 : 80,
       ...(view === 'form' ? { promptId: 'fixture-form-id' } : {}),
+      ...(view === 'arg' ? { placeholder: "What's your name?", choiceCount: 3, selectedValue: 'World' } : {}),
       dayPage: { dirty: false },
       permissions: {
         source: 'permissions.service',
@@ -221,7 +230,9 @@ async function exercise(
                 },
                 ...(invalid ? [{ role: 'alert', semanticId: 'panel:form-error-0' }] : []),
               ]
-            : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
+            : options.starter && input === 'Hello World'
+              ? [{ ...commandRows[0], text: 'Hello World', kind: 'script', semanticId: starter.semanticId }]
+              : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
     return {
       projectionQuality: 'complete',
       semanticSurface: view === 'none' ? 'scriptList' : view === 'form' ? 'form-prompt' : view,
@@ -232,6 +243,7 @@ async function exercise(
     pid,
     kitPath,
     scratchPath,
+    freshStarter: options.starter ? starter : undefined,
     async request(c: Obj) {
       seen.push(c.type);
       if (fault === 'dead') throw new Error('PRIVATE_FIXTURE_TRANSPORT');
@@ -269,9 +281,11 @@ async function exercise(
           if (cmd.type === 'setInput') input = cmd.text;
           else if (cmd.type === 'selectBySemanticId') {
             expect(view).toBe('none');
-            expect(commandRows.some((r) => r.semanticId === cmd.semanticId)).toBe(true);
+            expect(commandRows.some((r) => r.semanticId === cmd.semanticId) ||
+              (options.starter && input === 'Hello World' && cmd.semanticId === starter.semanticId)).toBe(true);
             selected = cmd.semanticId;
-            if (cmd.submit) {
+            if (cmd.submit && selected === starter.semanticId) view = 'arg';
+            else if (cmd.submit) {
               expect(selected).toBe(commandRows[1].semanticId);
               view = 'permissionsWizard';
             }
@@ -285,6 +299,8 @@ async function exercise(
         }
         case 'simulateKey': {
           if (c.key === 'escape') { visible = view === 'permissionsWizard' && !input ? false : visible; view = 'none'; }
+          else if (c.key === 'enter' && view === 'arg') view = 'div';
+          else if (c.key === 'enter' && view === 'div') { view = 'none'; visible = false; }
           else if (c.key === 's' && view === 'dayPage') {
             if (fault !== 'disk') writeFileSync(day, input);
           } else if (c.key === 'enter' && view === 'form') {
@@ -345,6 +361,9 @@ async function exercise(
   try {
     const result = await runInstalledJourneys(kit);
     expect(JSON.stringify(result)).not.toContain('PRIVATE_FIXTURE_');
+    if (result.status === 'pass') expect(result.evidence.settings.revision).toBe(
+      createHash('sha256').update(readFileSync(configFile)).digest('hex'),
+    );
     return { result, seen };
   } finally {
     if (child && child.exitCode === null) {
@@ -390,6 +409,18 @@ describe('installed release journeys — controlled transport fixtures only', ()
       expect(result.humanSteps).toHaveLength(7);
       expect(seen).toContain('run');
     });
+  it('runs the matched starter before writing the test note, and reopens the launcher after it closes', async () => {
+    const { result } = await exercise({ starter: true });
+    expect(result.status).toBe('pass');
+    expect(result.passed[0]).toBe('fresh-starter');
+    expect(result.evidence.freshStarter).toMatchObject({ dispatchedFromLauncher: true, namePromptAnswered: true, displayOpenedAndDismissed: true });
+  });
+  it('does not submit a substituted starter or start the note journey', async () => {
+    const { result, seen } = await exercise({ starter: true, fault: 'starter-substitution' });
+    expect(result).toMatchObject({ status: 'fail', reason: 'starter-bytes-disagree' });
+    expect(seen).not.toContain('batch');
+    expect(seen).not.toContain('openNotes');
+  });
   it('does not equate ready permissions with a working microphone', async () => {
     const { result } = await exercise({ mic: 'granted', ax: 'granted', deviceCount: 0 });
     expect(result.checkpoints.start).toMatchObject({ readiness: { dictation: { readiness: 'ready' } },
