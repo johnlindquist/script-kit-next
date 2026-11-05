@@ -2395,7 +2395,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                             ExternalCommand::OpenNotes => {
                                 logging::log("STDIN", "Opening today's note via stdin command");
-                                if let Err(e) = notes::open_note(ctx, notes::NoteTarget::Today) {
+                                // This dispatch already holds the main window and its app entity.
+                                // The app-only hook cannot borrow that window again on this stack.
+                                if let Err(e) = view.one_window_show_note(notes::NoteTarget::Today, ctx) {
                                     logging::log("STDIN", &format!("Failed to open notes: {}", e));
                                 }
                             }

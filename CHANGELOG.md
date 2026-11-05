@@ -8,6 +8,8 @@ Type **Make “Stays open” brighter** or **Put today’s note first for select
 
 **Keep my launcher minimal** shows scripts instead of tabs and suggestions when you open Kit. Typing still searches normally, and **Restore the standard launcher** brings the full home back.
 
+The `openNotes` stdin command opens today’s editor from a running launcher instead of silently leaving the list in place. **Quick Note Capture** opens the same page from the launcher.
+
 [Personal launcher guide](docs/guides/personal-launcher.md) · [External agent access](docs/guides/external-agents.md)
 
 ## 0.1.33 · Model engines stop with Kit
