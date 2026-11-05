@@ -30,7 +30,8 @@ find code / who owns / where is -> rg -n "<term>" Cargo.toml
 surface map / repo policy -> read GLOSSARY.md and AGENTS.md
 type-check the library -> ./scripts/agentic/agent-cargo.sh check --lib
 current versions -> rg -n "^version" Cargo.toml
-failed tag redo -> delete the remote tag, fix, then re-tag with -f (only when the user asks to release)
+requested release -> qualify the exact commit and push a new version tag. The release workflow signs, notarizes, and publishes it; no separate signing approval is required. Ordinary builds do not start a release.
+failed tag -> inspect the existing run and tag. A release request does not authorize moving or deleting an existing tag, force-pushing, pushing main, or bypassing hooks.
 verify changed behavior -> ./scripts/agentic/agent-cargo.sh clippy --locked --lib --no-deps -- -D warnings BEFORE any tag (the pre-push hook skips clippy)
 verify changed behavior -> both Cargo.toml version fields match the tag
 verify changed behavior -> ./scripts/agentic/agent-cargo.sh test --lib green
