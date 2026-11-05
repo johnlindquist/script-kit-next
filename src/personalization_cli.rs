@@ -1,4 +1,6 @@
 //! Offline API for the selected Kit workspace. One bounded JSON request, no GUI or provider.
+mod native_plan;
+
 pub fn run_if_requested() -> bool {
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() != Some(std::ffi::OsStr::new("--personalize")) {
@@ -7,6 +9,9 @@ pub fn run_if_requested() -> bool {
     use std::io::Read;
     let result = (|| {
         let body = match (args.next(), args.next()) {
+            (Some(s), None) if s == "native-plan" => {
+                return native_plan::describe(std::io::stdin().lock())
+            }
             (Some(s), None) if s == "describe" => br#"{"op":"describe"}"#.to_vec(),
             (Some(s), None) if s == "inspect" => br#"{"op":"inspect"}"#.to_vec(),
             (None, None) => {

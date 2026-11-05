@@ -540,8 +540,23 @@ pub fn resolve_effective_profile_decision(
     ai: &AiPreferences,
     ctx: &AgentChatProfileContext,
 ) -> AgentChatProfileResolution {
+    resolve_from_profiles(ai, ctx, resolved_mdflow_profiles(ctx))
+}
+
+/// Explicit review and send are authorization boundaries, not high-frequency picker renders.
+pub(super) fn resolve_fresh_profile_decision(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+) -> AgentChatProfileResolution {
+    resolve_from_profiles(ai, ctx, super::mdflow_profiles::fresh_mdflow_profiles(ctx))
+}
+
+fn resolve_from_profiles(
+    ai: &AiPreferences,
+    ctx: &AgentChatProfileContext,
+    mdflow_profiles: Vec<ResolvedAgentChatProfile>,
+) -> AgentChatProfileResolution {
     let built_ins = built_in_profiles(ctx);
-    let mdflow_profiles = resolved_mdflow_profiles(ctx);
 
     if let Some(selected_id) = clean_opt(ai.selected_profile_id.as_deref()) {
         if let Some(profile) = ai.profiles.iter().find(|profile| {

@@ -5,7 +5,7 @@ use crate::{
     notes::{self, NoteId, NoteTarget},
     ScriptListApp,
 };
-use gpui::{AppContext as _, Context};
+use gpui::Context;
 use sk_one_window::{
     personal_list::{Item, PersonalList},
     EnterTarget, Event, Key, Row,

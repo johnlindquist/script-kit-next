@@ -133,9 +133,12 @@ pub(crate) fn launcher_author_access(
 /// fallback to a general assistant when a selected profile is missing or overly broad.
 pub(crate) fn selected_launcher_author() -> Option<ResolvedAgentChatProfile> {
     let ai = crate::config::load_user_preferences().ai;
-    let profile = resolve_effective_profile_decision(&ai, &AgentChatProfileContext::from_setup())
-        .into_result()
-        .ok()?;
+    let profile = super::profiles::resolve_fresh_profile_decision(
+        &ai,
+        &AgentChatProfileContext::from_setup(),
+    )
+    .into_result()
+    .ok()?;
     launcher_author_access(&profile)?;
     Some(profile)
 }

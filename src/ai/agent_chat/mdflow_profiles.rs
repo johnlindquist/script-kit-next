@@ -79,6 +79,12 @@ pub fn resolved_mdflow_profiles(ctx: &AgentChatProfileContext) -> Vec<ResolvedAg
     profiles
 }
 
+pub(super) fn fresh_mdflow_profiles(
+    ctx: &AgentChatProfileContext,
+) -> Vec<ResolvedAgentChatProfile> {
+    resolved_mdflow_profiles_uncached(&mdflow_profiles_dir(ctx))
+}
+
 fn resolved_mdflow_profiles_uncached(dir: &PathBuf) -> Vec<ResolvedAgentChatProfile> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();

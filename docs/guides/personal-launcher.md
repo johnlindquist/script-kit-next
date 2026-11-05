@@ -66,6 +66,17 @@ A dedicated launcher writer asks about **each save**, even if ordinary chats hav
 
 For an external agent, the operator can separately grant `launcher:read` and `launcher:apply` with `scriptkit grant-agent`. No existing credential gets either grant automatically. The agent's `scriptkit agent launcher describe` lists supported targets; `inspect` and `preview` report stored or proposed state. After a permitted `apply`, use `scriptkit agent launcher live` to compare the actual window’s adopted revision. A matching revision means the window adopted the declaration. It does not prove a data source is connected or that an action ran. This returns preferences, not the current search, selection, or clipboard. See `scriptkit --skill` for the request shapes.
 
+## When Kit needs a native change
+
+A request such as “Make the cold first key faster” needs a native comparison, not a launcher rule. A local development agent can ask the installed executable for a read-only handoff:
+
+```sh
+printf '%s\n' '{"request":"Make the cold first key faster","proof":"Compare time from the first key to the correct actionable row on the same offline catalogue"}' |
+  "/Applications/Script Kit.app/Contents/MacOS/script-kit-gpui" --personalize native-plan
+```
+
+The result identifies the invoked executable by version and SHA-256. Match the hash to the signed release manifest or a verified local build reference before creating a separate worktree. In that worktree, use `bun scripts/devtools/devtools.ts build-ops act app-build --features owned-ui-evaluation --artifact-out .test-output/candidate.reference.json` with a new reference path. Compare both versions using the same disposable workspace and the action named in the request. Keep the working installation unchanged. A plan does not build or switch anything; a compiled candidate is not an installer. A launcher author cannot grant itself build, installation, microphone or desktop access.
+
 ## Local authoring API
 
 The installed executable accepts `--personalize describe` and `--personalize inspect` without opening a window. Other operations read one JSON object on stdin with `--personalize`. Use the currently selected Kit workspace (`SK_PATH` if configured). Use this route only with authority to write that local workspace. It is not a service credential, a workaround for a denied agent grant, or permission to inspect clipboard contents, run scripts or change security settings.

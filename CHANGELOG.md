@@ -1,6 +1,8 @@
 # Script Kit changelog
 
-## Unreleased · Personal launcher
+## 0.1.31 · A launcher you can customize by asking
+
+[Release notes](docs/releases/v0.1.31.md). Type **Customize Kit** to try an editable example. **Make a list of my pinned notes called Reading shelf** creates a native list without a model. Return opens the chosen note; Escape brings back the list and its filter.
 
 Type **Make “Stays open” brighter** or **Put today’s note first for selected text**, then choose **Customize Kit**. Changing the order does not save the selection. Type **Undo my last launcher change** to restore the previous rule.
 
