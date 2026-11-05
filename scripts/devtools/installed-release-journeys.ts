@@ -253,11 +253,17 @@ publish('saved.json',{nonce,old:old.value,wasDefault:old.isDefault,value:saved.v
 `;
 }
 
-export async function openSavedDayFromLauncher(date:string, ui:{state:()=>Promise<Row>;elements:()=>Promise<Row>;filter:(v:string)=>Promise<unknown>;enter:()=>Promise<unknown>}) {
+export async function openSavedDayFromLauncher(date:string, ui:{state:()=>Promise<Row>;elements:()=>Promise<Row>;filter:(v:string)=>Promise<unknown>;enter:()=>Promise<unknown>;chooseSearchNotes?:(id:string)=>Promise<unknown>}) {
   requireProof(/^\d{4}-\d{2}-\d{2}$/.test(date),'invalid-original-day');
   await ui.filter('Search Notes');
-  await observe(ui.state,s=>s.inputValue==='Search Notes' && s.oneWindow?.enter?.id==='builtin/search-notes' && !s.oneWindow.enterArmed,'search-notes-not-selected');
-  await ui.enter();
+  if(ui.chooseSearchNotes){
+    const id='main-list-row:v2:'+digest('builtin/search-notes');
+    await observe(ui.elements,e=>{const rows=e.elements.filter((r:Row)=>r.semanticId===id);return e.semanticSurface==='scriptList' && rows.length===1 && rows[0].role==='row' && rows[0].kind==='built-in' && rows[0].text==='Search Notes' && rows[0].selectable===true && !rows[0].actionDisabled;},'search-notes-row-not-ready');
+    await ui.chooseSearchNotes(id);
+  }else{
+    await observe(ui.state,s=>s.inputValue==='Search Notes' && s.oneWindow?.enter?.id==='builtin/search-notes' && !s.oneWindow.enterArmed,'search-notes-not-selected');
+    await ui.enter();
+  }
   await observe(ui.state,s=>s.oneWindow?.view==='notes','notes-list-not-open');
   await ui.filter(date);
   const weekday=new Intl.DateTimeFormat('en-US',{weekday:'long',timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));
@@ -354,6 +360,8 @@ export async function runInstalledJourneys(kit: InstalledKit) {
         surface: ['none','scriptList','form','dayPage','permissionsWizard'].includes(s.promptType) ? s.promptType : 'other',
         visible: s.windowVisible === true, visibleChoices: Number.isSafeInteger(s.visibleChoiceCount) ? s.visibleChoiceCount : null,
         inputLength: typeof s.inputValue === 'string' ? s.inputValue.length : null,
+        reducerOwns:s.oneWindow?.owned===true, reducerHasInput:s.oneWindow?.text===s.inputValue,
+        guarded:s.oneWindow?.enterArmed===true, noteList:s.oneWindow?.view==='notes', selectedDateRow:String(s.oneWindow?.enter?.id??'').startsWith('notes:open:'),
       };
       return s;
     };
@@ -543,7 +551,8 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     if (kit.originalData) {
       const orig=kit.originalData;
       await launcher();
-      await openSavedDayFromLauncher(orig.date,{state,elements,filter:text=>batch({type:'setInput',text}),enter:()=>key('enter')});
+      await openSavedDayFromLauncher(orig.date,{state,elements,filter:text=>batch({type:'setInput',text}),enter:()=>key('enter'),
+        chooseSearchNotes:id=>batch({type:'selectBySemanticId',semanticId:id,submit:true})});
       const doc=await waitView('dayPage');
       const dayIds=(await elements()).elements.filter((r:Row)=>/^day:\d{4}-\d{2}-\d{2}$/.test(r.semanticId));
       requireProof(dayIds.length===1 && dayIds[0].semanticId==='day:'+orig.date && doc.dayPage?.dirty===false &&

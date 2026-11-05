@@ -39,6 +39,7 @@ const commandRows = ['Check Permissions', 'Set Up Permissions'].map((text, i) =>
       .digest('hex'),
 }));
 
+const searchNoteRow = { role:'row',kind:'built-in',selectable:true,text:'Search Notes', semanticId:'main-list-row:v2:'+createHash('sha256').update('builtin/search-notes').digest('hex') };
 const quickNoteRow = { role:'row', kind:'built-in', selectable:true, text:'Quick Note Capture',
   semanticId:'main-list-row:v2:'+createHash('sha256').update('builtin/quick-capture').digest('hex') };
 
@@ -244,7 +245,7 @@ async function exercise(
             : options.starter && input === 'Hello World'
               ? [{ role: 'row', kind: 'script', selectable: true, semanticId: starter.semanticId,
                     content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'1'.repeat(64) } } }]
-              : input === quickNoteRow.text ? [quickNoteRow] : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
+              : input === searchNoteRow.text ? [searchNoteRow] : input === quickNoteRow.text ? [quickNoteRow] : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
     return {
       projectionQuality: 'complete',
       semanticSurface: view === 'none' ? 'scriptList' : view === 'form' ? 'form-prompt' : view,
@@ -297,9 +298,11 @@ async function exercise(
             expect(view).toBe('none');
             expect(commandRows.some((r) => r.semanticId === cmd.semanticId) ||
               (input === quickNoteRow.text && cmd.semanticId === quickNoteRow.semanticId) ||
+              (input === searchNoteRow.text && cmd.semanticId === searchNoteRow.semanticId) ||
               (options.starter && input === 'Hello World' && cmd.semanticId === starter.semanticId)).toBe(true);
             selected = cmd.semanticId;
-            if (cmd.submit && selected === quickNoteRow.semanticId) {
+            if(cmd.submit && selected===searchNoteRow.semanticId){notesList=true;input='';}
+            else if (cmd.submit && selected === quickNoteRow.semanticId) {
               view='dayPage'; ++noteOpens; input=fault === 'note' && noteOpens>1 ? '' : readFileSync(day,'utf8');
             } else if (cmd.submit && selected === starter.semanticId) view = 'arg';
             else if (cmd.submit) {

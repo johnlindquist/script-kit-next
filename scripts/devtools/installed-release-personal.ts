@@ -1,7 +1,7 @@
 // Drives only the host's verified installed instance and the matching app's offline author.
 // No global input, OS clipboard, screenshots, provider, or access to a different workspace.
 import {randomUUID} from 'node:crypto';
-import {check, type Json} from './lib/installed-release-contract';
+import {check, SmokeFault, type Json} from './lib/installed-release-contract';
 import type {InstalledKit} from './lib/installed-release-host';
 export type Author = (q:Json)=>Json;
 export const boundaries=['journeysProcessExited','beforeLauncherEdit','afterLauncherEdit','afterExternalEdit','beforeRelaunch','afterRelaunch','afterSelectionUndo','afterPinnedLabelUndo','afterFinalExit'] as const;
@@ -27,7 +27,19 @@ export async function personalControls(kit:InstalledKit){
   const applyText=async(words:string,label:string,revision:string)=>{
     await filter(words);
     const ready=async()=>{const s=await state();return s.windowVisible===true && s.inputValue===words && s.oneWindow.personalization?.appliedRevision===revision && s.oneWindow.enterArmed===false && s.oneWindow.enter?.id?.startsWith('personal/launcher/'+revision+'/') && s.oneWindow.enter.label===label;};
-    await wait(ready,'personal_row_not_ready');const e=await elements();
+    try { await wait(ready,'personal_row_not_ready'); }
+    catch (failure) {
+      if(!(failure instanceof SmokeFault) || failure.code!=='personal_row_not_ready') throw failure;
+      const s=await state(), w=s.oneWindow??{}, e=await elements();
+      const action=label==='Apply'?'Use brighter text for Stays open':'Undo my last launcher change';
+      const rows=(e.elements??[]).filter((r:Json)=>r.role==='row' && r.text===action && r.selectable && !r.actionDisabled);
+      // Flags only: no launcher text, personal row IDs, private titles or paths in the receipt.
+      const flags=[s.windowVisible===true,s.inputValue===words,w.owned===true,w.text===words,w.personalization?.appliedRevision===revision,
+        w.enterArmed===true,String(w.enter?.id??'').startsWith('personal/launcher/'+revision+'/'),w.enter?.label===label,
+        rows.length===1,rows.length===1&&rows[0].selected===true];
+      throw new SmokeFault('personal_not_ready_visible_input_owns_text_rev_armed_target_label_row_sel_'+flags.map(Number).join(''));
+    }
+    const e=await elements();
     const selected=e.elements?.filter((r:Json)=>r.role==='row'&&r.selected===true&&!r.actionDisabled&&r.selectable);check(selected?.length===1 && (label==='Apply'?selected[0].text==='Use brighter text for Stays open':selected[0].text==='Undo my last launcher change'),'personal_wrong_selected_row');
     check(await ready(),'personal_selection_changed');await key('enter');
   };

@@ -189,7 +189,8 @@ export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStar
     const status = "main-list-row:v2:3485d92f119229f9ce4e08bf509f97bb85457fea64d391b0c1cac4494cd9454e";
     check(
       row.semanticId === setup || (row.semanticId === status && row.submit !== true) ||
-        (row.semanticId === "main-list-row:v2:16cf1fc9a69fa8aa98d65534af5e7c06f11cdfb262a43a3accda7735a5780c79" && row.submit === true) ||
+        (["main-list-row:v2:16cf1fc9a69fa8aa98d65534af5e7c06f11cdfb262a43a3accda7735a5780c79",
+          "main-list-row:v2:6a48e7c4c80e6c41d75cddedcc44324ee352b911c5a2cd89653101723b3d16c8"].includes(row.semanticId) && row.submit === true) ||
         (verifyStarter && row.semanticId === STABILITY_STARTER.semanticId && row.submit === true) ||
         (row.submit === false && typeof row.semanticId === "string" && /^personal-item:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}:h-[0-9a-f]{64}$/.test(row.semanticId) && observedPaneRows?.has(row.semanticId) === true &&
           Object.keys(row).every(k=>["type","semanticId","submit"].includes(k))),
