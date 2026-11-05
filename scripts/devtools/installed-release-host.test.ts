@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { verifySourceVersion } from "./lib/installed-release-distribution";
+import { publicApiFailure, verifySourceVersion } from "./lib/installed-release-distribution";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ARCHIVE,
   authorizeInstalledCommand,
+  STABILITY_STARTER,
   correlated,
   EXE,
   ID,
@@ -89,6 +90,13 @@ const release = {
 };
 
 describe("installed-release admission and provenance (no host authority)", () => {
+  test('diagnoses anonymous API refusal without recording bodies or sensitive headers', () => {
+    const now = 1793880000 * 1000;
+    expect(publicApiFailure('actions/runs/5/attempts/1/jobs?per_page=100',403,
+      new Headers({'x-ratelimit-remaining':'0','x-ratelimit-reset':'1793880020'}),now)).toEqual({code:'public_jobs_http_403_limited_reset_1793880020',waitMs:21000});
+    expect(publicApiFailure('actions/runs/5/attempts/1',404,new Headers(),now)).toEqual({code:'public_run_http_404',waitMs:null});
+    expect(publicApiFailure('contents/something',403,new Headers({'retry-after':'PRIVATE'}),now)).toEqual({code:'public_release_http_403',waitMs:null});
+  });
   test("local CLI refuses before any output creation, even with hosted-looking env", () => {
     const root = mkdtempSync(join(tmpdir(), "installed-refusal-"));
     try {
@@ -216,6 +224,20 @@ test("exact correlated response and cleanup identity; late, refused or recycled 
       cdhash: "b".repeat(40),
     }]
   ) expect(sameProcess(wrong, target)).toBe(false);
+});
+
+test("starter submission requires the verified fresh release and its exact source-owned row", () => {
+  const submit = (semanticId: string) => ({ type: "batch", target: { type: "instance", id: "main", generation: 5 }, commands: [{ type: "selectBySemanticId", semanticId, submit: true }] });
+  expect(() => authorizeInstalledCommand(submit(STABILITY_STARTER.semanticId), "/tmp/owned")).toThrow();
+  expect(() => authorizeInstalledCommand(submit("same-name-other-row"), "/tmp/owned", true)).toThrow();
+  expect(() => authorizeInstalledCommand(submit(STABILITY_STARTER.semanticId), "/tmp/owned", true)).not.toThrow();
+});
+
+test("the pane inspection lane can highlight only a just-observed read-only row, never submit it",()=>{
+  const id="personal-item:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee:h-"+"e".repeat(64), target={type:"instance",id:"main",generation:5};
+  const select=(semanticId:string,submit:boolean)=>({type:"batch",target,commands:[{type:"selectBySemanticId",semanticId,submit}]});
+  expect(()=>authorizeInstalledCommand(select(id,false),"/tmp/owned",false,new Set([id]))).not.toThrow();
+  for(const [cmd, observed] of [[select(id,false),new Set<string>()],[select(id,true),new Set([id])],[select("unrelated",false),new Set(["unrelated"])]] as const)expect(()=>authorizeInstalledCommand(cmd,"/tmp/owned",false,observed)).toThrow();
 });
 
 test("installed transport only permits in-app journey actions, never native or grant requests", () => {

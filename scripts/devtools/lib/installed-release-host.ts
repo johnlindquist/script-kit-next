@@ -21,11 +21,16 @@ import {
 import { release, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { spawnOwnedProcess } from "../../agentic/owned-process";
+import { challengeSettingsSdk, sdkEntry } from "./installed-release-settings-sdk";
+import { challengeSettings, confirmJourneyBytes, releasedSettingsSource, releasedWorkspaceSource, settingsOwners, type SettingsInvocation, type SettingsSources } from "./installed-release-settings";
+import { challengeCommand, releasedBunPin } from "./installed-release-command";
 import { assertNoninteractiveVisualProbe } from "./operator-safety";
 import {
   APP,
   ARCHIVE,
   authorizeInstalledCommand,
+  STABILITY_STARTER,
   check,
   correlated,
   EXE,
@@ -45,6 +50,9 @@ import { assetBytes, fetchPublicRelease, publicJson } from "./installed-release-
 export interface InstalledKit {
   kitPath: string;
   scratchPath: string;
+  freshStarter?: { sha256: string; semanticId: string };
+  verifyStdinNoteReopen?: boolean;
+  originalData?: {date:string; noteSha256:string; configSha256:string; editorFontSize:number};
   pid: number;
   send(command: Record<string, any>): Promise<void>;
   request(command: Record<string, any>, expect: string | string[], timeoutMs?: number): Promise<any>;
@@ -328,7 +336,9 @@ async function withInstance<T>(
   cdhash: string,
   record: Json,
   checkpoint: () => void,
+  verifyStarter: boolean,
   body: (kit: InstalledKit) => Promise<T>,
+  observePaneSelection = false,
 ): Promise<T> {
   const io = mkdtempSync(`${scratch}/instance-`), fifo = join(io, "stdin"), out = join(io, "stdout");
   command("cannot_create_private_fifo", "/usr/bin/mkfifo", ["-m", "600", fifo]);
@@ -394,12 +404,16 @@ async function withInstance<T>(
     record.owner = { pid: owner.pid, generation: owner.generation, cdhash: owner.cdhash };
     checkpoint();
     const owned = owner, ids = new Set<string>();
+    const paneRows = new Set<string>();
+    let paneGeneration: number | undefined;
     let busy = false;
     const assertOwner = () => check(sameProcess(current(), owned), "installed_instance_changed");
     function write(command: Json, request: boolean) {
       active();
       assertNoninteractiveVisualProbe("installed-release-send");
-      authorizeInstalledCommand(command, io);
+      authorizeInstalledCommand(command, io, verifyStarter,
+        observePaneSelection && command.target?.generation === paneGeneration ? paneRows : undefined);
+      if(command.type!=="getState"){paneRows.clear();paneGeneration=undefined;}
       if (command.type === "run") {
         check(
           realpathSync(command.path) === command.path && lstatSync(command.path).isFile(),
@@ -426,6 +440,7 @@ async function withInstance<T>(
     const kit: InstalledKit = {
       kitPath: KIT,
       scratchPath: io,
+      freshStarter: verifyStarter ? STABILITY_STARTER : undefined,
       pid: owner.pid,
       send: async (cmd) => {
         check(!busy, "overlapping_protocol_operation");
@@ -446,6 +461,10 @@ async function withInstance<T>(
             const result = response(id, types);
             if (result) {
               assertOwner();
+              if(observePaneSelection && cmd.type==="getElements" && result.type==="elementsResult" && cmd.target?.type==="instance" && cmd.target.id==="main" && Number.isSafeInteger(cmd.target.generation) && cmd.target.generation>0){
+                paneGeneration=cmd.target.generation;
+                for(const e of result.elements??[])if(e.role==="row"&&e.selectable===true&&e.actionDisabled==="personal_list_read_only"&&/^personal-item:[0-9a-f-]{36}:h-[0-9a-f]{64}$/.test(e.semanticId))paneRows.add(e.semanticId);
+              }
               return result;
             }
             await sleep(40);
@@ -578,7 +597,8 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
       throw new SmokeFault("no_unlocked_aqua_console", "blocked");
     }
     receipt.aqua = true;
-    let marker: {path:string; value:string; workspace:string; day:string; dayHash:string; configHash:string; initialGrants:string[]} | null = null;
+    type UpgradeMarker = {path:string; value:string; workspace:string; day:string; dayHash:string; configHash:string; editorFontSize:number; initialGrants:string[]};
+    const update:{marker:UpgradeMarker|null}={marker:null};
     const personalHash=async (relative:string) => {
       check(relative==="config.ts" || /^brain\/days\/\d{4}-\d{2}-\d{2}\.md$/.test(relative),"unexpected_upgrade_file");
       const path=join(KIT,relative), st=lstatSync(path);
@@ -589,7 +609,12 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
       const r: Json = { tag };
       receipt.verifiedInstalls.push(r);
       const installed = await install(tag, plan.runCreatedAt, scratch, r, checkpoint);
-      await withInstance(inspect, scratch, installed.cdhash, r, checkpoint, async (kit) => {
+      const personalSource = "03c680dc872b5919d0d80995fa5c244093b933ec";
+      const starterSource = tag === "v0.1.33" ? STABILITY_STARTER.source : tag === "v0.1.34" ? personalSource : null;
+      const verifyStarter = starterSource !== null && update.marker === null;
+      if (verifyStarter) check(installed.release.sourceSha === starterSource, "unknown_starter_source");
+      await withInstance(inspect, scratch, installed.cdhash, r, checkpoint, verifyStarter, async (kit) => {
+        let marker=update.marker;
         const workspace = dirIdentity(KIT);
         check(lstatSync(KIT).uid === process.getuid!(), "wrong_workspace_owner");
         if (tag !== plan.tag) {
@@ -607,9 +632,10 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
           marker = {
             path: join(scripts, `installed-upgrade-${randomUUID()}.ts`),
             value: `// Synthetic user script preserved across upgrade: ${randomUUID()}\nexport {};\n`,
-            workspace, day,dayHash,configHash,initialGrants,
+            workspace, day,dayHash,configHash,editorFontSize:prior.evidence.settings.value,initialGrants,
           };
           writeFileSync(marker.path, marker.value, { flag: "wx", mode: 0o600 });
+          update.marker=marker;
           r.priorReady = true;
           return;
         }
@@ -620,11 +646,12 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
             "workspace_not_preserved",
           );
           check(await personalHash(marker.day)===marker.dayHash && await personalHash("config.ts")===marker.configHash,"prior_editor_note_or_settings_changed");
-          receipt.verifiedUpdate = true;
           r.sameWorkspaceAndMarker = true;
           r.previousNoteAndSettingsBytesPreserved = true;
         }
-        const result = await journeys(kit);
+        const result = await journeys(marker && plan.mode === "update" ? {
+          ...kit,originalData:{date:marker.day.slice("brain/days/".length,-3),noteSha256:marker.dayHash,configSha256:marker.configHash,editorFontSize:marker.editorFontSize},
+        } : {...kit, verifyStdinNoteReopen: tag === "v0.1.34" && installed.release.sourceSha === personalSource});
         check(
           result && ["pass", "fail", "blocked"].includes(result.status) &&
             Buffer.byteLength(JSON.stringify(result)) <= 1024 ** 2,
@@ -644,8 +671,10 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
           result?.status === "blocked" ? "blocked" : "fail",
         );
       });
+      const marker=update.marker;
       check(r.cleanup === "exact_instance_terminated", "owned_runtime_exit_not_verified");
       if (tag !== plan.tag) {
+        await confirmJourneyBytes(r.journeys, personalHash, "prior_installed_data_changed_at_exit");
         // Never overwrite an existing bundle. Archive ONLY our verified, stopped prior install.
         check(
           installed.inode === dirIdentity(APP) &&
@@ -654,6 +683,113 @@ export async function runOnHostedMac(journeys: (kit: InstalledKit) => Promise<Js
         );
         inspect("prior_instance_still_running", ["absent"]);
         moveExclusive(APP, join(installed.localRoot, "owned-prior.app"));
+      }
+      if (tag === plan.tag) {
+        if (marker && plan.mode === "update") {
+          check(r.journeys?.evidence?.notes?.reopenedOriginal === true && r.journeys.evidence.notes.sha256 === marker.dayHash &&
+            r.journeys.evidence.settings?.readOnly === true && r.journeys.evidence.settings.value === marker.editorFontSize &&
+            r.journeys.evidence.settings.revision === marker.configHash && await personalHash(marker.day) === marker.dayHash &&
+            await personalHash("config.ts") === marker.configHash, "upgrade_original_data_not_retained");
+          r.priorNoteAndSettingReadByUpgradedApp = true;
+        }
+        r.stage = "installed-settings-statement-boundary";
+        checkpoint();
+        check(r.cleanup === "exact_instance_terminated" && dirIdentity(APP) === installed.inode &&
+          r.journeys?.status === "pass", "settings_boundary_without_installed_journeys");
+        const workspace = dirIdentity(KIT);
+        const originalData = async (code: string) => {
+          check(dirIdentity(KIT) === workspace, code);
+          await confirmJourneyBytes(r.journeys, personalHash, code);
+        };
+        await originalData("settings_boundary_journey_data_mismatch");
+        check(tag === "v0.1.34" && installed.release.sourceSha === personalSource, "unknown_personal_release");
+        const {preparePersonal, recoverPersonal, boundaries} = await import("../installed-release-personal");
+        const dataChecks: string[] = [];
+        const guard = async (where: typeof boundaries[number]) => {
+          check(boundaries[dataChecks.length] === where, "personal_data_check_out_of_order");
+          await originalData("personal_original_data_changed_"+where);
+          if (marker) check(await personalHash(marker.day)===marker.dayHash && await personalHash("config.ts")===marker.configHash, "original_previous_installation_changed");
+          dataChecks.push(where); checkpoint();
+        };
+        r.personal = {originalDataSource: marker?"previousInstallation":"sameInstallation", originalDataChecks:dataChecks, first:{}, relaunched:{}};
+        const appAuthor = (q:Json) => {
+          assertNoninteractiveVisualProbe("installed-release-offline-author");
+          const envelope=JSON.stringify(q); check(Buffer.byteLength(envelope)<=8192,"personal_request_oversize");
+          const sandbox='(version 1)(allow default)(deny network* appleevent-send process-fork mach-lookup iokit-open)(deny file-write*)(allow file-write* (subpath '+JSON.stringify(KIT)+'))';
+          const p=spawnSync('/usr/bin/sandbox-exec',['-p',sandbox,join(APP,EXE),'--personalize'],{input:envelope,encoding:'utf8',cwd:scratch,env:cleanEnv(),maxBuffer:65536,timeout:8000,killSignal:'SIGKILL'});
+          check(!p.error&&!p.signal&&p.status===0,"personal_offline_author_failed");
+          const v=JSON.parse(p.stdout);check(v?.ok===true&&v.data,"personal_offline_author_unverified");return v.data;
+        };
+        await guard('journeysProcessExited');
+        const saved=await withInstance(inspect,scratch,installed.cdhash,r.personal.first,checkpoint,false,kit=>preparePersonal(kit,appAuthor,guard));
+        check(r.personal.first.cleanup==='exact_instance_terminated',"personal_first_exit_not_verified");
+        await guard('beforeRelaunch');
+        r.personal.result=await withInstance(inspect,scratch,installed.cdhash,r.personal.relaunched,checkpoint,false,kit=>recoverPersonal(kit,appAuthor,saved,guard));
+        check(r.personal.relaunched.cleanup==='exact_instance_terminated'&&!sameProcess(r.personal.first.owner,r.personal.relaunched.owner),"personal_relaunch_not_verified");
+        await guard('afterFinalExit');
+        r.stage = 'installed-read-only-pane-list';
+        const panes=await import('../installed-release-panes');
+        const commit = installed.release.sourceSha;
+        const pin = releasedBunPin(await publicJson(`contents/.bun-version?ref=${commit}`));
+        const provider=panes.checkedPaneFiles(KIT);
+        const operatorPane=(args:string[])=>{const result=JSON.parse(command('installed_pane_cli_failed',process.execPath,['--config=/dev/null','--no-env-file','--no-install','--no-macros',join(KIT,'bin/scriptkit'),'panes',...args],8000));check(result.success===true&&result.data,'installed_pane_cli_unverified');return result.data;};
+        r.paneView={instance:{},source:'synthetic Herdr host; real released mod, pairing and installed app'};
+        r.paneView.result=await panes.withPairedPaneFixture(scratch,provider,operatorPane,appAuthor,async scene=>{
+          await originalData('pane_setup_changed_original_data');
+          return await withInstance(inspect,scratch,installed.cdhash,r.paneView.instance,checkpoint,false,kit=>panes.readInstalledPaneView(kit,scene),true);
+        });
+        check(r.paneView.instance.cleanup==='exact_instance_terminated'&&operatorPane(['status']).state==='notPaired','pane_disposal_unverified');
+        await originalData('pane_read_changed_original_data');r.paneView.pairingRemoved=true;
+        if (marker && plan.mode==='update') receipt.verifiedUpdate=true;
+        r.stage = "installed-settings-statement-boundary";
+        const sources = Object.fromEntries(await Promise.all(settingsOwners.map(async name => [name,
+          releasedSettingsSource(name, await publicJson(`contents/scripts/${name}?ref=${commit}`)),
+        ]))) as SettingsSources;
+        const runHelper = ({args, cwd, env}: SettingsInvocation) => {
+          assertNoninteractiveVisualProbe("installed-release-workspace-child");
+          const p = spawnSync("/usr/bin/sandbox-exec", args, { cwd, env, timeout: 8_000, killSignal: "SIGKILL",
+            maxBuffer: 65536, stdio: ["ignore", "pipe", "pipe"] });
+          check(!p.error && !p.signal, "installed_workspace_challenge_process_failed");
+          return { status: p.status, stdout: p.stdout, stderr: p.stderr };
+        };
+        let result;
+        try {
+          result = challengeSettings(join(KIT, "sdk"), scratch, sources, runHelper);
+        } finally { await originalData("settings_challenge_changed_original_data"); }
+        r.settingsStatementBoundary = { ...result, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
+        r.stage = "installed-command-link";
+        checkpoint();
+        const cli = releasedWorkspaceSource("mcp-cli.ts", await publicJson(`contents/scripts/mcp-cli.ts?ref=${commit}`));
+        let commandResult;
+        try {
+          commandResult = challengeCommand(KIT, scratch, cli, pin, runHelper);
+        } finally { await originalData("command_challenge_changed_original_data"); }
+        r.commandLink = { ...commandResult, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
+        r.stage = "installed-settings-sdk-scope";
+        checkpoint();
+        const entry = releasedWorkspaceSource(sdkEntry, await publicJson(`contents/scripts/${sdkEntry}?ref=${commit}`));
+        let sdkResult;
+        try {
+          sdkResult = await challengeSettingsSdk(join(KIT, "sdk"), scratch, { ...sources, [sdkEntry]: entry }, pin,
+            async ({ cwd, env, args }) => {
+              await originalData("sdk_challenge_changed_original_data");
+              assertNoninteractiveVisualProbe("installed-release-settings-sdk-child");
+              // The SDK itself starts a CLI child. Wait for the whole bounded group, including on failure.
+              const child = await spawnOwnedProcess({ argv: ["/usr/bin/sandbox-exec", ...args], cwd, env,
+                timeoutMs: 8_000, maxOutputBytes: 65_536 });
+              try {
+                child.stdin.end();
+                const [status, out, err] = await Promise.all([child.exited, new Response(child.stdout).arrayBuffer(),
+                  new Response(child.stderr).arrayBuffer()]);
+                return { status, stdout: Buffer.from(out), stderr: Buffer.from(err) };
+              } finally {
+                const cleanup = await child.close();
+                check(cleanup.closed && cleanup.processGroupExited && !cleanup.survivors.length &&
+                  !cleanup.failureCodes.length, "sdk_challenge_group_not_closed");
+              }
+            });
+        } finally { await originalData("sdk_challenge_changed_original_data"); }
+        r.settingsSdkScope = { ...sdkResult, sourceCommit: commit, journeyNoteAndSettingsUnchangedDuringCheck: true };
       }
       r.stage = "complete";
       checkpoint();

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { runInstalledJourneys } from './installed-release-journeys';
+import { installedStarterObservation, runInstalledJourneys } from './installed-release-journeys';
 
 type Obj = Record<string, any>;
 const domainRows = [
@@ -39,6 +39,9 @@ const commandRows = ['Check Permissions', 'Set Up Permissions'].map((text, i) =>
       .digest('hex'),
 }));
 
+const quickNoteRow = { role:'row', kind:'built-in', selectable:true, text:'Quick Note Capture',
+  semanticId:'main-list-row:v2:'+createHash('sha256').update('builtin/quick-capture').digest('hex') };
+
 // CONTROLLED TRANSPORT FIXTURE, not a .app, real consent or a real device. Model
 // only the allowed wire effects. The generated script actually runs in an isolated
 // Bun child with a stubbed form() and copies of the production settings modules.
@@ -50,6 +53,9 @@ async function exercise(
     deviceCount?: number;
     enumerationFailed?: boolean;
     defaultSetting?: boolean;
+    starter?: boolean;
+    upgrade?: boolean;
+    stdinReopen?: boolean;
   } = {},
 ) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'installed-journey-test-')));
@@ -58,6 +64,13 @@ async function exercise(
     sdk = join(kitPath, 'sdk');
   mkdirSync(sdk, { recursive: true });
   mkdirSync(scratchPath);
+  const fixtureSource = '// synthetic starter for the controlled transport\n';
+  const starter = { sha256: createHash('sha256').update(fixtureSource).digest('hex'), semanticId: 'fixture-starter' };
+  if (options.starter) {
+    const file = join(kitPath, 'plugins/main/scripts/hello-world.ts');
+    mkdirSync(dirname(file), {recursive: true});
+    writeFileSync(file, options.fault === 'starter-substitution' ? '// wrong bytes' : fixtureSource);
+  }
   const configFile = join(kitPath, 'config.ts');
   writeFileSync(
     configFile,
@@ -91,7 +104,11 @@ async function exercise(
   const date = '2030-01-03',
     day = join(kitPath, `brain/days/${date}.md`);
   mkdirSync(dirname(day), { recursive: true });
-  writeFileSync(day, '');
+  const originalNote=options.upgrade?'Installed smoke 11111111-1111-4111-8111-111111111111\n':'';
+  writeFileSync(day, originalNote);
+  const digest=(path:string)=>createHash('sha256').update(readFileSync(path)).digest('hex');
+  const originalData=options.upgrade?{date,noteSha256:digest(day),configSha256:digest(configFile),editorFontSize:16}:undefined;
+  let notesList=false;
   const fault = options.fault,
     generation = 7,
     pid = process.pid;
@@ -135,7 +152,9 @@ async function exercise(
       inputValue: input,
       visibleChoiceCount: input === 'permissions' ? 2 : 80,
       ...(view === 'form' ? { promptId: 'fixture-form-id' } : {}),
+      ...(view === 'arg' ? { placeholder: "What's your name?", choiceCount: 3, selectedValue: 'World' } : {}),
       dayPage: { dirty: false },
+      oneWindow:{view:notesList?'notes':null,enterArmed:false,enter:{id:notesList&&input===date?'notes:open:'+date+' · Thursday':input==='Search Notes'?'builtin/search-notes':''}},
       permissions: {
         source: 'permissions.service',
         schemaVersion: 1,
@@ -221,7 +240,11 @@ async function exercise(
                 },
                 ...(invalid ? [{ role: 'alert', semanticId: 'panel:form-error-0' }] : []),
               ]
-            : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
+            : notesList && input===date ? [{semanticId:'notes-row:0',selected:true,content:{text:{rawContentReturned:false,charLength:(date+' · Thursday').length,byteLength:Buffer.byteLength(date+' · Thursday'),fingerprint:'sha256:'+'a'.repeat(64)}}}]
+            : options.starter && input === 'Hello World'
+              ? [{ role: 'row', kind: 'script', selectable: true, semanticId: starter.semanticId,
+                    content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'1'.repeat(64) } } }]
+              : input === quickNoteRow.text ? [quickNoteRow] : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
     return {
       projectionQuality: 'complete',
       semanticSurface: view === 'none' ? 'scriptList' : view === 'form' ? 'form-prompt' : view,
@@ -232,6 +255,9 @@ async function exercise(
     pid,
     kitPath,
     scratchPath,
+    freshStarter: options.starter ? starter : undefined,
+    verifyStdinNoteReopen: options.stdinReopen,
+    originalData,
     async request(c: Obj) {
       seen.push(c.type);
       if (fault === 'dead') throw new Error('PRIVATE_FIXTURE_TRANSPORT');
@@ -269,9 +295,14 @@ async function exercise(
           if (cmd.type === 'setInput') input = cmd.text;
           else if (cmd.type === 'selectBySemanticId') {
             expect(view).toBe('none');
-            expect(commandRows.some((r) => r.semanticId === cmd.semanticId)).toBe(true);
+            expect(commandRows.some((r) => r.semanticId === cmd.semanticId) ||
+              (input === quickNoteRow.text && cmd.semanticId === quickNoteRow.semanticId) ||
+              (options.starter && input === 'Hello World' && cmd.semanticId === starter.semanticId)).toBe(true);
             selected = cmd.semanticId;
-            if (cmd.submit) {
+            if (cmd.submit && selected === quickNoteRow.semanticId) {
+              view='dayPage'; ++noteOpens; input=fault === 'note' && noteOpens>1 ? '' : readFileSync(day,'utf8');
+            } else if (cmd.submit && selected === starter.semanticId) view = 'arg';
+            else if (cmd.submit) {
               expect(selected).toBe(commandRows[1].semanticId);
               view = 'permissionsWizard';
             }
@@ -285,6 +316,10 @@ async function exercise(
         }
         case 'simulateKey': {
           if (c.key === 'escape') { visible = view === 'permissionsWizard' && !input ? false : visible; view = 'none'; }
+          else if (options.upgrade && c.key==='enter' && !notesList && input==='Search Notes') { notesList=true; input=''; }
+          else if (options.upgrade && notesList && input===date && c.key==='enter') {notesList=false;view='dayPage';input=fault==='prior-note'?'wrong note':readFileSync(day,'utf8');}
+          else if (c.key === 'enter' && view === 'arg') view = 'div';
+          else if (c.key === 'enter' && view === 'div') { view = 'none'; visible = false; }
           else if (c.key === 's' && view === 'dayPage') {
             if (fault !== 'disk') writeFileSync(day, input);
           } else if (c.key === 'enter' && view === 'form') {
@@ -345,6 +380,10 @@ async function exercise(
   try {
     const result = await runInstalledJourneys(kit);
     expect(JSON.stringify(result)).not.toContain('PRIVATE_FIXTURE_');
+    if (result.status === 'pass') expect(result.evidence.settings.revision).toBe(
+      createHash('sha256').update(readFileSync(configFile)).digest('hex'),
+    );
+    if(originalData){expect(digest(day)).toBe(originalData.noteSha256);expect(digest(configFile)).toBe(originalData.configSha256);}
     return { result, seen };
   } finally {
     if (child && child.exitCode === null) {
@@ -356,6 +395,10 @@ async function exercise(
 }
 
 describe('installed release journeys — controlled transport fixtures only', () => {
+  it('reads the earlier dated note and SDK value without writing either during the upgrade',async()=>{
+    const {result,seen}=await exercise({upgrade:true});expect(result.status).toBe('pass');expect(result.evidence.notes.reopenedOriginal).toBe(true);expect(result.evidence.settings.readOnly).toBe(true);expect(seen).not.toContain('openNotes');
+    const refused=await exercise({upgrade:true,fault:'prior-note'});expect(refused.result).toMatchObject({status:'fail',stage:'notes-save-and-readback'});expect(refused.seen).not.toContain('run');
+  });
   for (const [mic, availability, deviceCount, enumerationFailed] of [
     ['notAsked', 'not-enumerated-without-grant', 0, false],
     ['denied', 'not-enumerated-without-grant', 0, false],
@@ -390,6 +433,33 @@ describe('installed release journeys — controlled transport fixtures only', ()
       expect(result.humanSteps).toHaveLength(7);
       expect(seen).toContain('run');
     });
+  it('requires the exact unique enabled script row and a measured label, not a matching cleartext title', () => {
+    const row = { semanticId: 'exact', role: 'row', kind: 'script', selectable: true,
+      content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'a'.repeat(64) } } };
+    expect(installedStarterObservation([row], 'exact').ready).toBe(true);
+    for (const rows of [[{ ...row, semanticId:'lookalike' }], [row, row], [{ ...row, text:'Hello World' }],
+      [{ ...row, actionDisabled:'main_menu_query_pending' }], [{ ...row, kind:'snippet' }],
+      [{ ...row, content:{ text:{ ...row.content.text, byteLength:10 } } }]]) {
+      expect(installedStarterObservation(rows, 'exact').ready).toBe(false);
+    }
+  });
+  it('exercises stdin/openNotes only for the successor fresh-install readback', async () => {
+    const {result,seen}=await exercise({stdinReopen:true});
+    expect(result.status).toBe('pass'); expect(result.evidence.notes.reopenedVia).toBe('stdin/openNotes');
+    expect(seen.filter(x=>x==='openNotes')).toHaveLength(1);
+  });
+  it('runs the matched starter before writing the test note, and reopens the launcher after it closes', async () => {
+    const { result } = await exercise({ starter: true });
+    expect(result.status).toBe('pass');
+    expect(result.passed[0]).toBe('fresh-starter');
+    expect(result.evidence.freshStarter).toMatchObject({ dispatchedFromLauncher: true, namePromptAnswered: true, displayOpenedAndDismissed: true });
+  });
+  it('does not submit a substituted starter or start the note journey', async () => {
+    const { result, seen } = await exercise({ starter: true, fault: 'starter-substitution' });
+    expect(result).toMatchObject({ status: 'fail', reason: 'starter-bytes-disagree' });
+    expect(seen).not.toContain('batch');
+    expect(seen).not.toContain('openNotes');
+  });
   it('does not equate ready permissions with a working microphone', async () => {
     const { result } = await exercise({ mic: 'granted', ax: 'granted', deviceCount: 0 });
     expect(result.checkpoints.start).toMatchObject({ readiness: { dictation: { readiness: 'ready' } },

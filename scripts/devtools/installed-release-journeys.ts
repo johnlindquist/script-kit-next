@@ -230,7 +230,7 @@ function retainedBytes(
 // This is the ONLY generated executable. No checkout imports, native APIs or child
 // processes here: the installed SDK owns the prompt; its installed settings module
 // owns its version-matched Bun CLI. Do not run it from the verifier process.
-function sdkScript(root: string, dir: string, pid: number, nonce: string, revision: string) {
+function sdkScript(root: string, dir: string, pid: number, nonce: string, revision: string, readOnlyValue?: number) {
   const q = JSON.stringify;
   return `import { writeFileSync, renameSync, realpathSync } from 'node:fs';
 import { configPath } from ${q(installedFile(root, 'sdk/config-document.ts'))};
@@ -244,11 +244,52 @@ publish('started.json',{nonce,ppid:process.ppid,bun:process.versions.bun});
 const value = await form('<form><input name="address" type="email" value="incomplete"></form>');
 publish('submitted.json',{nonce, address:value.address});
 if (value.address !== nonce+'@example.invalid') throw Error('wrong form result');
-const changed = await config.set('editorFontSize',old.value === 18 ? 19 : 18,old.revision);
+${readOnlyValue !== undefined ? `const saved = await config.get('editorFontSize');
+if (old.value !== ${q(readOnlyValue)} || saved.value !== old.value || saved.revision !== old.revision || saved.isDefault !== false || realpathSync(saved.path)!==realpathSync(expected)) throw Error('upgraded SDK did not retain the prior setting');
+publish('saved.json',{nonce,value:saved.value,revision:saved.revision,readOnly:true});` : `const changed = await config.set('editorFontSize',old.value === 18 ? 19 : 18,old.revision);
 const saved = await config.get('editorFontSize');
 if (realpathSync(saved.path) !== realpathSync(expected) || saved.revision !== changed.revision || saved.value !== changed.value || saved.isDefault !== false) throw Error('failed readback');
-publish('saved.json',{nonce,old:old.value,wasDefault:old.isDefault,value:saved.value,revision:saved.revision});
+publish('saved.json',{nonce,old:old.value,wasDefault:old.isDefault,value:saved.value,revision:saved.revision});`}
 `;
+}
+
+export async function openSavedDayFromLauncher(date:string, ui:{state:()=>Promise<Row>;elements:()=>Promise<Row>;filter:(v:string)=>Promise<unknown>;enter:()=>Promise<unknown>}) {
+  requireProof(/^\d{4}-\d{2}-\d{2}$/.test(date),'invalid-original-day');
+  await ui.filter('Search Notes');
+  await observe(ui.state,s=>s.inputValue==='Search Notes' && s.oneWindow?.enter?.id==='builtin/search-notes' && !s.oneWindow.enterArmed,'search-notes-not-selected');
+  await ui.enter();
+  await observe(ui.state,s=>s.oneWindow?.view==='notes','notes-list-not-open');
+  await ui.filter(date);
+  const weekday=new Intl.DateTimeFormat('en-US',{weekday:'long',timeZone:'UTC'}).format(new Date(date+'T12:00:00Z'));
+  const allowed=new Set(['notes:open:Today','notes:open:'+date+' · '+weekday]);
+  const ready=await observe(ui.state,s=>s.inputValue===date && allowed.has(s.oneWindow?.enter?.id) && !s.oneWindow.enterArmed,'original-day-not-ready');
+  const enter=ready.oneWindow.enter.id, title=enter.slice('notes:open:'.length);
+  // The public label is a process-private HMAC, not SHA-256(title). The reducer names the
+  // Enter target; bind that to one selected measured row and verify the exact document ID
+  // and original bytes in the editor before doing anything else.
+  await observe(ui.elements,e=>{
+    const found=e.elements.filter((r:Row)=>/^notes-row:\d+$/.test(r.semanticId) && r.content?.text?.rawContentReturned===false && r.content.text.charLength===[...title].length && r.content.text.byteLength===Buffer.byteLength(title));
+    const chosen=found.filter((r:Row)=>r.selected===true && !r.actionDisabled);const fp=chosen[0]?.content.text.fingerprint;
+    return chosen.length===1 && typeof fp==='string' && /^sha256:[0-9a-f]{64}$/.test(fp) && found.filter((r:Row)=>r.content.text.fingerprint===fp).length===1;
+  },'original-day-not-selected');
+  const still=await ui.state();requireProof(still.inputValue===date && still.oneWindow?.enter?.id===enter && !still.oneWindow.enterArmed,'original-day-selection-changed');
+  await ui.enter();
+}
+
+// Script labels are authored content. The public element protocol gives them a process-private
+// fingerprint, unlike the literal labels of built-ins. The signed starter bytes and the exact
+// source-owned row ID bind the target; no private label or fingerprint needs to leave this Mac.
+export function installedStarterObservation(rows: Row[], semanticId: string) {
+  const exact = rows.filter(row => row.semanticId === semanticId);
+  const row = exact.length === 1 ? exact[0] : undefined;
+  const name = row?.content?.text;
+  const measuredName = row?.text == null && row?.value == null &&
+    name?.contentKind === 'externalContent' && name.rawContentReturned === false &&
+    name.charLength === 'Hello World'.length && name.byteLength === Buffer.byteLength('Hello World') &&
+    typeof name.fingerprint === 'string' && /^sha256:[0-9a-f]{64}$/.test(name.fingerprint);
+  return { exactRows: exact.length, scriptRows: rows.filter(r => r.kind === 'script').length,
+    measuredName, ready: measuredName && row?.role === 'row' && row.kind === 'script' &&
+      row.selectable === true && !row.actionDisabled };
 }
 
 export async function runInstalledJourneys(kit: InstalledKit) {
@@ -392,14 +433,42 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       // A directly opened wizard resets the list only AFTER the hide transition.
       await observe(state, (s) => s.promptType === 'none', 'startup-wizard-did-not-dismiss');
     }
-    if (!(await state()).windowVisible) {
-      await identity();
-      const ack = await request({ type: 'show' }, 'windowVisibilityAck');
-      requireProof(ack.windowVisible === true, 'show-not-acknowledged');
-      await observe(state, s=>s.windowVisible === true && s.promptType === 'none','launcher-not-visible-after-show');
+    const launcher = async () => {
+      if (!(await state()).windowVisible) {
+        await identity();
+        const ack = await request({ type: 'show' }, 'windowVisibilityAck');
+        requireProof(ack.windowVisible === true, 'show-not-acknowledged');
+      }
+      await waitView('none');
+      requireProof((await identity()).visible === true, 'launcher-not-visible');
+    };
+    await launcher();
+    if (kit.freshStarter) {
+      stage = 'fresh-starter';
+      const { sha256, semanticId } = kit.freshStarter;
+      const file = installedFile(kit.kitPath, 'plugins/main/scripts/hello-world.ts');
+      const checkStarter = () => requireProof(digest(readFileSync(file)) === sha256, 'starter-bytes-disagree');
+      checkStarter();
+      await batch({ type: 'setInput', text: 'Hello World' });
+      await observe(elements, r => {
+        const observed = installedStarterObservation(r.elements, semanticId);
+        evidence.starterRow = observed;
+        return r.semanticSurface === 'scriptList' && observed.ready;
+      }, 'starter-not-in-launcher');
+      checkStarter();
+      await batch({ type: 'selectBySemanticId', semanticId, submit: true });
+      await observe(state, s => s.windowVisible === true && s.promptType === 'arg' &&
+        s.placeholder === "What's your name?" && s.choiceCount === 3 && s.selectedValue === 'World', 'starter-name-prompt-not-observed');
+      await key('enter');
+      await waitView('div');
+      await key('enter');
+      await observe(state, s => s.promptType === 'none', 'starter-did-not-close');
+      await launcher();
+      evidence.freshStarter = { sha256, dispatchedFromLauncher: true, namePromptAnswered: true, displayOpenedAndDismissed: true };
+      await checkpoint('freshStarter');
+      passed.push(stage);
+      stage = 'launcher';
     }
-    await waitView('none');
-    requireProof((await identity()).visible === true, 'launcher-not-visible');
     await batch({ type: 'setInput', text: 'permissions' });
     const filtered = await observe(
       state,
@@ -471,8 +540,29 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     passed.push(stage);
 
     stage = 'notes-save-and-readback';
-    await kit.send({ type: 'openNotes' });
-    const initialNote = await waitView('dayPage');
+    if (kit.originalData) {
+      const orig=kit.originalData;
+      await launcher();
+      await openSavedDayFromLauncher(orig.date,{state,elements,filter:text=>batch({type:'setInput',text}),enter:()=>key('enter')});
+      const doc=await waitView('dayPage');
+      const dayIds=(await elements()).elements.filter((r:Row)=>/^day:\d{4}-\d{2}-\d{2}$/.test(r.semanticId));
+      requireProof(dayIds.length===1 && dayIds[0].semanticId==='day:'+orig.date && doc.dayPage?.dirty===false &&
+        typeof doc.inputValue==='string' && digest(doc.inputValue)===orig.noteSha256 && digest(readFileSync(installedFile(kit.kitPath,'brain/days/'+orig.date+'.md')))===orig.noteSha256,'upgraded-editor-original-note-mismatch');
+      evidence.notes={date:orig.date,sha256:orig.noteSha256,reopenedOriginal:true};
+    } else {
+    const openTodayFromLauncher = async () => {
+      const title = 'Quick Note Capture', id = 'main-list-row:v2:'+digest('builtin/quick-capture');
+      await launcher();
+      await batch({ type: 'setInput', text: title });
+      await observe(elements, r => {
+        const matches = r.elements.filter((row: Row) => row.semanticId === id);
+        return r.semanticSurface === 'scriptList' && matches.length === 1 && matches[0].text === title &&
+          matches[0].kind === 'built-in' && matches[0].role === 'row' && matches[0].selectable === true && !matches[0].actionDisabled;
+      }, 'quick-note-not-in-launcher');
+      await batch({ type: 'selectBySemanticId', semanticId: id, submit: true });
+      return waitView('dayPage');
+    };
+    const initialNote = await openTodayFromLauncher();
     // Both clean installs and upgrades are supported; never replace arbitrary prior text.
     const prior = initialNote.inputValue;
     requireProof(
@@ -495,10 +585,16 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     requireProof(readFileSync(day, 'utf8') === note, 'note-not-on-disk');
     await key('escape');
     await observe(state, (s) => s.promptType === 'none', 'note-did-not-close');
-    await kit.send({ type: 'openNotes' });
-    const reopened = await waitView('dayPage');
+    let reopened;
+    if (kit.verifyStdinNoteReopen) {
+      await launcher();
+      await kit.send({ type: 'openNotes' });
+      reopened = await waitView('dayPage');
+    } else reopened = await openTodayFromLauncher();
     requireProof(reopened.inputValue === note && reopened.dayPage?.dirty === false, 'reopened-note-mismatch');
-    evidence.notes = { date, sha256:digest(note), savedAndReopened:true };
+    evidence.notes = { date, sha256:digest(note), savedAndReopened:true, entry:'builtin/quick-capture',
+      reopenedVia:kit.verifyStdinNoteReopen ? 'stdin/openNotes' : 'builtin/quick-capture' };
+    }
     await checkpoint('notes');
     passed.push(stage);
 
@@ -512,7 +608,8 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     for (const name of ['kit-sdk.ts', 'config-cli.ts', 'config-schema.ts'])
       installedFile(kit.kitPath, `sdk/${name}`);
     const script = join(dir, 'exercise.ts');
-    writeFileSync(script, sdkScript(kit.kitPath, dir, kit.pid, nonce, digest(before)), {
+    if(kit.originalData)requireProof(digest(before)===kit.originalData.configSha256,'upgraded-config-original-bytes-mismatch');
+    writeFileSync(script, sdkScript(kit.kitPath, dir, kit.pid, nonce, digest(before),kit.originalData?.editorFontSize), {
       flag: 'wx',
       mode: 0o600,
     });
@@ -586,6 +683,11 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     stage = 'installed-settings';
     const saved = await sideEffect('saved.json');
     const after = utf8.decode(readFileSync(installedFile(kit.kitPath, 'config.ts')));
+    if(kit.originalData) {
+      requireProof(saved.nonce===nonce && saved.readOnly===true && saved.value===kit.originalData.editorFontSize &&
+        before===after && digest(after)===kit.originalData.configSha256 && saved.revision===kit.originalData.configSha256,'upgraded-setting-changed');
+      evidence.settings={key:'editorFontSize',value:saved.value,revision:saved.revision,revisionMatchedDisk:true,readOnly:true};
+    } else {
     requireProof(
       saved.nonce === nonce &&
         Number.isFinite(saved.old) &&
@@ -599,9 +701,11 @@ export async function runInstalledJourneys(kit: InstalledKit) {
       key: 'editorFontSize',
       old: saved.old,
       value: saved.value,
+      revision: saved.revision,
       revisionMatchedDisk: true,
       neighboringBytesRetained: true,
     };
+    }
     await checkpoint('sdkAndSettings');
     passed.push(stage);
     return { ...base, status: 'pass' as const };
