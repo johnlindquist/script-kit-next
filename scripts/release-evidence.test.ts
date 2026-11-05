@@ -3333,7 +3333,7 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     }
   });
 
-  test("only the two owned hidden-frame CI commands consume immutable artifacts without launch opt-ins", () => {
+  test("only the owned hidden-frame CI commands consume their exact unsigned or signed artifacts without launch opt-ins", () => {
     const ownedFrames: Array<{ workflow: string; job: string; step: string; artifact: string }> = [];
     for (const name of ["ci", "release", "perf-gates", "release-compiler-proof"] as const) {
       const workflowDefinition = workflow(name);
@@ -3353,16 +3353,19 @@ describe("nonintrusive CI release ownership and publication graph", () => {
           expect(step.run).toContain("--receipt");
           const artifact = step.run.match(/--artifact\s+(\S+)/)?.[1];
           expect(artifact).toBeDefined();
-          const producer = name === "release" ? "publish-signed-bundle" : "app-build";
+          const signed = name === "release" && job === "sign-notarize-macos";
+          const producer = signed ? "publish-signed-bundle" : "app-build";
           expect(steps.slice(0, index).some((prior) =>
             prior.run?.includes(`build-ops act ${producer}`) &&
             prior.run.includes(`--artifact-out ${artifact}`))).toBe(true);
-          const compilerSteps = name === "release" ? workflowDefinition.jobs["build-macos-app"].steps ?? [] : steps.slice(0, index);
+          const compilerSteps = signed ? workflowDefinition.jobs["build-macos-app"].steps ?? [] : steps.slice(0, index);
           expect(compilerSteps.some((prior) => prior.run?.includes("build-ops act app-build") && prior.run.includes("--features owned-ui-evaluation"))).toBe(true);
-          if (name === "release") {
+          if (signed) {
             expect(step.run).toContain("--packaged");
             expect(steps.some((prior) => prior.run?.includes("build-ops act app-build"))).toBe(false);
             expect(steps.slice(0, index).some((prior) => prior.run?.includes("publish-signed-bundle") && prior.run.includes("--release-input") && prior.run.includes("--expected-input-sha256"))).toBe(true);
+          } else {
+            expect(step.run).not.toContain("--packaged");
           }
           ownedFrames.push({ workflow: name, job, step: step.name ?? "unnamed", artifact: artifact! });
         }
@@ -3370,6 +3373,12 @@ describe("nonintrusive CI release ownership and publication graph", () => {
     }
 
     expect(ownedFrames).toEqual([
+      {
+        workflow: "release",
+        job: "build-macos-app",
+        step: "Check the compiled launcher before it reaches signing",
+        artifact: ".test-output/release/compile.reference.json",
+      },
       {
         workflow: "release",
         job: "sign-notarize-macos",

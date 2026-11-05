@@ -344,7 +344,8 @@ fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
                 Some("scripts" | "scriptlets") if kind.is_dir() => {
                     new_scriptkit.join("plugins/main").join(&name)
                 }
-                Some("logs" | "cache" | "db" | "sdk") if kind.is_dir() => new_scriptkit.join(&name),
+                Some("logs") if kind.is_dir() => new_scriptkit.join("logs/legacy-v1"),
+                Some("cache" | "db" | "sdk") if kind.is_dir() => new_scriptkit.join(&name),
                 Some(
                     "config.ts"
                     | "theme.json"
@@ -385,6 +386,7 @@ fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
         return false;
     };
     if let Err(error) = fs::create_dir(&new_scriptkit)
+        .and_then(|_| fs::create_dir(new_scriptkit.join("logs")))
         .and_then(|_| fs::create_dir_all(new_scriptkit.join("plugins/main")))
     {
         warn!(%error, "Couldn't prepare a new kit for migration");
@@ -421,7 +423,18 @@ fn migrate_from_kenv_in(home: &Path, kit_path: &Path) -> bool {
     info!("Migration from ~/.kenv to ~/.scriptkit complete");
     true
 }
-// --- merged from part_003.rs ---
+/// Disk logging creates the workspace's logs directory. Let migration or fresh
+/// setup claim the workspace first, before a log file makes it look installed.
+pub fn setup_before_diagnostics(start_diagnostics: impl FnOnce()) -> SetupResult {
+    let migrated = migrate_from_kenv();
+    let setup = ensure_kit_setup();
+    start_diagnostics();
+    if migrated {
+        info!("Migrated from ~/.kenv to ~/.scriptkit");
+    }
+    setup
+}
+
 /// Ensure the ~/.scriptkit environment is properly set up.
 ///
 /// This function is idempotent - it will create missing directories and files

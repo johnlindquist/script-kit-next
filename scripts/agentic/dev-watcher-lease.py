@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Serialize watcher registration and preserve stale leases without signalling processes."""
+from __future__ import annotations
+
 import ctypes
 import fcntl
 import hashlib

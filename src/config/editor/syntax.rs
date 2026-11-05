@@ -47,10 +47,11 @@ pub(super) fn check(bun: &Path, source: &str) -> Result<(), String> {
         .map_err(|e| format!("Could not start the settings syntax checker: {e}"))?;
     // Missing inputs can emit errors with status zero. Count, but never retain
     // or publish, diagnostics: Bun quotes private source in its error messages.
-    let diagnostics = io::copy(
-        &mut child.stderr.take().expect("piped checker diagnostics"),
-        &mut io::sink(),
-    );
+    let diagnostics = child
+        .stderr
+        .take()
+        .ok_or_else(|| io::Error::other("Missing settings checker diagnostics"))
+        .and_then(|mut stderr| io::copy(&mut stderr, &mut io::sink()));
     let status = child
         .wait()
         .map_err(|e| format!("Could not wait for the settings syntax checker: {e}"))?;

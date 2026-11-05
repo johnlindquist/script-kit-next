@@ -32,15 +32,7 @@ fn prepare_startup_environment() -> setup::SetupResult {
         panic!("invalid triggerBuiltin registry detected at startup: {e}");
     }
 
-    // Migrate from legacy ~/.kenv to new ~/.scriptkit structure (one-time migration)
-    // This must happen BEFORE ensure_kit_setup() so the new path is used
-    if setup::migrate_from_kenv() {
-        logging::log("APP", "Migrated from ~/.kenv to ~/.scriptkit");
-    }
-
-    // Ensure ~/.scriptkit environment is properly set up (directories, SDK, config, etc.)
-    // This is idempotent - it creates missing directories and files without overwriting user configs
-    let setup_result = setup::ensure_kit_setup();
+    let setup_result = setup::setup_before_diagnostics(initialize_startup_diagnostics);
     if setup_result.is_fresh_install {
         logging::log(
             "APP",
