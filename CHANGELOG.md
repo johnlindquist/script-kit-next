@@ -1,16 +1,20 @@
 # Script Kit changelog
 
-## Unreleased · Model process cleanup
+## 0.1.33 · Model engines stop with Kit
+
+[Release notes and installation checks](docs/releases/v0.1.33.md).
 
 If Kit is force-quit on macOS, the Goose, ghost-text, and embedding processes it started stop without waiting for another Kit launch. Tools that remain in the engine’s process group stop with it. Process Manager distinguishes the engine PID from the group controlled by Stop. This does not scan for or kill unrelated copies of those programs. [Issue #56](https://github.com/johnlindquist/script-kit-next/issues/56).
 
-## 0.1.31 · A dependable Return action
-
-[Release notes and installation checks](docs/releases/v0.1.31.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
+When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
 
 Fresh workspaces include the **Hello World** starter. An eligible v1 workspace imports before Kit opens its first log file.
 
 Deleting a note during a search-index rebuild no longer interrupts indexing. The CLI keeps saved credentials paired with their local server, and a malformed connection file can be diagnosed without printing its contents.
+
+## 0.1.31 and 0.1.32 · No public installers
+
+Neither version produced a public Mac installer.
 
 ## 0.1.30 · Source tag only
 
