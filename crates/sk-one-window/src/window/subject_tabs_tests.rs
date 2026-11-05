@@ -124,6 +124,61 @@ fn late_settings_move_only_the_automatic_default_and_guard_return() {
 }
 
 #[test]
+fn minimal_home_keeps_scripts_and_setup_but_not_stale_subject_actions() {
+    use crate::personal::{Edit, HomeMode, LauncherRules};
+    let mut w = OneWindow::default();
+    open(&mut w, 0);
+    let stock = LauncherRules::default();
+    let script = "script/main:source-sha256-example";
+    let setup = crate::setup::needs_setup_rows(&[crate::setup::Missing::Bun]);
+    let mut rows = setup.clone();
+    rows.extend([
+        Row::new("app/mail", "Mail"),
+        Row::new(script, "Hello World"),
+        Row::new("scriptlet/main:stamp", "Date stamp"),
+    ]);
+    w.handle(1, Event::Suggested(rows));
+    w.handle(
+        800,
+        Event::Subjects(TabsEvent::Personal(
+            stock.with(Edit::Home(HomeMode::Minimal)),
+        )),
+    );
+    assert!(!w.tabs_visible());
+    assert_eq!(
+        w.list
+            .pinned
+            .iter()
+            .map(|r| r.key.as_str())
+            .collect::<Vec<_>>(),
+        [crate::setup::BUN_KEY, script, "scriptlet/main:stamp"]
+    );
+    assert_eq!(w.list.pinned[1].head.as_deref(), Some("Scripts"));
+    // A delayed clipboard observation must not restore the now-hidden action or retarget Return.
+    w.handle(
+        801,
+        Event::Subjects(TabsEvent::Observe(source(
+            SubjectKind::Clipboard,
+            "later",
+            0,
+        ))),
+    );
+    assert!(w.handle(802, Event::Key(Key::Enter)).picked.is_none());
+    w.handle(1500, Event::Key(Key::Down));
+    assert_eq!(
+        w.handle(2000, Event::Key(Key::Enter)).picked.unwrap().0.key,
+        script
+    );
+    w.handle(2200, Event::Text("Mail".into()));
+    w.handle(2201, Event::Names(vec![Row::new("app/mail", "Mail")]));
+    assert_eq!(w.list.names[0].key, "app/mail");
+    w.handle(2300, Event::Text(String::new()));
+    w.handle(2301, Event::Subjects(TabsEvent::Personal(stock)));
+    assert!(w.tabs_visible());
+    assert!(w.list.pinned.iter().any(|r| r.key == "app/mail"));
+}
+
+#[test]
 fn late_subjects_do_not_retarget_a_deliberate_pick() {
     let mut w = OneWindow::default();
     open(&mut w, 100);

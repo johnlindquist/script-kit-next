@@ -615,6 +615,7 @@ impl ScriptListApp {
     pub(crate) fn one_window_jev_token(&self) -> u64 {
         let list = self.one_window.list();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.one_window.personal_rules().home_mode.hash(&mut hasher);
         list.jev.settled_for(&list.text).hash(&mut hasher);
         for slot in (0..list.jev.len()).filter_map(|i| list.jev.get(i)) {
             slot.row.as_ref().map(|row| &row.key).hash(&mut hasher);

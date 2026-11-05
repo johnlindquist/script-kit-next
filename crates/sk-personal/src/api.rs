@@ -1,7 +1,7 @@
 //! JSON for the installed app's `--personalize` operation. These receipts describe the stored
 //! workspace; only a reply from the running window can attest to adoption there.
 use super::*;
-use sk_one_window::personal::{TextRole, Weight};
+use sk_one_window::personal::{HomeMode, TextRole, Weight};
 mod endpoint;
 mod review;
 pub use endpoint::{Adoption, Endpoint};
@@ -27,6 +27,7 @@ fn marker(s: &str) -> Result<Edit> {
         Edit::PinWeight(Weight::Regular),
         Edit::SelectionFirst(None),
         Edit::ClipboardFirst(None),
+        Edit::Home(HomeMode::Standard),
     ]
     .into_iter()
     .find(|e| e.target() == s)

@@ -6,6 +6,7 @@ use super::*;
 pub struct Adoption {
     pub workspace: Option<String>,
     pub applied_revision: Option<String>,
+    #[serde(serialize_with = "public_rules")]
     pub effective: LauncherRules,
     /// Configuration identities only, not view results or input.
     pub active_view_ids: Vec<String>,

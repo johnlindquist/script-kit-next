@@ -18,7 +18,7 @@ import { runMcpCli } from "./mcp-cli";
 
 import { agent, operator } from "./agent-bridge-cli";
 
-const stockLauncherRules = { pinnedText:"muted", pinnedWeight:"regular", selectionFirst:null, clipboardFirst:null };
+const stockLauncherRules = { pinnedText:"muted", pinnedWeight:"regular", selectionFirst:null, clipboardFirst:null, homeMode:"standard" };
 
 describe("scoped launcher author", () => {
   it("requires explicit grants, pins the operation to the selected verb, and never retries a refusal", async () => {
@@ -118,6 +118,7 @@ describe("launcher receipt identity", () => {
       }
       for (const [target,field,value] of [
         ["launcher.header.pinned-label.textRole","pinnedText","primary"], ["launcher.header.pinned-label.weight","pinnedWeight","semiboldWhileDictating"],
+        ["launcher.home.mode","homeMode","minimal"],
         ["launcher.subject.selection.firstAction","selectionFirst","note"], ["launcher.subject.clipboard.firstAction","clipboardFirst",null],
       ] as const) {
         const change = {op:"edit",edit:{target,value}};

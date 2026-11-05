@@ -153,7 +153,9 @@ pub struct State {
     pub workspace: String,
     pub revision: String,
     pub enabled: bool,
+    #[serde(serialize_with = "public_rules")]
     pub declared: LauncherRules,
+    #[serde(serialize_with = "public_rules")]
     pub effective: LauncherRules,
     /// Declarations only. Disabled recipes do not open, query a source or own a key.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -168,6 +170,15 @@ pub struct Applied {
     pub applied_revision: String,
     pub replayed: bool,
     pub state: State,
+}
+// On-disk defaults preserve old journal seals; authoring clients see the actual value.
+fn public_rules<S: serde::Serializer>(
+    rules: &LauncherRules,
+    s: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    let mut v = serde_json::to_value(rules).map_err(serde::ser::Error::custom)?;
+    v["homeMode"] = json!(rules.home_mode);
+    v.serialize(s)
 }
 fn hash(b: &[u8]) -> String {
     format!("{:x}", Sha256::digest(b))
@@ -542,5 +553,5 @@ impl Store {
 }
 
 pub fn catalog() -> Value {
-    json!({"schemaVersion":1,"targets":[{"id":"launcher.header.pinned-label.textRole","values":["muted","primary"],"when":"window.pinned"},{"id":"launcher.header.pinned-label.weight","values":["regular","semibold","semiboldWhileDictating"],"when":"window.pinned"},{"id":"launcher.subject.selection.firstAction","values":[null,"ask","note","show","handoff"]},{"id":"launcher.subject.clipboard.firstAction","values":[null,"ask","note","show","open"]}],"operations":["describe","inspect","preview","apply","why","status"],"commit":"apply requires workspace, expectedRevision, a fresh v4 requestId, and change; repeat only the identical request","undo":"apply change {op:undo,of:<inspect.undo>}","limits":{"jsonBytes":65536,"historyLookup":256},"capabilities":[],"views":{"schema":views::schema(),"maxViews":views::MAX_VIEWS,"put":"apply change {op:putView,view}","remove":"apply change {op:removeView,id}","why":"personal.view.<id>","activation":"Saving or previewing does not read a source or grant its action"},"safeMode":"SCRIPT_KIT_PERSONAL_SAFE_MODE=1"})
+    json!({"schemaVersion":1,"targets":[{"id":"launcher.home.mode","values":["standard","minimal"],"default":"standard","when":"launcher.home","effect":"Minimal hides the subject tabs and shows just scripts and setup on the empty launcher. Typing still searches everything."},{"id":"launcher.header.pinned-label.textRole","values":["muted","primary"],"when":"window.pinned"},{"id":"launcher.header.pinned-label.weight","values":["regular","semibold","semiboldWhileDictating"],"when":"window.pinned"},{"id":"launcher.subject.selection.firstAction","values":[null,"ask","note","show","handoff"]},{"id":"launcher.subject.clipboard.firstAction","values":[null,"ask","note","show","open"]}],"operations":["describe","inspect","preview","apply","why","status"],"commit":"apply requires workspace, expectedRevision, a fresh v4 requestId, and change; repeat only the identical request","undo":"apply change {op:undo,of:<inspect.undo>}","limits":{"jsonBytes":65536,"historyLookup":256},"capabilities":[],"views":{"schema":views::schema(),"maxViews":views::MAX_VIEWS,"put":"apply change {op:putView,view}","remove":"apply change {op:removeView,id}","why":"personal.view.<id>","activation":"Saving or previewing does not read a source or grant its action"},"safeMode":"SCRIPT_KIT_PERSONAL_SAFE_MODE=1"})
 }

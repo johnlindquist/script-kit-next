@@ -4,6 +4,8 @@
 
 Type **Make “Stays open” brighter** or **Put today’s note first for selected text**, then choose **Customize Kit**. Changing the order does not save the selection. Type **Undo my last launcher change** to restore the previous rule.
 
+**Keep my launcher minimal** shows scripts instead of tabs and suggestions when you open Kit. Typing still searches normally, and **Restore the standard launcher** brings the full home back.
+
 [Personal launcher guide](docs/guides/personal-launcher.md) · [External agent access](docs/guides/external-agents.md)
 
 ## 0.1.30 · A dependable Return action

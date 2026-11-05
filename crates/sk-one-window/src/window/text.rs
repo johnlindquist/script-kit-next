@@ -62,13 +62,7 @@ impl OneWindow {
         }
         if empty && pins.is_empty() && self.staged.is_none() {
             pins = self.subject_page().map(|p| p.rows()).unwrap_or_default();
-            pins.extend(self.suggested.iter().enumerate().map(|(i, r)| {
-                let mut r = r.clone();
-                if i == 0 && r.head.is_none() {
-                    r.head = Some(words::SUGGESTED.into());
-                }
-                r
-            }));
+            pins.extend(self.personal_rules().home_mode.suggestions(&self.suggested));
         }
         self.list.pinned = pins;
 

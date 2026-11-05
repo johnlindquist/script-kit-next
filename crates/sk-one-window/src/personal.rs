@@ -1,6 +1,6 @@
-//! Personal rules can change the appearance of the existing pin and move an existing action
-//! to the front of one subject. They cannot create rows, edit action IDs, or change permission.
-use crate::SubjectKind;
+//! Personal rules set the home list, the existing pin’s appearance, and subject action order.
+//! They never create actions, change target identities, or grant permission.
+use crate::{Row, SubjectKind};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +35,44 @@ pub enum ClipboardAction {
     Open,
 }
 
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HomeMode {
+    #[default]
+    Standard,
+    Minimal,
+}
+impl HomeMode {
+    fn is_standard(&self) -> bool {
+        *self == Self::Standard
+    }
+
+    /// Only change the idle home list. Typed search, staged actions, questions and recovery
+    /// still go through the ordinary reducer. Keep the source-owned key of each real script.
+    pub(crate) fn suggestions(self, rows: &[Row]) -> Vec<Row> {
+        let mut first_script = true;
+        rows.iter()
+            .enumerate()
+            .filter_map(|(i, row)| {
+                if self == Self::Minimal && row.key != crate::setup::BUN_KEY {
+                    if !row.key.starts_with("script/") && !row.key.starts_with("scriptlet/") {
+                        return None;
+                    }
+                    let mut row = row.clone();
+                    row.head = std::mem::take(&mut first_script).then(|| "Scripts".to_owned());
+                    Some(row)
+                } else {
+                    let mut row = row.clone();
+                    if i == 0 && row.head.is_none() {
+                        row.head = Some(crate::contract::words::SUGGESTED.into());
+                    }
+                    Some(row)
+                }
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct LauncherRules {
@@ -42,6 +80,9 @@ pub struct LauncherRules {
     pub pinned_weight: Weight,
     pub selection_first: Option<SelectionAction>,
     pub clipboard_first: Option<ClipboardAction>,
+    // Stock must keep its original bytes in sealed journals written by earlier versions.
+    #[serde(skip_serializing_if = "HomeMode::is_standard")]
+    pub home_mode: HomeMode,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "target", content = "value", deny_unknown_fields)]
@@ -54,10 +95,13 @@ pub enum Edit {
     SelectionFirst(Option<SelectionAction>),
     #[serde(rename = "launcher.subject.clipboard.firstAction")]
     ClipboardFirst(Option<ClipboardAction>),
+    #[serde(rename = "launcher.home.mode")]
+    Home(HomeMode),
 }
 impl Edit {
     pub fn target(self) -> &'static str {
         match self {
+            Self::Home(_) => "launcher.home.mode",
             Self::PinText(_) => "launcher.header.pinned-label.textRole",
             Self::PinWeight(_) => "launcher.header.pinned-label.weight",
             Self::SelectionFirst(_) => "launcher.subject.selection.firstAction",
@@ -68,6 +112,7 @@ impl Edit {
 impl LauncherRules {
     pub fn with(mut self, edit: Edit) -> Self {
         match edit {
+            Edit::Home(v) => self.home_mode = v,
             Edit::PinText(v) => self.pinned_text = v,
             Edit::PinWeight(v) => self.pinned_weight = v,
             Edit::SelectionFirst(v) => self.selection_first = v,
@@ -77,6 +122,7 @@ impl LauncherRules {
     }
     pub fn edit_at(self, target: Edit) -> Edit {
         match target {
+            Edit::Home(_) => Edit::Home(self.home_mode),
             Edit::PinText(_) => Edit::PinText(self.pinned_text),
             Edit::PinWeight(_) => Edit::PinWeight(self.pinned_weight),
             Edit::SelectionFirst(_) => Edit::SelectionFirst(self.selection_first),

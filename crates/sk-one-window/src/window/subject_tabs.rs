@@ -155,7 +155,11 @@ impl OneWindow {
         self.tabs.enabled
     }
     pub fn tabs_visible(&self) -> bool {
-        self.tabs.enabled && !self.in_view() && self.staged.is_none() && !self.away
+        self.tabs.enabled
+            && self.tabs.personal.home_mode == crate::personal::HomeMode::Standard
+            && !self.in_view()
+            && self.staged.is_none()
+            && !self.away
     }
     pub fn subject_pages(&self) -> Vec<SubjectPage> {
         if !self.tabs_visible() {

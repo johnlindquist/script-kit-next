@@ -335,7 +335,7 @@ const digest = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v)
 const revision = (v: unknown) => v === "stock" || digest(v);
 // Store::state and Store::preview expose declared rules even while disabled. The effective
 // rules must be those same declarations when enabled, or LauncherRules::default() when not.
-const stockRules = { pinnedText: "muted", pinnedWeight: "regular", selectionFirst: null, clipboardFirst: null };
+const stockRules = { pinnedText: "muted", pinnedWeight: "regular", selectionFirst: null, clipboardFirst: null, homeMode: "standard" };
 function snapshot(v: unknown): v is Record<string, unknown> {
 	if (!object(v) || !digest(v.workspace) || !revision(v.revision) || typeof v.enabled !== "boolean") return false;
 	const { declared, effective, undo } = v;
@@ -360,6 +360,7 @@ function sameRequest(a: unknown, b: unknown): boolean {
 // Check the requested declaration, not just a well-shaped snapshot of some change.
 // The store owns validation and history; the client cannot infer prior values for Undo.
 const declaredFields = new Map([
+	["launcher.home.mode", "homeMode"],
 	["launcher.header.pinned-label.textRole", "pinnedText"],
 	["launcher.header.pinned-label.weight", "pinnedWeight"],
 	["launcher.subject.selection.firstAction", "selectionFirst"],

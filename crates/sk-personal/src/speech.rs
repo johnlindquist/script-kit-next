@@ -1,7 +1,7 @@
 //! Small offline grammar for deliberate launcher requests; arbitrary or compound prose is not
 //! approval to change a setting. External authors may also use the typed catalog directly.
 use super::Change;
-use sk_one_window::personal::{ClipboardAction, Edit, SelectionAction, TextRole, Weight};
+use sk_one_window::personal::{ClipboardAction, Edit, HomeMode, SelectionAction, TextRole, Weight};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reading {
     Change(Change),
@@ -69,6 +69,25 @@ pub fn read(input: &str) -> Option<Reading> {
     let norm = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
     let s = norm.strip_prefix("kit, ").unwrap_or(&norm);
     let s = s.strip_prefix("please ").unwrap_or(s);
+    let mode = match s {
+        "make my launcher minimal"
+        | "keep my launcher minimal"
+        | "use a minimal launcher"
+        | "show only scripts when i open kit"
+        | "show just scripts on my launcher home" => Some(HomeMode::Minimal),
+        "restore the standard launcher"
+        | "use the standard launcher"
+        | "show everything on my launcher home" => Some(HomeMode::Standard),
+        "why is my launcher minimal" | "why does my launcher only show scripts" => {
+            return Some(Reading::Why(Edit::Home(HomeMode::Standard)));
+        }
+        _ => None,
+    };
+    if let Some(mode) = mode {
+        return Some(Reading::Change(Change::Edit {
+            edit: Edit::Home(mode),
+        }));
+    }
     if s == "undo my last launcher change" {
         return Some(Reading::UndoLast);
     }
@@ -169,6 +188,12 @@ pub fn label(change: &Change) -> &'static str {
         Change::Edit {
             edit: Edit::ClipboardFirst(None),
         } => "Restore default clipboard actions",
+        Change::Edit {
+            edit: Edit::Home(HomeMode::Minimal),
+        } => "Show just scripts on the launcher home",
+        Change::Edit {
+            edit: Edit::Home(HomeMode::Standard),
+        } => "Restore the standard launcher home",
         Change::PutView { .. } => "Save this personal view",
         Change::RemoveView { .. } => "Remove this personal view",
         Change::Undo { .. } => "Undo the last launcher change",

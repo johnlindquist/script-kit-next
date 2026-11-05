@@ -226,6 +226,68 @@ fn an_unpublished_journal_record_is_not_a_committed_request() {
     assert_eq!(s.inspect().unwrap_err(), Error::InvalidDocument);
 }
 #[test]
+fn a_minimal_home_is_a_reversible_workspace_preference_not_a_search() {
+    use sk_personal::speech::{Reading, read};
+    let tmp = tempfile::tempdir().unwrap();
+    let p = tmp.path();
+    let store = Store::open(p).unwrap();
+    let stock = store.inspect().unwrap();
+    let Some(Reading::Change(change)) = read("Kit, please keep my launcher minimal!") else {
+        panic!("no scoped edit")
+    };
+    let request = ask(&stock, change);
+    store.apply(request.clone(), Author::Launcher).unwrap();
+    drop(store);
+    let reopened = Store::open(p).unwrap();
+    let current = reopened.inspect().unwrap();
+    assert_eq!(
+        api(p, json!({"op":"inspect"})).unwrap()["state"]["effective"]["homeMode"],
+        "minimal"
+    );
+    assert_eq!(
+        api(p, json!({"op":"why","target":"launcher.home.mode"})).unwrap()["requestId"],
+        request.request_id.to_string()
+    );
+    let off = reopened
+        .apply(ask(&current, Change::Disable), Author::Launcher)
+        .unwrap()
+        .state;
+    assert_eq!(off.effective, stock.effective);
+    assert_eq!(off.declared, current.declared);
+    let on = reopened
+        .apply(
+            ask(
+                &off,
+                Change::Undo {
+                    of: off.undo.unwrap(),
+                },
+            ),
+            Author::Launcher,
+        )
+        .unwrap()
+        .state;
+    assert_eq!(on.effective, current.effective);
+    let undone = reopened
+        .apply(
+            ask(
+                &on,
+                Change::Undo {
+                    of: request.request_id,
+                },
+            ),
+            Author::Launcher,
+        )
+        .unwrap()
+        .state;
+    assert_eq!(undone.effective, stock.effective);
+    assert_eq!(
+        api(p, json!({"op":"inspect"})).unwrap()["state"]["effective"]["homeMode"],
+        "standard"
+    );
+    assert!(read("write a note: keep my launcher minimal").is_none());
+}
+
+#[test]
 fn local_readings_require_a_complete_scoped_request() {
     use sk_personal::speech::{Reading, read};
     assert_eq!(
