@@ -10,6 +10,12 @@
 //! - Bulk kill for graceful shutdown
 //!
 
+pub(crate) mod model_group;
+#[cfg(unix)]
+pub use model_group::run_if_requested as run_model_group_monitor_if_requested;
+#[cfg(all(test, unix))]
+pub(crate) mod model_group_tests;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,12 +30,41 @@ pub static PROCESS_MANAGER: LazyLock<ProcessManager> = LazyLock::new(ProcessMana
 /// Information about a tracked child process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessInfo {
-    /// Process ID
+    /// Stop target: the private group leader for a supervised model, otherwise the tracked PID.
     pub pid: u32,
+    /// Actual model executable, for inspection only. Never a persisted signalling authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_pid: Option<u32>,
+    /// Per-launch monitor identity, carried in its argv so a recycled PID/name is not authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) model_group_instance: Option<uuid::Uuid>,
     /// Path to the script being executed
     pub script_path: String,
     /// Timestamp when the process was started
     pub started_at: DateTime<Utc>,
+}
+impl ProcessInfo {
+    fn is_model_group(&self) -> bool {
+        self.model_pid.is_some() || self.model_group_instance.is_some()
+    }
+
+    fn matches_command(&self, cmd: &[std::ffi::OsString]) -> bool {
+        if self.is_model_group() {
+            #[cfg(unix)]
+            return self
+                .model_group_instance
+                .is_some_and(|id| model_group::matches_guard(cmd, &self.script_path, id));
+            #[cfg(not(unix))]
+            return false;
+        }
+        cmdline_matches_recorded(cmd, &self.script_path)
+    }
+    pub(crate) fn pid_label(&self) -> String {
+        match self.model_pid {
+            Some(model) => format!("PID {model} • group {}", self.pid),
+            None => format!("PID {}", self.pid),
+        }
+    }
 }
 /// Thread-safe process manager for tracking bun script processes
 #[derive(Debug, Clone)]
@@ -229,8 +264,20 @@ impl ProcessManager {
     ///
     /// This adds the process to the in-memory map and persists to disk.
     pub fn register_process(&self, pid: u32, script_path: &str) {
+        self.register_process_info(pid, script_path, None, None);
+    }
+
+    fn register_process_info(
+        &self,
+        pid: u32,
+        script_path: &str,
+        model_pid: Option<u32>,
+        model_group_instance: Option<uuid::Uuid>,
+    ) {
         let info = ProcessInfo {
             pid,
+            model_pid,
+            model_group_instance,
             script_path: script_path.to_string(),
             started_at: Utc::now(),
         };
@@ -278,7 +325,15 @@ impl ProcessManager {
     /// Get all currently tracked active processes
     pub fn get_active_processes(&self) -> Vec<ProcessInfo> {
         if let Ok(processes) = self.active_processes.read() {
-            processes.values().cloned().collect()
+            let entries = processes.values();
+            // A warm client can outlive its engine. Omit a demonstrably exited group,
+            // but never treat an unavailable observation as proof of exit.
+            #[cfg(unix)]
+            let entries = entries.filter(|p| {
+                !p.is_model_group()
+                    || observe_owned_process_group(p.pid) != OwnedProcessGroupLiveness::Exited
+            });
+            entries.cloned().collect()
         } else {
             Vec::new()
         }
@@ -306,8 +361,8 @@ impl ProcessManager {
 
         for process in processes.iter().take(limit) {
             lines.push(format!(
-                "PID {} • {} • started {}",
-                process.pid,
+                "{} • {} • started {}",
+                process.pid_label(),
                 process.script_path,
                 crate::formatting::format_absolute_datetime(process.started_at)
             ));
@@ -376,7 +431,7 @@ impl ProcessManager {
                 self.unregister_process(info.pid);
                 continue;
             };
-            if !cmdline_matches_recorded(process.cmd(), &info.script_path) {
+            if !info.matches_command(process.cmd()) {
                 warn!(
                     pid = info.pid,
                     script_path = info.script_path.as_str(),
@@ -432,7 +487,7 @@ impl ProcessManager {
 
         #[cfg(unix)]
         {
-            if !owned_process_signal_is_authorized(pid, self.is_tracked_process(pid)) {
+            if !owned_process_signal_is_authorized(pid, self.signal_target_is_current(pid)) {
                 warn!(
                     pid,
                     "process_manager.kill_process.refused_invalid_or_unowned_group"
@@ -448,7 +503,13 @@ impl ProcessManager {
                 info!(pid, "killed process group");
             } else if ret == -1 {
                 let err = std::io::Error::last_os_error();
-                if err.raw_os_error() == Some(libc::ESRCH) {
+                if err.raw_os_error() == Some(libc::ESRCH)
+                    && self
+                        .active_processes
+                        .read()
+                        .ok()
+                        .is_some_and(|p| p.get(&pid).is_some_and(|i| !i.is_model_group()))
+                {
                     // SAFETY: same contract as above, targeting the single pid.
                     let single = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
                     if single == 0 {
@@ -496,6 +557,11 @@ impl ProcessManager {
 
         #[cfg(unix)]
         {
+            if !self.signal_target_is_current(pid) {
+                return Err(format!(
+                    "Cannot verify the original process group for PID {pid}"
+                ));
+            }
             let pgid = -(pid as i32);
             // SAFETY: libc::kill with a negative PID targets the process group.
             // The PID was validated as tracked above.
@@ -536,6 +602,9 @@ impl ProcessManager {
                             OwnedProcessGroupLiveness::Alive => {}
                         }
 
+                        if !manager.signal_target_is_current(pid) {
+                            return;
+                        }
                         warn!(
                             pid,
                             timeout_secs = ProcessManager::SIGKILL_TIMEOUT_SECS,
@@ -590,6 +659,34 @@ impl ProcessManager {
             let _ = pid;
             Err("Process termination not supported on this platform".to_string())
         }
+    }
+
+    #[cfg(unix)]
+    fn signal_target_is_current(&self, pid: u32) -> bool {
+        let Some(info) = self
+            .active_processes
+            .read()
+            .ok()
+            .and_then(|p| p.get(&pid).cloned())
+        else {
+            return false;
+        };
+        if !info.is_model_group() {
+            return true;
+        }
+        if pid <= 1 || pid > i32::MAX as u32 || unsafe { libc::getpgid(pid as i32) } != pid as i32 {
+            return false;
+        }
+        let id = Pid::from_u32(pid);
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[id]),
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_cmd(sysinfo::UpdateKind::Always),
+        );
+        system
+            .process(id)
+            .is_some_and(|p| info.matches_command(p.cmd()))
     }
 
     #[cfg(unix)]
@@ -700,7 +797,7 @@ impl ProcessManager {
                     );
                     continue;
                 };
-                if !cmdline_matches_recorded(process.cmd(), &info.script_path) {
+                if !info.matches_command(process.cmd()) {
                     warn!(
                         pid = info.pid,
                         script_path = info.script_path.as_str(),
@@ -731,7 +828,12 @@ impl ProcessManager {
                 // Adopt only after independently checking the persisted
                 // command identity and dead parent. The signalling boundary
                 // accepts exclusively groups owned by this live registry.
-                self.register_process(info.pid, &info.script_path);
+                self.register_process_info(
+                    info.pid,
+                    &info.script_path,
+                    info.model_pid,
+                    info.model_group_instance,
+                );
                 self.kill_process(info.pid);
                 #[cfg(unix)]
                 if self.reconcile_owned_process_cleanup(info.pid, observe_tracked_process(info.pid))
@@ -848,10 +950,19 @@ impl ChildRegistration {
     /// the user's real ~/.scriptkit tracking files (a live app instance shares
     /// them).
     pub fn register(pid: u32, command_path: &str) -> Self {
+        Self::for_group(pid, command_path, None, None)
+    }
+
+    fn for_group(
+        pid: u32,
+        command_path: &str,
+        model_pid: Option<u32>,
+        model_group_instance: Option<uuid::Uuid>,
+    ) -> Self {
         #[cfg(not(test))]
-        PROCESS_MANAGER.register_process(pid, command_path);
+        PROCESS_MANAGER.register_process_info(pid, command_path, model_pid, model_group_instance);
         #[cfg(test)]
-        let _ = command_path;
+        let _ = (command_path, model_pid, model_group_instance);
         Self { pid }
     }
 }
@@ -1115,10 +1226,57 @@ mod tests {
         assert!(pids.contains(&5002));
     }
 
+    /// A still-live, separately grouped process with exactly the saved program name
+    /// is not the monitor to which a model-group Stop was bound.
+    #[cfg(unix)]
+    #[test]
+    fn model_group_rejects_an_unrelated_live_pid_with_a_matching_name() {
+        use std::os::unix::process::CommandExt;
+        let (manager, _temp) = create_test_manager();
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("4")
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let id = child.id();
+        let nonce = uuid::Uuid::new_v4();
+        manager.register_process_info(id, "/bin/sleep", Some(id), Some(nonce));
+        let refused = manager.terminate_process(id).is_err();
+        manager.kill_process(id);
+        // A partial record must not become permission to use the legacy bare-PID fallback.
+        manager.register_process_info(id, "/bin/sleep", None, Some(nonce));
+        let incomplete_refused = manager.terminate_process(id).is_err();
+        let untouched = child.try_wait().unwrap().is_none();
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(manager.get_active_processes().is_empty());
+        manager.unregister_process(id);
+        assert!(refused && incomplete_refused && untouched);
+        let cmd = |token: uuid::Uuid| {
+            [
+                "Kit",
+                "--watch-model-process-group",
+                "123",
+                &token.to_string(),
+                "/bin/sleep",
+            ]
+            .map(std::ffi::OsString::from)
+        };
+        assert!(model_group::matches_guard(&cmd(nonce), "/bin/sleep", nonce));
+        assert!(!model_group::matches_guard(
+            &cmd(uuid::Uuid::new_v4()),
+            "/bin/sleep",
+            nonce
+        ));
+        assert!(!model_group::matches_guard(&cmd(nonce), "/bin/slee", nonce));
+    }
+
     #[test]
     fn test_process_info_serialization() {
         let info = ProcessInfo {
             pid: 42,
+            model_pid: None,
+            model_group_instance: None,
             script_path: "/path/to/script.ts".to_string(),
             started_at: Utc::now(),
         };
@@ -1254,6 +1412,8 @@ mod tests {
         // No dedicated group: this still exercises the owned PID fallback.
         let record = ProcessInfo {
             pid: orphan_pid,
+            model_pid: None,
+            model_group_instance: None,
             script_path: fixture_path.to_string_lossy().into_owned(),
             started_at: Utc::now(),
         };

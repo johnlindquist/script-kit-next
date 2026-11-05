@@ -40,9 +40,6 @@ enum EmbedRequest {
         texts: Vec<String>,
         gpu_layers: u32,
     },
-    Shutdown {
-        id: u64,
-    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,13 +131,11 @@ fn fingerprint_model_file(path: &Path) -> String {
 /// A live helper subprocess dedicated to embeddings.
 pub struct BrainEmbedder {
     model: ResolvedEmbedModel,
-    child: Mutex<Child>,
+    child: Mutex<Option<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<EmbedResponse>>>>,
     next_id: AtomicU64,
-    /// Tracks the helper with the global process manager for quit-time and
-    /// post-crash reaping; dropping this embedder unregisters it.
-    _registration: crate::process_manager::ChildRegistration,
+    group: crate::process_manager::model_group::ModelGroup,
 }
 
 impl BrainEmbedder {
@@ -158,19 +153,8 @@ impl BrainEmbedder {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
-        // Own process group so orphan cleanup / kill_all can reap the helper.
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        let mut child = command
-            .spawn()
+        let (mut child, group) = crate::process_manager::model_group::ModelGroup::spawn(command)
             .with_context(|| format!("spawn brain embed helper {}", helper_path.display()))?;
-        let registration = crate::process_manager::ChildRegistration::register(
-            child.id(),
-            &helper_path.to_string_lossy(),
-        );
         let stdin = child.stdin.take().context("brain embed helper stdin")?;
         let stdout = child.stdout.take().context("brain embed helper stdout")?;
         let pending: Arc<Mutex<HashMap<u64, mpsc::Sender<EmbedResponse>>>> =
@@ -197,11 +181,11 @@ impl BrainEmbedder {
             .context("spawn brain embed reader thread")?;
         Ok(Self {
             model,
-            child: Mutex::new(child),
+            child: Mutex::new(Some(child)),
             stdin: Mutex::new(Some(stdin)),
             pending,
             next_id: AtomicU64::new(1),
-            _registration: registration,
+            group,
         })
     }
 
@@ -214,7 +198,11 @@ impl BrainEmbedder {
         self.child
             .lock()
             .ok()
-            .map(|mut child| matches!(child.try_wait(), Ok(None)))
+            .map(|mut child| {
+                child
+                    .as_mut()
+                    .is_some_and(|c| matches!(c.try_wait(), Ok(None)))
+            })
             .unwrap_or(false)
     }
 
@@ -280,16 +268,17 @@ impl BrainEmbedder {
 
 impl Drop for BrainEmbedder {
     fn drop(&mut self) {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let _ = self.write_request(&EmbedRequest::Shutdown { id });
-        if let Ok(mut stdin) = self.stdin.lock() {
-            let _ = stdin.take();
-        }
-        if let Ok(mut child) = self.child.lock() {
-            // A replaced or dropped embedder must never leak a zombie helper,
-            // even if the shutdown request above never reached a wedged child.
-            let _ = child.kill();
-            let _ = child.wait();
+        self.stdin
+            .get_mut()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
+        if let Some(child) = self
+            .child
+            .get_mut()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
+        {
+            self.group.finish_after_eof(child);
         }
     }
 }
@@ -344,6 +333,14 @@ mod tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&path, perms).expect("chmod fake helper");
         path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn model_group_follows_owner_embedder() {
+        crate::process_manager::model_group_tests::check_parent_loss(|program| {
+            BrainEmbedder::spawn_with_helper(program, fake_model()).unwrap()
+        });
     }
 
     fn fake_model() -> ResolvedEmbedModel {

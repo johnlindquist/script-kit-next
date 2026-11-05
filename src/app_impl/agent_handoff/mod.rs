@@ -2664,6 +2664,7 @@ impl ScriptListApp {
             label: process.script_path.clone(),
             metadata: Some(serde_json::json!({
                 "pid": process.pid,
+                "modelPid": process.model_pid,
                 "scriptPath": process.script_path.clone(),
                 "startedAt": process.started_at.to_rfc3339(),
                 "sourceIndex": source_index,
