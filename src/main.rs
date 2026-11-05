@@ -419,7 +419,7 @@ mod personalization_cli;
 
 fn main() {
     #[cfg(unix)]
-    if let Some(code) = script_kit_gpui::process_manager::run_model_group_monitor_if_requested() {
+    if let Some(code) = process_manager::run_model_group_monitor_if_requested() {
         std::process::exit(code);
     }
     if let Some(result) = design_evaluation::run_if_requested() {
