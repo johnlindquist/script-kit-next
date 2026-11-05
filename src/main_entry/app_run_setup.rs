@@ -1,5 +1,4 @@
 {
-    initialize_startup_diagnostics();
     let setup_result = prepare_startup_environment();
 
     let startup_boot_started = std::time::Instant::now();

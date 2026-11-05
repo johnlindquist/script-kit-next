@@ -213,6 +213,27 @@ mod tests {
     }
 
     #[test]
+    fn normal_workspace_startup_seeds_hello_world_only_on_first_launch() {
+        with_sk_path(|home| {
+            let kit = home.join("kit");
+            std::env::set_var(SK_PATH_ENV, &kit);
+            let starter = kit.join("plugins/main/scripts/hello-world.ts");
+            let launch = || {
+                setup_before_diagnostics(|| {
+                    let logs = kit.join("logs");
+                    fs::create_dir_all(&logs).unwrap();
+                    fs::write(logs.join("latest-session.jsonl"), "session").unwrap();
+                })
+            };
+            assert!(launch().is_fresh_install);
+            assert!(fs::read_to_string(&starter).unwrap().contains("Hello World"));
+            fs::remove_file(&starter).unwrap();
+            assert!(!launch().is_fresh_install);
+            assert!(!starter.exists());
+        });
+    }
+
+    #[test]
     fn alternate_kit_migration_does_not_touch_the_legacy_home() {
         let home = tempfile::tempdir().unwrap();
         let legacy = home.path().join(".kenv");
@@ -235,6 +256,8 @@ mod tests {
             let kit = home.path().join(".scriptkit");
             fs::create_dir_all(legacy.join("scripts")).unwrap();
             fs::write(legacy.join("scripts/demo.ts"), "fixture").unwrap();
+            fs::create_dir(legacy.join("logs")).unwrap();
+            fs::write(legacy.join("logs/latest-session.jsonl"), "old session").unwrap();
             if has_extra {
                 fs::write(legacy.join("keep.txt"), "mine").unwrap();
                 fs::create_dir_all(legacy.join("kenvs/team")).unwrap();
@@ -247,6 +270,11 @@ mod tests {
                 assert!(legacy.join(".git").is_dir());
             } else {
                 assert!(migrate_from_kenv_in(home.path(), &kit));
+                fs::write(kit.join("logs/latest-session.jsonl"), "new session").unwrap();
+                assert_eq!(
+                    fs::read_to_string(kit.join("logs/legacy-v1/latest-session.jsonl")).unwrap(),
+                    "old session"
+                );
                 assert_eq!(
                     fs::read_to_string(kit.join("plugins/main/scripts/demo.ts")).unwrap(),
                     "fixture"

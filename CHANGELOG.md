@@ -4,6 +4,8 @@
 
 [Release notes and installation checks](docs/releases/v0.1.29.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
 
+Fresh workspaces include the **Hello World** starter. An eligible v1 workspace imports before Kit opens its first log file.
+
 Deleting a note during a search-index rebuild no longer interrupts indexing. The CLI keeps saved credentials paired with their local server, and a malformed connection file can be diagnosed without printing its contents.
 
 ## 0.1.28 · Reliability (source tag only)
