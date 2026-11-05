@@ -696,7 +696,10 @@ jobs:
       - name: Verify final release zip contents
         id: verify-final-zip
         run: |
-          TMP_DIR="$(mktemp -d)"
+          # macOS TMPDIR can begin with /var (a link to /private/var). Anchor only the
+          # newly created directory; keep every extracted bundle path subject to link checks.
+          TMP_DIR="$(cd "$(mktemp -d "$RUNNER_TEMP/verify-final-zip.XXXXXX")" && pwd -P)"
+          trap 'rm -rf -- "$TMP_DIR"' EXIT
           /usr/bin/ditto -x -k "target/release/bundle/osx/Script-Kit-macos.zip" "$TMP_DIR"
           APP="$TMP_DIR/Script Kit.app"
           bun scripts/agentic/release-sidecar.ts verify-signed "$APP/Contents/MacOS/goose" "$EXPECTED_ENGINE_PAYLOAD"

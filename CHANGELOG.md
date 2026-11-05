@@ -1,8 +1,8 @@
 # Script Kit changelog
 
-## 0.1.31 · A launcher you can customize by asking
+## 0.1.32 · A launcher you can customize by asking
 
-[Release notes](docs/releases/v0.1.31.md). Type **Customize Kit** to try an editable example. **Make a list of my pinned notes called Reading shelf** creates a native list without a model. Return opens the chosen note; Escape brings back the list and its filter.
+[Release notes](docs/releases/v0.1.32.md). Type **Customize Kit** to try an editable example. **Make a list of my pinned notes called Reading shelf** creates a native list without a model. Return opens the chosen note; Escape brings back the list and its filter.
 
 Type **Make “Stays open” brighter** or **Put today’s note first for selected text**, then choose **Customize Kit**. Changing the order does not save the selection. Type **Undo my last launcher change** to restore the previous rule.
 
@@ -10,13 +10,17 @@ Type **Make “Stays open” brighter** or **Put today’s note first for select
 
 [Personal launcher guide](docs/guides/personal-launcher.md) · [External agent access](docs/guides/external-agents.md)
 
-## 0.1.30 · A dependable Return action
+## 0.1.31 · A dependable Return action
 
-[Release notes and installation checks](docs/releases/v0.1.30.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
+[Release notes and installation checks](docs/releases/v0.1.31.md). When Jev is off, Return names the selected action immediately. A delayed file search doesn’t change the caption, and agents inspecting the launcher see the same label as the person at the keyboard.
 
 Fresh workspaces include the **Hello World** starter. An eligible v1 workspace imports before Kit opens its first log file.
 
 Deleting a note during a search-index rebuild no longer interrupts indexing. The CLI keeps saved credentials paired with their local server, and a malformed connection file can be diagnosed without printing its contents.
+
+## 0.1.30 · Source tag only
+
+The app was signed and notarized, but its final archive check did not finish. No Mac installer was published.
 
 ## 0.1.29 · Source tag only
 
