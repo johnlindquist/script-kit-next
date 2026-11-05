@@ -868,6 +868,29 @@ test("one transient allocation race retries without masking persistent incomplet
   expect(f.timers.size).toBe(0);
 });
 
+test("an uncapped build keeps sampling while compiler scratch entries vanish", async () => {
+  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB;
+  const f = guardFixture(), guard = f.start();
+  f.worker.answer(sample(0, ["Error: ENOENT: no such file or directory, lstat 'out/CMakeFiles/CMakeScratch/TryCompile-a'"])); await microtasks();
+  expect(f.refusals).toEqual([]);
+  await f.advance(1_000); expect(f.worker.requests).toHaveLength(2);
+  f.worker.answer(sample(0, ["Error: inventory_directory_changed"])); await f.advance(1_000);
+  expect(f.worker.requests).toHaveLength(3);
+  f.worker.answer(sample(4096)); await microtasks();
+  expect(f.refusals).toEqual([]);
+  const stopping = guard.stop(); await f.advance(10);
+  f.worker.answer(sample(4096)); await f.advance(1_100);
+  expect(await stopping).toMatchObject({ complete: true, workerClosed: true });
+});
+
+test("an uncapped build still stops when outputs are redirected", async () => {
+  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB;
+  const f = guardFixture(), guard = f.start();
+  f.worker.answer(sample(0, ["Error: inventory_output_symlink"])); await f.advance(1_000);
+  expect(f.refusals.map(error => error.code)).toEqual(["resource_observation_incomplete"]);
+  await guard.stop();
+});
+
 for (const error of ["ENOENT", "Error: inventory_directory_changed", "Error: inventory_unstable_directory: /ESTALE/object"]) test(`guard does not retry a refused directory: ${error}`, async () => {
   const f = guardFixture(), guard = f.start(); f.worker.answer(sample(4096, [error]));
   await f.advance(250);
