@@ -606,6 +606,7 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   let allocated: AllocationObservation | null = null, available: number | null = initial ? initialObservation!.availableBytes : null;
   let availableError: string | undefined;
   let scanId = 0, pendingScan = 0, scanStarted = 0, scanFailures = 0, freeFailures = 0;
+  let churnFailures = 0;
   let scanDeadline: NodeJS.Timeout | undefined, pendingFree = false;
   let finalPair: { started: number; nextScanId: number; allocation: boolean; free: boolean; done: PromiseWithResolvers<BuildResourceSummary> } | undefined;
   // Waiting for an older, still-live query consumes the closing pair's time, not a second deadline.
@@ -671,6 +672,10 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   // only safe retry in the exact directory; a whole-tree retry could hide a replacement.
   const transient = (errors: readonly string[], free = false): boolean => errors.length > 0 && errors.every(error =>
     /^(?:Error: )?(?:ESTALE|EAGAIN|EBUSY)\b/.test(error) || (free && /^(?:Error: )?ENOENT\b/.test(error)));
+  // Filesystem churn from a running build, as opposed to redirected outputs or mounts.
+  const churn = (errors: readonly string[]): boolean => errors.length > 0 && errors.every(error =>
+    /^(?:Error: )?(?:ENOENT|ESTALE|EAGAIN|EBUSY)\b/.test(error)
+    || /^(?:Error: )?inventory_(?:unstable_directory|directory_changed|probe_missing|probe_identity)\b/.test(error));
   const failedAllocation = (errors: string[]): void => {
     allocated = { present: false, complete: false, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors };
     summary.sampleCount++;
@@ -770,8 +775,13 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
           if (!sampler && !finalPair && !sample.complete && transient(sample.errors) && scanFailures++ === 0) {
             summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(scan, 250); return;
           }
+          // Without a size cap the scan enforces nothing, so entries that vanish or
+          // move while the compiler works only mean "sample again", never "stop".
+          if (!sampler && !sample.complete && policy.targetAgentBudgetBytes === null && churn(sample.errors) && churnFailures++ < 30) {
+            summary.transientFailureCount = (summary.transientFailureCount ?? 0) + 1; later(scan, finalPair ? 250 : 1_000); return;
+          }
           if (!sample.complete) { check(true); return; }
-          scanFailures = 0;
+          scanFailures = 0; churnFailures = 0;
           if (finalPair) scan(); // An older in-flight result cannot settle the final pair.
           else later(scan, Math.max(0, 10_000 - (performance.now() - scanStarted)));
         };
