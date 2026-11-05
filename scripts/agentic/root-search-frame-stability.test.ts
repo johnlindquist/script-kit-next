@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { normalizeProtocolResponse, OWNED_RESPONSE_ENCODING } from "../devtools/driver.ts";
 import { validateArtifact, type ArtifactSpec } from "./artifact-lifecycle.ts";
+import { coldRootReady } from "./root-frame-startup.ts";
 
 const benchmark = "scripts/agentic/root-search-frame-stability.ts";
 function inspect(args: string[], environment: Record<string, string> = {}) {
@@ -16,6 +17,17 @@ function inspect(args: string[], environment: Record<string, string> = {}) {
   });
 }
 describe("owned semantic frame stability proof contract", () => {
+  test("only a cold stock workspace may start the measured input", () => {
+    const p = {scope:'runningWindow',error:null,pendingWrite:false,activeViewIds:[],workspace:null as string|null,appliedRevision:null as string|null};
+    const root = {windowVisible:false,inputValue:'',oneWindow:{view:null,personalization:p},targetIdentity:{appViewVariant:'ScriptList'},
+      rootFileSearch:{query:'',generation:0,providerLoading:false,loading:false,visibleResultCount:0,cacheEntryCount:0,cacheResultCount:0}};
+    expect(coldRootReady(root)).toBe(false);
+    p.workspace='a'.repeat(64); p.appliedRevision='stock'; expect(coldRootReady(root)).toBe(true);
+    for(const changed of [{inputValue:'already typed'},{windowVisible:true},{rootFileSearch:{...root.rootFileSearch,cacheResultCount:1}},
+      {oneWindow:{view:null,personalization:{...p,appliedRevision:'b'.repeat(64)}}},{oneWindow:{view:null,personalization:{...p,error:'unsafePath'}}}]) {
+      expect(()=>coldRootReady({...root,...changed})).toThrow();
+    }
+  });
   test("help remains passive without an artifact or output receipt", () => {
     const result = inspect(["--help"]);
     expect(result.exitCode).toBe(0);
