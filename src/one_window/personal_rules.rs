@@ -195,6 +195,7 @@ impl ScriptListApp {
                         format!("Create “{}”", view.title)
                     },
                 )
+                .with_authored_label()
                 .with_head("Customize Kit")
                 .with_icon("list")
                 .with_sub(sub)

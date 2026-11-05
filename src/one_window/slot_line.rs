@@ -590,7 +590,8 @@ fn spoken_hints(hints: &[(String, String)]) -> String {
 
 /// The line as `getElements` shows it, from the same line and style the renderer draws:
 ///
-/// - `main-view-slot-line`: `text` the title, `value` the state words drawn beside it ("Runs in
+/// - `main-view-slot-line`: `text` the title (measured, not returned, for recent activity),
+///   `value` the state words drawn beside it ("Runs in
 ///   8s", "Typing into"), `sourceName` the small text, `kind` the line's kind, `statusKind`
 ///   `failed` or `lit` when it is drawn that way;
 /// - `main-view-slot-line:icon`: `text` the glyph drawn (an asset path, or `app:<bundle id>`);
@@ -613,7 +614,7 @@ pub(crate) fn slot_line_elements(
     } else {
         None
     };
-    let mut elements = vec![ElementInfo {
+    let mut status = ElementInfo {
         semantic_id: SLOT_LINE_ID.to_string(),
         element_type: ElementType::Panel,
         text: Some(line.title.clone()),
@@ -630,7 +631,14 @@ pub(crate) fn slot_line_elements(
         status_kind,
         action_disabled: None,
         style: None,
-    }];
+    };
+    if line.kind == sk_one_window::SlotKind::Recent {
+        // Recent entries can name user-created lists or scripts, including entries saved
+        // by older versions. Leave the painted line and its controls intact.
+        status = status.redact_text(crate::protocol::ElementContentKind::UserContent);
+        status.source_name = None;
+    }
+    let mut elements = vec![status];
     let glyph = if line.icon.starts_with(APP_ICON_PREFIX) {
         line.icon.clone()
     } else {
@@ -667,6 +675,25 @@ pub(crate) fn slot_line_elements(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recent_activity_exposes_controls_without_repeating_private_names() {
+        let line = SlotLine::new(
+            sk_one_window::SlotKind::Recent,
+            "Last",
+            "Saved Project canary",
+        )
+        .with_sub("saved as Project canary · just now")
+        .with_hint("⌘Z", "undo");
+        let elements = slot_line_elements(&line, SlotStyle::new(&line, false, false));
+        let obs = serde_json::to_value(&elements).unwrap();
+        assert!(!obs.to_string().contains("Project canary"));
+        assert_eq!(obs[0]["content"]["text"]["rawContentReturned"], false);
+        assert_eq!(elements[0].semantic_id, SLOT_LINE_ID);
+        assert!(elements
+            .iter()
+            .any(|e| e.semantic_id == "main-view-slot-line:undo"));
+    }
 
     #[test]
     fn the_first_strength_is_drawn_without_easing() {

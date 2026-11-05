@@ -1368,6 +1368,7 @@ mod tests {
     #[test]
     fn config_backed_command_rows_delegate_to_existing_script_actions_owner() {
         let builtin = SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+            authored_label: false,
             entry: crate::builtins::BuiltInEntry {
                 id: "builtin/clipboard-history".to_string(),
                 name: "Clipboard History".to_string(),

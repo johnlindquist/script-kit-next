@@ -1471,6 +1471,7 @@ mod tests {
     #[test]
     fn same_identity_detects_builtin_action_and_spine_eligibility_transitions() {
         let mut builtin = SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+            authored_label: false,
             entry: crate::builtins::BuiltInEntry {
                 id: "builtin/test".into(),
                 name: "Same".into(),

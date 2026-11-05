@@ -2626,9 +2626,10 @@ impl ScriptListApp {
                         }
                     });
                     let (value, content_kind) = match result {
-                        scripts::SearchResult::BuiltIn(_) => {
-                            (subtitle.unwrap_or_else(|| label.clone()), None)
-                        }
+                        scripts::SearchResult::BuiltIn(m) => (
+                            subtitle.unwrap_or_else(|| label.clone()),
+                            m.authored_label.then_some(protocol::ElementContentKind::UserContent),
+                        ),
                         scripts::SearchResult::File(file_match) => (
                             file_match.file.path.clone(),
                             Some(protocol::ElementContentKind::FilePath),

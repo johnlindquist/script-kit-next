@@ -387,6 +387,7 @@ mod tests {
 
     fn builtin(name: &str, group: BuiltInGroup, score: i32) -> SearchResult {
         SearchResult::BuiltIn(BuiltInMatch {
+            authored_label: false,
             entry: BuiltInEntry {
                 id: name.to_lowercase().replace(' ', "-"),
                 name: name.to_string(),

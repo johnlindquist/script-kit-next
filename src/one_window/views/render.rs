@@ -539,13 +539,19 @@ impl ScriptListApp {
             Some(v) => (v.label(), view_rows(v)),
             None => self.one_window_staged_rows()?,
         };
+        let mut header = header_element(0, &label);
+        if matches!(view, Some(HostedView::Personal(_))) {
+            // A recipe title is workspace content, including in the usual section slug.
+            header.semantic_id = "personal-list:header".into();
+            header = header.redact_content(ElementContentKind::UserContent);
+        }
         let mut out = vec![
             ElementInfo::input(
                 "filter",
                 Some(self.filter_text.as_str()),
                 self.focused_input != FocusedInput::None,
             ),
-            header_element(0, &label),
+            header,
         ];
         out.extend(rows.into_iter().enumerate().map(|(ix, row)| {
             let mut el = ElementInfo::redacted_choice(

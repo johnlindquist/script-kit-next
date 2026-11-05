@@ -249,6 +249,9 @@ pub struct ScriptletMatch {
 #[derive(Clone, Debug)]
 pub struct BuiltInMatch {
     pub entry: crate::builtins::BuiltInEntry,
+    /// Synthetic built-ins can carry workspace text. It remains private even though
+    /// the row uses the same command routing as a product-provided built-in.
+    pub authored_label: bool,
     pub score: i32,
     /// Winning field evidence captured during scoring.
     pub match_evidence: Option<MatchEvidence>,

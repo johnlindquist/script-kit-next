@@ -271,6 +271,7 @@ fn test_builtin_match_struct() {
     };
 
     let builtin_match = BuiltInMatch {
+        authored_label: false,
         entry: entry.clone(),
         score: 100,
         match_evidence: None,
@@ -295,6 +296,7 @@ fn test_search_result_builtin_variant() {
     };
 
     let result = SearchResult::BuiltIn(BuiltInMatch {
+        authored_label: false,
         entry,
         score: 75,
         match_evidence: None,

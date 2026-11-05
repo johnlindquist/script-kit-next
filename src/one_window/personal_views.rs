@@ -225,6 +225,7 @@ impl ScriptListApp {
                     format!("{OPEN}{}/{}", state.revision, v.id),
                     v.title.clone(),
                 )
+                .with_authored_label()
                 .with_head("My views")
                 .with_icon("list")
                 .with_enter_label("Open view")
