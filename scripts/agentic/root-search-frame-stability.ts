@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { OwnedEvaluationClient } from "../devtools/lib/owned-evaluation.ts";
+import { coldRootReady } from "./root-frame-startup.ts";
 import { readArtifactReference } from "../devtools/design.ts";
 import { DriverLifecycleError, normalizeProtocolResponse, unknownOwnedCleanup, type Json } from "../devtools/driver.ts";
 import { verifyImmutableArtifact } from "./build-artifact.ts";
@@ -69,8 +70,24 @@ try {
   client = await OwnedEvaluationClient.launch(repoRoot, reference, claim, [fixtureId], args.includes("--packaged") ? "clean-exact-head" : "current-content");
   const target: AutomationInstance = await client.mount(fixtureId);
   receipt.requestedTarget = target; receipt.session = { name: client.driver.sessionName, ...client.driver.processIdentity };
-  requireHidden(await client.inspect(target));
-  await client.act(target, { type: "setInput", text: query });
+  // A newly mounted launcher can still be publishing its workspace revision. A refused
+  // stale setInput measured zero provider frames. Observe readiness first, not a sleep or
+  // a retry of the measured action. A changed identity at dispatch still fails closed.
+  const startupDeadline = performance.now() + timeoutMs;
+  let initial = await client.inspect(target), pendingSamples = 0, renderedReady = false;
+  for (;;) {
+    requireHidden(initial);
+    const ready = coldRootReady(initial);
+    if (ready && renderedReady) break;
+    if (!ready) pendingSamples++;
+    if (performance.now() >= startupDeadline) throw new Error("cold_root_workspace_not_ready");
+    renderedReady = ready;
+    await client.frame(target);
+    initial = await client.inspect(target);
+  }
+  receipt.fixtureStartup = { status: "pass", pendingSamples, stockWorkspaceRendered: true,
+    dataGeneration: initial.targetIdentity.dataGeneration, queryGeneration: initial.rootFileSearch.generation };
+  await client.act(target, { type: "setInput", text: query }, initial.targetIdentity);
   const before = await client.inspect(target); requireHidden(before);
   const status = before.rootFileSearch;
   if (status?.query !== query || status.mode !== "GlobalQuery" || status.providerLoading !== true || status.loading !== true)
