@@ -285,16 +285,23 @@ test("finite stdout and stderr bursts pause behind a stalled consumer and drain 
 }, 10000);
 
 test("paused output reads do not suspend the absolute process deadline", async () => {
+  const deadlineMs = 2000;
   const child = await spawnOwnedProcess({
-    ...options(["python3", "-c", "import sys; sys.stdout.buffer.write(b'x' * (16 * 1024 * 1024)); sys.stdout.buffer.flush()"], 100),
+    ...options(["python3", "-c", "import sys; sys.stdout.buffer.write(b'x' * (16 * 1024 * 1024)); sys.stdout.buffer.flush()"], deadlineMs),
     maxOutputBytes: 32 * 1024 * 1024,
   });
   try {
     child.stdin.end();
-    Bun.sleepSync(250);
+    // Don't assume Python starts, allocates and writes within 100 ms. No reader is
+    // attached: observe the 64 KiB stream high-water mark before blocking this event loop.
+    const readyBy = performance.now() + deadlineMs;
+    while (child.observedReceivedOutputBytes < 64 * 1024 && performance.now() < readyBy && !absent(child.pid)) await Bun.sleep(5);
+    expect(child.observedReceivedOutputBytes).toBeGreaterThanOrEqual(64 * 1024);
+    Bun.sleepSync(deadlineMs + 150);
+    expect(absent(child.pid)).toBe(true); // The producer exited before either pipe was drained.
     const [stdout, , exit] = await Promise.all([new Response(child.stdout).arrayBuffer(), new Response(child.stderr).text(), child.exited]);
     expect(exit).not.toBe(0);
-    expect(stdout.byteLength).toBeGreaterThan(0);
+    expect(stdout.byteLength).toBeGreaterThanOrEqual(64 * 1024);
   } finally {
     const cleanup = await child.close();
     expect(cleanup).toMatchObject({ closed: true, processExited: true, processGroupExited: true, streamsDrained: true });
