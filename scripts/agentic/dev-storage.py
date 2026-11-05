@@ -11,6 +11,8 @@ import subprocess
 import sys
 
 MIN_FREE_BYTES = 25 * 1024**3
+DEFAULT_VOLUME = "/Volumes/OMEGA SSD"
+LOCAL = "local"
 MARKER = ".script-kit-dev-storage.json"
 
 
@@ -61,13 +63,19 @@ def resolve_layout(repo, env):
     repo = Path(repo).resolve(strict=True)
     if not repo.is_dir():
         raise Refused("invalid_repo", "Repository must be a directory")
-    volume = Path(env.get("SCRIPT_KIT_DEV_VOLUME") or "/Volumes/OMEGA SSD")
-    if not volume.is_absolute() or ".." in volume.parts:
-        raise Refused("invalid_volume", "Use an absolute SSD mount path without traversal")
-    root = volume / "sk" / hashlib.sha256(str(repo).encode()).hexdigest()[:12]
+    requested = env.get("SCRIPT_KIT_DEV_VOLUME")
+    # Without an explicit volume, use the default SSD only when it is mounted.
+    # Otherwise build inside the checkout, like plain `cargo build` would.
+    if requested == LOCAL or (not requested and not os.path.ismount(DEFAULT_VOLUME)):
+        volume, root = None, repo / "target" / "dev"
+    else:
+        volume = Path(requested or DEFAULT_VOLUME)
+        if not volume.is_absolute() or ".." in volume.parts:
+            raise Refused("invalid_volume", "Use an absolute SSD mount path without traversal")
+        root = volume / "sk" / hashlib.sha256(str(repo).encode()).hexdigest()[:12]
     target, goose = root / "target", root / "goose-sidecar"
     paths = {
-        "SCRIPT_KIT_DEV_VOLUME": str(volume),
+        "SCRIPT_KIT_DEV_VOLUME": str(volume) if volume else LOCAL,
         "SCRIPT_KIT_DEV_STORAGE_ROOT": str(root),
         "CARGO_TARGET_DIR": str(target),
         "SCRIPT_KIT_DEV_GOOSE_DIR": str(goose),
@@ -94,6 +102,14 @@ def resolve_layout(repo, env):
 
 
 def inspect_layout(repo, volume, root, paths, env):
+    if volume is None:
+        # Repository-local build output: no external drive, ownership marker or space floor.
+        paths["SCRIPT_KIT_DEV_VOLUME_UUID"] = LOCAL
+        probe = root if root.exists() else repo
+        space = os.statvfs(probe)
+        mount = {"path": str(root), "uuid": LOCAL, "external": False, "writable": os.access(probe, os.W_OK),
+                 "available_bytes": space.f_bavail * space.f_frsize}
+        return mount, {"repo": str(repo), "volume_uuid": LOCAL}, root.is_dir()
     marker = root / MARKER
     owned_paths = [value for key, value in paths.items() if key != "SCRIPT_KIT_DEV_VOLUME_UUID"]
     reject_symlinks(volume, [*owned_paths, marker, root / ".locks", root / "target/release",
@@ -135,12 +151,13 @@ def main(argv=None):
         mount, expected, prepared = inspect_layout(repo, volume, root, paths, os.environ)
         if args.command == "prepare":
             # Observe again before mutation. Never create the mountpoint itself.
-            second = observe_volume(volume)
-            if second["uuid"] != mount["uuid"]:
-                raise Refused("swapped_mount", "SSD changed during preparation")
-            root.parent.mkdir(mode=0o700, exist_ok=True)
+            if volume is not None:
+                second = observe_volume(volume)
+                if second["uuid"] != mount["uuid"]:
+                    raise Refused("swapped_mount", "SSD changed during preparation")
+            root.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             root.mkdir(mode=0o700, exist_ok=True)
-            if not prepared:
+            if not prepared and volume is not None:
                 with (root / MARKER).open("x") as output:
                     output.write(json.dumps(expected) + "\n")
                     output.flush()
@@ -152,7 +169,7 @@ def main(argv=None):
             print("\n".join(f"export {key}={shlex.quote(value)}" for key, value in paths.items()))
         else:
             print(json.dumps({"ok": True, "command": args.command, "repo": str(repo),
-                              "storage_root": str(root), "volume": str(volume), "mount": mount,
+                              "storage_root": str(root), "volume": str(volume) if volume else LOCAL, "mount": mount,
                               "available_bytes": mount["available_bytes"], "prepared": prepared,
                               "paths": paths}, indent=2))
         return 0

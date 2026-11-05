@@ -44,6 +44,31 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertEqual(json.loads(err)["error"]["type"], kind)
 
+    def test_without_a_mounted_default_ssd_builds_inside_the_checkout(self):
+        self.env = {}
+        with patch.object(storage.os.path, "ismount", return_value=False):
+            code, out, err = self.invoke("prepare", shell=True)
+            self.assertEqual(code, 0, err)
+            exports = dict(line.removeprefix("export ").split("=", 1) for line in out.splitlines())
+            local = self.repo.resolve() / "target" / "dev"
+            self.assertEqual(shlex.split(exports["CARGO_TARGET_DIR"])[0], str(local / "target"))
+            self.assertEqual(shlex.split(exports["SCRIPT_KIT_DEV_VOLUME"])[0], "local")
+            self.assertTrue((local / "target").is_dir())
+            self.assertFalse((local / storage.MARKER).exists())
+            # dev-cycle.sh re-runs prepare with the exported variables.
+            self.env = {k: shlex.split(v)[0] for k, v in exports.items()}
+            code, _, err = self.invoke("prepare", shell=True)
+            self.assertEqual(code, 0, err)
+        self.mock.assert_not_called()
+
+    def test_explicit_local_ignores_a_mounted_default_ssd(self):
+        self.env = {"SCRIPT_KIT_DEV_VOLUME": "local"}
+        with patch.object(storage.os.path, "ismount", return_value=True):
+            code, out, err = self.invoke("inspect")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["volume"], "local")
+        self.mock.assert_not_called()
+
     def test_inspect_is_read_only_including_shell_under_noninteractive(self):
         self.env["SCRIPT_KIT_NONINTERACTIVE"] = "1"
         code, out, err = self.invoke()

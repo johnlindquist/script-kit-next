@@ -23,8 +23,9 @@
 #   -h | --help                Show usage.
 #
 # Build storage:
-#   Uses /Volumes/OMEGA SSD by default (SCRIPT_KIT_DEV_VOLUME overrides it).
-#   Refuses missing/replaced volumes and conflicting target/cache overrides.
+#   Uses /Volumes/OMEGA SSD when it is mounted; otherwise builds in ./target/dev.
+#   SCRIPT_KIT_DEV_VOLUME=/Volumes/<drive> picks another SSD (which must be
+#   mounted); SCRIPT_KIT_DEV_VOLUME=local always builds inside the checkout.
 #   Inspect without building: python3 -B scripts/agentic/dev-storage.py --repo "$PWD" inspect
 
 set -e
@@ -291,7 +292,7 @@ eval "$DEV_STORAGE_ENV"
 unset DEV_STORAGE_ENV
 # Apple make stalled in the native helper build; Ninja handles this SSD lane.
 export CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
-echo "[dev.sh] SSD storage: ${SCRIPT_KIT_DEV_STORAGE_ROOT}"
+echo "[dev.sh] Build storage: ${SCRIPT_KIT_DEV_STORAGE_ROOT}"
 echo "[dev.sh] Cargo target: ${CARGO_TARGET_DIR}"
 
 # --- Launcher self-update stamp ---------------------------------------------
