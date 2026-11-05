@@ -1777,6 +1777,7 @@ mod files_action_tests {
     #[test]
     fn deeplink_for_config_backed_rows_uses_command_namespace() {
         let builtin = scripts::SearchResult::BuiltIn(scripts::BuiltInMatch {
+            authored_label: false,
             entry: crate::builtins::BuiltInEntry {
                 id: "builtin/clipboard-history".to_string(),
                 name: "Clipboard History".to_string(),

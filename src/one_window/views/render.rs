@@ -158,7 +158,7 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
             .collect(),
         HostedView::Personal(list) if list.data.rows().len() == 0 => vec![ViewRow {
             id: "personal-list:status".into(),
-            title: list.message.unwrap_or("No matching titles").into(),
+            title: list.presentation().1.unwrap_or("No matching titles").into(),
             description: None,
             icon: "info",
             selected: false,
@@ -539,13 +539,19 @@ impl ScriptListApp {
             Some(v) => (v.label(), view_rows(v)),
             None => self.one_window_staged_rows()?,
         };
+        let mut header = header_element(0, &label);
+        if matches!(view, Some(HostedView::Personal(_))) {
+            // A recipe title is workspace content, including in the usual section slug.
+            header.semantic_id = "personal-list:header".into();
+            header = header.redact_content(ElementContentKind::UserContent);
+        }
         let mut out = vec![
             ElementInfo::input(
                 "filter",
                 Some(self.filter_text.as_str()),
                 self.focused_input != FocusedInput::None,
             ),
-            header_element(0, &label),
+            header,
         ];
         out.extend(rows.into_iter().enumerate().map(|(ix, row)| {
             let mut el = ElementInfo::redacted_choice(
@@ -562,7 +568,17 @@ impl ScriptListApp {
             el.semantic_id = row.id;
             if view.is_none() || matches!(view, Some(HostedView::Personal(_))) {
                 el.role = Some("row".into());
-                el.selectable = Some(el.semantic_id != "personal-list:status");
+                let is_status = el.semantic_id == "personal-list:status";
+                el.selectable = Some(!is_status);
+                if let Some(HostedView::Personal(list)) = view {
+                    if is_status {
+                        el.status_kind = Some(list.presentation().0.into());
+                        el.action_disabled = Some("personal_list_no_target".into());
+                    } else if list.read_only() {
+                        // A pane row may be highlighted but never submitted with a metadata grant.
+                        el.action_disabled = Some("personal_list_read_only".into());
+                    }
+                }
             }
             el
         }));

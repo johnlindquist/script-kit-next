@@ -1469,6 +1469,7 @@ mod tests {
 
     fn make_builtin_result(name: &str, score: i32) -> SearchResult {
         SearchResult::BuiltIn(crate::scripts::types::BuiltInMatch {
+            authored_label: false,
             entry: crate::builtins::BuiltInEntry {
                 id: name.to_lowercase().replace(' ', "-"),
                 name: name.to_string(),

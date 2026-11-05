@@ -190,6 +190,7 @@ impl ScriptListApp {
             .strip_prefix(ACTION_KEY)
             .or((row.key == super::chat_entry::ABOUT_KEY).then_some(row.key.as_str()))?;
         Some(SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+            authored_label: row.authored_label,
             entry: crate::builtins::BuiltInEntry {
                 id: row.key.clone(),
                 name: row.title.clone(),

@@ -361,6 +361,7 @@ mod advanced_query_tests {
 
     fn builtin_result(name: &str) -> SearchResult {
         SearchResult::BuiltIn(BuiltInMatch {
+            authored_label: false,
             entry: BuiltInEntry {
                 id: format!("builtin/{}", name.to_lowercase().replace(' ', "-")),
                 name: name.to_string(),

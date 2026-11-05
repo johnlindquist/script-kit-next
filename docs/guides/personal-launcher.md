@@ -2,6 +2,8 @@
 
 Type **Customize Kit** for examples. Pick one to put its words in the input, then edit the request or press Return on the proposed change. Picking an example does not save anything.
 
+You can speak the request, too. With [Dictation](dictation.md) set up, choose **Dictate into Kit** and say **Keep my launcher minimal**. Stop recording to put the words in Kit’s input. Edit them if necessary, then press Return on **Show just scripts on the launcher home** to save. Saying the same words while dictating into a note just writes them in the note; it does not change the launcher.
+
 Type **Make “Stays open” brighter** in the launcher. The **Customize Kit** row names the edit. Press Return to apply it. Pin the window with ⌘⇧P to see the label; the input and pin icon keep their usual appearance. **Make the pinned label bold only while dictating** changes its weight without losing the brighter color. It uses the recording indicator, not the microphone or transcript.
 
 Want a quieter starting point? Type **Keep my launcher minimal** and press Return on **Show just scripts on the launcher home**. Open Kit with an empty input to see your scripts and scriptlets instead of subject tabs, apps and suggestions. Required setup still appears. Nothing is uninstalled: type a name to search normally, including apps and notes. This choice survives closing and restarting Kit. **Restore the standard launcher** brings the tabs and suggestions back without changing your other preferences. Agents can preview or set `launcher.home.mode` to `minimal` or `standard`.
@@ -22,13 +24,15 @@ If you have a known-good copy of the original file, quit Kit before restoring it
 
 Type **Make a list of my pinned notes called Reading shelf**, then choose **Create “Reading shelf”**. Type **view reading shelf** to open it. For all notes with the latest changes first, try **Make a list of my notes newest first named Recently edited**. For a read-only list of panes, try **Make a list of Herdr panes that need me called Attention** and pair a space before opening it. These requests work without a model. A name already in use is not overwritten. A configured launcher author can compose other lists from the installed schema. The view uses Kit’s normal input and rows. Saving it does not open a note or read its contents. Type **my views** or **view reading** in the launcher, select the list and press Return. Type to narrow its titles and press Return to open the selected note. If the note was renamed, unpinned from a pinned-only list, or moved outside the result limit, Kit asks you to choose again instead of opening a different result. Escape returns from the editor to the same filtered list; Escape again returns to the launcher.
 
+Kit shows the title you chose in the launcher. In passive `getElements` snapshots, an authored list row and its header expose private measurements rather than the title. Select a row by its current semantic ID. To read the declaration itself, use the workspace’s `--personalize inspect` or an authorized launcher reader.
+
 Check `describe` for `views.schema` first. If it is absent, this version of Kit cannot create personal lists. Preview the following change before saving it. For `apply`, use the workspace and revision from `inspect` and generate a fresh version-4 request ID:
 
 ```json
 {"op":"putView","view":{"id":"reading","title":"My pinned notes","limit":24,"list":{"source":"kit.noteTitles","filter":"pinned","sort":"title","detail":"lastChanged","enter":"openNote"}}}
 ```
 
-A view name is not a filesystem path. A list can show up to 48 rows, and a workspace can keep eight views. Sorting and filtering happen before the row limit; typing in an open view narrows that bounded list. Saving a different declaration with the same ID updates the view. Undo restores its previous definition without changing any note. Pane recipes do not grant access to Herdr: an unconnected source shows an unavailable message, never a substitute list.
+A view name is not a filesystem path. A list can show up to 48 rows, and a workspace can keep eight views. Sorting and the declared source filter happen before the row limit. When more titles exist, the header says **first N**. Typing narrows that bounded list; an empty source is different from a search that matches none of its titles. Saving a different declaration with the same ID updates the view. Undo restores its previous definition without changing any note. Pane recipes do not grant access to Herdr: an unconnected source shows an unavailable message, never a substitute list.
 
 ## Share a read-only Herdr pane list
 
@@ -76,6 +80,8 @@ printf '%s\n' '{"request":"Make the cold first key faster","proof":"Compare time
 ```
 
 The result identifies the invoked executable by version and SHA-256. Match the hash to the signed release manifest or a verified local build reference before creating a separate worktree. In that worktree, use `bun scripts/devtools/devtools.ts build-ops act app-build --features owned-ui-evaluation --artifact-out .test-output/candidate.reference.json` with a new reference path. Compare both versions using the same disposable workspace and the action named in the request. Keep the working installation unchanged. A plan does not build or switch anything; a compiled candidate is not an installer. A launcher author cannot grant itself build, installation, microphone or desktop access.
+
+An open personal list exposes `getState.oneWindow.personalList`: its source, state, limit, truncation flag, bounded source count, visible count, and selected element ID. These fields do not contain titles or pane addresses. `empty` means the source replied with zero matching rows; `noMatches` means the typed filter hid every row in a nonempty snapshot. `unavailable`, `stale`, `disabled`, `unsupported`, and `unverified` do not mean empty. In `getElements`, a status row carries `statusKind` and is not selectable. A metadata-only pane can be highlighted, but its row reports `actionDisabled: "personal_list_read_only"`.
 
 ## Local authoring API
 

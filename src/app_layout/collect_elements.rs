@@ -185,7 +185,7 @@ impl ScriptListApp {
             status_kind: None,
             action_disabled: None,
             style: None,
-        })
+        }.redact_text(protocol::ElementContentKind::UserContent))
     }
 
     /// What `@` attached, as chips after the subject's in the main input, projected from the
@@ -2626,9 +2626,10 @@ impl ScriptListApp {
                         }
                     });
                     let (value, content_kind) = match result {
-                        scripts::SearchResult::BuiltIn(_) => {
-                            (subtitle.unwrap_or_else(|| label.clone()), None)
-                        }
+                        scripts::SearchResult::BuiltIn(m) => (
+                            subtitle.unwrap_or_else(|| label.clone()),
+                            m.authored_label.then_some(protocol::ElementContentKind::UserContent),
+                        ),
                         scripts::SearchResult::File(file_match) => (
                             file_match.file.path.clone(),
                             Some(protocol::ElementContentKind::FilePath),

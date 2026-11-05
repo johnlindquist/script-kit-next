@@ -61,6 +61,7 @@ pub(crate) fn own_row_key(builtin_id: &str) -> Option<&str> {
 /// A reducer row drawn as a launcher row.
 pub(crate) fn own_row_result(row: &Row) -> SearchResult {
     SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+        authored_label: row.authored_label,
         entry: crate::builtins::BuiltInEntry {
             id: format!("{OWN_ROW_PREFIX}{}", row.key),
             name: row.title.clone(),

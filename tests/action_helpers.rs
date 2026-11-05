@@ -80,6 +80,7 @@ fn make_scriptlet_match() -> ScriptletMatch {
 
 fn make_builtin_match() -> BuiltInMatch {
     BuiltInMatch {
+        authored_label: false,
         entry: BuiltInEntry {
             id: "clipboard_history".to_string(),
             name: "Clipboard History".to_string(),

@@ -65,6 +65,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
             .iter()
             .filter(|e| !crate::builtins::is_query_only_builtin(&e.id))
             .map(|e| BuiltInMatch {
+                authored_label: false,
                 entry: e.clone(),
                 score: 0,
                 match_evidence: None,
@@ -85,6 +86,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
         if matches!(entry.feature, BuiltInFeature::AiVault) {
             if let Some(evidence) = restricted_builtin_alias_match(entry, &query_lower) {
                 matches.push(BuiltInMatch {
+                    authored_label: false,
                     entry: entry.clone(),
                     score: evidence.score,
                     match_evidence: Some(evidence),
@@ -146,6 +148,7 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
 
         if let Some(best) = best {
             matches.push(BuiltInMatch {
+                authored_label: false,
                 entry: entry.clone(),
                 score: best.score,
                 match_evidence: Some(best),

@@ -33,6 +33,10 @@ pub struct Row {
     /// Stable identity: the same thing keeps the same key across renders.
     pub key: String,
     pub title: String,
+    /// The label comes from the workspace or the user, not the product. Keep it private
+    /// when adapting this row to another launcher result or a passive element snapshot.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub authored_label: bool,
     /// The muted line under the title ("or say “undo that”", "App · 12 min ago").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub: Option<String>,
@@ -87,6 +91,11 @@ impl Row {
             score: 100,
             ..Self::default()
         }
+    }
+
+    pub fn with_authored_label(mut self) -> Self {
+        self.authored_label = true;
+        self
     }
 
     pub fn with_enter_label(mut self, label: impl Into<String>) -> Self {

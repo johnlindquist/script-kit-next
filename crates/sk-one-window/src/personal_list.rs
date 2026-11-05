@@ -16,6 +16,10 @@ pub struct PersonalList {
     deliberate: bool,
 }
 impl PersonalList {
+    /// Number in the bounded snapshot, independent of the words in the input.
+    pub fn source_len(&self) -> usize {
+        self.items.len()
+    }
     pub fn rows(&self) -> impl ExactSizeIterator<Item = &Item> {
         self.visible.iter().map(|&i| &self.items[i])
     }

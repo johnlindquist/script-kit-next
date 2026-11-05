@@ -3515,6 +3515,7 @@ impl ScriptListApp {
                 let entry = entry.clone();
                 Box::new(move || {
                     SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+                        authored_label: false,
                         entry: (*entry).clone(),
                         score: pin_score,
                         match_evidence: None,

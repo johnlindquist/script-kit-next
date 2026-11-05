@@ -19,6 +19,33 @@ use uuid::Uuid;
 pub(super) const NAME: &str = "personal-list";
 const OPEN: &str = "personal/view/";
 const ROW: &str = "personal-item:";
+/// Source refusals carry their category at the decision site, not inferred from UI text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SourceIssue {
+    Unavailable(&'static str),
+    Stale(&'static str),
+    Disabled(&'static str),
+    Unsupported(&'static str),
+    Unverified(&'static str),
+}
+impl SourceIssue {
+    pub(super) fn status(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Unavailable(msg) => ("unavailable", msg),
+            Self::Stale(msg) => ("stale", msg),
+            Self::Disabled(msg) => ("disabled", msg),
+            Self::Unsupported(msg) => ("unsupported", msg),
+            Self::Unverified(msg) => ("unverified", msg),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Load {
+    Loading,
+    Ready { empty_label: &'static str },
+    Problem(SourceIssue),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct List {
     mount: Uuid,
@@ -26,7 +53,7 @@ pub(crate) struct List {
     revision: String,
     pub(super) recipe: ViewRecipe,
     pub(super) data: PersonalList,
-    pub(super) message: Option<&'static str>,
+    load: Load,
     opening: Option<Uuid>,
     more: bool,
 }
@@ -63,11 +90,39 @@ impl List {
         self.opening = None;
         self.data.type_query(text);
     }
-    fn invalidate(&mut self) {
+    fn fail(&mut self, issue: SourceIssue) {
         self.data.replace(Vec::new());
         self.more = false;
-        self.message = Some("This view changed. Reopen it from the launcher.");
+        self.load = Load::Problem(issue);
         self.opening = None;
+    }
+    fn invalidate(&mut self) {
+        self.fail(SourceIssue::Stale(
+            "This view changed. Reopen it from the launcher.",
+        ));
+    }
+    pub(super) fn presentation(&self) -> (&'static str, Option<&'static str>) {
+        match self.load {
+            Load::Loading => ("loading", Some("Loading…")),
+            Load::Problem(issue) => {
+                let (state, msg) = issue.status();
+                (state, Some(msg))
+            }
+            Load::Ready { empty_label } if self.data.source_len() == 0 => {
+                ("empty", Some(empty_label))
+            }
+            Load::Ready { .. } if self.data.rows().len() == 0 => {
+                ("noMatches", Some("No matching titles"))
+            }
+            Load::Ready { .. } => ("ready", None),
+        }
+    }
+    pub(super) fn observation(&self) -> serde_json::Value {
+        serde_json::json!({"state":self.presentation().0,
+            "source":match self.recipe.list { ListSpec::Notes { .. } => "kit.noteTitles", ListSpec::Panes { .. } => "herdr.paneMetadata" },
+            "readOnly":self.read_only(), "limit":self.recipe.limit, "truncated":self.more,
+            "sourceCount":self.data.source_len(), "visibleCount":self.data.rows().len(),
+            "selectedElementId":self.data.selected().map(|r|self.row_id(&r.id))})
     }
 }
 
@@ -75,9 +130,9 @@ pub(super) struct SourceSnapshot {
     pub(super) items: Vec<Item>,
     pub(super) pair_id: Option<String>,
     pub(super) more: bool,
-    pub(super) message: Option<&'static str>,
+    pub(super) empty_label: &'static str,
 }
-type SourceRows = Result<SourceSnapshot, &'static str>;
+type SourceRows = Result<SourceSnapshot, SourceIssue>;
 fn load_items(
     root: &std::path::Path,
     workspace: &str,
@@ -88,7 +143,7 @@ fn load_items(
     let current = || {
         let stored = Store::open(root)
             .and_then(|s| s.inspect())
-            .map_err(|_| "Personal views are unavailable")?;
+            .map_err(|_| SourceIssue::Unavailable("Personal views are unavailable"))?;
         if stored.enabled
             && stored.workspace == workspace
             && stored.revision == revision
@@ -96,7 +151,9 @@ fn load_items(
         {
             Ok(())
         } else {
-            Err("This view changed. Reopen it from the launcher.")
+            Err(SourceIssue::Stale(
+                "This view changed. Reopen it from the launcher.",
+            ))
         }
     };
     current()?;
@@ -112,9 +169,10 @@ fn load_items(
                 sort == NoteSort::Title,
                 recipe.limit,
             )
-            .map_err(|_| "The note index is unavailable")?;
+            .map_err(|_| SourceIssue::Unavailable("The note index is unavailable"))?;
             Ok(SourceSnapshot {
                 items: notes
+                    .titles
                     .into_iter()
                     .map(|note| Item {
                         id: note.id.to_string(),
@@ -134,8 +192,12 @@ fn load_items(
                     })
                     .collect(),
                 pair_id: None,
-                more: false,
-                message: None,
+                more: notes.more,
+                empty_label: if filter == NoteFilter::Pinned {
+                    "No pinned notes"
+                } else {
+                    "No notes"
+                },
             })
         }
         ListSpec::Panes {
@@ -157,9 +219,9 @@ fn load_items(
             Ok(snapshot)
         }
         // Keep control-demanding recipes projectable, but never silently reinterpret a metadata grant.
-        ListSpec::Panes { .. } => {
-            Err("This view asks to control Herdr. Pane sharing is read only.")
-        }
+        ListSpec::Panes { .. } => Err(SourceIssue::Unsupported(
+            "This view asks to control Herdr. Pane sharing is read only.",
+        )),
     }
 }
 impl ScriptListApp {
@@ -172,7 +234,7 @@ impl ScriptListApp {
         let Some(HostedView::Personal(list)) = self.one_window_host.view.as_mut() else {
             return;
         };
-        let before = (list.data.clone(), list.message, list.more);
+        let before = (list.data.clone(), list.load, list.more);
         if !state.is_some_and(|s| {
             s.enabled && s.workspace == list.workspace && s.revision == list.revision
         }) {
@@ -182,16 +244,14 @@ impl ScriptListApp {
                 Ok(source) => {
                     list.data.replace(source.items);
                     list.more = source.more;
-                    list.message = source.message;
+                    list.load = Load::Ready {
+                        empty_label: source.empty_label,
+                    };
                 }
-                Err(msg) => {
-                    list.data.replace(Vec::new());
-                    list.message = Some(msg);
-                    list.more = false;
-                }
+                Err(issue) => list.fail(issue),
             }
         }
-        if before.0 == list.data && before.1 == list.message && before.2 == list.more {
+        if before.0 == list.data && before.1 == list.load && before.2 == list.more {
             return;
         }
         let enter = list.enter();
@@ -225,6 +285,7 @@ impl ScriptListApp {
                     format!("{OPEN}{}/{}", state.revision, v.id),
                     v.title.clone(),
                 )
+                .with_authored_label()
                 .with_head("My views")
                 .with_icon("list")
                 .with_enter_label("Open view")
@@ -265,7 +326,7 @@ impl ScriptListApp {
                 revision: revision.clone(),
                 recipe: recipe.clone(),
                 data: PersonalList::default(),
-                message: Some("Loading…"),
+                load: Load::Loading,
                 opening: None,
                 more: false,
             }),
@@ -292,7 +353,7 @@ impl ScriptListApp {
                 cx.background_executor().timer(std::time::Duration::from_secs(4)).await;
                 if !this.update(cx, |app, ctx| {
                     if !crate::is_main_window_visible() {
-                        app.receive_personal_items(mount, Err("Pane sharing paused. Reopen the view for a fresh list."), ctx);
+                        app.receive_personal_items(mount, Err(SourceIssue::Stale("Pane sharing paused. Reopen the view for a fresh list.")), ctx);
                         return false;
                     }
                     matches!(app.one_window_hosted_view(),Some(HostedView::Personal(l)) if l.mount == mount)
@@ -433,13 +494,13 @@ impl ScriptListApp {
                         let Some(HostedView::Personal(list)) = app.one_window_host.view.as_mut() else { return; };
                         list.opening = None;
                         let refusal = match refreshed {
-                            Ok(source) => (!list.data.confirm_refreshed(&shown, source.items))
-                                .then_some("That note changed or no longer matches. Choose a result again."),
-                            Err(reason) => {
-                                list.data.replace(Vec::new());
-                                list.message = Some(reason);
-                                Some(reason)
+                            Ok(source) => {
+                                list.more = source.more;
+                                list.load = Load::Ready { empty_label: source.empty_label };
+                                (!list.data.confirm_refreshed(&shown, source.items))
+                                    .then_some("That note changed or no longer matches. Choose a result again.")
                             }
+                            Err(issue) => { list.fail(issue); Some(issue.status().1) }
                         };
                         if let Some(reason) = refusal {
                             let enter = list.enter();
