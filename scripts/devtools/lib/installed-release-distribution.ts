@@ -21,10 +21,14 @@ export function publicApiFailure(path: string, status: number, headers: Headers,
     until !== null && until*1000 >= now ? until*1000-now+1000 : null;
   return { code: `public_${endpoint}_http_${status}${limited ? '_limited' : ''}${until === null ? '' : '_reset_'+until}`, waitMs };
 }
-// A fresh VM has at most 25 minutes. Spend at most the first 12 minutes on the
-// pre-attestation reads; this can wait out a known shared anonymous quota reset
-// without starting another Mac. Later release reads keep their short bound.
-const publicPreflightUntil = Date.now()+12*60_000;
+// The same VM may wait out one anonymous hourly quota window, across all public
+// reads. Never restart the allowance per request. Attestation still precedes any
+// installation; post-install source checks still require their original public data.
+const publicReadsStartedAt = Date.now();
+export function publicWaitBudget(status:number,headers:Headers,startedAt:number,at:number) {
+  const limited=status===429 || (status===403 && headers.get('x-ratelimit-remaining')==='0');
+  return Math.max(0,Math.min(limited ? 60*60_000+2000 : 60_000, startedAt+65*60_000-at));
+}
 export async function publicJson(path: string): Promise<Json> {
   const read = () => fetch(`https://api.github.com/repos/${REPO}/${path}`, {
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
@@ -36,7 +40,7 @@ export async function publicJson(path: string): Promise<Json> {
   if (!res.ok) {
     const {code, waitMs} = publicApiFailure(path,res.status,res.headers,Date.now());
     await res.body?.cancel();
-    const budget = path.startsWith('actions/runs/') ? publicPreflightUntil-Date.now() : 60_000;
+    const budget = publicWaitBudget(res.status,res.headers,publicReadsStartedAt,Date.now());
     check(waitMs !== null && waitMs > 0 && waitMs <= budget, code, 'blocked');
     await new Promise(resolve => setTimeout(resolve,waitMs));
     res = await read(); // One bounded, read-only retry after the server's stated wait, never a write.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { publicApiFailure, verifySourceVersion } from "./lib/installed-release-distribution";
+import { publicApiFailure, publicWaitBudget, verifySourceVersion } from "./lib/installed-release-distribution";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -99,6 +99,13 @@ describe("installed-release admission and provenance (no host authority)", () =>
     authorizeInstalledCommand(cmd,'/unused',false,undefined,ctx);
     for(const bad of [{...ctx,ids:new Set<string>()},{...ctx,revision:'b'.repeat(64)},{...ctx,choices:['panes'] as const}])expect(()=>authorizeInstalledCommand(cmd,'/unused',false,undefined,bad)).toThrow();
     expect(()=>authorizeInstalledCommand({...cmd,commands:[{...cmd.commands[0],submit:true}]},'/unused',false,undefined,ctx)).toThrow();
+  });
+  test('a late anonymous quota response shares the original wall-clock bound; unrelated outages do not extend it',()=>{
+    const base=1_800_000_000_000, headers=new Headers({'x-ratelimit-remaining':'0'});
+    expect(publicWaitBudget(403,headers,base,base+4*60_000)).toBe(60*60_000+2000);
+    expect(publicWaitBudget(429,headers,base,base+64*60_000)).toBe(60_000);
+    expect(publicWaitBudget(403,headers,base,base+66*60_000)).toBe(0);
+    expect(publicWaitBudget(503,new Headers(),base,base)).toBe(60_000);
   });
   test('diagnoses anonymous API refusal without recording bodies or sensitive headers', () => {
     const now = 1793880000 * 1000;

@@ -17,7 +17,9 @@ jobs:
   installed:
     name: Installed release (${{ matrix.mode }})
     runs-on: macos-15
-    timeout-minutes: 25
+    # Keep the original journey budget plus one shared anonymous GitHub API reset.
+    # No token is injected into the app and a rate limit never counts as a passing check.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
