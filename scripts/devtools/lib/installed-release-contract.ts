@@ -189,6 +189,7 @@ export function authorizeInstalledCommand(cmd: Json, scratch: string, verifyStar
     const status = "main-list-row:v2:3485d92f119229f9ce4e08bf509f97bb85457fea64d391b0c1cac4494cd9454e";
     check(
       row.semanticId === setup || (row.semanticId === status && row.submit !== true) ||
+        (row.semanticId === "main-list-row:v2:16cf1fc9a69fa8aa98d65534af5e7c06f11cdfb262a43a3accda7735a5780c79" && row.submit === true) ||
         (verifyStarter && row.semanticId === STABILITY_STARTER.semanticId && row.submit === true),
       "unreviewed_menu_selection",
     );

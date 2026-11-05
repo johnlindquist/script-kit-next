@@ -515,8 +515,19 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     passed.push(stage);
 
     stage = 'notes-save-and-readback';
-    await kit.send({ type: 'openNotes' });
-    const initialNote = await waitView('dayPage');
+    const openTodayFromLauncher = async () => {
+      const title = 'Quick Note Capture', id = 'main-list-row:v2:'+digest('builtin/quick-capture');
+      await launcher();
+      await batch({ type: 'setInput', text: title });
+      await observe(elements, r => {
+        const matches = r.elements.filter((row: Row) => row.semanticId === id);
+        return r.semanticSurface === 'scriptList' && matches.length === 1 && matches[0].text === title &&
+          matches[0].kind === 'built-in' && matches[0].role === 'row' && matches[0].selectable === true && !matches[0].actionDisabled;
+      }, 'quick-note-not-in-launcher');
+      await batch({ type: 'selectBySemanticId', semanticId: id, submit: true });
+      return waitView('dayPage');
+    };
+    const initialNote = await openTodayFromLauncher();
     // Both clean installs and upgrades are supported; never replace arbitrary prior text.
     const prior = initialNote.inputValue;
     requireProof(
@@ -539,10 +550,9 @@ export async function runInstalledJourneys(kit: InstalledKit) {
     requireProof(readFileSync(day, 'utf8') === note, 'note-not-on-disk');
     await key('escape');
     await observe(state, (s) => s.promptType === 'none', 'note-did-not-close');
-    await kit.send({ type: 'openNotes' });
-    const reopened = await waitView('dayPage');
+    const reopened = await openTodayFromLauncher();
     requireProof(reopened.inputValue === note && reopened.dayPage?.dirty === false, 'reopened-note-mismatch');
-    evidence.notes = { date, sha256:digest(note), savedAndReopened:true };
+    evidence.notes = { date, sha256:digest(note), savedAndReopened:true, entry:'builtin/quick-capture' };
     await checkpoint('notes');
     passed.push(stage);
 

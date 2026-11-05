@@ -39,6 +39,9 @@ const commandRows = ['Check Permissions', 'Set Up Permissions'].map((text, i) =>
       .digest('hex'),
 }));
 
+const quickNoteRow = { role:'row', kind:'built-in', selectable:true, text:'Quick Note Capture',
+  semanticId:'main-list-row:v2:'+createHash('sha256').update('builtin/quick-capture').digest('hex') };
+
 // CONTROLLED TRANSPORT FIXTURE, not a .app, real consent or a real device. Model
 // only the allowed wire effects. The generated script actually runs in an isolated
 // Bun child with a stubbed form() and copies of the production settings modules.
@@ -233,7 +236,7 @@ async function exercise(
             : options.starter && input === 'Hello World'
               ? [{ role: 'row', kind: 'script', selectable: true, semanticId: starter.semanticId,
                     content: { text: { contentKind: 'externalContent', rawContentReturned: false, charLength: 11, byteLength: 11, fingerprint: 'sha256:'+'1'.repeat(64) } } }]
-              : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
+              : input === quickNoteRow.text ? [quickNoteRow] : commandRows.map((x) => ({ ...x, selected: selected === x.semanticId }));
     return {
       projectionQuality: 'complete',
       semanticSurface: view === 'none' ? 'scriptList' : view === 'form' ? 'form-prompt' : view,
@@ -283,9 +286,12 @@ async function exercise(
           else if (cmd.type === 'selectBySemanticId') {
             expect(view).toBe('none');
             expect(commandRows.some((r) => r.semanticId === cmd.semanticId) ||
+              (input === quickNoteRow.text && cmd.semanticId === quickNoteRow.semanticId) ||
               (options.starter && input === 'Hello World' && cmd.semanticId === starter.semanticId)).toBe(true);
             selected = cmd.semanticId;
-            if (cmd.submit && selected === starter.semanticId) view = 'arg';
+            if (cmd.submit && selected === quickNoteRow.semanticId) {
+              view='dayPage'; ++noteOpens; input=fault === 'note' && noteOpens>1 ? '' : readFileSync(day,'utf8');
+            } else if (cmd.submit && selected === starter.semanticId) view = 'arg';
             else if (cmd.submit) {
               expect(selected).toBe(commandRows[1].semanticId);
               view = 'permissionsWizard';
@@ -328,11 +334,7 @@ async function exercise(
     },
     async send(c: Obj) {
       seen.push(c.type);
-      if (c.type === 'openNotes') {
-        view = 'dayPage';
-        ++noteOpens;
-        input = fault === 'note' && noteOpens > 1 ? '' : readFileSync(day, 'utf8');
-      } else if (c.type === 'run') {
+      if (c.type === 'run') {
         expect(realpathSync(c.path).startsWith(scratchPath + '/installed-journey-')).toBe(true);
         child = Bun.spawn(
           [
