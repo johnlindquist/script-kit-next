@@ -672,6 +672,14 @@ impl EmojiGridLayout {
     }
 }
 
+/// An explicit launcher request such as “emoji mushroom”. The normal picker
+/// query is left untouched; unrelated sentences do not become picker commands.
+pub fn launcher_picker_term(words: &str) -> Option<&str> {
+    let (verb, rest) = words.trim().split_once(char::is_whitespace)?;
+    let term = rest.trim();
+    (verb.eq_ignore_ascii_case("emoji") && !term.is_empty()).then_some(term)
+}
+
 pub fn search_emojis(query: &str) -> Vec<&'static Emoji> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {

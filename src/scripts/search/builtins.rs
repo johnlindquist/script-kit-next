@@ -95,6 +95,22 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
             continue;
         }
 
+        // Preview the picker’s real first result on “emoji <name>”. Keep the
+        // normal built-in identity and scoring so an exact script can still win.
+        let preview = if matches!(entry.feature, BuiltInFeature::EmojiPicker) {
+            crate::emoji::launcher_picker_term(query)
+                .and_then(|term| crate::emoji::search_emojis(term).into_iter().next())
+                .map(|found| {
+                    let mut row = entry.clone();
+                    row.description =
+                        format!("{} {} · Open matching emoji", found.emoji, found.name);
+                    row.keywords.push(query.trim().to_string());
+                    row
+                })
+        } else {
+            None
+        };
+        let entry = preview.as_ref().unwrap_or(entry);
         let mut best = None;
 
         if entry.group == BuiltInGroup::MenuBar {
@@ -190,6 +206,19 @@ mod tests {
             icon: None,
             group,
         }
+    }
+
+    #[test]
+    fn explicit_emoji_query_previews_a_real_match_without_inventing_a_new_command() {
+        let mut picker = builtin("Emoji Picker", "Choose an emoji", &["emoji"]);
+        picker.feature = BuiltInFeature::EmojiPicker;
+        let entries = [picker];
+        let results = fuzzy_search_builtins(&entries, "Emoji mushroom");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].entry.id, entries[0].id);
+        assert!(results[0].entry.description.contains('🍄'));
+        assert!(fuzzy_search_builtins(&entries, "emoji qzxqzx").is_empty());
+        assert!(fuzzy_search_builtins(&entries, "mushroom omelette").is_empty());
     }
 
     #[test]

@@ -2806,12 +2806,16 @@ impl ScriptListApp {
                 );
                 self.emoji_skin_tone = crate::emoji_pins::load_skin_tone();
                 self.refresh_emoji_head_snapshot();
-                self.open_builtin_filterable_view(
+                let filter = crate::emoji::launcher_picker_term(&self.filter_text)
+                    .unwrap_or_default()
+                    .to_string();
+                self.open_builtin_filterable_view_with_filter(
                     AppView::EmojiPickerView {
-                        filter: String::new(),
+                        filter: filter.clone(),
                         selected_index: 0,
                         selected_category: None,
                     },
+                    &filter,
                     "Search Emoji & Symbols...",
                     false,
                     cx,

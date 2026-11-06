@@ -170,6 +170,10 @@ impl ScriptListApp {
             },
             None => crate::actions::get_global_actions(),
         };
+        let past_chats = matches!(result.as_ref(), Some(SearchResult::BuiltIn(m)) if matches!(m.entry.feature, crate::builtins::BuiltInFeature::AiChat))
+            .then(|| Row::new(format!("{ACTION_KEY}{}", sk_one_window::past_chats::ROW_KEY), "See past chats")
+                .with_sub("Browse previous conversations without starting a new one")
+                .with_icon("history"));
         let mut rows = actions
             .iter()
             .filter(|action| action.is_enabled())
@@ -177,6 +181,7 @@ impl ScriptListApp {
         Event::Actions(
             rows.next()
                 .into_iter()
+                .chain(past_chats)
                 .chain(std::iter::once(super::chat_entry::about_row()))
                 .chain(rows)
                 .collect(),
@@ -209,6 +214,11 @@ impl ScriptListApp {
     /// subject's words and row are the list again while the action runs; the input goes back
     /// to what the reducer shows if the action left the window as it was.
     pub(crate) fn one_window_run_action(&mut self, id: String, cx: &mut Context<Self>) {
+        if id == sk_one_window::past_chats::ROW_KEY {
+            self.one_window_host.staged_from = None;
+            self.one_window_open_past_chats(String::new(), cx);
+            return;
+        }
         if id == super::chat_entry::ABOUT_KEY {
             self.one_window_route_work(&super::chat_entry::about_row(), cx);
             return;

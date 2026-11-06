@@ -3520,7 +3520,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             let old_text = self.text.clone();
             self.mode.adjust_auto_closed_pair(range, new_text.len());
             self.text.replace(range.clone(), new_text);
-        self.sk.text_version = self.sk.text_version.wrapping_add(1);
+            self.sk.text_version = self.sk.text_version.wrapping_add(1);
             self.sk.text_version = self.sk.text_version.wrapping_add(1);
 
             M::adjust_annotations(self, range, new_text.len());
@@ -3891,11 +3891,23 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
                 Some((new_offset..new_offset).into()),
             );
         } else {
+            // Replacing a whole selected field by typing starts a new burst.
+            // Undo should restore the previous query, not the first letter of its
+            // replacement. Programmatic replacements, paste, IME, masks and
+            // partial selections keep their own transaction boundaries.
+            let replacing_field_by_typing = range_utf16.is_none()
+                && !ends_composition
+                && !self.silent_replace_text
+                && self.mask_pattern.is_none()
+                && !range.is_empty()
+                && range == (0..old_text.len())
+                && !new_text.contains(['\n', '\r'])
+                && new_text.graphemes(true).take(2).count() == 1;
             self.push_history(
                 &old_text,
                 &range,
                 &new_text,
-                requested_intent,
+                requested_intent.or(replacing_field_by_typing.then_some(EditIntent::Typing)),
                 selection_before,
                 None,
             );
@@ -5832,6 +5844,27 @@ mod tests {
                 assert_eq!(state.value(), "prefix ");
                 state.undo(&Undo, window, cx);
                 assert_eq!(state.value(), "");
+            });
+        });
+    }
+
+    #[gpui::test]
+    fn undo_restores_the_entire_query_replaced_by_typing(cx: &mut TestAppContext) {
+        let view = InputView::build(cx, |state| state);
+        let mut cx = VisualTestContext::from_window(view.window_handle.into(), cx);
+        cx.update(|window, cx| {
+            view.input.update(cx, |state, cx| {
+                let original = "time in Reykjavík";
+                state.replace_text_in_range(None, original, window, cx);
+                state.select_all(window, cx);
+                for ch in "time in Dublin".chars() {
+                    state.replace_text_in_range(None, &ch.to_string(), window, cx);
+                }
+                state.undo(&Undo, window, cx);
+                assert_eq!(state.value(), original);
+                assert_eq!(state.selected_range(), 0..original.len());
+                state.redo(&Redo, window, cx);
+                assert_eq!(state.value(), "time in Dublin");
             });
         });
     }

@@ -414,7 +414,9 @@ fn is_adjacent_batch(intent: EditIntent, previous: &[Change], current: &[Change]
 fn is_adjacent(intent: EditIntent, previous: &Change, current: &Change) -> bool {
     match intent {
         EditIntent::Typing => {
-            previous.old_range.is_empty()
+            // A typed replacement may BEGIN a burst, but cannot continue an
+            // earlier one across a selection. Only adjacent insertions extend it.
+            !previous.new_range.is_empty()
                 && current.old_range.is_empty()
                 && !previous.new_text.contains(['\n', '\r'])
                 && !current.new_text.contains(['\n', '\r'])

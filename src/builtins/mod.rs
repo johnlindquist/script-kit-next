@@ -910,13 +910,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/tips",
             "Help",
-            "Every key, symbol and place in Script Kit; ↵ on one tries it",
+            "Browse keyboard shortcuts, symbols and places in Script Kit; ↵ on an example tries it",
             vec![
                 "tips",
                 "help",
                 "learn",
                 "hints",
                 "shortcuts",
+                "keyboard shortcuts",
+                "shortcut guide",
+                "keyboard reference",
                 "sigils",
                 "discover",
                 "onboarding",
@@ -1518,7 +1521,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/new-extension",
             "Create Scriptlet Bundle",
-            "Create a new scriptlet bundle with YAML frontmatter and scriptlet examples",
+            "Create reusable text snippets and commands, starting with a greeting you can edit",
             vec![
                 "new",
                 "scriptlet",
@@ -1527,6 +1530,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "frontmatter",
                 "yaml",
                 "snippet",
+                "text snippets",
+                "text expansion",
                 "create",
             ],
             BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
@@ -1681,7 +1686,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/choose-theme",
             "Theme Designer",
-            "Design your color theme with live preview",
+            "Preview color themes or enter a hex color to try it as the accent",
             vec![
                 "theme",
                 "appearance",
