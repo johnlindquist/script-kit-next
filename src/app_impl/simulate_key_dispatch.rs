@@ -239,6 +239,8 @@ impl ScriptListApp {
                         // Mirrors the live ⌘1–3 arm in src/render_script_list/mod.rs.
                         let digit = key_lower.as_bytes()[0] - b'0';
                         view.one_window_key(sk_one_window::Key::CmdDigit(digit), ctx);
+                    } else if has_cmd && !has_shift && !_has_alt && !_has_ctrl && key_lower == "r" && view.maybe_restart_for_setup_row(ctx) {
+                        logging::log("STDIN", "SimulateKey: restart for selected permission");
                     } else if has_cmd
                         && !has_shift
                         && key_lower == "z"

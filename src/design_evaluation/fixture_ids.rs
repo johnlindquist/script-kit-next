@@ -4,6 +4,11 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
     &[
         "main.script-list",
         "main.subject-tabs",
+        "main.launcher-basics",
+        "main.launcher-ready",
+        "main.launcher-cold",
+        "main.launcher-reading",
+        "main.launcher-watch",
         "main.root-search-frame-stability",
         "main-search-contract",
         "main.about",

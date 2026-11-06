@@ -375,6 +375,10 @@ struct Focus {
     row: Row,
 }
 
+fn is_local_match(row: &Row) -> bool {
+    !row.fallback && !row.key.starts_with(crate::contract::ALL_RESULTS_KEY)
+}
+
 #[derive(Clone, Debug)]
 struct PendingDismiss {
     at: Ms,
@@ -421,6 +425,9 @@ pub struct OneWindow {
     /// The user moved the highlight since the words last changed: ⌘K acts on that row rather
     /// than on what the input's chip offers.
     chose: bool,
+    /// Per input revision: no publication, placeholders only, or actual matching names.
+    /// A fallback-only snapshot isn't the answer from a still-loading local catalogue.
+    published_names: Option<bool>,
     /// What `@` attached, in order, as chips after the subject.
     context: Vec<ContextChip>,
     /// The chip ← highlighted, counted from the attached subject; ⌫ removes it.
@@ -473,6 +480,7 @@ impl OneWindow {
             runs_held: Vec::new(),
             agent_owns: false,
             chose: false,
+            published_names: None,
             context: Vec::new(),
             chip_at: None,
             missed: None,
@@ -589,14 +597,37 @@ impl OneWindow {
         // implicit top action follows the new order; a row the user chose keeps its identity,
         // including when the settings callback arrives in the same turn as that choice.
         let new_rules = matches!(&ev, Event::Subjects(TabsEvent::Personal(_)));
-        let untouched_top = new_rules && !self.chose && self.list.sel == 0;
-        let focus = if ev.is_user() || (self.user_turn(now) && !new_rules) {
+        // Setup that comes to lead the empty list takes an untouched highlight the same way.
+        let new_setup = matches!(&ev, Event::Suggested(_));
+        let untouched_top = (new_rules || new_setup) && !self.chose && self.list.sel == 0;
+        // The search's first names for the words are a launcher's answer to them: when the user
+        // hasn't moved the highlight, the list's top row takes it, even from a stand-in Jev's
+        // place showed while the search ran.
+        let exact_app = |row: &Row| {
+            row.key.starts_with("app/") && row.title.trim().eq_ignore_ascii_case(self.text.trim())
+        };
+        let first_names = matches!(&ev, Event::Names(rows) if self.published_names.is_none()
+            || (self.published_names == Some(false) && rows.iter().any(is_local_match))
+            || (rows.iter().any(exact_app) && !self.host_names.iter().any(exact_app)))
+            && !self.chose
+            && !self.text.trim().is_empty();
+        let focus = if ev.is_user() || (self.user_turn(now) && !new_rules) || first_names {
             None
         } else {
             self.focus()
         };
+        let enter_before = first_names.then(|| self.enter_runs(now));
         self.tick(now, &mut fx);
         let consumed = self.apply(now, ev, &mut fx);
+        if let Some(before) = enter_before.filter(|_| consumed) {
+            self.list.sel = 0;
+            self.list.move_sel(0);
+            // A stand-in that showed long enough to be read may have been what a press meant.
+            let shown_since = self.user_at.unwrap_or(0);
+            if self.enter_runs(now) != before && now.saturating_sub(shown_since) >= ENTER_GUARD_MS {
+                self.guard.arm(now);
+            }
+        }
         let changed_page = before_page != self.subject_page().map(|p| p.id);
         if changed_page
             || (before_page
@@ -608,10 +639,12 @@ impl OneWindow {
         }
         let changed_default = untouched_top
             && focus.as_ref().is_some_and(|old| {
-                old.row.key.starts_with("subject/")
-                    && self.list.pinned.first().is_some_and(|new| {
-                        new.key.starts_with("subject/") && new.key != old.row.key
-                    })
+                self.list.pinned.first().is_some_and(|new| {
+                    new.key != old.row.key
+                        && ((old.row.key.starts_with("subject/")
+                            && new.key.starts_with("subject/"))
+                            || crate::setup::is_setup(&new.key))
+                })
             });
         if (changed_page || changed_default)
             && !self.chose
@@ -660,6 +693,8 @@ impl OneWindow {
                 if self.views.top().is_some_and(|top| top.takes_input) {
                     return false;
                 }
+                self.published_names =
+                    Some(self.published_names == Some(true) || rows.iter().any(is_local_match));
                 self.host_names = rows;
                 self.refresh_rows();
                 self.list.names_came();

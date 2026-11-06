@@ -282,6 +282,14 @@ pub enum OneWindowFixtureCommand {
         words: String,
     },
     ShortcutOutside {},
+    /// Complete the synthetic cold catalogue; never discover or launch desktop apps.
+    FinishAppIndex {},
+    ObserveUnchangedPermissionRequest {},
+    ReportScriptFailure {},
+    /// Replace one owned detector observation. This never requests or changes OS permissions.
+    ObserveAccessibility {
+        granted: bool,
+    },
     /// Starts the voice session "Start Dictation to Agent Chat/Notes" starts; the typed words
     /// stand in for the heard ones because evaluation never opens a microphone.
     TalkTo {

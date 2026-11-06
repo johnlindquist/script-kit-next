@@ -54,7 +54,7 @@ impl HomeMode {
         rows.iter()
             .enumerate()
             .filter_map(|(i, row)| {
-                if self == Self::Minimal && row.key != crate::setup::BUN_KEY {
+                if self == Self::Minimal && !crate::setup::is_setup(&row.key) {
                     if !row.key.starts_with("script/") && !row.key.starts_with("scriptlet/") {
                         return None;
                     }

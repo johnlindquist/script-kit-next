@@ -298,7 +298,8 @@ pub fn request_permission(
 
 #[derive(Debug, Clone)]
 pub enum PermissionStartupIntent {
-    OpenFullWizard,
+    /// Show the launcher: what's missing leads its list under "Needs setup".
+    ShowSetup,
     ShowReminder {
         reminder: crate::permissions::features::StartupReminder,
     },
@@ -313,7 +314,15 @@ pub enum PermissionStartupIntent {
 /// never nags at startup.
 pub fn startup_intent(is_fresh_install: bool) -> PermissionStartupIntent {
     let facts = crate::permissions::live_facts();
-    let status_of = |kind| crate::permissions::status(kind);
+    let declined = load_declined();
+    // A permission the user chose to go on without is never brought up again at startup.
+    let status_of = |kind| {
+        if declined.contains(&kind) {
+            crate::platform::permiso_detect::PermissionStatus::Authorized
+        } else {
+            crate::permissions::status(kind)
+        }
+    };
     decide_startup_intent(
         &status_of,
         &facts,
@@ -332,7 +341,7 @@ fn decide_startup_intent(
             | crate::platform::permiso_detect::PermissionStatus::Unknown
     );
     if first_run && accessibility_missing {
-        return PermissionStartupIntent::OpenFullWizard;
+        return PermissionStartupIntent::ShowSetup;
     }
     match crate::permissions::features::startup_reminder(status_of, facts) {
         Some(reminder) => PermissionStartupIntent::ShowReminder { reminder },
@@ -340,19 +349,86 @@ fn decide_startup_intent(
     }
 }
 
+fn onboarding_path() -> std::path::PathBuf {
+    crate::setup::get_kit_path().join("permission-onboarding.json")
+}
+
 fn onboarding_state_exists() -> bool {
-    let path = crate::setup::get_kit_path().join("permission-onboarding.json");
-    path.exists()
+    onboarding_path().exists()
+}
+
+/// Whether a status leaves the permission off. `Unknown` (no detector here) isn't asked about.
+pub fn is_missing(status: crate::platform::permiso_detect::PermissionStatus) -> bool {
+    !matches!(
+        status,
+        crate::platform::permiso_detect::PermissionStatus::Authorized
+            | crate::platform::permiso_detect::PermissionStatus::Unknown
+    )
+}
+
+/// The permissions that lead the empty launcher under "Needs setup", in order.
+///
+/// Required and recommended permissions that are off lead until the user says to go on without
+/// them (`declined`). `every` is "Set Up Permissions": all of them with their state, as long as
+/// one is still off.
+pub fn setup_list(
+    statuses: &[(
+        PermissionKind,
+        crate::platform::permiso_detect::PermissionStatus,
+    )],
+    declined: &[PermissionKind],
+    every: bool,
+) -> Vec<(
+    PermissionKind,
+    crate::platform::permiso_detect::PermissionStatus,
+)> {
+    if every {
+        return if statuses.iter().any(|(_, status)| {
+            *status != crate::platform::permiso_detect::PermissionStatus::Authorized
+        }) {
+            statuses.to_vec()
+        } else {
+            Vec::new()
+        };
+    }
+    statuses
+        .iter()
+        .filter(|(kind, status)| {
+            is_missing(*status)
+                && kind.requirement() != PermissionRequirement::Optional
+                && !declined.contains(kind)
+        })
+        .copied()
+        .collect()
+}
+
+/// The permissions the user chose to go on without.
+pub fn load_declined() -> Vec<PermissionKind> {
+    std::fs::read_to_string(onboarding_path())
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|state| state.get("declined").cloned())
+        .and_then(|declined| serde_json::from_value(declined).ok())
+        .unwrap_or_default()
+}
+
+/// Records the permissions the user goes on without; the setup is done either way.
+pub fn save_declined(declined: &[PermissionKind]) -> std::io::Result<()> {
+    let state = serde_json::json!({
+        "schemaVersion": 2,
+        "completedAt": chrono::Utc::now().to_rfc3339(),
+        "declined": declined,
+    });
+    crate::atomic_file::write_private_atomic(
+        &onboarding_path(),
+        &serde_json::to_vec_pretty(&state)?,
+    )
 }
 
 pub fn mark_onboarding_completed() {
-    let path = crate::setup::get_kit_path().join("permission-onboarding.json");
-    let state = serde_json::json!({
-        "schemaVersion": 1,
-        "completedAt": chrono::Utc::now().to_rfc3339(),
-    });
-    if let Ok(content) = serde_json::to_string_pretty(&state) {
-        let _ = std::fs::write(path, content);
+    let declined = load_declined();
+    if let Err(error) = save_declined(&declined) {
+        tracing::warn!(%error, "Couldn't save the permission setup state");
     }
 }
 
@@ -610,7 +686,7 @@ mod tests {
         let denied = |_kind: PermissionKind| PS::Denied;
         assert!(matches!(
             decide_startup_intent(&denied, &facts, true),
-            PermissionStartupIntent::OpenFullWizard
+            PermissionStartupIntent::ShowSetup
         ));
         assert!(matches!(
             decide_startup_intent(&denied, &facts, false),
@@ -634,6 +710,63 @@ mod tests {
             decide_startup_intent(&only_screen_missing, &facts, false),
             PermissionStartupIntent::None
         ));
+    }
+
+    #[test]
+    fn the_launcher_leads_with_required_and_recommended_permissions_until_declined() {
+        use crate::platform::permiso_detect::PermissionStatus as PS;
+        let statuses = [
+            (PermissionKind::Accessibility, PS::Denied),
+            (PermissionKind::ScreenRecording, PS::NotDetermined),
+            (PermissionKind::EventSynthesizing, PS::Denied),
+            (PermissionKind::InputMonitoring, PS::Denied),
+            (PermissionKind::Microphone, PS::NotDetermined),
+        ];
+        let kinds = |list: Vec<(PermissionKind, PS)>| -> Vec<PermissionKind> {
+            list.into_iter().map(|(kind, _)| kind).collect()
+        };
+        assert_eq!(
+            kinds(setup_list(&statuses, &[], false)),
+            [
+                PermissionKind::Accessibility,
+                PermissionKind::ScreenRecording
+            ]
+        );
+        assert_eq!(
+            kinds(setup_list(
+                &statuses,
+                &[PermissionKind::ScreenRecording],
+                false
+            )),
+            [PermissionKind::Accessibility],
+            "a permission the user went on without stays out of the way"
+        );
+        assert!(setup_list(
+            &statuses,
+            &[
+                PermissionKind::Accessibility,
+                PermissionKind::ScreenRecording
+            ],
+            false
+        )
+        .is_empty());
+        assert_eq!(
+            setup_list(&statuses, PermissionKind::all(), true).len(),
+            5,
+            "Set Up Permissions lists every permission"
+        );
+        let all_on: Vec<_> = PermissionKind::all()
+            .iter()
+            .map(|&kind| (kind, PS::Authorized))
+            .collect();
+        assert!(setup_list(&all_on, &[], true).is_empty());
+        let unknown = [(PermissionKind::Accessibility, PS::Unknown)];
+        assert!(setup_list(&unknown, &[], false).is_empty());
+        assert_eq!(
+            setup_list(&unknown, &[], true),
+            unknown,
+            "unknown is not all-on"
+        );
     }
 
     #[test]

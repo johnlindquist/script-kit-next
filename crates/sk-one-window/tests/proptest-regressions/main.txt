@@ -7,3 +7,5 @@
 cc 14dce9bd0aa6791f360e13a4a49cd05a739c54bfb99c8a866ed89489af70804f # shrinks to steps = [Open, Wait(396), OpenUnprompted, Type(0), Jev { current: false, rows: [] }, Key(Enter)]
 cc 9aee33004c112fa6d2288398551555c47d08ba2372769c1b7bf7d009bdf81730 # shrinks to steps = [Content(380), Type(0), Done { message: false, stay: false }, Content(120)]
 cc 6c67743da20615a32b70576acd8ac03b5d1529682c3466880ee87a7ee351254d # shrinks to steps = [Content(427), Open, Content(120), Type(1), Wait(299), Jev { current: true, rows: [] }, Type(0)]
+cc 5f713a4848a99517ba2280be70c804a007242a84be36a3b4a128207d1e9ff22a # shrinks to steps = [Type(1), Jev { current: true, rows: [] }, Names([(0, 50)])]
+cc ca626f99b9e2bf5f76e7b0e2c5fae2efe80391dcde8a16b680bd72ea71d917f7 # shrinks to steps = [Type(4), Key(Down), Type(4), Jev { current: true, rows: [] }, Names([(0, 50)])]

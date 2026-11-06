@@ -1894,6 +1894,15 @@ pub(crate) struct ScriptListApp {
     focus_coordinator: focus_coordinator::FocusCoordinator,
     /// bun isn't on this Mac: the empty list leads with a "Needs setup" row.
     bun_missing: bool,
+    /// "Set Up Permissions" lists every permission under "Needs setup", until the user goes on
+    /// without the rest or every one is on.
+    permission_setup_every: bool,
+    /// Permissions the user chose to go on without (`permission-onboarding.json`).
+    permission_setup_declined: Vec<crate::permissions_wizard::PermissionKind>,
+    /// The 2s status refresh for "Needs setup" is running.
+    permission_setup_refreshing: bool,
+    /// The permissions "Needs setup" listed when the refresh last looked.
+    permission_setup_shown: Vec<sk_one_window::Row>,
     // Scroll stabilization: track last scrolled-to index for each scroll handle
     #[allow(dead_code)]
     last_scrolled_main: Option<usize>,

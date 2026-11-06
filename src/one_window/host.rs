@@ -54,6 +54,8 @@ pub(crate) struct OneWindowHost {
     pub(super) handoff_draft: Option<super::handoff::OpenDraft>,
     jev_asked: u64,
     jev_pending: Option<(u64, String)>,
+    jev_timed_out: Option<u64>,
+    jev_responses: u64,
     /// A row that ran and opened something; its title is what finished when that ends.
     finishing: Option<Row>,
     last_run: Option<Row>,
@@ -205,7 +207,15 @@ fn jev_rows(readings: &[JevRow]) -> Vec<Row> {
     readings
         .iter()
         .map(|reading| {
-            let row = Row::new(reading.key.clone(), reading.plan.title.clone());
+            let mut row = Row::new(reading.key.clone(), reading.plan.title.clone());
+            row.p = Some(reading.plan.probability as f32);
+            // Only a plain, one-step launch duplicates a name. "Move Slack" and
+            // compound plans are useful alternatives even if Slack is listed.
+            if reading.plan.clauses.is_empty() {
+                if let [crate::intent::Step::Command { command }] = reading.plan.steps.as_slice() {
+                    row.target = Some(command.name.clone());
+                }
+            }
             if crate::intent::launcher::unavailable(&reading.plan).is_some() {
                 row.with_enter_label("Unavailable")
             } else {
@@ -326,6 +336,14 @@ impl ScriptListApp {
             ) {
                 self.one_window_host.fill_preview =
                     self.one_window_host.fill_preview.wrapping_add(1);
+            }
+            if matches!(&event, Event::Text(s) if self.one_window_host.jev_pending.as_ref().is_some_and(|(_,words)| words != s))
+                || matches!(
+                    &event,
+                    Event::Dismissed | Event::Summon | Event::View(_) | Event::Stage(_)
+                )
+            {
+                self.one_window_cancel_jev();
             }
             let typed = matches!(event, Event::Text(_));
             let outcome = self.one_window.handle(now, event);
@@ -811,9 +829,10 @@ impl ScriptListApp {
             let (row, result) = &names[at];
             let aliased = alias.as_ref().is_some_and(|alias| alias.is_target(result));
             let exact = result.name().trim().to_lowercase() == typed;
-            (!aliased, !row.learned, !exact)
+            let exact_app = exact && matches!(result, SearchResult::App(_));
+            (!aliased, !row.learned, !exact, !exact_app)
         };
-        let plain = (true, true, true);
+        let plain = (true, true, true, true);
         let mut picked = pick_across_sources(&sources, budget);
         let mut must: Vec<usize> = (0..names.len()).filter(|&at| rank(at) != plain).collect();
         must.sort_by_key(|&at| (rank(at), at));
@@ -1046,6 +1065,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.one_window_host.jev_asked += 1;
+        self.one_window_host.jev_timed_out = None;
         let id = self.one_window_host.jev_asked;
         self.one_window_host.jev_pending = Some((id, text.clone()));
         self.ask_jev(id, text, screen, cx);
@@ -1057,6 +1077,7 @@ impl ScriptListApp {
     }
 
     pub(super) fn one_window_cancel_jev(&mut self) {
+        self.one_window_host.jev_timed_out = None;
         self.one_window_host.jev_pending = None;
     }
 
@@ -1069,6 +1090,7 @@ impl ScriptListApp {
         result: Result<Plan, JevError>,
         cx: &mut Context<Self>,
     ) {
+        self.one_window_host.jev_responses = self.one_window_host.jev_responses.saturating_add(1);
         let current = self
             .one_window_host
             .jev_pending
@@ -1080,6 +1102,19 @@ impl ScriptListApp {
             return;
         }
         self.one_window_host.jev_pending = None;
+        // A late success may improve this list, never execute an abandoned Return.
+        if self.one_window_host.jev_timed_out.take() == Some(id)
+            && (result.is_err()
+                || screen != self.intent_screen_key()
+                || !self.one_window_owns_list()
+                || self.filter_text != text
+                || self.one_window.list().text != text
+                || self.one_window.is_away()
+                || self.one_window.in_view()
+                || self.one_window.list().held.is_some())
+        {
+            return;
+        }
         if screen != self.intent_screen_key() {
             self.one_window_talk_unread(&text, cx);
             self.one_window_handle(Event::JevDown { text }, cx);
@@ -1121,10 +1156,16 @@ impl ScriptListApp {
         let Some((_, text)) = self
             .one_window_host
             .jev_pending
-            .take_if(|(pending, _)| *pending == id)
+            .as_ref()
+            .filter(|(pending, _)| *pending == id)
+            .cloned()
         else {
             return;
         };
+        // Fall back at the deadline and release any waiting Return, but keep the
+        // identity until completion. A slow answer for this *same* screen may
+        // still fill the slots. Typing, changing views and retry invalidate it.
+        self.one_window_host.jev_timed_out = Some(id);
         tracing::info!(target: "script_kit::intent", event = "jev_timed_out");
         self.one_window_talk_unread(&text, cx);
         self.one_window_handle(Event::JevDown { text }, cx);
@@ -1307,6 +1348,8 @@ impl ScriptListApp {
             "chipAt": self.one_window.chip_at(),
             "agentOwns": self.one_window.agent_owns(),
             "subjectTabs": self.subject_tab_elements(),
+            "chatStagedPartCount": self.one_window.chat().map(|chat| chat.with.len()),
+            "ownedChatDelivery": self.owned_chat_delivery(),
             "personalization": self.personal_observation(),
             "personalList": match self.one_window_hosted_view() {
                 Some(super::views::HostedView::Personal(list)) => Some(list.observation()),
@@ -1325,6 +1368,8 @@ impl ScriptListApp {
                 }))
                 .collect::<Vec<_>>(),
             "jevSettled": list.jev.settled_for(&list.text),
+            "jevRequestCount": self.one_window_host.jev_asked,
+            "jevResponseCount": self.one_window_host.jev_responses,
             "heightPx": self.one_window_fixed_height(),
             "nowMs": now,
             "view": self.one_window.views().top().map(|top| top.name.as_str()),

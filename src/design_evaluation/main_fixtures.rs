@@ -49,6 +49,170 @@ pub(crate) fn mount_main_fixture(
     app.gpui_input_state
         .update(cx, |input, cx| input.set_value(initial_filter, window, cx));
     let view = match id {
+        "main.launcher-basics"
+        | "main.launcher-ready"
+        | "main.launcher-cold"
+        | "main.launcher-reading" => {
+            use crate::one_window::subject_tabs::{copy_source, selection_source, window_source};
+            use crate::permissions_wizard::PermissionKind;
+            use crate::platform::permiso_detect::PermissionStatus;
+            use sk_one_window::{window::subject_tabs::TabsEvent, Subject, SubjectKind};
+            // Only catalogue and ambient input data are seeded. Filtering, ranking,
+            // Return, dispatch, prompts and rendering use the ordinary launcher.
+            for name in [
+                "superwhisper",
+                "Superhuman",
+                "Google Chrome",
+                "Slack",
+                "Translate",
+                "Open Notes",
+            ] {
+                if id == "main.launcher-cold" && name == "superwhisper" {
+                    continue;
+                }
+                app.apps.push(app_launcher::AppInfo {
+                    name: name.into(),
+                    path: root.join(format!("{name}.app")),
+                    bundle_id: None,
+                    icon: None,
+                });
+            }
+            for name in ["Summarize Page", "Slack"] {
+                app.scripts.push(Arc::new(scripts::Script {
+                    name: name.into(),
+                    path: root.join("scripts").join(format!("{name}.ts")),
+                    extension: "ts".into(),
+                    plugin_id: "owned".into(),
+                    ..Default::default()
+                }));
+            }
+            app.root_search
+                .install_script_catalogue_candidates(app.scripts.clone().into());
+            let MainServices::OwnedFixtures(sources) = &mut app.main_services else {
+                unreachable!()
+            };
+            let sources = Arc::make_mut(sources);
+            if id == "main.launcher-reading" {
+                sources.delayed_test_readings =
+                    ["superwhisper", "what describes the lantern paradox"]
+                        .map(|request| {
+                            use crate::intent::{
+                                Command, CommandKind, Pathway, Plan, Reading, Step,
+                            };
+                            let ask = Reading {
+                                pathway: Pathway::Ask,
+                                probability: 0.85,
+                                title: if request == "superwhisper" {
+                                    "Ask about superwhisper".into()
+                                } else {
+                                    "Ask about the lantern".into()
+                                },
+                                steps: vec![Step::Ask {
+                                    question: request.into(),
+                                    subject: None,
+                                }],
+                                typed: None,
+                                typed_is_proposed: false,
+                                missing: None,
+                                tip: None,
+                            };
+                            let (reading, alternatives) = if request == "superwhisper" {
+                                (
+                                    Reading {
+                                        pathway: Pathway::Run,
+                                        title: "Open superwhisper".into(),
+                                        probability: 0.97,
+                                        steps: vec![Step::Command {
+                                            command: Command {
+                                                id: "app/superwhisper".into(),
+                                                name: "superwhisper".into(),
+                                                kind: CommandKind::App,
+                                                description: String::new(),
+                                                plugin: None,
+                                                capture_targets: vec![],
+                                                code: None,
+                                            },
+                                        }],
+                                        ..ask.clone()
+                                    },
+                                    vec![ask],
+                                )
+                            } else {
+                                (ask, Vec::new())
+                            };
+                            Plan {
+                                reading,
+                                alternatives,
+                                request: request.into(),
+                                complete: 1.0,
+                                reuse: 0.0,
+                                ready: true,
+                                slots: Default::default(),
+                                words: vec![],
+                                clauses: vec![],
+                                timing: Default::default(),
+                            }
+                        })
+                        .to_vec();
+            }
+            sources.permissions = PermissionKind::all()
+                .iter()
+                .map(|&kind| {
+                    (
+                        kind,
+                        if id == "main.launcher-ready" || kind == PermissionKind::Microphone {
+                            PermissionStatus::Authorized
+                        } else {
+                            PermissionStatus::Denied
+                        },
+                    )
+                })
+                .collect();
+            app.bun_missing = false;
+            let window = Subject {
+                kind: SubjectKind::Window,
+                title: "Example document".into(),
+                sub: "Fixture Editor".into(),
+                icon: "window".into(),
+                ..Default::default()
+            };
+            app.change_subjects(
+                TabsEvent::Open {
+                    window: Some(window_source(window, 60_000)),
+                    copy: copy_source(
+                        "Good morning",
+                        if id == "main.launcher-cold" {
+                            121_000
+                        } else {
+                            30_000
+                        },
+                    )
+                    .map(Box::new),
+                },
+                cx,
+            );
+            let text = "how are you?";
+            let selection = Subject {
+                kind: SubjectKind::Selection,
+                title: text.into(),
+                sub: "in Fixture Editor".into(),
+                icon: "text-cursor".into(),
+                ..Default::default()
+            };
+            if id != "main.launcher-cold" {
+                app.change_subjects(TabsEvent::Observe(selection_source(selection, text)), cx);
+            }
+            prepare_launcher_files(app, root)?;
+            if id == "main.launcher-basics" {
+                app.spawn_permission_setup_refresh(cx);
+            }
+            AppView::ScriptList
+        }
+        "main.launcher-watch" => {
+            #[cfg(feature = "owned-ui-evaluation")]
+            start_owned_script_watch(app, cx)?;
+            AppView::ScriptList
+        }
         "main.subject-tabs" => {
             use crate::one_window::subject_tabs::{copy_source, selection_source, window_source};
             use sk_one_window::{window::subject_tabs::TabsEvent, Event, Subject, SubjectKind};
@@ -504,6 +668,47 @@ pub(crate) fn mount_main_fixture(
             .update(cx, |input, cx| input.focus(window, cx));
     }
     cx.notify();
+    Ok(())
+}
+
+/// The caller saves a file after mounting. Only a real ScriptWatcher notification
+/// invokes the catalogue loader; there is no timer polling the filesystem for results.
+#[cfg(feature = "owned-ui-evaluation")]
+fn start_owned_script_watch(
+    app: &mut ScriptListApp,
+    cx: &mut Context<ScriptListApp>,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        app.main_services.owned_sources().is_some(),
+        "owned_main_required"
+    );
+    let (mut watcher, rx, kit) = crate::watcher::ScriptWatcher::for_owned_save(&app.config)?;
+    watcher.start()?;
+    let dir = kit.join("plugins/fixture/scripts");
+    let path = dir.join("lantern-inspector.ts");
+    cx.spawn(async move |this,cx| {
+        let _watcher = watcher;
+        let start = std::time::Instant::now();
+        while start.elapsed()<std::time::Duration::from_secs(25) {
+            cx.background_executor().timer(std::time::Duration::from_millis(25)).await;
+            let ready = rx.try_iter().any(|ev| matches!(ev, crate::watcher::ScriptReloadEvent::FileCreated(p) | crate::watcher::ScriptReloadEvent::FileChanged(p) if p == path));
+            if !ready { continue; }
+            let result=(|| -> anyhow::Result<_> {
+                let policy=crate::runtime_policy::owned_evaluation().context("owned_root_required")?;
+                for entry in std::fs::read_dir(&dir)? {let e=entry?;anyhow::ensure!(e.path()==path && e.file_type()?.is_file(), "unexpected_fixture_entry");policy.require_owned_path(&e.path())?;}
+                crate::scripts::read_scripts_from_dir(&dir,&kit)
+            })();
+            if let Ok(loaded)=result {
+                let _=this.update(cx, |app,cx| {
+                    app.commit_main_menu_results_refresh("scripts",None,cx,move |app,cx| {
+                        let mut scripts=app.scripts.clone();scripts.extend(loaded);
+                        app.apply_loaded_scripts_and_scriptlets(scripts,crate::scripts::ScriptletCatalogue::from_scriptlets(app.scriptlets.clone()),cx);true
+                    });
+                });
+            }
+            break;
+        }
+    }).detach();
     Ok(())
 }
 

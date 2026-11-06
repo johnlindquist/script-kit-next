@@ -675,7 +675,9 @@ export function startBuildResourceGuard(root: string, onRefusal: (error: BuildRe
   // Filesystem churn from a running build, as opposed to redirected outputs or mounts.
   const churn = (errors: readonly string[]): boolean => errors.length > 0 && errors.every(error =>
     /^(?:Error: )?(?:ENOENT|ESTALE|EAGAIN|EBUSY)\b/.test(error)
-    || /^(?:Error: )?inventory_(?:unstable_directory|directory_changed|probe_missing|probe_identity)\b/.test(error));
+    || /^(?:Error: )?inventory_(?:unstable_directory|directory_changed|probe_missing|probe_identity)\b/.test(error)
+    // A replay that meets a file the compiler created after the walk (new name, size or stamps).
+    || /^(?:Error: )?inventory_unstable_replay_scope:(?:membership|entry):at=[a-z-]{1,16}:replay=[a-z-]{1,16}:[a-z+-]{1,32}$/.test(error));
   const failedAllocation = (errors: string[]): void => {
     allocated = { present: false, complete: false, logicalBytes: 0, allocatedBytes: 0, entries: 0, linksNotFollowed: 0, errors };
     summary.sampleCount++;

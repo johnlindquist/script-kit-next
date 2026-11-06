@@ -80,7 +80,8 @@ export type FixtureControl =
       { operation: "retry" | "stop" }))
   | { family: "oneWindow"; operation: "handoffRecipient" | "handoffAnswer" }
   | { family: "oneWindow"; operation: "cursorBegin"; handsFree?:boolean; inKit?:boolean; recoverableSample?:boolean }
-  | { family:"oneWindow"; operation:"shortcutOutside" }
+  | { family:"oneWindow"; operation:"shortcutOutside" | "summon" | "finishAppIndex" | "observeUnchangedPermissionRequest" | "reportScriptFailure" }
+  | { family:"oneWindow"; operation:"observeAccessibility"; granted:boolean }
   | { family: "oneWindow"; operation: "cursorFinal"; words: string }
   | { family: "oneWindow"; operation: "talkTo"; destination: "chat" | "note" }
   | ({ family: "search" } & ({ operation: "prepare"; scenario: string } |
@@ -683,7 +684,14 @@ export class OwnedEvaluationClient {
       throw new DriverCommandRefused("stale_target_identity", result.requestId);
     if (result.type === "batchResult" && (result.success !== true || result.results?.length !== 1 || result.results[0]?.success !== true))
       throw new EvaluationContractError("single_action_batch_not_completed");
-    if (!receipt.dispatchCompleted) throw new EvaluationContractError("completed_action_receipt_required");
+    if (!receipt.dispatchCompleted) {
+      // A layout/provider update may win after scheduling but before GPUI dispatch.
+      // Report only the explicit, correlated pre-dispatch refusal; don't retry here.
+      if (result.type === "simulateGpuiEventResult" && result.success === false &&
+          result.errorCode === "stale_target_identity" && result.dispatchCompleted === false && receipt.dispatchCompleted === false)
+        throw new DriverCommandRefused("stale_target_identity", result.requestId);
+      throw new EvaluationContractError("completed_action_receipt_required");
+    }
     if (receipt.after) this.mounted.set(`${target.id}:${target.generation}`, receipt.after);
     else if (["submissionDelivered", "popupClosed", "rootClosed"].includes(receipt.effect.kind)) this.mounted.delete(`${target.id}:${target.generation}`);
     return result;

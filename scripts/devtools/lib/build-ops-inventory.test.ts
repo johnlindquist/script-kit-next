@@ -883,6 +883,19 @@ test("an uncapped build keeps sampling while compiler scratch entries vanish", a
   expect(await stopping).toMatchObject({ complete: true, workerClosed: true });
 });
 
+test("an uncapped build keeps sampling while new compiler outputs appear during a replay", async () => {
+  delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB;
+  const f = guardFixture(), guard = f.start();
+  f.worker.answer(sample(0, ["Error: inventory_unstable_replay_scope:membership:at=deps:replay=deps:unseen-name-or-type"])); await microtasks();
+  expect(f.refusals).toEqual([]);
+  await f.advance(1_000); expect(f.worker.requests).toHaveLength(2);
+  f.worker.answer(sample(4096)); await microtasks();
+  expect(f.refusals).toEqual([]);
+  const stopping = guard.stop(); await f.advance(10);
+  f.worker.answer(sample(4096)); await f.advance(1_100);
+  expect(await stopping).toMatchObject({ complete: true, workerClosed: true });
+});
+
 test("an uncapped build still stops when outputs are redirected", async () => {
   delete process.env.SCRIPT_KIT_AGENT_TARGET_BUDGET_GB;
   const f = guardFixture(), guard = f.start();

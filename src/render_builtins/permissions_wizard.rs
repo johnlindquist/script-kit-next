@@ -11,7 +11,7 @@
 /// Recording) or the matching System Settings pane, and let the poll flip the
 /// card to Granted when the user returns.
 impl ScriptListApp {
-    fn permissions_wizard_rows(
+    pub(crate) fn permissions_wizard_rows(
         &self,
     ) -> Vec<(
         crate::permissions_wizard::PermissionKind,
@@ -51,15 +51,16 @@ impl ScriptListApp {
         is_fresh_install: bool,
         cx: &mut Context<Self>,
     ) {
+        self.spawn_permission_setup_refresh(cx);
         match crate::permissions_wizard::startup_intent(is_fresh_install) {
-            crate::permissions_wizard::PermissionStartupIntent::OpenFullWizard => {
+            crate::permissions_wizard::PermissionStartupIntent::ShowSetup => {
                 tracing::info!(
-                    event = "permission_onboarding_full_wizard",
+                    event = "permission_onboarding_setup_rows",
                     is_fresh_install,
-                    "Opening permissions wizard at startup"
+                    "Showing the launcher with the missing permissions under Needs setup"
                 );
-                self.open_permissions_wizard(cx);
                 script_kit_gpui::request_show_main_window();
+                cx.notify();
             }
             crate::permissions_wizard::PermissionStartupIntent::ShowReminder { reminder } => {
                 let names = reminder
@@ -89,48 +90,52 @@ impl ScriptListApp {
         }
     }
 
+    /// "Set Up Permissions": every permission leads the empty launcher under "Needs setup",
+    /// under the same input as everything else.
     pub(crate) fn open_permissions_wizard(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.current_view, AppView::PermissionsWizardView { .. }) {
-            self.current_view = AppView::PermissionsWizardView { selected_index: 0 };
-            self.note_main_route_changed();
-            self.pending_focus = Some(FocusTarget::AppRoot);
-            self.spawn_permissions_wizard_poll(cx);
-        }
-        cx.notify();
+        self.one_window_set_up_permissions(cx);
+        self.spawn_permission_setup_refresh(cx);
     }
 
-    /// Re-render the wizard every 2s while it is the active view so cards flip
-    /// to Granted after the user toggles Script Kit in System Settings.
-    /// The loop exits as soon as the view changes, so reopening the wizard
-    /// (which spawns a fresh loop) never accumulates pollers.
-    fn spawn_permissions_wizard_poll(&mut self, cx: &mut Context<Self>) {
-        if !self.main_services.is_production() {
-            return;
+    /// TCC publishes no grant notifications: while "Needs setup" lists a permission, re-read
+    /// the statuses every 2s so a row flips to Granted when the user comes back from System
+    /// Settings. Only one loop runs at a time.
+    pub(crate) fn spawn_permission_setup_refresh(&mut self, cx: &mut Context<Self>) {
+        if self.main_services.is_production() { crate::permissions::refresh_all(); }
+        let rows = self.one_window_setup_rows();
+        if self.permission_setup_shown != rows {
+            self.permission_setup_shown = rows;
+            self.one_window_republish_setup("permission_setup_observed", cx);
         }
+        if self.permission_setup_refreshing { return; }
+        self.permission_setup_refreshing = true;
         cx.spawn(async move |this, cx| loop {
             cx.background_executor()
                 .timer(std::time::Duration::from_secs(2))
                 .await;
-
-            let mut keep_polling = false;
+            let mut keep = false;
             cx.update(|cx| {
                 let _ = this.update(cx, |app, cx| {
-                    keep_polling =
-                        matches!(app.current_view, AppView::PermissionsWizardView { .. });
-                    if keep_polling && script_kit_gpui::is_main_window_visible() {
-                        cx.notify();
+                    if app.main_services.is_production() { crate::permissions::refresh_all(); }
+                    let listed = app.permission_setup_list();
+                    if listed.is_empty() { app.permission_setup_every = false; }
+                    keep = !listed.is_empty() || (app.main_services.is_production() && script_kit_gpui::is_main_window_visible());
+                    app.permission_setup_refreshing = keep;
+                    let rows = app.one_window_setup_rows();
+                    if rows != app.permission_setup_shown {
+                        app.permission_setup_shown = rows;
+                        app.one_window_republish_setup("permission_setup_changed", cx);
                     }
                 });
             });
-
-            if !keep_polling {
+            if !keep {
                 break;
             }
         })
         .detach();
     }
 
-    fn execute_permissions_wizard_grant(
+    pub(crate) fn execute_permissions_wizard_grant(
         &mut self,
         kind: crate::permissions_wizard::PermissionKind,
         cx: &mut Context<Self>,
@@ -206,6 +211,17 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Only the selected, still-stuck setup row owns ⌘R. Never reset TCC as
+    /// a side effect of restarting; the normal cancellable quit hold applies.
+    pub(crate) fn maybe_restart_for_setup_row(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.main_services.is_production() || !self.one_window_owns_list() || !self.filter_text.is_empty() || self.one_window.in_view() { return false; }
+        let Some(row) = self.one_window.list().current_row() else { return false; };
+        let Some(id) = sk_one_window::setup::permission_id(&row.key) else { return false; };
+        if !self.permission_setup_list().iter().any(|(kind, status)| crate::permissions::kind_code(*kind) == id && crate::permissions_wizard::is_missing(*status) && crate::permissions::grant_looks_stuck(*kind)) { return false; }
+        self.one_window_hold("rotate-cw", "Restart Script Kit", Box::new(|app, cx| app.restart_script_kit_for_permissions(cx)), cx);
+        true
+    }
+
     /// Quit and reopen Script Kit, so macOS applies a grant it is holding
     /// back (Screen Recording, or an entry made for an older copy).
     fn restart_script_kit_for_permissions(&mut self, cx: &mut Context<Self>) {
@@ -248,7 +264,7 @@ impl ScriptListApp {
     /// Description for a wizard row: what the permission is for when
     /// granted; what stops working when it isn't; how to unstick a grant
     /// that didn't take.
-    fn permissions_wizard_row_description(
+    pub(crate) fn permissions_wizard_row_description(
         kind: crate::permissions_wizard::PermissionKind,
         status: crate::platform::permiso_detect::PermissionStatus,
     ) -> String {

@@ -192,6 +192,7 @@ pub fn merge(names: Vec<Row>, learned: Vec<Row>) -> Vec<Row> {
         .into_iter()
         .filter(|n| {
             n.is_open_tab()
+                || n.key.starts_with("app/")
                 || !learned
                     .iter()
                     .any(|l| l.title.eq_ignore_ascii_case(&n.title))
@@ -200,7 +201,11 @@ pub fn merge(names: Vec<Row>, learned: Vec<Row>) -> Vec<Row> {
     for row in learned {
         let at = out
             .iter()
-            .position(|n| !n.fallback && n.score < row.score)
+            .position(|n| {
+                !n.fallback
+                    && (n.score < row.score
+                        || (row.learned && row.score == 100 && !n.learned && n.score == row.score))
+            })
             .or_else(|| out.iter().position(|n| n.fallback))
             .unwrap_or(out.len());
         out.insert(at, row);
@@ -320,6 +325,15 @@ mod tests {
         let merged = merge(names, taught("put the pr on my second screen").rows("put"));
         assert_eq!(merged.len(), 1);
         assert!(merged[0].learned);
+    }
+
+    #[test]
+    fn a_learned_sentence_keeps_its_namesake_application_reachable() {
+        let lesson = taught("open notes");
+        let same_title = Row::new("app/notes", chrome().title).with_score(100);
+        let rows = merge(vec![same_title], lesson.rows("open notes"));
+        assert!(rows[0].learned);
+        assert_eq!(rows[1].key, "app/notes");
     }
 
     #[test]

@@ -163,7 +163,9 @@ fn minimal_home_keeps_scripts_and_setup_but_not_stale_subject_actions() {
             0,
         ))),
     );
-    assert!(w.handle(802, Event::Key(Key::Enter)).picked.is_none());
+    // Setup leads the list from the start, so Return may run it, never a hidden subject action.
+    let ran = w.clone().handle(802, Event::Key(Key::Enter)).picked;
+    assert!(ran.is_none_or(|(row, _)| row.key == crate::setup::BUN_KEY));
     w.handle(1500, Event::Key(Key::Down));
     assert_eq!(
         w.handle(2000, Event::Key(Key::Enter)).picked.unwrap().0.key,
@@ -276,4 +278,102 @@ fn selection_and_copy_of_the_same_text_count_once_and_history_walks_back() {
     assert_eq!(w.subject_page().unwrap().source.subject.title, "Second run");
     w.handle(4, Event::Key(Key::Up));
     assert_eq!(w.subject_page().unwrap().source.subject.title, "First run");
+}
+
+/// Selected text in the launcher's tab, then “Translate to French” and ↵: the words go to the
+/// model with the selection, not as a question about nothing.
+#[test]
+fn an_instruction_without_its_object_works_on_the_selected_text() {
+    let text = "Translate to French";
+    let mut w = OneWindow::default();
+    open(&mut w, 0);
+    w.handle(
+        1,
+        Event::Subjects(TabsEvent::Observe(source(
+            SubjectKind::Selection,
+            "how are you?",
+            0,
+        ))),
+    );
+    let page = w.subject_page().unwrap();
+    assert_eq!(page.source.subject.kind, SubjectKind::Selection);
+    let mut quick = w.clone();
+    quick.handle(5, Event::Key(Key::CmdEnter));
+    let chat = quick.chat().expect("a clean chat opens, not a row action");
+    assert!(chat.with.is_empty() && chat.turns.is_empty());
+    // A real typist passes through "Translate t", which could be an explicit
+    // object. The definitive instruction must reclaim Return when "to" completes.
+    let mut typed = w.clone();
+    for (i, prefix) in ["Translate", "Translate t", "Translate to", text]
+        .into_iter()
+        .enumerate()
+    {
+        let ms = 10 + i as u64 * 50;
+        typed.handle(ms, Event::Text(prefix.into()));
+        typed.handle(
+            ms,
+            Event::JevDown {
+                text: prefix.into(),
+            },
+        );
+        typed.handle(
+            ms + 1,
+            Event::Names(if i == 0 {
+                vec![Row::new("app/translate", "Translate")]
+            } else {
+                vec![]
+            }),
+        );
+    }
+    assert_eq!(
+        typed.enter_target(170).id,
+        format!("subject/{}/ask-words", page.id)
+    );
+    w.handle(10, Event::Text(text.into()));
+    w.handle(10, Event::JevDown { text: text.into() });
+    w.handle(
+        40,
+        Event::Names(vec![
+            Row::new("chat:old", "Demande de traduction en français").with_score(40),
+            Row::new(format!("fallback-google:{text}"), "Search Google").fallback(),
+        ]),
+    );
+    let key = format!("subject/{}/ask-words", page.id);
+    assert_eq!(w.list.current_row().unwrap().key, key);
+    assert_eq!(w.enter_target(1_000).label, "Ask the model");
+    assert_eq!(
+        w.handle(1_000, Event::Key(Key::Enter))
+            .picked
+            .unwrap()
+            .0
+            .key,
+        key
+    );
+
+    for (said, offered) in [
+        ("translate this to French", true),
+        ("Summarize", true),
+        ("please fix this", true),
+        ("make this shorter", true),
+        ("turn this into a list", true),
+        ("fix grammar", true),
+        ("fix the grammar", true),
+        ("fix grammar in my email", false),
+        ("Summarize Page", false),
+        ("make coffee", false),
+        ("translate hello to French", false),
+        ("fix wifi", false),
+        ("open safari", false),
+    ] {
+        assert_eq!(page.reading(said).is_some(), offered, "{said}");
+    }
+    let window = source(SubjectKind::Window, "Terminal", 0);
+    let window_page = w
+        .subject_pages()
+        .into_iter()
+        .find(|p| p.source.subject.kind == SubjectKind::Window)
+        .unwrap();
+    assert_eq!(window_page.source.subject.kind, window.subject.kind);
+    assert!(window_page.reading("translate to French").is_none());
+    assert!(window_page.reading("summarize this").is_some());
 }

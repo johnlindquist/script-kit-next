@@ -3,7 +3,7 @@
 //! ↵ names what Enter runs. While each key only extends the words, it changes when that truly
 //! changes (a stronger name took the top, or Jev's reading settled) and never goes back to words
 //! it showed earlier in the sentence. A name that owned Enter and lost it to another is passed over
-//! if it comes back strong later in the same sentence. And Jev's reading becomes ↵'s words only
+//! if it comes back strong later, unless the user finished typing its exact name. Jev's reading becomes ↵'s words only
 //! once the keys have paused, or a key that isn't typing (an arrow, Enter) says the sentence is
 //! done, so a reading of half a sentence never flashes on the button and goes stale on the next
 //! key.
@@ -47,17 +47,24 @@ impl Steady {
     }
 
     /// The names for the current words came, strongest first. Returns the one that owns Enter.
-    pub fn names<'a>(&mut self, strong: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
-        let owner = strong.into_iter().find(|key| {
-            if !self.may_own(key) {
-                return false;
+    pub fn names<'a>(
+        &mut self,
+        strong: impl IntoIterator<Item = (&'a str, bool)>,
+    ) -> Option<&'a str> {
+        let owner = strong.into_iter().find_map(|(key, explicit)| {
+            if explicit {
+                self.passed.retain(|p| p != key);
+                return Some(key);
             }
-            let last = self.owners.last().and_then(Option::as_deref) == Some(*key);
+            if !self.may_own(key) {
+                return None;
+            }
+            let last = self.owners.last().and_then(Option::as_deref) == Some(key);
             if !last && self.owners.iter().flatten().any(|o| o == key) {
                 self.passed.push(key.to_string());
-                return false;
+                return None;
             }
-            true
+            Some(key)
         });
         if self.owners.last().map(Option::as_deref) != Some(owner) {
             self.owners.push(owner.map(str::to_string));
@@ -85,7 +92,11 @@ mod tests {
 
     fn typed<'a>(s: &mut Steady, now: Ms, text: &str, strong: &[&'a str]) -> Option<&'a str> {
         s.on_text(now, text, true);
-        s.names(strong.iter().copied())
+        s.names(
+            strong
+                .iter()
+                .map(|&key| (key, key.eq_ignore_ascii_case(text))),
+        )
     }
 
     #[test]

@@ -454,17 +454,20 @@ fn extract_app_icon_from_bundle_resource(app_path: &Path) -> Result<Option<Vec<u
         anyhow::ensure!(data != nil, "Allocating application icon data failed");
         let image: id = msg_send![class!(NSImage), alloc];
         anyhow::ensure!(image != nil, "Allocating application icon image failed");
+        // `initWithData:` returns nil (and frees the allocation) for an icon file AppKit can't
+        // decode; messaging that nil from Rust is a null dereference.
         let image: id = msg_send![image, initWithData: data];
+        if image == nil {
+            // An unsupported icon encoding doesn't make the application disappear.
+            // Read/permission/allocation errors above remain real scan failures.
+            return Ok(None);
+        }
         let png_bytes = image_to_png_bytes(image);
         let _: () = msg_send![image, release];
-        let png_bytes = png_bytes.with_context(|| {
-            format!(
-                "Decoding application icon resource: {}",
-                icon_path.display()
-            )
-        })?;
-        ICONS_FROM_BUNDLE_RESOURCE.fetch_add(1, Ordering::Relaxed);
-        Ok(Some(png_bytes))
+        if png_bytes.is_some() {
+            ICONS_FROM_BUNDLE_RESOURCE.fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(png_bytes)
     }
 }
 

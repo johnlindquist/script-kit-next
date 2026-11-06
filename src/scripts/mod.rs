@@ -61,6 +61,9 @@ pub(crate) use self::grouping::prepend_root_brain_inbox_section;
 pub(crate) use self::grouping::prepend_root_conversations_section;
 #[allow(unused_imports)]
 pub(crate) use self::grouping::prepend_root_pinned_notes_section;
+#[cfg(feature = "owned-ui-evaluation")]
+#[allow(unused_imports)]
+pub(crate) use self::loader::read_scripts_from_dir;
 #[allow(unused_imports)]
 pub use self::loader::{read_scripts, read_scripts_report};
 pub use self::scheduling::register_scheduled_scripts;

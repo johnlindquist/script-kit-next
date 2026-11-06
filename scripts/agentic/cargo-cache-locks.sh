@@ -39,7 +39,7 @@ cargo_cache_remove_candidate() {
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   exec python3 - "$@" <<'PY'
-import hashlib, json, os, pathlib, shutil, stat, subprocess, sys, time, uuid
+import ctypes, hashlib, json, os, pathlib, shutil, stat, subprocess, sys, tempfile, time, uuid
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'))
@@ -142,6 +142,45 @@ def write(path, value):
         file.write(canonical(value) + '\n'); file.flush(); os.fsync(file.fileno())
     tmp.replace(path / 'lease.json')
 
+def rename_exclusive(source, destination):
+    # Plain rename can silently replace an *empty*, still-protected reservation.
+    libc = ctypes.CDLL(None, use_errno=True)
+    src, dst = os.fsencode(source), os.fsencode(destination)
+    if sys.platform == 'darwin':
+        result = libc.renamex_np(src, dst, 4)  # RENAME_EXCL
+    elif sys.platform.startswith('linux'):
+        result = libc.renameat2(-100, src, -100, dst, 1)  # AT_FDCWD, RENAME_NOREPLACE
+    else:
+        raise RuntimeError('exclusive_lease_publication_unsupported')
+    if result:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(destination))
+
+def try_acquire(path, pid, generation):
+    owner_start = start(pid)
+    if not owner_start:
+        raise RuntimeError('owner_already_absent')
+    # Assemble a complete record in private. Its inode survives publication;
+    # interruption before the rename cannot reserve the shared lock name.
+    staged = pathlib.Path(tempfile.mkdtemp(prefix='.' + path.name + '.prepare-', dir=path.parent))
+    published = False
+    try:
+        info = staged.stat()
+        value = {'schemaVersion':2,'pid':pid,'processStartTime':owner_start,'generation':generation,
+                 'directoryDevice':info.st_dev,'directoryInode':info.st_ino,'children':[]}
+        write(staged, value)
+        try:
+            rename_exclusive(staged, path)
+        except FileExistsError:
+            return None
+        published = True
+        return value
+    finally:
+        # Publication is the last filesystem operation on success: cleanup must
+        # never report a failed acquire after ownership has changed hands.
+        if not published:
+            shutil.rmtree(staged)
+
 def main():
     op, raw = sys.argv[1:3]
     path = pathlib.Path(raw).absolute()
@@ -180,21 +219,13 @@ def main():
         deadline = time.monotonic() + int(sys.argv[5]) / 1000
         path.parent.mkdir(parents=True, exist_ok=True)
         while True:
-            try:
-                path.mkdir(mode=0o700)
-                break
-            except FileExistsError:
-                if time.monotonic() >= deadline:
-                    raise RuntimeError('lease_busy_or_incomplete')
-                time.sleep(0.05)
-        info = path.stat()
-        owner_start = start(pid)
-        if not owner_start:
-            raise RuntimeError('owner_already_absent')
-        value = {'schemaVersion':2,'pid':pid,'processStartTime':owner_start,'generation':generation,
-                 'directoryDevice':info.st_dev,'directoryInode':info.st_ino,'children':[]}
-        write(path, value)
-        return value
+            if not os.path.lexists(path):
+                value = try_acquire(path, pid, generation)
+                if value is not None:
+                    return value
+            if time.monotonic() >= deadline:
+                raise RuntimeError('lease_busy_or_incomplete')
+            time.sleep(0.05)
     value, digest = snapshot(path)
     if value['pid'] != pid or value['generation'] != generation or start(pid) != value['processStartTime']:
         raise RuntimeError('lease_owner_changed')
@@ -221,8 +252,12 @@ def main():
             raise RuntimeError('lease_release_identity_changed')
         if sorted(p.name for p in path.iterdir()) != ['lease.json']:
             raise RuntimeError('lease_unknown_files')
-        (path / 'lease.json').unlink()
-        path.rmdir()
+        # Release the public name with the record still intact. Even a killed
+        # releaser must not strand an empty directory at the shared name.
+        retired = path.with_name('.' + path.name + '.released-' + str(uuid.uuid4()))
+        rename_exclusive(path, retired)
+        (retired / 'lease.json').unlink()
+        retired.rmdir()
         return {'released':True,'generation':generation}
     raise RuntimeError('unknown_lease_operation')
 

@@ -103,6 +103,10 @@ struct Run {
     /// When the user last typed, pressed a key or clicked: what arrives in that same turn is
     /// part of what they did.
     user_at: Option<u64>,
+    /// The words the search last listed names for, and whether the user moved the highlight
+    /// since the words changed: the search's first names for new words lead the list.
+    published_names: Option<bool>,
+    moved: bool,
 }
 
 /// The highlighted row the user may be about to run, with the list it's in: its words and
@@ -132,6 +136,8 @@ impl Run {
             undone: HashSet::new(),
             wake: None,
             user_at: None,
+            published_names: None,
+            moved: false,
         }
     }
 
@@ -203,9 +209,35 @@ impl Run {
         if user {
             self.user_at = Some(self.now);
         }
+        let text_before = self.win.text().to_string();
+        let has_names = match &ev {
+            Event::Names(rows) => Some(!rows.is_empty()),
+            _ => None,
+        };
+        let first_names = has_names.is_some_and(|matches| {
+            self.published_names.is_none() || (self.published_names == Some(false) && matches)
+        }) && !self.moved
+            && !text_before.trim().is_empty();
+        let moved = matches!(ev, Event::Key(Key::Up | Key::Down) | Event::Select(_));
+        // Typed words start a new sentence, even the same words again.
+        let typed = matches!(ev, Event::Text(_));
         let was = self.highlight();
         let out = self.win.handle(self.now, ev);
-        self.check_kept(was, &out);
+        if typed || self.win.text() != text_before {
+            self.moved = false;
+            self.published_names = None;
+        }
+        self.moved |= moved;
+        if let Some(matches) = has_names.filter(|_| out.consumed) {
+            self.published_names = Some(self.published_names == Some(true) || matches);
+        }
+        if first_names && out.consumed {
+            if self.win.views().top().is_none() && out.picked.is_none() {
+                assert_eq!(self.win.list().sel, 0, "the first names for the words lead");
+            }
+        } else {
+            self.check_kept(was, &out);
+        }
         self.check(&out.effects, is_enter.then_some(before.enter));
     }
 

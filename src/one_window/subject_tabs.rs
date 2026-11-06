@@ -237,6 +237,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.reload_personal_rules(cx);
+        self.spawn_permission_setup_refresh(cx);
         let window = window.or_else(|| {
             Some(TabSource {
                 subject: Subject {
@@ -315,8 +316,10 @@ impl ScriptListApp {
                     text: source.body.to_string(),
                     mime_type: None,
                 };
+                // The typed instruction is the first turn, sent with the subject: Enter on
+                // “Translate to French · Selected text” translates it.
                 let entry = if id == "ask-words" {
-                    ChatEntry::seeded(self.filter_text.clone())
+                    ChatEntry::sending(self.filter_text.trim().to_string())
                 } else if row.title == "Explain this error" {
                     ChatEntry::seeded("Explain this error")
                 } else {

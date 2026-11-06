@@ -204,6 +204,7 @@ pub(crate) fn main_window_result_action_label(
     frontmost_app_name: Option<&str>,
 ) -> String {
     match result {
+        crate::scripts::SearchResult::App(am) => format!("Open {}", am.app.name),
         crate::scripts::SearchResult::Scriptlet(sm)
             if matches!(sm.scriptlet.tool.as_str(), "paste" | "snippet") =>
         {

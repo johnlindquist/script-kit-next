@@ -396,6 +396,9 @@ pub mod ledger_words {
     pub const BUN_MISSING: &str = "bun is not installed";
     pub const BUN_INSTALL: &str = "Install from bun.sh";
     pub const BUN_URL: &str = "https://bun.sh";
+    pub const PERMISSIONS_CONTINUE: &str = "Continue without them";
+    pub const PERMISSIONS_CONTINUE_SUB: &str =
+        "Some things won't be able to run until they're allowed";
 
     /// "Didn't send: To Sarah" / "Didn't run: Empty Trash".
     pub fn stopped(label: &str, run: bool) -> String {

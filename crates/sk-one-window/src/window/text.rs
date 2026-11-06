@@ -25,6 +25,7 @@ impl OneWindow {
         }
         self.text = text;
         self.chose = false;
+        self.published_names = None;
         self.chip_at = None;
         if self.text.trim().is_empty() {
             self.agent_owns = false;
@@ -61,8 +62,15 @@ impl OneWindow {
             }
         }
         if empty && pins.is_empty() && self.staged.is_none() {
-            pins = self.subject_page().map(|p| p.rows()).unwrap_or_default();
-            pins.extend(self.personal_rules().home_mode.suggestions(&self.suggested));
+            // What still needs setting up leads, above the subject tabs' panel.
+            let (setup, rest): (Vec<Row>, Vec<Row>) = self
+                .suggested
+                .iter()
+                .cloned()
+                .partition(|r| crate::setup::is_setup(&r.key));
+            pins = setup;
+            pins.extend(self.subject_page().map(|p| p.rows()).unwrap_or_default());
+            pins.extend(self.personal_rules().home_mode.suggestions(&rest));
         }
         self.list.pinned = pins;
 
@@ -88,10 +96,10 @@ impl OneWindow {
                 }
             }
         }
+        // Two host targets can share a display name (app, script, open tab). Only
+        // the same action key is a duplicate; Enter must be able to reach both.
         for r in real {
-            if !names.iter().any(|n| {
-                n.is_open_tab() == r.is_open_tab() && n.title.eq_ignore_ascii_case(&r.title)
-            }) {
+            if !names.iter().any(|n| n.key == r.key) {
                 names.push(r);
             }
         }

@@ -41,7 +41,9 @@ pub(crate) mod style;
 // Used by the library's day page editor; the binary's copy of this module doesn't call it.
 #[allow(unused_imports)]
 pub(crate) use storage::save_note_from_editor;
-pub(crate) use storage::{cold_content_for_new_note, verify_saved_note_content};
+pub(crate) use storage::{
+    cold_content_for_new_note, move_note_to_trash, undo_note_trash, verify_saved_note_content,
+};
 
 // Re-export notes action catalog for CommandBar action builders
 #[allow(unused_imports)]

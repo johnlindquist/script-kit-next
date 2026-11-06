@@ -57,6 +57,29 @@ mod tests {
     }
 
     #[test]
+    fn note_trash_undo_restores_the_file_once_and_refuses_an_old_tombstone() {
+        let _guard = notes_db_test_guard();
+        init_notes_db().unwrap();
+        let note = Note::with_content(format!(
+            "# {}\nDo not lose this line",
+            unique_test_token("trash_undo")
+        ));
+        save_note(&note).unwrap();
+        let path = note_file_path(note.id).unwrap().unwrap();
+        let (_, first) = move_note_to_trash(note.id).unwrap();
+        assert!(!path.exists());
+        undo_note_trash(note.id, first).unwrap();
+        assert!(path.exists());
+        assert!(undo_note_trash(note.id, first).is_err());
+        let (_, second) = move_note_to_trash(note.id).unwrap();
+        assert!(undo_note_trash(note.id, first).is_err());
+        assert!(!path.exists());
+        undo_note_trash(note.id, second).unwrap();
+        assert_eq!(get_note(note.id).unwrap().unwrap().content, note.content);
+        delete_note_permanently(note.id).unwrap();
+    }
+
+    #[test]
     fn confirmed_trash_delete_refuses_a_restored_note() {
         let _guard = notes_db_test_guard();
         init_notes_db().unwrap();

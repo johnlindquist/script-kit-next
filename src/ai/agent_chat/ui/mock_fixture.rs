@@ -18,6 +18,8 @@ const MAX_EVENTS: usize = 64;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct FixtureTurnReceipt {
     pub generation: u64,
+    /// Digests of the actual provider-free adapter input. Never records prompt text.
+    pub text_block_sha256: Vec<String>,
     pub thread_id: String,
     pub cancellation_requested: bool,
     /// Sending a local cancellation request is not a provider acknowledgement.
@@ -330,6 +332,19 @@ impl AgentChatConnection for StandardAgentChatMockFixtureConnection {
         state.turns.push(ActiveFixtureTurn {
             receipt: FixtureTurnReceipt {
                 generation,
+                text_block_sha256: request
+                    .blocks
+                    .iter()
+                    .filter_map(|block| {
+                        use sha2::Digest;
+                        match block {
+                            crate::ai::agent_chat::content::ContentBlock::Text(t) => {
+                                Some(format!("{:x}", sha2::Sha256::digest(t.text.as_bytes())))
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect(),
                 thread_id: request.ui_thread_id,
                 cancellation_requested: false,
                 remote_cancellation_acknowledged: false,

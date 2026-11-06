@@ -700,7 +700,21 @@ pub fn set_note_pinned(note_id: &str, pinned: bool) -> Result<String> {
 
 /// Moves a note to the trash. Returns its title.
 pub fn trash_note(note_id: &str) -> Result<String> {
-    change_note(note_id, crate::notes::Note::soft_delete)
+    trash_note_with_undo(note_id).map(|(title, _)| title)
+}
+
+/// The returned tombstone is required for Undo; an old inverse cannot affect a later deletion.
+pub fn trash_note_with_undo(note_id: &str) -> Result<(String, chrono::DateTime<chrono::Utc>)> {
+    crate::notes::move_note_to_trash(
+        crate::notes::NoteId::parse(note_id).context("Invalid note identity")?,
+    )
+}
+
+pub fn undo_trash_note(note_id: &str, at: chrono::DateTime<chrono::Utc>) -> Result<String> {
+    crate::notes::undo_note_trash(
+        crate::notes::NoteId::parse(note_id).context("Invalid note identity")?,
+        at,
+    )
 }
 
 /// Removes a note for good, file and all.

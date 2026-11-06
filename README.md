@@ -508,7 +508,11 @@ bun scripts/devtools/devtools.ts build-ops diagnose locks
 bun scripts/devtools/devtools.ts design diagnose --receipt "$RUN/theme-story/receipt.json"
 ```
 
-Receipt diagnosis is historical validation, not fresh proof. A stale compiler-input/configuration/toolchain artifact must be **rebuilt** into a new reference under a fresh `RUN`, then rerun with fresh output directories. Never reuse failed output roots or repair hashes by hand. Lock recovery, when needed, belongs to `build-ops act recover-lock --lock <exact-name.lock> --expect <observed-lock.json>` with the exact observed lease document; do not kill unrelated processes or delete caches/artifacts.
+Receipt diagnosis is historical validation, not fresh proof. A stale compiler-input/configuration/toolchain artifact must be **rebuilt** into a new reference under a fresh `RUN`, then rerun with fresh output directories. Never reuse failed output roots or repair hashes by hand.
+
+`target-agent/.locks/metadata.lock` gives one writer at a time access to the shared task registry. It is held during a registry operation, not for the life of a test. The helper verifies the owner's process first, then publishes the directory and its `lease.json` together without replacing an existing lock. Release removes the name before cleaning up the record. A failed process lookup therefore refuses the caller without blocking the next writer.
+
+Use `build-ops act recover-lock --lock <exact-name.lock> --expect <observed-lock.json>` for a lock diagnosed as `recoverable`. A missing owner record is not evidence of a dead owner; the recovery command refuses it. Do not fabricate lease records, kill unrelated processes, or delete caches/artifacts.
 
 Owned Design/Stories receipts use `script-kit-owned-receipt` format version 1: a compact summary references the single sanitized `observation.json` through existing artifact hashes and an owner-marker digest. Retain the complete owned evidence tree at its recorded identity; copying only the final JSON is not sufficient. Readers verify ownership, paths, bytes, and semantic evidence before trusting the summary. Resolution is one level only, with a 1 MiB compact-wire limit and 64 MiB per artifact; retained captures are processed sequentially. Obsolete inline-owned receipts are rejected without rewriting historical files; use their original compatible reader or collect fresh evidence. Small exporter release proofs remain standalone V2 documents written once and may still be copied/uploaded alone.
 

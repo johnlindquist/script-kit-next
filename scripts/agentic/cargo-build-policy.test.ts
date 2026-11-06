@@ -1584,6 +1584,66 @@ return {async stop(){watcher.close();return {sampleCount:1,maximumSampledAllocat
 });
 
 describe("Cargo cache ownership", () => {
+  test("failed owner observation leaves the metadata lock available to the next writer", () => {
+    const workspace = fixture(), parent = join(workspace.root, "target-agent/.locks"), lock = join(parent, "metadata.lock");
+    const owner = [String(process.pid), "metadata-writer"];
+    const ps = join(workspace.bin, "ps");
+    writeFileSync(ps, "#!/bin/sh\nexit 71\n", { mode: 0o755 });
+    const failed = run("cargo-cache-locks.sh", ["acquire", lock, ...owner, "0"], workspace.env);
+    expect(failed.status).not.toBe(0);
+    expect(failed.stderr).toContain("owner_start_unknown");
+    expect(readdirSync(parent)).toEqual([]);
+    rmSync(ps);
+    // The next writer must receive its lease, even where deleting scratch
+    // directories would fail after the public name has changed hands.
+    writeFileSync(join(workspace.bin, "sitecustomize.py"), `import os, sys
+def refuse(event, args):
+    if event == 'os.rmdir' and os.path.exists(os.environ['FIXTURE_PUBLIC_LOCK']):
+        raise PermissionError('post-publication scratch cleanup refused')
+sys.addaudithook(refuse)
+`);
+    const acquired = run("cargo-cache-locks.sh", ["acquire", lock, ...owner, "0"], { ...workspace.env, PYTHONPATH: workspace.bin, FIXTURE_PUBLIC_LOCK: lock });
+    expect(acquired.status).toBe(0);
+    expect(JSON.parse(acquired.stdout).directoryInode).toBe(lstatSync(lock).ino);
+    expect(run("cargo-cache-locks.sh", ["release", lock, ...owner], workspace.env).status).toBe(0);
+    expect(readdirSync(parent)).toEqual([]);
+  });
+
+  test("a releaser interrupted after unlinking its record cannot strand the public name", () => {
+    const workspace = fixture(), lock = join(workspace.root, "target-agent/.locks/metadata.lock");
+    const owner = [String(process.pid), "interrupted-release"];
+    expect(run("cargo-cache-locks.sh", ["acquire", lock, ...owner, "0"], workspace.env).status).toBe(0);
+    // Exit only this fixture's release helper, at rmdir of the original inode.
+    writeFileSync(join(workspace.bin, "sitecustomize.py"), `import os, sys
+def interrupt(event, args):
+    if event == 'os.rmdir' and os.stat(args[0]).st_ino == ${lstatSync(lock).ino}:
+        os._exit(91)
+sys.addaudithook(interrupt)
+`);
+    const stopped = run("cargo-cache-locks.sh", ["release", lock, ...owner], { ...workspace.env, PYTHONPATH: workspace.bin });
+    expect(stopped.status).toBe(91);
+    expect(existsSync(lock)).toBe(false);
+    const next = [String(process.pid), "next-writer"];
+    expect(run("cargo-cache-locks.sh", ["acquire", lock, ...next, "0"], workspace.env).status).toBe(0);
+    expect(run("cargo-cache-locks.sh", ["release", lock, ...next], workspace.env).status).toBe(0);
+  });
+
+  test("a racing empty metadata reservation is never replaced by a prepared lease", () => {
+    const workspace = fixture(), parent = join(workspace.root, "target-agent/.locks"), lock = join(parent, "metadata.lock");
+    // A different writer takes the name while the first is observing its owner.
+    const ps = join(workspace.bin, "ps");
+    writeFileSync(ps, '#!/bin/sh\nmkdir -m 700 "$RIVAL_LOCK" || exit 71\nexec /bin/ps "$@"\n', { mode: 0o755 });
+    const result = run("cargo-cache-locks.sh", ["acquire", lock, String(process.pid), "contender", "0"], { ...workspace.env, RIVAL_LOCK: lock });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("lease_busy_or_incomplete");
+    expect(readdirSync(parent)).toEqual(["metadata.lock"]);
+    expect(readdirSync(lock)).toEqual([]);
+    const diagnosis = run("cargo-cache-locks.sh", ["diagnose", lock], workspace.env);
+    expect(JSON.parse(diagnosis.stdout).state).toBe("protected");
+    expect(run("cargo-cache-locks.sh", ["recover", lock, diagnosis.stdout], workspace.env).status).not.toBe(0);
+    expect(existsSync(lock)).toBe(true);
+  });
+
   test("unproved compiler group cleanup retains the lease until exact absence recovery", async () => {
     const workspace = fixture(), lock = join(workspace.root, "target-agent/.locks/pool-agent-debug.lock");
     writeFileSync(join(workspace.bin, "ps"), `#!/bin/bash

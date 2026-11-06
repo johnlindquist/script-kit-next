@@ -1008,3 +1008,78 @@ fn news_waits_while_something_is_staged_and_gets_the_line_once_let_go() {
         "with nothing run before staging, the line keeps naming what's behind"
     );
 }
+
+/// Typing an app's name with Jev off: Jev's stand-in rows land in the same turn as the key, and
+/// the search's names a moment later. The app the words name is a launcher's first answer, so it
+/// takes the highlight and ↵ — the stand-in that filled the list for those few milliseconds was
+/// never the user's choice.
+#[test]
+fn an_app_named_exactly_leads_and_owns_enter_when_its_name_arrives_after_jev_went_down() {
+    let text = "superwhisper";
+    let mut win = OneWindow::default();
+    win.handle(0, Event::Text(text.into()));
+    win.handle(0, Event::JevDown { text: text.into() });
+    assert_eq!(win.list().current_row().unwrap().key, "down:model");
+    win.handle(
+        30,
+        Event::Names(vec![
+            Row::new("app:superwhisper", "superwhisper").with_score(100),
+            Row::new(
+                format!("{}{text}", crate::contract::ALL_RESULTS_KEY),
+                "See all 8 results",
+            ),
+            Row::new(format!("fallback-google:{text}"), "Search Google").fallback(),
+        ]),
+    );
+    assert_eq!(win.list().current(), Some(Item::Name(0)));
+    assert_eq!(win.enter_target(30).id, "app:superwhisper");
+    assert_eq!(
+        win.handle(31, Event::Key(Key::Enter)).picked.unwrap().0.key,
+        "app:superwhisper"
+    );
+}
+
+#[test]
+fn normal_exact_app_after_prefix_rival_and_empty_catalogue_publication() {
+    let mut w = OneWindow::default();
+    let app = || Row::new("app:whisper", "superwhisper").with_enter_label("Open superwhisper");
+    let rival = || Row::new("app:human", "Superhuman");
+    for (at, text, names) in [
+        (0, "su", vec![app()]),
+        (20, "super", vec![rival()]),
+        (40, "superw", vec![app()]),
+    ] {
+        w.handle(at, Event::Text(text.into()));
+        w.handle(at, Event::JevDown { text: text.into() });
+        w.handle(at, Event::Names(names));
+    }
+    let text = "SuperWhisper".to_lowercase();
+    w.handle(70, Event::Text(text.clone()));
+    w.handle(70, Event::JevDown { text });
+    w.handle(71, Event::Names(vec![])); // a provider published before the app index
+    w.handle(86, Event::Names(vec![app()]));
+    assert_eq!(w.enter_target(87).id, "app:whisper");
+    assert_eq!(
+        w.handle(90, Event::Key(Key::Enter)).picked.unwrap().0.key,
+        "app:whisper"
+    );
+}
+
+#[test]
+fn normal_same_title_app_and_script_keep_separate_dispatch_targets() {
+    let mut w = OneWindow::default();
+    w.handle(0, Event::Text("slack".into()));
+    w.handle(
+        0,
+        Event::Names(vec![
+            Row::new("app:slack", "Slack"),
+            Row::new("script:slack", "Slack"),
+        ]),
+    );
+    assert_eq!(w.enter_target(1).id, "app:slack");
+    w.handle(2, Event::Key(Key::Down));
+    assert_eq!(
+        w.handle(3, Event::Key(Key::Enter)).picked.unwrap().0.key,
+        "script:slack"
+    );
+}

@@ -934,13 +934,16 @@ impl ScriptListApp {
                     "trash",
                     format!("Move “{title}” to the trash"),
                     Box::new(move |app, cx| {
-                        let trashed = script_kit_gpui::day_page::trash_note(&id.as_str());
-                        if let Err(error) = trashed {
-                            app.one_window_notice(
-                                crate::line_notice::FAILED,
-                                format!("Couldn't move the note to the Trash: {error}"),
-                                cx,
-                            );
+                        match script_kit_gpui::day_page::trash_note_with_undo(&id.as_str()) {
+                            Ok((title, at)) => app.one_window_done_undoable(
+                                "trash", format!("Moved “{title}” to the trash"),
+                                Box::new(move |app, cx| {
+                                    if let Err(error) = script_kit_gpui::day_page::undo_trash_note(&id.as_str(), at) {
+                                        app.notice_failed(format!("Couldn't restore the note: {error}"), cx);
+                                    }
+                                }), cx),
+                            Err(error) => app.one_window_notice(crate::line_notice::FAILED,
+                                format!("Couldn't move the note to the Trash: {error}"), cx),
                         }
                     }),
                     cx,

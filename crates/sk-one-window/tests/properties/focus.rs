@@ -1,6 +1,9 @@
 //! The highlighted row is the user's. While one sentence sits in the input, nothing that arrives
 //! on its own (another answer from Jev, Jev going quiet, names searched again, time passing)
 //! replaces it or moves the highlight off it, and Return runs exactly it.
+//!
+//! One arrival is the launcher's answer rather than a change under the user: the search's first
+//! names for the words. Until the user moves the highlight, the top of that list takes it.
 
 use proptest::prelude::*;
 use sk_one_window::Row;
@@ -106,6 +109,8 @@ proptest! {
         let mut win = OneWindow::default();
         let mut now = 0u64;
         win.handle(now, Event::Text(SAID.into()));
+        let mut searched = None;
+        let mut moved = false;
         for a in arrivals {
             now += match a {
                 Arrival::Wait(ms) => u64::from(ms),
@@ -115,6 +120,22 @@ proptest! {
             let held_back = return_runs(&win, now).is_err();
             win.handle(now, event(&a));
             if matches!(a, Arrival::Move(_)) {
+                moved = true;
+                continue;
+            }
+            let first = match &a {
+                Arrival::Names(picks) => {
+                    let had = searched.replace(searched == Some(true) || !picks.is_empty());
+                    had.is_none() || (had == Some(false) && !picks.is_empty())
+                }
+                _ => false,
+            };
+            if first && !moved {
+                prop_assert_eq!(win.list().sel, 0, "the first names didn't put the highlight on top");
+                let top = win.list().current_row().map(|row| row.key);
+                if let Ok(ran) = return_runs(&win, now) {
+                    prop_assert_eq!(ran, top, "Return ran something other than the top row");
+                }
                 continue;
             }
             let Some(key) = was else {

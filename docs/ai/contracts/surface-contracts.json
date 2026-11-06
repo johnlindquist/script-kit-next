@@ -52,6 +52,121 @@
       ]
     },
     {
+      "id": "main.launcher-basics",
+      "family": "main",
+      "root": "main",
+      "owner": "src/main_entry/app_run_setup.rs",
+      "factoryOwners": [
+        "src/main_entry/app_run_setup.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/render_script_list",
+      "expectedSemanticSurface": "scriptList",
+      "requiredSemanticIds": [
+        "input:filter"
+      ]
+    },
+    {
+      "id": "main.launcher-ready",
+      "family": "main",
+      "root": "main",
+      "owner": "src/main_entry/app_run_setup.rs",
+      "factoryOwners": [
+        "src/main_entry/app_run_setup.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/render_script_list",
+      "expectedSemanticSurface": "scriptList",
+      "requiredSemanticIds": [
+        "input:filter"
+      ]
+    },
+    {
+      "id": "main.launcher-cold",
+      "family": "main",
+      "root": "main",
+      "owner": "src/main_entry/app_run_setup.rs",
+      "factoryOwners": [
+        "src/main_entry/app_run_setup.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/render_script_list",
+      "expectedSemanticSurface": "scriptList",
+      "requiredSemanticIds": [
+        "input:filter"
+      ]
+    },
+    {
+      "id": "main.launcher-reading",
+      "family": "main",
+      "root": "main",
+      "owner": "src/main_entry/app_run_setup.rs",
+      "factoryOwners": [
+        "src/main_entry/app_run_setup.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/render_script_list",
+      "expectedSemanticSurface": "scriptList",
+      "requiredSemanticIds": [
+        "input:filter"
+      ]
+    },
+    {
+      "id": "main.launcher-watch",
+      "family": "main",
+      "root": "main",
+      "owner": "src/main_entry/app_run_setup.rs",
+      "factoryOwners": [
+        "src/main_entry/app_run_setup.rs"
+      ],
+      "proofBoundary": "owned-production-runtime",
+      "nativeExclusions": [
+        "WindowServer composition and desktop capture",
+        "AppKit material, native glyph pixels and calibrated native entry/exit motion",
+        "Native focus, activation, IME and global input",
+        "System clipboard, device access, TCC and external-app insertion",
+        "Live providers, credentials, network and operator storage"
+      ],
+      "appViewVariant": "ScriptList",
+      "presentationOwner": "src/render_script_list",
+      "expectedSemanticSurface": "scriptList",
+      "requiredSemanticIds": [
+        "input:filter"
+      ]
+    },
+    {
       "id": "main.root-search-frame-stability",
       "family": "main",
       "root": "main",
@@ -1932,6 +2047,11 @@
         "main-overlay.logs",
         "main-overlay.tab-ai-saved",
         "main-search-contract",
+        "main.launcher-basics",
+        "main.launcher-cold",
+        "main.launcher-reading",
+        "main.launcher-ready",
+        "main.launcher-watch",
         "main.menu-syntax-history",
         "main.menu-syntax-object",
         "main.menu-syntax-trigger",

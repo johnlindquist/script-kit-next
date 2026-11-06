@@ -138,6 +138,25 @@ impl ScriptListApp {
             self.one_window_jev_answered(id, text, screen, Err(JevError::Refused("local request")), cx);
             return;
         }
+        // An owned service may supply a delayed plan rather than a remote request.
+        // Its result still crosses the real request-id, text and context checks.
+        if let Some(plan) = self.main_services.owned_sources().and_then(|sources|
+            sources.delayed_test_readings.iter().find(|p| p.request == text)).cloned() {
+            cx.spawn(async move |this, cx| {
+                // Exercise both sides of the five-second fallback deadline. The
+                // second, deliberately different response has the same request id.
+                let duplicate=(text=="superwhisper").then(|| {
+                    let mut duplicate=plan.clone(); duplicate.reading.title="Obsolete second answer".into(); duplicate.alternatives.clear(); duplicate
+                });
+                cx.background_executor().timer(std::time::Duration::from_millis(if duplicate.is_some() { 6500 } else { 1500 })).await;
+                let _ = this.update(cx, |app, cx| app.one_window_jev_answered(id, text.clone(), screen, Ok(plan), cx));
+                if let Some(plan)=duplicate {
+                    cx.background_executor().timer(std::time::Duration::from_millis(1600)).await;
+                    let _ = this.update(cx, |app,cx| app.one_window_jev_answered(id,text,screen,Ok(plan),cx));
+                }
+            }).detach();
+            return;
+        }
         let world = if self.main_services.is_production() {
             None
         } else {

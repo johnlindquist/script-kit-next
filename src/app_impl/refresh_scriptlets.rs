@@ -702,7 +702,7 @@ impl ScriptListApp {
         self.invalidate_preview_cache();
     }
 
-    fn apply_loaded_scripts_and_scriptlets(
+    pub(crate) fn apply_loaded_scripts_and_scriptlets(
         &mut self,
         loaded_scripts: Vec<std::sync::Arc<scripts::Script>>,
         loaded_scriptlets: scripts::ScriptletCatalogue,

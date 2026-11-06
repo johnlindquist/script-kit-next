@@ -51,6 +51,40 @@ impl ScriptWatcher {
         (Self { watcher }, rx)
     }
 
+    /// A real filesystem watcher, restricted to a new, empty private plugin tree.
+    /// It neither discovers the user's plugins nor permits a caller-supplied watch path.
+    #[cfg(feature = "owned-ui-evaluation")]
+    pub(crate) fn for_owned_save(
+        config: &crate::config::Config,
+    ) -> anyhow::Result<(Self, Receiver<ScriptReloadEvent>, PathBuf)> {
+        let scope = crate::runtime_policy::owned_evaluation()
+            .ok_or_else(|| anyhow::anyhow!("owned_root_required"))?;
+        let kit = scope.root().join("normal-kit");
+        scope.require_owned_path(&kit)?;
+        std::fs::create_dir(&kit)?;
+        let plugins = kit.join("plugins");
+        let scripts = plugins.join("fixture/scripts");
+        std::fs::create_dir_all(&scripts)?;
+        let paths = super::KitWatchPaths {
+            plugins_path: plugins,
+            scripts_paths: vec![scripts],
+            scriptlets_paths: vec![],
+            agents_paths: vec![],
+            skills_paths: vec![],
+        };
+        let settings = super::watcher_settings_from_config(config);
+        let spec =
+            ScriptWatcherSpec::with_discover_paths(settings, Arc::new(move || paths.clone()));
+        let (tx, rx) = channel();
+        Ok((
+            Self {
+                watcher: GenericWatcher::new(tx, spec, to_generic_watcher_settings(settings)),
+            },
+            rx,
+            kit,
+        ))
+    }
+
     /// Start watching the scripts directory for changes.
     pub fn start(&mut self) -> NotifyResult<()> {
         self.watcher.start()

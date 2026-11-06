@@ -378,6 +378,23 @@ function clientFixture(captureBytes: Json = { pngBase64: capturePng }, alterAtom
   return { client: new Constructor(driver as unknown as Driver), requests, changeState: () => { current = { ...current, dataGeneration: current.dataGeneration + 1 }; } };
 }
 
+test("a deferred GPUI refusal is identified only when both receipts rule out dispatch", async () => {
+  for (const dispatched of [false, true]) {
+    const { client } = clientFixture();
+    const target = await client.mount("main.script-list");
+    const request = client.driver.request.bind(client.driver);
+    client.driver.request = async (command, options) => {
+      const r = await request(command, options);
+      if(command.type === "simulateGpuiEvent") {
+        Object.assign(r, {success:false,errorCode:"stale_target_identity",dispatchCompleted:dispatched});
+        r.actionReceipt.dispatchCompleted=false;
+      }
+      return r;
+    };
+    await expect(client.act(target,{type:"key",key:"x",text:"x"})).rejects.toThrow(dispatched ? "completed_action_receipt_required" : "stale_target_identity");
+  }
+});
+
 function frameAcknowledgementClientFixture(alter: (reply: Json) => void = () => {}) {
   const fixture = clientFixture();
   const request = fixture.client.driver.request.bind(fixture.client.driver);

@@ -434,6 +434,20 @@ mod tests {
         assert!(!state.message().is_empty(), "Should have a message");
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn an_undecodable_icon_is_missing_artwork_not_a_failed_app_catalogue() {
+        let home = tempfile::tempdir().unwrap();
+        let app = home.path().join("Fixture.app");
+        let resources = app.join("Contents/Resources");
+        fs::create_dir_all(&resources).unwrap();
+        fs::write(app.join("Contents/Info.plist"), b"<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleIconFile</key><string>Broken.icns</string></dict></plist>").unwrap();
+        fs::write(resources.join("Broken.icns"), b"not an image").unwrap();
+        assert!(extract_app_icon_from_bundle_resource(&app)
+            .unwrap()
+            .is_none());
+    }
+
     #[test]
     fn application_roots_distinguish_empty_absent_and_failed_reads() {
         let temp = tempfile::tempdir().expect("tempdir");

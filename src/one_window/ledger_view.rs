@@ -10,7 +10,7 @@ use std::hash::{Hash, Hasher};
 use gpui::Context;
 use sk_one_window::contract::ledger_words;
 use sk_one_window::notice::{Irreversible, Notice};
-use sk_one_window::setup::{needs_setup_rows, Missing, BUN_KEY};
+use sk_one_window::setup::{needs_setup_rows, Missing, Need, Permission, BUN_KEY, CONTINUE_KEY};
 use sk_one_window::stage::entry_subject;
 use sk_one_window::{history, Done, Effect, Event, HeldOp, Key, Risk, Row, ViewOp};
 
@@ -74,6 +74,38 @@ pub(crate) fn own_row_result(row: &Row) -> SearchResult {
         score: 0,
         match_evidence: None,
     })
+}
+
+/// A permission as its "Needs setup" row shows it.
+fn setup_permission(
+    kind: crate::permissions_wizard::PermissionKind,
+    status: crate::platform::permiso_detect::PermissionStatus,
+) -> Permission {
+    use crate::permissions_wizard::PermissionRequirement;
+    use crate::platform::permiso_detect::PermissionStatus;
+    let granted = match status {
+        PermissionStatus::Authorized => Some(true),
+        PermissionStatus::Unknown => None,
+        PermissionStatus::Denied | PermissionStatus::NotDetermined => Some(false),
+    };
+    Permission {
+        id: crate::permissions::kind_code(kind),
+        name: kind.name(),
+        icon: kind.icon(),
+        need: match kind.requirement() {
+            PermissionRequirement::Required => Need::Required,
+            PermissionRequirement::Recommended => Need::Recommended,
+            PermissionRequirement::Optional => Need::Optional,
+        },
+        granted,
+        about: if granted == Some(false) && crate::permissions::grant_looks_stuck(kind) {
+            "Already on in System Settings? Press ⌘R to restart Script Kit".to_string()
+        } else if granted == Some(false) {
+            kind.missing_consequence().to_string()
+        } else {
+            kind.subtitle().to_string()
+        },
+    }
 }
 
 /// Rows as the launcher's grouped list: each row's head becomes a section header.
@@ -546,12 +578,141 @@ impl ScriptListApp {
 
     /// What still needs setting up, to lead the empty list.
     pub(crate) fn one_window_setup_rows(&self) -> Vec<Row> {
-        let missing: Vec<Missing> = self
+        let mut missing: Vec<Missing> = self
             .bun_missing
             .then_some(Missing::Bun)
             .into_iter()
             .collect();
+        missing.extend(
+            self.permission_setup_list()
+                .into_iter()
+                .map(|(kind, status)| Missing::Permission(setup_permission(kind, status))),
+        );
         needs_setup_rows(&missing)
+    }
+
+    /// The permissions "Needs setup" lists now, with their state.
+    pub(crate) fn permission_setup_list(
+        &self,
+    ) -> Vec<(
+        crate::permissions_wizard::PermissionKind,
+        crate::platform::permiso_detect::PermissionStatus,
+    )> {
+        // Read the published observations here. Building rows (and hashing their
+        // cache key) is a paint/search path, not a reason to query macOS.
+        let statuses = self.main_services.owned_sources().map_or_else(
+            || {
+                crate::permissions_wizard::PermissionKind::all()
+                    .iter()
+                    .map(|&kind| {
+                        (
+                            kind,
+                            crate::permissions::cached(kind).unwrap_or(
+                                crate::platform::permiso_detect::PermissionStatus::Unknown,
+                            ),
+                        )
+                    })
+                    .collect()
+            },
+            |sources| sources.permissions.clone(),
+        );
+        crate::permissions_wizard::setup_list(
+            &statuses,
+            &self.permission_setup_declined,
+            self.permission_setup_every,
+        )
+    }
+
+    /// "Set Up Permissions": every permission leads the empty launcher with its state, until
+    /// the user goes on without the rest. Nothing is listed when every one is already on.
+    pub(crate) fn one_window_set_up_permissions(&mut self, cx: &mut Context<Self>) {
+        if self.main_services.is_production() {
+            crate::permissions::refresh_all();
+        }
+        self.permission_setup_every = true;
+        if self.permission_setup_list().is_empty() {
+            self.permission_setup_every = false;
+            self.one_window_notice(crate::line_notice::INFO, "Every permission is on", cx);
+            return;
+        }
+        if !matches!(self.current_view, crate::AppView::ScriptList) || !self.filter_text.is_empty()
+        {
+            self.reset_to_script_list(cx);
+        }
+        if self.main_services.is_production() {
+            script_kit_gpui::request_show_main_window();
+        }
+        self.one_window_republish_ledger("permission_setup", cx);
+        cx.notify();
+    }
+
+    /// Runs a "Needs setup" permission row: asks macOS, or opens where it's switched on.
+    fn one_window_run_permission_row(
+        &mut self,
+        row: &Row,
+        cx: &mut Context<Self>,
+    ) -> Option<anyhow::Result<()>> {
+        if row.key == CONTINUE_KEY {
+            return Some(self.one_window_continue_without_permissions(cx));
+        }
+        let id = sk_one_window::setup::permission_id(&row.key)?;
+        let Some(&kind) = crate::permissions_wizard::PermissionKind::all()
+            .iter()
+            .find(|kind| crate::permissions::kind_code(**kind) == id)
+        else {
+            return Some(Err(anyhow::anyhow!("That permission is no longer listed")));
+        };
+        self.execute_permissions_wizard_grant(kind, cx);
+        self.one_window_republish_ledger("permission_requested", cx);
+        Some(Ok(()))
+    }
+
+    /// The user goes on without the permissions still off: they stop leading the list and stop
+    /// coming up at startup. ⌘Z brings them back.
+    fn one_window_continue_without_permissions(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let before = self.permission_setup_declined.clone();
+        let was_every = self.permission_setup_every;
+        let mut declined = before.clone();
+        for (kind, status) in self.permission_setup_list() {
+            if crate::permissions_wizard::is_missing(status) && !declined.contains(&kind) {
+                declined.push(kind);
+            }
+        }
+        crate::permissions_wizard::save_declined(&declined)
+            .map_err(|error| anyhow::anyhow!("Couldn't save the permission choice: {error}"))?;
+        self.permission_setup_declined = declined;
+        self.permission_setup_every = false;
+        tracing::info!(
+            category = "PERMISSIONS",
+            event = "permission_setup_continued",
+            declined = ?self.permission_setup_declined,
+        );
+        self.one_window_done_undoable(
+            "arrow-right",
+            "Continued without some permissions",
+            Box::new(
+                move |app: &mut ScriptListApp, cx: &mut Context<ScriptListApp>| {
+                    if let Err(error) = crate::permissions_wizard::save_declined(&before) {
+                        app.one_window_notice(
+                            crate::line_notice::FAILED,
+                            format!("Couldn't bring the permissions back: {error}"),
+                            cx,
+                        );
+                        return;
+                    }
+                    app.permission_setup_declined = before;
+                    app.permission_setup_every = was_every;
+                    app.one_window_republish_ledger("permission_setup_undone", cx);
+                    app.spawn_permission_setup_refresh(cx);
+                },
+            ),
+            cx,
+        );
+        self.one_window_republish_ledger("permission_setup_continued", cx);
+        Ok(())
     }
 
     /// Changes whenever the reducer's own rows would draw differently.
@@ -573,6 +734,20 @@ impl ScriptListApp {
             .map(|s| s.waiting_for_rows)
             .hash(hasher);
         self.bun_missing.hash(hasher);
+        for (kind, status) in self.permission_setup_list() {
+            kind.hash(hasher);
+            crate::permissions::status_code(status).hash(hasher);
+            crate::permissions::grant_looks_stuck(kind).hash(hasher);
+        }
+    }
+
+    /// "Needs setup" changed: the empty list draws it again.
+    pub(crate) fn one_window_republish_setup(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.one_window_republish_ledger(reason, cx);
     }
 
     fn one_window_republish_ledger(&mut self, reason: &'static str, cx: &mut Context<Self>) {
@@ -590,6 +765,9 @@ impl ScriptListApp {
         row: &Row,
         cx: &mut Context<Self>,
     ) -> Option<anyhow::Result<()>> {
+        if let Some(ran) = self.one_window_run_permission_row(row, cx) {
+            return Some(ran);
+        }
         if row.key == BUN_KEY {
             let opened = self.open_bun_website();
             if let Err(error) = &opened {

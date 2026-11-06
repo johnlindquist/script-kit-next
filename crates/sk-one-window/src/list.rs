@@ -612,7 +612,15 @@ impl ListState {
             .names
             .iter()
             .filter(|r| !r.fallback && r.is_strong())
-            .map(|r| r.key.as_str());
+            .map(|r| {
+                // These are explicit targets, not former fuzzy winners. A text action
+                // can disappear while the next word is incomplete ("translate t").
+                let instruction = r.key.starts_with("subject/") && r.key.ends_with("/ask-words");
+                (
+                    r.key.as_str(),
+                    instruction || r.title.trim().eq_ignore_ascii_case(self.text.trim()),
+                )
+            });
         self.steady.names(strong);
     }
 

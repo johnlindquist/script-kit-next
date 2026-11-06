@@ -199,6 +199,52 @@ impl Evaluator {
                 };
                 chat::drive_sdk_chat_fixture(&prompt, control, action, &mut cx)?;
             }
+            FixtureControl::OneWindow(
+                crate::protocol::OneWindowFixtureCommand::ObserveUnchangedPermissionRequest {},
+            ) => {
+                ensure!(
+                    mounted.fixture_id == "main.launcher-basics",
+                    "launcher_permissions_fixture_required"
+                );
+                let kind = crate::permissions_wizard::PermissionKind::ScreenRecording;
+                // Process-local facts in this owned evaluator only, never TCC.
+                crate::permissions::record(
+                    kind,
+                    crate::platform::permiso_detect::PermissionStatus::Denied,
+                );
+                crate::permissions::note_requested(kind);
+            }
+            FixtureControl::OneWindow(
+                crate::protocol::OneWindowFixtureCommand::ReportScriptFailure {},
+            ) => {
+                ensure!(
+                    mounted.fixture_id == "main.launcher-ready",
+                    "launcher_fixture_required"
+                );
+                let RootOwner::Main(main) = &mounted.owner else {
+                    anyhow::bail!("launcher_main_required")
+                };
+                let path = self.bootstrap.root.join("scripts/Fixture Failure.ts");
+                crate::runtime_policy::owned_evaluation()
+                    .context("owned_storage_required")?
+                    .require_owned_path(&path)?;
+                use std::io::Write as _;
+                std::fs::File::create_new(&path)?
+                    .write_all(b"throw new Error('Fixture example failed');\n")?;
+                main.update(&mut **self.cx.app.borrow_mut(), |app, cx| {
+                    app.handle_prompt_message(
+                        crate::PromptMessage::ScriptError {
+                            error_message: "Fixture example failed".into(),
+                            stderr_output: None,
+                            exit_code: Some(1),
+                            stack_trace: None,
+                            script_path: path.to_string_lossy().into_owned(),
+                            suggestions: Vec::new(),
+                        },
+                        cx,
+                    )
+                });
+            }
             FixtureControl::Theme(command) => {
                 ensure!(
                     mounted.fixture_id == "main.theme-chooser",
@@ -253,6 +299,75 @@ impl Evaluator {
                 main.update(&mut **self.cx.app.borrow_mut(), |app, cx| {
                     app.cursor_fixture_final(words, cx)
                 })?;
+            }
+            FixtureControl::OneWindow(
+                crate::protocol::OneWindowFixtureCommand::FinishAppIndex {},
+            ) => {
+                ensure!(
+                    mounted.fixture_id == "main.launcher-cold",
+                    "cold_catalogue_fixture_required"
+                );
+                let RootOwner::Main(main) = &mounted.owner else {
+                    anyhow::bail!("launcher_main_required")
+                };
+                let path = self.bootstrap.root.join("superwhisper.app");
+                main.update(
+                    &mut **self.cx.app.borrow_mut(),
+                    |app, cx| -> anyhow::Result<()> {
+                        ensure!(
+                            app.main_services.owned_sources().is_some()
+                                && !app.apps.iter().any(|a| a.path == path),
+                            "not_a_pending_fixture_catalogue"
+                        );
+                        let mut apps = app.apps.clone();
+                        apps.push(crate::app_launcher::AppInfo {
+                            name: "superwhisper".into(),
+                            path,
+                            bundle_id: None,
+                            icon: None,
+                        });
+                        app.commit_main_menu_results_refresh("apps", None, cx, |app, cx| {
+                            app.complete_root_app_catalog(apps, std::time::Duration::ZERO, cx);
+                            true
+                        });
+                        Ok(())
+                    },
+                )?;
+            }
+            FixtureControl::OneWindow(
+                crate::protocol::OneWindowFixtureCommand::ObserveAccessibility { granted },
+            ) => {
+                ensure!(
+                    mounted.fixture_id == "main.launcher-basics",
+                    "launcher_permissions_fixture_required"
+                );
+                let RootOwner::Main(main) = &mounted.owner else {
+                    anyhow::bail!("launcher_main_required")
+                };
+                main.update(
+                    &mut **self.cx.app.borrow_mut(),
+                    |app, cx| -> anyhow::Result<()> {
+                        let crate::MainServices::OwnedFixtures(sources) = &mut app.main_services
+                        else {
+                            anyhow::bail!("owned_permissions_required")
+                        };
+                        let pair = std::sync::Arc::make_mut(sources)
+                            .permissions
+                            .iter_mut()
+                            .find(|(k, _)| {
+                                *k == crate::permissions_wizard::PermissionKind::Accessibility
+                            })
+                            .context("accessibility_fixture_absent")?;
+                        pair.1 = if granted {
+                            crate::platform::permiso_detect::PermissionStatus::Authorized
+                        } else {
+                            crate::platform::permiso_detect::PermissionStatus::Denied
+                        };
+                        // Only the detector changed. The launcher's regular poll observes it.
+                        let _ = cx;
+                        Ok(())
+                    },
+                )?;
             }
             FixtureControl::OneWindow(
                 crate::protocol::OneWindowFixtureCommand::ShortcutOutside {},

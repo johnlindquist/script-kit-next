@@ -400,6 +400,26 @@ impl ScriptListApp {
         }
     }
 
+    /// A receipt from the owned mock connection, not an inference from chat UI text.
+    /// No observation of prompts from production providers is made here.
+    pub(super) fn owned_chat_delivery(&self) -> Option<serde_json::Value> {
+        if self.main_services.is_production() {
+            return None;
+        }
+        let receipts = self
+            .one_window_host
+            .work
+            .chat
+            .as_ref()?
+            .fixture
+            .as_ref()?
+            .receipts()
+            .ok()?;
+        Some(
+            serde_json::json!({ "turnCount": receipts.len(), "lastTextBlocksSha256": receipts.last().map(|r| &r.text_block_sha256) }),
+        )
+    }
+
     /// A new thread for the model's chat.
     pub(crate) fn one_window_fresh_chat_thread(
         &mut self,

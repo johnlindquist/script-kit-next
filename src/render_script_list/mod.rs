@@ -1140,6 +1140,10 @@ impl ScriptListApp {
             let flat_results_clone = flat_results.clone();
             let projected_rows = self.main_menu_committed_rows_snapshot();
             let panel_rows = if self.has_launcher_tabs() && self.filter_text.is_empty() { self.one_window.subject_page().map_or(0, |p|p.source.rows.len()) } else {0};
+            // "Needs setup" leads the empty list above the subject panel: its header and rows
+            // come first, so the panel's header sits right after them.
+            let setup_rows = if panel_rows > 0 { self.one_window.list().pinned.iter().take_while(|r| sk_one_window::setup::is_setup(&r.key)).count() } else {0};
+            let panel_start = if setup_rows > 0 { setup_rows + 1 } else {0};
             let panel_fill=crate::components::subject_tab_bar::panel_color(&self.theme);
             let panel_edge=px(crate::components::subject_tab_bar::PANEL_INSET);
             let committed_calculator = self.main_menu_committed_calculator().cloned();
@@ -1196,9 +1200,9 @@ impl ScriptListApp {
                                         ))
                                         .debug_selector(move || format!("oneWindowSectionHeader:{ix}"))
                                         .h(px(h_px))
-                                        .when(is_first && panel_rows>0,|d|d.bg(panel_fill))
+                                        .when(ix==panel_start && panel_rows>0,|d|d.bg(panel_fill))
                                         .child(crate::list_item::render_section_header_for_family(label,icon.as_deref(),theme_colors,is_first,if panel_rows>0 {crate::list_item::SectionPresentationFamily::PreserveAuthored} else {crate::list_item::SectionPresentationFamily::Launcher}));
-                                    if is_first && panel_rows>0 {div().w_full().px(panel_edge).child(head).into_any_element()} else {head.into_any_element()}
+                                    if ix==panel_start && panel_rows>0 {div().w_full().px(panel_edge).child(head).into_any_element()} else {head.into_any_element()}
                                 }
                                 GroupedListItem::Status(status) => {
                                     div()
@@ -1382,7 +1386,7 @@ impl ScriptListApp {
                                             format!("script-item-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
-                                        .when(ix>0 && ix<=panel_rows,|d|d.bg(panel_fill).when(ix==panel_rows,|d|d.rounded_b(px(current_main_menu_theme.def().row.radius))))
+                                        .when(ix>panel_start && ix<=panel_start+panel_rows,|d|d.bg(panel_fill).when(ix==panel_start+panel_rows,|d|d.rounded_b(px(current_main_menu_theme.def().row.radius))))
                                         .when(stale, |row| {
                                             row.opacity(crate::theme::opacity::OPACITY_STALE_ROW)
                                         })
@@ -1404,7 +1408,7 @@ impl ScriptListApp {
                                             }
                                         }).absolute().top_0().left_0().size_full())
                                     });
-                                    if ix>0 && ix<=panel_rows {div().w_full().px(panel_edge).child(row_element).into_any_element()} else {row_element.into_any_element()}
+                                    if ix>panel_start && ix<=panel_start+panel_rows {div().w_full().px(panel_edge).child(row_element).into_any_element()} else {row_element.into_any_element()}
                                 }
                             }
                         } else {
@@ -1700,6 +1704,10 @@ impl ScriptListApp {
                     let key_match = key_str.to_ascii_lowercase();
 
                     match key_match.as_str() {
+                        "r" if !has_shift && !event.keystroke.modifiers.alt && !event.keystroke.modifiers.control && this.maybe_restart_for_setup_row(cx) => {
+                            cx.stop_propagation();
+                            return;
+                        }
                         "v" if this.route_large_script_list_paste_to_agent_chat(cx) => {
                             logging::log(
                                 "KEY",

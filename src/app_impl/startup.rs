@@ -673,6 +673,10 @@ impl ScriptListApp {
             last_scrolled_clipboard: None,
             last_scrolled_window: None,
             bun_missing: !bun_available,
+            permission_setup_every: false,
+            permission_setup_declined: crate::permissions_wizard::load_declined(),
+            permission_setup_refreshing: false,
+            permission_setup_shown: Vec::new(),
             // Menu bar integration: Now handled by frontmost_app_tracker module
             // which pre-fetches menu items in background when apps activate
             // Shortcut recorder state - starts as None (no recorder showing)

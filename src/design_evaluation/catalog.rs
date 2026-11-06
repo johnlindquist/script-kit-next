@@ -157,6 +157,11 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
     let (route, owner) = match id {
         "main.script-list"
         | "main.subject-tabs"
+        | "main.launcher-basics"
+        | "main.launcher-ready"
+        | "main.launcher-cold"
+        | "main.launcher-reading"
+        | "main.launcher-watch"
         | "main.root-search-frame-stability"
         | "main-search-contract"
         | "main.menu-syntax-trigger"

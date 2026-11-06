@@ -53,30 +53,93 @@ impl SubjectPage {
             _ => format!("{}d", s / 86400),
         }
     }
-    /// A local, explicitly scoped chat draft; no selected or copied text goes into a
-    /// classifier request. Non-referential launcher searches keep their normal matches.
+    /// The words asked of the subject: a local rule, so no selected or copied text goes into a
+    /// classifier request. An instruction leads with a verb that works on text and either names
+    /// the subject ("translate this") or, for selected or copied text, leaves its object out
+    /// ("translate to French", "summarize"). Searches that name their own object ("translate
+    /// hello to French") keep their normal matches.
     pub fn reading(&self, text: &str) -> Option<Row> {
+        const VERBS: &[&str] = &[
+            "explain",
+            "summarize",
+            "summarise",
+            "rewrite",
+            "translate",
+            "ask",
+            "fix",
+            "proofread",
+            "shorten",
+            "simplify",
+            "improve",
+            "reword",
+            "rephrase",
+            "correct",
+            "polish",
+            "condense",
+            "expand",
+            "define",
+            "reply",
+            "respond",
+            "answer",
+            "edit",
+        ];
+        const NAMES_IT: &[&str] = &[
+            "this",
+            "it",
+            "that",
+            "these",
+            "them",
+            "selection",
+            "selected",
+            "clipboard",
+            "copied",
+        ];
+        const LEAVES_IT_OUT: &[&str] = &[
+            "to", "into", "in", "as", "for", "like", "from", "with", "so", "and", "please",
+            "briefly",
+        ];
         let words: Vec<_> = text
             .split(|c: char| !c.is_alphanumeric())
             .filter(|w| !w.is_empty())
             .map(str::to_ascii_lowercase)
+            .skip_while(|w| w == "please")
             .collect();
         let verb = words.first()?.as_str();
-        if !matches!(
-            verb,
-            "explain" | "summarize" | "rewrite" | "translate" | "ask"
-        ) || !words.iter().any(|w| matches!(w.as_str(), "this" | "it"))
-        {
+        let object = words.get(1).map(String::as_str);
+        let names_it = words.iter().any(|w| NAMES_IT.contains(&w.as_str()));
+        // General verbs aren't text actions by themselves (e.g. "Make Coffee").
+        // Only use them when their direct object points at the current subject.
+        let transforms_it =
+            matches!(verb, "make" | "turn") && object.is_some_and(|word| NAMES_IT.contains(&word));
+        if !transforms_it && !VERBS.contains(&verb) {
+            return None;
+        }
+        let text_subject = matches!(
+            self.source.subject.kind,
+            SubjectKind::Selection | SubjectKind::Clipboard
+        );
+        let leaves_it_out = words
+            .get(1)
+            .is_none_or(|next| LEAVES_IT_OUT.contains(&next.as_str()));
+        let edits_text = verb == "fix"
+            && match &words[1..] {
+                [what] => matches!(what.as_str(), "grammar" | "spelling" | "punctuation"),
+                [the, what] if the == "the" => {
+                    matches!(what.as_str(), "grammar" | "spelling" | "punctuation")
+                }
+                _ => false,
+            };
+        if !names_it && !(text_subject && (leaves_it_out || edits_text)) {
             return None;
         }
         Some(
             Row::new(
                 format!("subject/{}/ask-words", self.id),
-                format!("{} · {}", text, self.source.label),
+                format!("{} · {}", text.trim(), self.source.label),
             )
-            .with_sub("Open a chat with this subject")
+            .with_sub("Ask the model with this subject")
             .with_icon("sparkles")
-            .with_enter_label("Open chat"),
+            .with_enter_label("Ask the model"),
         )
     }
     pub fn rows(&self) -> Vec<Row> {

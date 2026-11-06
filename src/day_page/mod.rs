@@ -9,7 +9,8 @@ pub(crate) mod telemetry;
 mod tests;
 
 pub use document::{
-    delete_note_permanently, set_note_pinned, trash_note, DayPageBinding, DayPageDocumentSession,
+    delete_note_permanently, set_note_pinned, trash_note, trash_note_with_undo, undo_trash_note,
+    DayPageBinding, DayPageDocumentSession,
 };
 pub use render::render_fragment_back_bar;
 pub use sediment::{

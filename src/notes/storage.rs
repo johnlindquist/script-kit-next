@@ -1526,14 +1526,63 @@ pub fn save_note(note: &Note) -> Result<()> {
     let substrate = notes_substrate()?;
     let db = get_db()?;
     let mut conn = db.lock().map_err(db_lock_err)?;
+    // Reserve the index write before touching the canonical file. A competing
+    // trash/restore must not invalidate the target between lookup and commit.
+    let tx = conn
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .context("Starting note save")?;
+    save_note_in_transaction(&substrate, tx, note)
+}
 
+/// Move or restore exactly one note. An inverse identifies the particular trip to the trash,
+/// not just a note UUID that may have since been restored, edited and trashed again.
+/// Take SQLite's write reservation before reading the source, including across processes.
+fn change_note_trash(
+    id: NoteId,
+    restore: Option<DateTime<Utc>>,
+) -> Result<(String, DateTime<Utc>)> {
+    ensure_notes_db_open()?;
+    let substrate = notes_substrate()?;
+    let db = get_db()?;
+    let mut conn = db.lock().map_err(db_lock_err)?;
+    let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let mut note = get_note_with_conn(&tx, id)?.context("Note no longer exists")?;
+    anyhow::ensure!(note.deleted_at == restore, "Note trash state changed");
+    let at = match restore {
+        Some(at) => {
+            note.restore();
+            at
+        }
+        None => {
+            let at = Utc::now();
+            note.deleted_at = Some(at);
+            at
+        }
+    };
+    save_note_in_transaction(&substrate, tx, &note)?;
+    Ok((note.title, at))
+}
+
+pub(crate) fn move_note_to_trash(id: NoteId) -> Result<(String, DateTime<Utc>)> {
+    change_note_trash(id, None)
+}
+
+pub(crate) fn undo_note_trash(id: NoteId, at: DateTime<Utc>) -> Result<String> {
+    change_note_trash(id, Some(at)).map(|(title, _)| title)
+}
+
+fn save_note_in_transaction(
+    substrate: &BrainSubstrate,
+    tx: rusqlite::Transaction<'_>,
+    note: &Note,
+) -> Result<()> {
     // A note's title is its `# Heading`, else its file name; the file is named after it.
     let heading = file_names::heading_title(&note.content);
     let mut titled = note.clone();
     if let Some(heading) = &heading {
         titled.title = heading.clone();
     }
-    let (mut slug, is_restoring, previous_title) = resolve_note_save_target(&conn, &titled)?;
+    let (mut slug, is_restoring, previous_title) = resolve_note_save_target(&tx, &titled)?;
     if is_restoring {
         let destination = substrate.paths().note_file(&slug);
         if let Some(raw) = brain_io::read_private_document_if_present(&destination)? {
@@ -1541,12 +1590,12 @@ pub fn save_note(note: &Note) -> Result<()> {
                 .parse_document(&raw)
                 .map_or(true, |(existing, _)| existing.id != note.id);
             if other_note {
-                slug = allocate_note_stem(&substrate, &titled.title)?;
+                slug = allocate_note_stem(substrate, &titled.title)?;
             }
         }
     } else if note.deleted_at.is_none() {
         if let (Some(heading), Some(previous)) = (heading.as_deref(), previous_title.as_deref()) {
-            slug = name_note_file_after_title(&substrate, &slug, previous, heading)?;
+            slug = name_note_file_after_title(substrate, &slug, previous, heading)?;
         }
     }
     if heading.is_none() && previous_title.is_some() {
@@ -1554,18 +1603,14 @@ pub fn save_note(note: &Note) -> Result<()> {
     }
     let note = &titled;
     let hash = if note.deleted_at.is_some() {
-        trash_canonical_note_file(&substrate, &slug)?;
+        trash_canonical_note_file(substrate, &slug)?;
         String::new()
     } else {
         if is_restoring {
-            restore_canonical_note_file(&substrate, note.id, &slug)?;
+            restore_canonical_note_file(substrate, note.id, &slug)?;
         }
-        write_canonical_note_file(&substrate, note, &slug)?
+        write_canonical_note_file(substrate, note, &slug)?
     };
-
-    let tx = conn
-        .transaction()
-        .context("Failed to start note save transaction")?;
 
     upsert_note_index_with_conn(&tx, note, &slug, &hash)?;
     tx.commit()
@@ -1942,7 +1987,10 @@ pub(crate) fn resolve_note_ref(target: &str) -> Result<NoteRefResolution> {
 pub fn get_note(id: NoteId) -> Result<Option<Note>> {
     let db = get_db()?;
     let conn = db.lock().map_err(db_lock_err)?;
+    get_note_with_conn(&conn, id)
+}
 
+fn get_note_with_conn(conn: &Connection, id: NoteId) -> Result<Option<Note>> {
     let mut stmt = conn
         .prepare(
             r#"

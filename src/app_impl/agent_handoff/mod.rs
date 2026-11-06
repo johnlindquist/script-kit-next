@@ -477,6 +477,15 @@ impl ScriptListApp {
             return false;
         }
 
+        // GPUI's owned visual platform has a private clipboard. arboard bypasses
+        // that platform and would read the operator's real pasteboard instead.
+        if !self.main_services.is_production() {
+            return cx.read_from_clipboard().and_then(|item| item.text())
+                .is_some_and(|text| self.route_large_launcher_text_paste(&text, cx));
+        }
+        if crate::runtime_policy::check(crate::runtime_policy::ExternalEffect::SystemClipboard).is_err() {
+            return false;
+        }
         let Ok(mut clipboard) = arboard::Clipboard::new() else {
             return false;
         };
@@ -529,6 +538,10 @@ impl ScriptListApp {
             return false;
         };
 
+        self.route_large_launcher_text_paste(&text, cx)
+    }
+
+    fn route_large_launcher_text_paste(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
         let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
         // A5 decision (2026-06-09): the launcher input is single-line, so any
         // multi-line paste routes to Agent Chat instead of being newline-
