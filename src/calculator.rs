@@ -1,3 +1,5 @@
+mod length;
+
 use itertools::Itertools;
 use regex::Regex;
 use std::sync::OnceLock;
@@ -19,6 +21,9 @@ pub struct CalculatorInlineResult {
 }
 
 pub fn try_build(input: &str) -> Option<CalculatorInlineResult> {
+    if let Some(conversion) = length::try_build(input) {
+        return Some(conversion);
+    }
     // "20% of 150" reads as 20% times 150.
     let prepared = percent_of_re().replace_all(input, "% * ").into_owned();
     if !looks_like_math(&prepared) {

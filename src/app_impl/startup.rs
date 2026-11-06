@@ -1296,6 +1296,12 @@ impl ScriptListApp {
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // Consume this physical key before the focused input can queue a
+                            // PressEnter against the destination view instead of Settings.
+                            if !this.show_actions_popup && this.submit_focused_settings_row(SettingsActivationSource::Enter, window, cx) {
+                                cx.stop_propagation();
+                                return;
+                            }
                             if let AppView::ScriptIssuesView { report } = &this.current_view {
                                 let report = report.clone();
                                 this.fix_script_issues_in_agent(&report, cx);
@@ -1384,6 +1390,15 @@ impl ScriptListApp {
                 let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
+
+                // A focused empty field must not eat the unmodified grid edge keys.
+                if matches!(key, "home" | "end") && no_direction_modifiers && !event.keystroke.modifiers.shift {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if this.move_emoji_to_edge(key == "end", cx) { cx.stop_propagation(); }
+                        });
+                    }
+                }
 
                 // Emoji picker uses Left/Right to navigate the grid and must consume
                 // those keys before the search input moves its text cursor.

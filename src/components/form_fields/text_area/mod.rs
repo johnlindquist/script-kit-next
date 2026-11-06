@@ -87,6 +87,7 @@ pub struct FormTextArea {
     /// Selection anchor (char index), None if no selection
     pub selection_anchor: Option<usize>,
     input_revision: u64,
+    history: super::edit_history::History,
     viewport: super::editable_text::FieldViewport,
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,
@@ -110,6 +111,7 @@ impl FormTextArea {
             cursor_position: cursor_pos,
             selection_anchor: None,
             input_revision: 0,
+            history: Default::default(),
             viewport: Default::default(),
             focus_handle: cx.focus_handle(),
             rows,
@@ -120,6 +122,10 @@ impl FormTextArea {
     /// Get the current value
     pub fn value(&self) -> &str {
         &self.value
+    }
+
+    pub(crate) fn finish_visit(&mut self) {
+        self.history.break_group();
     }
 
     pub(crate) fn revision(&self) -> u64 {
@@ -159,6 +165,8 @@ impl FormTextArea {
 
     /// Set the value programmatically
     pub fn set_value(&mut self, value: String) {
+        // External replacements establish a new baseline for this field.
+        self.history.reset();
         let cursor_position = char_len(&value);
         if self.value != value || self.cursor_position != cursor_position || self.has_selection() {
             self.advance_input_revision();
@@ -297,6 +305,22 @@ impl FormTextArea {
         self.record_selection_change(previous);
     }
 
+    fn move_line_edge(&mut self, end: bool, extend_selection: bool) {
+        let previous = self.selection_state();
+        let start = line_start_for_char_position(&self.value, self.cursor_position);
+        if extend_selection {
+            self.selection_anchor.get_or_insert(self.cursor_position);
+        } else {
+            self.clear_selection();
+        }
+        self.cursor_position = if end {
+            line_end_for_line_start(&self.value, start)
+        } else {
+            start
+        };
+        self.record_selection_change(previous);
+    }
+
     fn move_home(&mut self, extend_selection: bool) {
         let previous = self.selection_state();
         if extend_selection && self.selection_anchor.is_none() {
@@ -430,9 +454,57 @@ impl FormTextArea {
     /// Navigation (Arrow, Home, End), Editing (Backspace, Delete, Enter),
     /// and printable character input.
     pub fn handle_key_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        let mods = event.keystroke.modifiers;
+        if mods.platform
+            && !mods.alt
+            && !mods.control
+            && !mods.function
+            && event.keystroke.key.eq_ignore_ascii_case("z")
+        {
+            if let Some(snapshot) = self.history.step(
+                mods.shift,
+                &self.value,
+                self.cursor_position,
+                self.selection_anchor,
+            ) {
+                self.value = snapshot.value;
+                self.cursor_position = snapshot.cursor;
+                self.selection_anchor = snapshot.anchor;
+                self.advance_input_revision();
+                self.state.set_value(self.value.clone());
+                cx.notify();
+            }
+            // Even an empty local history must not undo an unrelated launcher action.
+            cx.stop_propagation();
+            return;
+        }
+        let kind = super::edit_history::kind(event, true);
+        let pending = self.history.begin(
+            &self.value,
+            self.cursor_position,
+            self.selection_anchor,
+            self.input_revision,
+            kind,
+        );
+        self.apply_input_event(event, cx);
+        self.history
+            .finish(pending, &self.value, self.input_revision);
+    }
+
+    fn apply_input_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
+        let mods = event.keystroke.modifiers;
+        if mods.control || mods.function || (mods.alt && event.keystroke.key_char.is_none()) {
+            return;
+        }
+        if cmd && !mods.alt && (is_key_left(key) || is_key_right(key)) {
+            self.move_line_edge(is_key_right(key), shift);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
 
         // Select all
         if cmd && !shift && key.eq_ignore_ascii_case("a") {

@@ -45,6 +45,14 @@ fn field_icon(name: SlotName) -> &'static str {
 
 fn view_rows(view: &HostedView) -> Vec<ViewRow> {
     match view {
+        HostedView::Display(d) => vec![ViewRow {
+            id: "local-display:preview".into(),
+            title: d.shown(),
+            description: None,
+            icon: "type",
+            selected: false,
+            word: None,
+        }],
         HostedView::Form(form) => form
             .fields
             .iter()
@@ -298,6 +306,13 @@ impl ScriptListApp {
             .track_scroll(scroll)
             .pb(crate::main_list_footer_overlay_total_padding());
         for (ix, row) in rows.into_iter().enumerate() {
+            if let Some(HostedView::Display(model)) = self.one_window_hosted_view() {
+                list = list.child(crate::components::display_preview::render(
+                    model,
+                    &self.theme,
+                ));
+                continue;
+            }
             let selector = format!("list-row:{}", row.id);
             let form_field = row.id.starts_with("form-field:").then(|| row.id.clone());
             let personal_item = row
@@ -566,6 +581,10 @@ impl ScriptListApp {
                 ElementContentKind::UserContent,
             );
             el.semantic_id = row.id;
+            if matches!(view, Some(HostedView::Display(_))) {
+                el.role = Some("preview".into());
+                el.selectable = Some(false);
+            }
             if view.is_none() || matches!(view, Some(HostedView::Personal(_))) {
                 el.role = Some("row".into());
                 let is_status = el.semantic_id == "personal-list:status";

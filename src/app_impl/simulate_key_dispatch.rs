@@ -1630,6 +1630,11 @@ impl ScriptListApp {
                         });
                     }
                 }
+                AppView::EmojiPickerView { filter, .. }
+                    if filter.is_empty() && matches!(key_lower.as_str(), "home" | "end")
+                        && !has_cmd && !has_shift && !_has_alt && !_has_ctrl => {
+                    view.move_emoji_to_edge(key_lower == "end", ctx);
+                }
                 AppView::EmojiPickerView { .. } if has_cmd && key_lower == "k" => {
                     // Mirrors the live GPUI handler at
                     // src/render_builtins/emoji_picker.rs:140-158 which

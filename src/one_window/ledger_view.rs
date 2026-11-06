@@ -298,7 +298,12 @@ impl ScriptListApp {
         self.record_one_window_undo(icon, title, undo, cx);
     }
 
-    fn record_one_window_undo(
+    pub(super) fn forget_one_window_undo(&mut self, id: u64) {
+        self.one_window_host.ledger.undo.remove(&id);
+        self.one_window.release_undo(id);
+    }
+
+    pub(super) fn record_one_window_undo(
         &mut self,
         icon: &str,
         title: impl Into<String>,

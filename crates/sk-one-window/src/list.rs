@@ -615,7 +615,10 @@ impl ListState {
             .map(|r| {
                 // These are explicit targets, not former fuzzy winners. A text action
                 // can disappear while the next word is incomplete ("translate t").
-                let instruction = r.key.starts_with("subject/") && r.key.ends_with("/ask-words");
+                let instruction = r.key.starts_with("subject/")
+                    && (r.key.ends_with("/ask-words")
+                        || r.key.ends_with("/title-case")
+                        || r.key.ends_with("/word-count"));
                 (
                     r.key.as_str(),
                     instruction || r.title.trim().eq_ignore_ascii_case(self.text.trim()),

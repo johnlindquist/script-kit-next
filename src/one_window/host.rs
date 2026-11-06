@@ -65,6 +65,8 @@ pub(crate) struct OneWindowHost {
     pub(crate) learns: super::learns::LearnsHost,
     pub(crate) cursor_voice: crate::CursorHost,
     pub(super) ledger: super::ledger_view::LedgerHost,
+    pub(super) timers: sk_one_window::countdown::Timers,
+    pub(super) timer_undo: Option<u64>,
     /// The form, answer or note open in place of the list.
     pub(super) view: Option<super::views::HostedView>,
     /// The input's words the open view last took.
@@ -769,6 +771,28 @@ impl ScriptListApp {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
         }
+        for row in self
+            .one_window_host
+            .timers
+            .rows(text, self.one_window_host.now)
+        {
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
+        if let Some(display) = sk_one_window::display::Display::request(text) {
+            let row = display.row();
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
+        if let Some(draw) = sk_one_window::quick_tools::NumberDraw::request(text) {
+            let row = draw.row();
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
+        if let Some(row) = sk_one_window::quick_tools::coin_row(text) {
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
         if let Some((row, result)) = self.one_window_capture_row(text) {
             results.insert(row.key.clone(), result);
             rows.push(row);
@@ -1206,6 +1230,52 @@ impl ScriptListApp {
         if row.key.starts_with("personal/view/") {
             return self.open_personal_view(&row, cx);
         }
+        if let Some(id) = row.key.strip_prefix("quick-display:") {
+            let display = sk_one_window::display::Display::request(&self.filter_text)
+                .filter(|d| d.id() == id)
+                .ok_or_else(|| anyhow::anyhow!("display_query_changed"))?;
+            let seed = display.text.clone();
+            self.one_window_open_hosted(super::views::HostedView::Display(display), Some(seed), cx);
+            return Ok(());
+        }
+        if self.run_countdown_row(&row.key, cx) {
+            return Ok(());
+        }
+        if row.key.starts_with("quick-tool:random:") {
+            let draw = sk_one_window::quick_tools::NumberDraw::request(&self.filter_text)
+                .filter(|draw| draw.key() == row.key)
+                .ok_or_else(|| anyhow::anyhow!("number_range_changed"))?;
+            let n = draw.draw(|| {
+                let id = uuid::Uuid::new_v4();
+                let bytes = id.as_bytes();
+                u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+            });
+            let (low, high) = draw.bounds();
+            self.one_window_open_local_answer(
+                "Random number",
+                n.to_string(),
+                &format!("Draw from {low} to {high}"),
+                sk_one_window::form::Source::Known("number draw".into()),
+                cx,
+            );
+            return Ok(());
+        }
+        if row.key == sk_one_window::quick_tools::COIN {
+            // A UUID v4 payload bit (outside its fixed version/variant bits).
+            let side = if uuid::Uuid::new_v4().as_bytes()[0] & 1 == 0 {
+                "Heads"
+            } else {
+                "Tails"
+            };
+            self.one_window_open_local_answer(
+                "Flip a coin",
+                side.to_string(),
+                "Coin toss",
+                sk_one_window::form::Source::Known("coin toss".into()),
+                cx,
+            );
+            return Ok(());
+        }
         if super::personal_rules::is_rule_row(&row) {
             return self.run_personal_rule(&row, cx);
         }
@@ -1342,6 +1412,12 @@ impl ScriptListApp {
             "owned": self.one_window_owns_list(),
             "text": self.one_window.text(),
             "cursorDictation":cursor_voice,
+            "localDisplay": match self.one_window_hosted_view() {
+                Some(super::views::HostedView::Display(d))=>Some(serde_json::json!({"kind":d.id(),"length":d.text.chars().count(),"hex":if d.kind==sk_one_window::display::Kind::Color{d.value()}else{None}})),_=>None,
+            },
+            "countdown": self.one_window_host.timers.active().map(|t| serde_json::json!({
+                "id": t.id, "durationSeconds": t.seconds, "remainingMs": t.due.saturating_sub(now),
+            })),
             "marks": marks,
             "inputWords": self.gpui_input_state.read(cx).value().to_string(),
             "context": self.one_window.context(),

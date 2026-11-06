@@ -22,6 +22,24 @@ impl EmojiPickerEmptyState {
 }
 
 impl ScriptListApp {
+    /// Home/End belongs to the grid when the search field is empty. While typing,
+    /// leave those keys to the caret, and never move the grid under staged actions.
+    fn move_emoji_to_edge(&mut self, last: bool, cx: &mut Context<Self>) -> bool {
+        if self.show_actions_popup { return false; }
+        let AppView::EmojiPickerView { filter, selected_index, selected_category } = &mut self.current_view else { return false; };
+        if !filter.is_empty() { return false; }
+        let display = crate::emoji::display_ordered_emojis(filter, *selected_category, &self.emoji_head);
+        *selected_index = if last { display.emojis.len().saturating_sub(1) } else { 0 };
+        if !display.emojis.is_empty() {
+            let row = crate::emoji::compute_display_scroll_row(*selected_index, &display);
+            self.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
+        }
+        self.input_mode = InputMode::Keyboard;
+        self.hovered_index = None;
+        cx.notify();
+        true
+    }
+
     /// Open or close ⌘K for the selected emoji.
     fn toggle_emoji_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.show_actions_popup {
@@ -161,6 +179,12 @@ impl ScriptListApp {
                         );
                         return;
                     }
+                }
+
+                if matches!(key, "home" | "end") && !has_cmd && !modifiers.shift && !modifiers.alt && !modifiers.control
+                    && this.move_emoji_to_edge(key == "end", cx) {
+                    cx.stop_propagation();
+                    return;
                 }
 
                 if is_key_escape(key) && !this.show_actions_popup {

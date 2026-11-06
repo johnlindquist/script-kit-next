@@ -21,6 +21,7 @@ pub struct FormTextField {
     /// Selection anchor (CHAR INDEX). None = no selection.
     pub selection_anchor: Option<usize>,
     input_revision: u64,
+    history: super::edit_history::History,
     show_submit_issue: bool,
     pub(crate) required_hint: Option<&'static str>,
     host_issue: Option<SharedString>,
@@ -50,6 +51,7 @@ impl FormTextField {
             cursor_position: char_len(&initial_value),
             selection_anchor: None,
             input_revision: 0,
+            history: Default::default(),
             show_submit_issue: false,
             required_hint: None,
             host_issue: None,
@@ -73,7 +75,11 @@ impl FormTextField {
             return None;
         }
         let handled = if mods.platform {
-            !mods.alt && !mods.shift && matches!(key.as_str(), "a" | "c" | "x" | "v")
+            !mods.alt
+                && (matches!(
+                    key.as_str(),
+                    "z" | "left" | "right" | "arrowleft" | "arrowright"
+                ) || (!mods.shift && matches!(key.as_str(), "a" | "c" | "x" | "v")))
         } else {
             matches!(
                 key.as_str(),
@@ -129,6 +135,17 @@ impl FormTextField {
         } else {
             "Enter a number."
         })
+    }
+
+    /// Validate a value after this field has actually been visited, not while the
+    /// user is still typing and not while moving past a pristine or optional blank.
+    pub(crate) fn finish_visit(&mut self, cx: &mut Context<Self>) {
+        self.history.break_group();
+        if !self.value.trim().is_empty()
+            && self.value != self.field.value.as_deref().unwrap_or_default()
+        {
+            self.reveal_submit_issue(cx);
+        }
     }
 
     pub(crate) fn reveal_submit_issue(&mut self, cx: &mut Context<Self>) -> bool {
@@ -190,6 +207,8 @@ impl FormTextField {
 
     /// Set the value programmatically
     pub fn set_value(&mut self, value: String) {
+        // External replacements establish a new baseline for this field.
+        self.history.reset();
         let cursor_position = char_len(&value);
         if self.value != value || self.cursor_position != cursor_position || self.has_selection() {
             self.advance_input_revision();
@@ -434,6 +453,48 @@ impl FormTextField {
 
     /// Unified key handler with selection and clipboard support
     pub fn handle_key_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
+        let mods = event.keystroke.modifiers;
+        if mods.platform
+            && !mods.alt
+            && !mods.control
+            && !mods.function
+            && event.keystroke.key.eq_ignore_ascii_case("z")
+        {
+            if let Some(snapshot) = self.history.step(
+                mods.shift,
+                &self.value,
+                self.cursor_position,
+                self.selection_anchor,
+            ) {
+                self.value = snapshot.value;
+                self.cursor_position = snapshot.cursor;
+                self.selection_anchor = snapshot.anchor;
+                self.advance_input_revision();
+                self.state.set_value(self.value.clone());
+                cx.notify();
+            }
+            // Even an empty local history must not undo an unrelated launcher action.
+            cx.stop_propagation();
+            return;
+        }
+        let kind = if self.is_password {
+            None
+        } else {
+            super::edit_history::kind(event, false)
+        };
+        let pending = self.history.begin(
+            &self.value,
+            self.cursor_position,
+            self.selection_anchor,
+            self.input_revision,
+            kind,
+        );
+        self.apply_input_event(event, cx);
+        self.history
+            .finish(pending, &self.value, self.input_revision);
+    }
+
+    fn apply_input_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
         let cmd = event.keystroke.modifiers.platform;
         let shift = event.keystroke.modifiers.shift;
@@ -442,6 +503,19 @@ impl FormTextField {
             return;
         }
 
+        if cmd
+            && !mods.alt
+            && (crate::ui_foundation::is_key_left(key) || crate::ui_foundation::is_key_right(key))
+        {
+            if crate::ui_foundation::is_key_left(key) {
+                self.move_home(shift);
+            } else {
+                self.move_end(shift);
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         // Select all
         if cmd && !shift && key.eq_ignore_ascii_case("a") {
             self.select_all();

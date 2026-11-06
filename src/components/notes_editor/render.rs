@@ -87,7 +87,37 @@ impl NotesEditor {
                 crate::theme::gpui_kit_bridge::KIT_MULTILINE_EDITOR_LINE_HEIGHT_REMS,
             ));
 
+        let on_return = input_state.clone();
+        let on_transpose = input_state.clone();
         div()
+            .capture_action(move |enter: &gpui_component::input::Enter, window, cx| {
+                if !enter.shift
+                    && !enter.secondary
+                    && on_return.update(cx, |state, cx| {
+                        state.edit_at_single_caret(super::caret_edits::checklist_return, window, cx)
+                    })
+                {
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            })
+            .capture_key_down(move |event: &gpui::KeyDownEvent, window, cx| {
+                let m = event.keystroke.modifiers;
+                if m.control
+                    && !m.platform
+                    && !m.alt
+                    && !m.shift
+                    && !m.function
+                    && event.keystroke.key.eq_ignore_ascii_case("t")
+                    && on_transpose.update(cx, |state, cx| {
+                        state.edit_at_single_caret(super::caret_edits::transpose, window, cx)
+                    })
+                {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                }
+            })
             .debug_selector(|| "notes-editor-input-viewport".to_string())
             .h_full()
             .child(editor)

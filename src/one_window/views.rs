@@ -21,6 +21,7 @@ pub(crate) const ANSWER: &str = "answer";
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum HostedView {
     Form(Form),
+    Display(sk_one_window::display::Display),
     Answer(Answer),
     Notes(super::notes::NotesList),
     Personal(super::personal_views::List),
@@ -30,6 +31,7 @@ pub(crate) enum HostedView {
 impl HostedView {
     pub(crate) fn name(&self) -> &'static str {
         match self {
+            HostedView::Display(d) => d.id(),
             HostedView::Form(_) => FORM,
             HostedView::Answer(_) => ANSWER,
             HostedView::Notes(_) => super::notes::NOTES,
@@ -41,6 +43,7 @@ impl HostedView {
     /// The view's header words.
     pub(crate) fn label(&self) -> String {
         match self {
+            HostedView::Display(d) => d.title().into(),
             HostedView::Form(form) => match &form.verb {
                 Verb::Message => "Message".into(),
                 Verb::Remind => "Reminder".into(),
@@ -58,6 +61,15 @@ impl HostedView {
 
     pub(crate) fn enter(&self) -> EnterTarget {
         match self {
+            HostedView::Display(d) => EnterTarget::new(
+                "local-display:copy",
+                match (d.kind, d.value().is_some()) {
+                    (sk_one_window::display::Kind::Cue, true) => "Copy cue",
+                    (sk_one_window::display::Kind::Color, true) => "Copy hex",
+                    (sk_one_window::display::Kind::Cue, false) => "Type a cue",
+                    (sk_one_window::display::Kind::Color, false) => "Enter a hex color",
+                },
+            ),
             HostedView::Form(form) => form.enter(),
             HostedView::Answer(answer) => answer.enter(),
             HostedView::Notes(list) => list.enter(),
@@ -69,6 +81,7 @@ impl HostedView {
     /// How many rows the view draws under its header.
     pub(crate) fn rows(&self) -> usize {
         match self {
+            HostedView::Display(_) => 1,
             HostedView::Form(form) => form.fields.len(),
             HostedView::Answer(answer) => match &answer.shape {
                 Some(sk_one_window::answer::Shape::List { items }) => items.len(),
@@ -143,7 +156,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> Vec<Event> {
         match self.one_window_hosted_view() {
-            Some(HostedView::Form(_) | HostedView::Answer(_)) => {
+            Some(HostedView::Form(_) | HostedView::Answer(_) | HostedView::Display(_)) => {
                 self.one_window_hosted_key(key, cx)
             }
             Some(HostedView::Reading(_)) if key == Key::Enter => {
@@ -199,6 +212,29 @@ impl ScriptListApp {
                 }
                 FormKey::Unused => None,
             },
+            HostedView::Display(model) if key == Key::Enter => model.value().map(|value| {
+                crate::runtime_policy::route_text_copy(
+                    crate::runtime_policy::owned_evaluation(),
+                    &value,
+                    |s| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(s.to_owned()));
+                        Ok(())
+                    },
+                )
+                .map(|receipt| Done {
+                    icon: "copy".into(),
+                    title: receipt.feedback(
+                        match model.kind {
+                            sk_one_window::display::Kind::Cue => "Copied cue",
+                            sk_one_window::display::Kind::Color => "Copied hex color",
+                        }
+                        .to_string(),
+                    ),
+                    ..Done::default()
+                })
+                .map_err(|_| "one_window_copy_failed")
+            }),
+            HostedView::Display(_) => None,
             HostedView::Answer(answer) if key == Key::Enter => answer.copy_text().map(|text| {
                 crate::runtime_policy::route_text_copy(
                     crate::runtime_policy::owned_evaluation(),
@@ -305,6 +341,7 @@ impl ScriptListApp {
                     sk_one_window::form::FieldState::Filled
                 };
             }
+            HostedView::Display(d) => d.text = text,
             HostedView::Notes(list) => list.typed(text),
             HostedView::Personal(list) => list.typed(text),
             HostedView::Reading(view) => {
@@ -507,6 +544,19 @@ impl ScriptListApp {
             crate::DayPageBack::Leave,
             cx,
         );
+    }
+
+    pub(super) fn one_window_open_local_answer(
+        &mut self,
+        title: &str,
+        value: String,
+        detail: &str,
+        source: Source,
+        cx: &mut Context<Self>,
+    ) {
+        let mut answer = Answer::asking(title.to_string());
+        answer.arrived(vec![Fact::new(value, detail.to_string(), source)]);
+        self.one_window_open_hosted(HostedView::Answer(answer), None, cx);
     }
 
     /// The calculator's answer, in place: the number it came to.

@@ -32,6 +32,68 @@ pub fn fuzzy_search_apps(apps: &[AppInfo], query: &str) -> Vec<AppMatch> {
         .collect()
 }
 
+/// Two deliberate word prefixes may each omit one interior vowel: FxEd → Fixture Editor.
+/// Don't admit arbitrary scattered letters, nonadjacent words, paths or bundle identifiers.
+fn shortened_app_words(name: &str, query: &str) -> Option<MatchEvidence> {
+    let q = query.as_bytes();
+    if !(4..=16).contains(&q.len()) || !q.iter().all(u8::is_ascii_alphabetic) {
+        return None;
+    }
+    let mut words: Vec<Vec<(u8, usize)>> = Vec::new();
+    let mut previous = None::<char>;
+    for (i, ch) in name.chars().enumerate() {
+        if i >= 128 {
+            return None;
+        }
+        if ch.is_ascii_alphabetic() {
+            if previous.is_none_or(|p| {
+                !p.is_ascii_alphabetic() || p.is_ascii_lowercase() && ch.is_ascii_uppercase()
+            }) {
+                words.push(Vec::new());
+            }
+            words.last_mut()?.push((ch.to_ascii_lowercase() as u8, i));
+        }
+        previous = Some(ch);
+    }
+    fn prefix(word: &[(u8, usize)], part: &[u8]) -> Option<(Vec<usize>, bool)> {
+        let mut out = Vec::with_capacity(part.len());
+        let mut skipped = false;
+        let mut at = 0;
+        for (i, &letter) in part.iter().enumerate() {
+            if word.get(at)?.0 != letter && i > 0 && !skipped && b"aeiou".contains(&word[at].0) {
+                at += 1;
+                skipped = true;
+            }
+            if word.get(at)?.0 != letter {
+                return None;
+            }
+            out.push(word[at].1);
+            at += 1;
+        }
+        Some((out, skipped))
+    }
+    for pair in words.windows(2) {
+        for cut in 2..=q.len() - 2 {
+            if let (Some((mut left, a)), Some((right, b))) =
+                (prefix(&pair[0], &q[..cut]), prefix(&pair[1], &q[cut..]))
+            {
+                if a || b {
+                    left.extend(right);
+                    let tier = super::match_contract::TIER_COMPACT_FUZZY_PRIMARY;
+                    return Some(MatchEvidence {
+                        field: MatchEvidenceField::Name,
+                        text: name.into(),
+                        indices: left,
+                        tier,
+                        score: super::match_contract::score_from_tier(tier, 100),
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
 /// The apps whose names match `query`, best first, as positions in `apps` with the
 /// evidence that admitted them. The launcher and the Apps list share this one rule, so
 /// an abbreviation such as `gcal` finds Google Calendar in both.
@@ -46,7 +108,9 @@ pub fn rank_apps(apps: &[AppInfo], query: &str) -> Vec<(usize, MatchEvidence)> {
             MatchEvidenceField::Name,
             &app.name,
             primary_text_match(&app.name, &query_lower, &mut nucleo),
-        ) {
+        )
+        .or_else(|| shortened_app_words(&app.name, &query_lower))
+        {
             matches.push((index, evidence));
         }
     }
@@ -59,4 +123,21 @@ pub fn rank_apps(apps: &[AppInfo], query: &str) -> Vec<(usize, MatchEvidence)> {
         }
     });
     matches
+}
+
+#[cfg(test)]
+mod shortened_apps_tests {
+    use super::*;
+    #[test]
+    fn abbreviated_word_pairs_still_require_two_real_word_prefixes() {
+        assert_eq!(
+            shortened_app_words("Fixture Editor", "fxed")
+                .unwrap()
+                .indices,
+            [0, 2, 8, 9]
+        );
+        assert!(shortened_app_words("Fixture Text Editor", "fxed").is_none());
+        assert!(shortened_app_words("Fixture Editor", "fted").is_none());
+        assert!(shortened_app_words("Fixture Editor", "xed").is_none());
+    }
 }

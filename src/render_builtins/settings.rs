@@ -116,6 +116,17 @@ impl ScriptListApp {
         self.execute_settings_action(action_id, source, window, cx);
     }
 
+    /// Resolve the selected row once, on the Settings surface. In particular, the
+    /// Enter that opens a designer must not also apply that designer’s first theme.
+    fn submit_focused_settings_row(&mut self, source: SettingsActivationSource, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let AppView::SettingsView { filter, selected_index } = &self.current_view else { return false; };
+        let items = self.get_settings_items();
+        if let Some(descriptor) = selected_settings_action_descriptor(&items,filter,*selected_index,self.settings_action_availability()) {
+            self.submit_settings_action(descriptor.action_id,source,window,cx);
+        }
+        true
+    }
+
     /// Execute a settings action by its stable ID (GEO-006). The ID is the
     /// only execution currency; the enabled state is rechecked HERE so a
     /// stale projection can never invoke a disabled action.
@@ -497,21 +508,7 @@ impl ScriptListApp {
                     }
                     cx.stop_propagation();
                 } else if is_key_enter(key) {
-                    // GEO-006: Enter resolves the selected descriptor and
-                    // submits its stable action ID — never the enum directly.
-                    if let Some(descriptor) = selected_settings_action_descriptor(
-                        &settings_items,
-                        &current_filter,
-                        current_selected,
-                        this.settings_action_availability(),
-                    ) {
-                        this.submit_settings_action(
-                            descriptor.action_id,
-                            SettingsActivationSource::Enter,
-                            window,
-                            cx,
-                        );
-                    }
+                    this.submit_focused_settings_row(SettingsActivationSource::Enter, window, cx);
                     cx.stop_propagation();
                 } else {
                     cx.propagate();

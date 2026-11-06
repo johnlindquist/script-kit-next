@@ -104,6 +104,42 @@ impl SubjectPage {
             .map(str::to_ascii_lowercase)
             .skip_while(|w| w == "please")
             .collect();
+        let text_subject = matches!(
+            self.source.subject.kind,
+            SubjectKind::Selection | SubjectKind::Clipboard
+        );
+        if text_subject
+            && matches!(
+                words.join(" ").as_str(),
+                "title case" | "title case this" | "make this title case" | "convert to title case"
+            )
+        {
+            return Some(
+                Row::new(
+                    format!("subject/{}/title-case", self.id),
+                    format!("Title case · {}", self.source.label),
+                )
+                .with_sub("Capitalize each word locally; the original text stays unchanged")
+                .with_icon("type")
+                .with_enter_label("Preview title case"),
+            );
+        }
+        if text_subject
+            && matches!(
+                words.join(" ").as_str(),
+                "word count" | "count words" | "count these words" | "how many words"
+            )
+        {
+            return Some(
+                Row::new(
+                    format!("subject/{}/word-count", self.id),
+                    format!("Word count · {}", self.source.label),
+                )
+                .with_sub(crate::quick_tools::word_count_label(&self.source.body))
+                .with_icon("type")
+                .with_enter_label("Show word count"),
+            );
+        }
         let verb = words.first()?.as_str();
         let object = words.get(1).map(String::as_str);
         let names_it = words.iter().any(|w| NAMES_IT.contains(&w.as_str()));
@@ -114,10 +150,6 @@ impl SubjectPage {
         if !transforms_it && !VERBS.contains(&verb) {
             return None;
         }
-        let text_subject = matches!(
-            self.source.subject.kind,
-            SubjectKind::Selection | SubjectKind::Clipboard
-        );
         let leaves_it_out = words
             .get(1)
             .is_none_or(|next| LEAVES_IT_OUT.contains(&next.as_str()));

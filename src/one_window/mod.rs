@@ -3,11 +3,13 @@
 
 pub(crate) mod automations;
 pub(crate) mod capture;
+mod catalog_apps;
 pub(crate) mod chat_entry;
 pub(crate) mod chat_host;
 mod chat_presentation;
 pub(crate) mod chips;
 pub(crate) mod connections;
+mod countdown;
 mod desktop_fill;
 mod handoff;
 pub(crate) mod height_host;

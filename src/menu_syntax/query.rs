@@ -47,6 +47,17 @@ pub fn parse_source_filter_query(input: &str) -> Option<AdvancedQuery> {
 }
 
 pub fn parse_filter_query(input: &str) -> Option<AdvancedQuery> {
+    // Only a complete, explicitly requested swatch wins over hashtag filtering.
+    // Bare #, tagged searches and :# filters keep their established meanings.
+    if let Some((verb, literal)) = input.trim().split_once(char::is_whitespace) {
+        let literal = literal.trim();
+        if (verb.eq_ignore_ascii_case("color") || verb.eq_ignore_ascii_case("colour"))
+            && literal.starts_with('#')
+            && sk_one_window::display::hex(literal).is_some()
+        {
+            return None;
+        }
+    }
     let tokens = tokenize(input);
     if tokens.is_empty() {
         return None;
@@ -294,6 +305,19 @@ mod tests {
     #[test]
     fn unknown_colon_token_stays_literal() {
         assert!(parse_filter_query("deploy x:").is_none());
+    }
+
+    #[test]
+    fn explicit_hex_is_a_swatch_but_ordinary_hashtags_still_filter() {
+        assert!(parse_filter_query("colour  #63B7A6").is_none());
+        assert!(parse_filter_query("color #abc").is_none());
+        for query in ["color #club", "posters #abc", "color #abc posters", "#abc"] {
+            assert!(parse_filter_query(query).is_some(), "{query}");
+        }
+        assert_eq!(
+            parse_advanced_query(":color #abc").predicates,
+            vec![Predicate::Tag("abc".into())]
+        );
     }
 
     #[test]

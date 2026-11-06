@@ -145,6 +145,7 @@ impl ScriptListApp {
                 action_id,
                 should_close,
             } => {
+                if self.handle_bound_catalog_action(host, &action_id, should_close, window, cx) { return; }
                 let root_unified_context = if should_close
                     && matches!(host, ActionsDialogHost::MainList)
                     && crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(

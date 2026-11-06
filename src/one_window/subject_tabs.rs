@@ -331,6 +331,20 @@ impl ScriptListApp {
                 self.choose_handoff_recipient(source.body.to_string(), cx)
             }
             "note" => self.one_window_open_note(source.body.to_string(), cx),
+            "word-count" => self.one_window_open_local_answer(
+                "Word count",
+                sk_one_window::quick_tools::word_count_label(&source.body),
+                "Counted locally, without sending your text",
+                sk_one_window::form::Source::Staged(source.subject.kind),
+                cx,
+            ),
+            "title-case" => self.one_window_open_local_answer(
+                "Title case",
+                sk_one_window::quick_tools::title_case(&source.body),
+                "Each word capitalized; your original text is unchanged",
+                sk_one_window::form::Source::Staged(source.subject.kind),
+                cx,
+            ),
             "show" => {
                 use sk_one_window::{
                     answer::{Answer, Fact},

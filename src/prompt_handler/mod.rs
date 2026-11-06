@@ -2667,19 +2667,7 @@ impl ScriptListApp {
                         selected_index,
                         entries,
                     } => {
-                        let query = filter.trim().to_lowercase();
-                        let visible: Vec<_> = entries
-                            .iter()
-                            .filter(|tip| {
-                                query.is_empty()
-                                    || tip.title.to_lowercase().contains(&query)
-                                    || tip.hint.to_lowercase().contains(&query)
-                                    || tip
-                                        .keywords
-                                        .iter()
-                                        .any(|keyword| keyword.to_lowercase().contains(&query))
-                            })
-                            .collect();
+                        let visible = script_kit_gpui::tips::visible_tip_indices(entries, filter);
                         (
                             "tips".to_string(),
                             None,
@@ -2688,7 +2676,7 @@ impl ScriptListApp {
                             entries.len(),
                             visible.len(),
                             *selected_index as i32,
-                            visible.get(*selected_index).map(|tip| tip.title.clone()),
+                            visible.get(*selected_index).map(|&i| entries[i].title.clone()),
                         )
                     }
                     AppView::ScriptTemplateCatalogView {
@@ -6821,7 +6809,7 @@ impl ScriptListApp {
         if let AppView::FormPrompt { entity, .. } | AppView::CreateAiPresetView { entity } = &self.current_view {
             let entity = entity.clone();
             let selected = entity.update(cx, |form, cx| {
-                let selected = form.focus_field_by_semantic_id(semantic_id);
+                let selected = form.focus_field_by_semantic_id(semantic_id, cx);
                 cx.notify();
                 selected
             });

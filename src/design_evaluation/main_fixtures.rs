@@ -396,7 +396,7 @@ pub(crate) fn mount_main_fixture(
         "main.tips" => AppView::TipsView {
             filter: String::new(),
             selected_index: 0,
-            entries: serde_json::from_str(crate::setup::EMBEDDED_TIPS)?,
+            entries: script_kit_gpui::tips::tips_without_global_hotkeys(),
         },
         "main.script-template-catalog" => AppView::ScriptTemplateCatalogView {
             filter: String::new(),

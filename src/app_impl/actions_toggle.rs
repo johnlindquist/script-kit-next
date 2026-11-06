@@ -413,6 +413,9 @@ impl ScriptListApp {
             return self.one_window_owns_list() && self.one_window_stage(cx);
         }
 
+        if matches!(&self.current_view, AppView::AppLauncherView { .. }) {
+            return self.toggle_catalog_app_actions(window, cx);
+        }
         if matches!(&self.current_view, AppView::FileSearchView { .. }) {
             let selected = self.selected_file_search_result_owned();
             if let Some((display_index, _)) = &selected {

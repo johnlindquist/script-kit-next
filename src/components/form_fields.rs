@@ -22,6 +22,8 @@
 mod checkbox;
 #[path = "form_fields/colors.rs"]
 mod colors;
+#[path = "form_fields/edit_history.rs"]
+mod edit_history;
 #[path = "form_fields/editable_text.rs"]
 mod editable_text;
 #[path = "form_fields/helpers.rs"]

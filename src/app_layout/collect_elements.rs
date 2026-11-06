@@ -643,20 +643,9 @@ impl ScriptListApp {
                 selected_index,
                 entries,
             } => {
-                let query = filter.trim().to_lowercase();
-                let rows: Vec<String> = entries
-                    .iter()
-                    .filter(|tip| {
-                        query.is_empty()
-                            || tip.title.to_lowercase().contains(&query)
-                            || tip.hint.to_lowercase().contains(&query)
-                            || tip.description.to_lowercase().contains(&query)
-                            || tip
-                                .keywords
-                                .iter()
-                                .any(|keyword| keyword.to_lowercase().contains(&query))
-                    })
-                    .map(|tip| tip.title.clone())
+                let rows: Vec<String> = script_kit_gpui::tips::visible_tip_indices(entries, filter)
+                    .into_iter()
+                    .map(|i| entries[i].title.clone())
                     .collect();
                 ElementCollectionOutcome::complete_from(
                     "tips",

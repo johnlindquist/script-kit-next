@@ -191,27 +191,7 @@ impl ScriptListApp {
             }
             crate::footer_popup::FooterAction::Today => self.show_day_page_view(window, cx),
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::SettingsView {
-                    filter,
-                    selected_index,
-                } = &self.current_view
-                {
-                    let items = self.get_settings_items();
-                    if let Some(descriptor) = selected_settings_action_descriptor(
-                        &items,
-                        filter,
-                        *selected_index,
-                        self.settings_action_availability(),
-                    ) {
-                        self.submit_settings_action(
-                            descriptor.action_id,
-                            SettingsActivationSource::NativeFooter,
-                            window,
-                            cx,
-                        );
-                    }
-                    return;
-                }
+                if self.submit_focused_settings_row(SettingsActivationSource::NativeFooter, window, cx) { return; }
                 if matches!(self.current_view, AppView::ScriptList) {
                     if self.should_consume_menu_syntax_trigger_picker_press_enter(source)
                         || self.should_consume_script_list_enter_after_submit(source)

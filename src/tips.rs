@@ -184,6 +184,20 @@ fn embedded_tips() -> Vec<Tip> {
     })
 }
 
+/// An owned test window has no registered global shortcuts. Use the same
+/// resolution as production rather than drawing literal placeholder names.
+#[cfg(feature = "owned-ui-evaluation")]
+pub fn tips_without_global_hotkeys() -> Vec<Tip> {
+    resolve_tip_placeholders(
+        embedded_tips(),
+        &[
+            (MAIN_HOTKEY_PLACEHOLDER, None),
+            (NOTES_HOTKEY_PLACEHOLDER, None),
+            (DICTATION_HOTKEY_PLACEHOLDER, None),
+        ],
+    )
+}
+
 pub fn load_tips() -> Vec<Tip> {
     let path = tips_json_path();
     let tips = match std::fs::read_to_string(&path) {
@@ -223,20 +237,32 @@ pub fn tip_matches_filter(tip: &Tip, query_lowercase: &str) -> bool {
         || tip.title.to_lowercase().contains(query_lowercase)
         || tip.full_hint().to_lowercase().contains(query_lowercase)
         || tip.description.to_lowercase().contains(query_lowercase)
+        || has_syntax_example(tip, query_lowercase)
         || tip
             .keywords
             .iter()
             .any(|keyword| keyword.to_lowercase().contains(query_lowercase))
 }
 
-/// Indices into `entries` visible under `filter`, in catalog order.
+/// A syntax query names the example to try, not just a word in another tip’s description.
+fn has_syntax_example(tip: &Tip, query: &str) -> bool {
+    query.starts_with([';', '/', '@', ':', '~', '!', '?', '`', '#', '+', '>'])
+        && tip
+            .examples
+            .iter()
+            .any(|e| e.input.trim_start().to_lowercase().starts_with(query))
+}
+
+/// Keep catalog order except when an example directly starts with the requested syntax.
 pub fn visible_tip_indices(entries: &[Tip], filter: &str) -> Vec<usize> {
     let query = filter.trim().to_lowercase();
-    entries
+    let mut found: Vec<_> = entries
         .iter()
         .enumerate()
         .filter_map(|(index, tip)| tip_matches_filter(tip, &query).then_some(index))
-        .collect()
+        .collect();
+    found.sort_by_key(|&i| !has_syntax_example(&entries[i], &query));
+    found
 }
 
 #[cfg(test)]
@@ -308,6 +334,14 @@ mod tests {
             keywords: Vec::new(),
             open: None,
         }
+    }
+
+    #[test]
+    fn capture_query_leads_with_the_example_instead_of_an_incidental_mention() {
+        let entries = embedded_tips();
+        let matches = visible_tip_indices(&entries, ";TODO");
+        assert_eq!(entries[matches[0]].id, "capture-semicolon");
+        assert!(matches.iter().any(|&i| entries[i].id == "today"));
     }
 
     #[test]

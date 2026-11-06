@@ -36,6 +36,7 @@ pub mod conversation_style;
 /// Selection is opt-in on the vendored `TextView`, so building one outside
 /// this module silently produces unselectable text.
 pub(crate) mod conversation_text;
+pub mod display_preview;
 #[cfg(test)]
 mod error_handling_audit_tests;
 pub mod focusable_prompt_wrapper;

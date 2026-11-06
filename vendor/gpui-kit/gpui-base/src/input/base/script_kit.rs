@@ -446,6 +446,38 @@ impl InputBaseState<EditorMode> {
 }
 
 impl InputBaseState<EditorMode> {
+    /// Apply a host-defined text edit as one undoable edit. The active editor, not its
+    /// container, owns composition, multi-cursor edits, completions and selection state.
+    pub fn edit_at_single_caret(
+        &mut self,
+        plan: impl FnOnce(&str, usize) -> Option<(Range<usize>, String)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.is_editable()
+            || !self.focus_handle.is_focused(window)
+            || self.ime_marked_range.is_some()
+            || !self.selections.is_single()
+            || !self.active_selection().is_empty()
+            || self.is_context_menu_open(cx)
+        {
+            return false;
+        }
+        let text = self.value();
+        let Some((range, replacement)) = plan(&text, self.cursor()) else {
+            return false;
+        };
+        if text.get(range.clone()).is_none() {
+            return false;
+        }
+        self.undo_manager
+            .set_pending_intent(super::undo_manager::EditIntent::Atomic);
+        let range = self.range_to_utf16(&range);
+        self.replace_text_in_range_silent(Some(range), &replacement, window, cx);
+        self.pause_blink_cursor(cx);
+        true
+    }
+
     /// Minimum visible rows for the editor viewport.
     pub fn rows(mut self, rows: usize) -> Self {
         if let super::mode::LayoutMode::CodeEditor { rows: value, .. } = &mut self.mode {

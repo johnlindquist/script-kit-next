@@ -4,6 +4,7 @@
 //! focus for the Notes window and future Day Page surface. The host binds
 //! document content, wires save/change callbacks, and owns window chrome.
 
+mod caret_edits;
 mod component;
 pub(crate) mod contract;
 mod formatting;

@@ -23,7 +23,14 @@ function fixture() {
   roots.push(root); return createBuildWorkspace(root);
 }
 afterEach(() => {
-  const writable = (path: string): void => { const stat = lstatSync(path); if (stat.isDirectory() && !stat.isSymbolicLink()) { chmodSync(path, 0o700); for (const child of readdirSync(path)) writable(join(path, child)); } };
+  const writable = (path: string): void => {
+    // A transient Git lock may disappear between readdir and lstat. It is
+    // already gone; permission/ownership failures still surface. Never follow a link.
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (!stat?.isDirectory() || stat.isSymbolicLink()) return;
+    chmodSync(path, 0o700);
+    for (const child of readdirSync(path)) writable(join(path, child));
+  };
   for (const root of roots.splice(0)) { writable(root); rmSync(root, { recursive: true }); }
 });
 function build(root: string, env: Record<string, string>, kind: ArtifactKind, extra: Record<string, string> = {}) {

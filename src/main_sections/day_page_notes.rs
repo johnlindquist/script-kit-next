@@ -631,6 +631,15 @@ pub(crate) fn day_page_note_actions(view: &DayPageView) -> Vec<crate::actions::A
         row("new", "New Note".into(), "Start a new note").with_shortcut("cmd+n"),
         row("list", "Notes".into(), "Find a note by name"),
     ];
+    if !view.session.is_viewing_note() {
+        if let Some(day) = view.session.bound_date() {
+            for (label, target) in [("Previous day", day.pred_opt()), ("Next day", day.succ_opt().filter(|d| *d <= view.today()))] {
+                if let Some(date) = target {
+                    actions.push(row(&format!("day:{date}"), label.into(), &format!("Open the day page for {date}")));
+                }
+            }
+        }
+    }
     if view.session.bound_date() != Some(view.today()) || view.session.is_viewing_note() {
         actions.push(row("today", "Today".into(), "Open today's page").with_shortcut("cmd+t"));
     }
@@ -801,6 +810,14 @@ impl ScriptListApp {
                 );
             }
         };
+        if let Some(date) = action.strip_prefix("day:") {
+            let target = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+            let current = entity.read(cx);
+            if !current.session.is_viewing_note() && current.session.bound_date().is_some_and(|day| day.pred_opt() == Some(target) || day.succ_opt() == Some(target) && target <= current.today()) {
+                follow(NoteTarget::Day(target), window, cx);
+            }
+            return Some(true);
+        }
         if let Some(id) = action.strip_prefix("open:") {
             let id = crate::notes::NoteId::parse(id)?;
             follow(NoteTarget::Note(id), window, cx);

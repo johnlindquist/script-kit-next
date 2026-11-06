@@ -27,6 +27,8 @@ const STAGED_SEARCH_ID: &str = "staged-actions-search";
 
 /// What a view staged: whose actions they are and the dialog they come from.
 pub(crate) struct ViewStage {
+    /// Captured once for the Apps catalog; never resolve its actions from the launcher index.
+    pub(super) catalog_app: Option<crate::app_launcher::AppInfo>,
     host: ActionsDialogHost,
     dialog: Entity<ActionsDialog>,
     /// What ↵ runs: the highlighted action.
@@ -108,6 +110,7 @@ impl ScriptListApp {
         let rows = staged_rows(&dialog, cx);
         self.actions_dialog = Some(dialog.clone());
         self.one_window_host.view_stage = Some(ViewStage {
+            catalog_app: None,
             host,
             dialog: dialog.clone(),
             enter: highlighted_title(&dialog, cx),

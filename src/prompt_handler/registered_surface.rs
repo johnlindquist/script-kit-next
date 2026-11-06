@@ -241,7 +241,7 @@ impl ScriptListApp {
         if let AppView::CreateAiPresetView { entity } = &self.current_view {
             let entity = entity.clone();
             let selected = entity.update(cx, |form, cx| {
-                let selected = form.focus_field_by_semantic_id(semantic_id)?;
+                let selected = form.focus_field_by_semantic_id(semantic_id, cx)?;
                 form.focus_field_at(form.focused_index, window, cx);
                 Some(selected)
             }).ok_or_else(|| anyhow::anyhow!("preset_field_not_found"))?;

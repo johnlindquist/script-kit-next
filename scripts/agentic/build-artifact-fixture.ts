@@ -87,7 +87,8 @@ export function createBuildWorkspace(directory: string): BuildWorkspaceFixture {
   writeFileSync(join(root, "Cargo.lock"), "version = 4\n");
   writeFileSync(join(root, "rust-toolchain.toml"), '[toolchain]\nchannel="1.98.0"\nprofile="minimal"\ncomponents=["rustfmt","clippy","rust-analyzer"]\n');
   for (const name of ["main.rs", "lib.rs", "bin/export_design_tokens.rs", "bin/liquid_glass_demo.rs"]) writeFileSync(join(root, "src", name), "// fixture input\n");
-  for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-qm", "fixture"]]) {
+  // This disposable build workspace must not start background Git maintenance during teardown.
+  for (const args of [["init", "-q"], ["config", "--local", "maintenance.auto", "false"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-qm", "fixture"]]) {
     const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     if (result.status !== 0) throw new Error(result.stderr);
   }

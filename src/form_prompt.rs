@@ -371,14 +371,33 @@ impl FormPromptState {
         if self.fields.is_empty() {
             return;
         }
-        self.set_focused_index(index.min(self.fields.len() - 1));
+        self.visit_field(index.min(self.fields.len() - 1), cx);
         if let Some(focus_handle) = self.focus_handle_at(self.focused_index, cx) {
             focus_handle.focus(window, cx);
         }
         cx.notify();
     }
 
-    pub fn focus_field_by_semantic_id(&mut self, semantic_id: &str) -> Option<String> {
+    fn visit_field(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.focused_index != index {
+            if let Some((_, field)) = self.fields.get(self.focused_index) {
+                match field {
+                    FormFieldEntity::TextField(field) => {
+                        field.update(cx, |f, cx| f.finish_visit(cx))
+                    }
+                    FormFieldEntity::TextArea(field) => field.update(cx, |f, _| f.finish_visit()),
+                    FormFieldEntity::Checkbox(_) => (),
+                }
+            }
+        }
+        self.set_focused_index(index);
+    }
+
+    pub fn focus_field_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
         let semantic_prefix = self.semantic_prefix();
         let index = self
             .fields
@@ -391,7 +410,7 @@ impl FormPromptState {
                 (field_semantic_id == semantic_id).then_some(index)
             })?;
 
-        self.set_focused_index(index);
+        self.visit_field(index, cx);
         self.fields
             .get(index)
             .map(|(field, _)| field.label.clone().unwrap_or_else(|| field.name.clone()))
