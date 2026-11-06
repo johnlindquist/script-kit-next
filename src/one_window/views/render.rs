@@ -105,6 +105,44 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
                     word: None,
                 })
                 .collect(),
+            Some(Shape::Card { title, facts }) if title.contains('\n') => {
+                // The answer keeps the exact text for Copy, including its final newline;
+                // render a bounded preview using the same rows the element API exposes.
+                let mut lines = title.lines();
+                let mut rows: Vec<_> = lines
+                    .by_ref()
+                    .take(48)
+                    .enumerate()
+                    .map(|(i, line)| ViewRow {
+                        id: format!("answer:line:{i}"),
+                        title: if line.is_empty() {
+                            "(blank line)".into()
+                        } else {
+                            line.into()
+                        },
+                        description: if i == 0 {
+                            facts.first().map(|f| f.detail.clone())
+                        } else {
+                            None
+                        },
+                        icon: "text",
+                        selected: i == 0,
+                        word: None,
+                    })
+                    .collect();
+                let omitted = lines.count();
+                if omitted > 0 {
+                    rows.push(ViewRow {
+                        id: "answer:more-lines".into(),
+                        title: format!("{omitted} more lines in the full result"),
+                        description: None,
+                        icon: "text",
+                        selected: false,
+                        word: None,
+                    });
+                }
+                rows
+            }
             Some(Shape::Card { title, facts }) => std::iter::once(ViewRow {
                 id: "answer:card".into(),
                 title: title.clone(),

@@ -18635,8 +18635,12 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(
                 a.description.as_deref(),
-                Some("Copies to clipboard and pastes to the focused app")
+                Some("Copies plain text to the clipboard, then pastes it without formatting")
             );
+            let image = make_clipboard_entry(ContentType::Image, false, None);
+            let actions = get_clipboard_history_context_actions(&image);
+            let image_paste = find_action(&actions,"clip:clipboard_paste").unwrap();
+            assert!(!image_paste.description.as_deref().unwrap().contains("plain text"));
         }
 
         #[test]

@@ -698,6 +698,9 @@ impl ScriptListApp {
                 Some("ScriptTemplateCatalog filter")
             }
             AppView::TipsView { filter, .. } if !filter.is_empty() => Some("Tips filter"),
+            AppView::SdkReferenceView { filter, .. } if !filter.is_empty() => {
+                Some("SDK reference filter")
+            }
             AppView::FileSearchView { query, .. } if !query.is_empty() => Some("FileSearch query"),
             _ => None,
         };
@@ -824,6 +827,13 @@ impl ScriptListApp {
                 });
             }
             AppView::ScriptTemplateCatalogView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+            }
+            AppView::SdkReferenceView {
                 filter,
                 selected_index,
                 ..

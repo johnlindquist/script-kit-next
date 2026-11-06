@@ -153,6 +153,10 @@ impl Answer {
                 format!("answer:list:{}", items.len()),
                 format!("Copy all {}", items.len()),
             ),
+            Some(Shape::Card { title, .. }) if title.contains('\n') => {
+                let n = title.lines().count();
+                EnterTarget::new(format!("answer:lines:{n}"), format!("Copy {n} lines"))
+            }
             Some(Shape::Card { title, .. }) => {
                 EnterTarget::new(format!("answer:card:{title}"), format!("Copy “{title}”"))
             }

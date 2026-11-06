@@ -605,6 +605,11 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::SdkReferenceView { filter, selected_index, .. } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) { cx.notify(); }
+                return;
+            }
             AppView::TipsView {
                 filter,
                 selected_index,

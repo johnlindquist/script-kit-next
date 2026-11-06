@@ -51,6 +51,7 @@ pub(crate) fn mount_main_fixture(
     let view = match id {
         "main.launcher-basics"
         | "main.launcher-ready"
+        | "main.launcher-text-samples"
         | "main.launcher-cold"
         | "main.launcher-reading" => {
             use crate::one_window::subject_tabs::{copy_source, selection_source, window_source};
@@ -59,6 +60,7 @@ pub(crate) fn mount_main_fixture(
             use sk_one_window::{window::subject_tabs::TabsEvent, Subject, SubjectKind};
             // Only catalogue and ambient input data are seeded. Filtering, ranking,
             // Return, dispatch, prompts and rendering use the ordinary launcher.
+            let samples = id == "main.launcher-text-samples";
             for name in [
                 "superwhisper",
                 "Superhuman",
@@ -66,7 +68,10 @@ pub(crate) fn mount_main_fixture(
                 "Slack",
                 "Translate",
                 "Open Notes",
-            ] {
+            ]
+            .into_iter()
+            .chain(["Calendar", "Dictionary"].into_iter().filter(|_| samples))
+            {
                 if id == "main.launcher-cold" && name == "superwhisper" {
                     continue;
                 }
@@ -160,7 +165,10 @@ pub(crate) fn mount_main_fixture(
                 .map(|&kind| {
                     (
                         kind,
-                        if id == "main.launcher-ready" || kind == PermissionKind::Microphone {
+                        if id == "main.launcher-ready"
+                            || samples
+                            || kind == PermissionKind::Microphone
+                        {
                             PermissionStatus::Authorized
                         } else {
                             PermissionStatus::Denied
@@ -180,7 +188,11 @@ pub(crate) fn mount_main_fixture(
                 TabsEvent::Open {
                     window: Some(window_source(window, 60_000)),
                     copy: copy_source(
-                        "Good morning",
+                        if samples {
+                            "Cedar\nBirch\nCedar"
+                        } else {
+                            "Good morning"
+                        },
                         if id == "main.launcher-cold" {
                             121_000
                         } else {
@@ -191,7 +203,11 @@ pub(crate) fn mount_main_fixture(
                 },
                 cx,
             );
-            let text = "how are you?";
+            let text = if samples {
+                "Cedar\nApple\nCedar"
+            } else {
+                "how are you?"
+            };
             let selection = Subject {
                 kind: SubjectKind::Selection,
                 title: text.into(),
@@ -203,6 +219,21 @@ pub(crate) fn mount_main_fixture(
                 app.change_subjects(TabsEvent::Observe(selection_source(selection, text)), cx);
             }
             prepare_launcher_files(app, root)?;
+            if samples {
+                // Real stores in the owned runtime only. Neither operation reads the OS clipboard.
+                crate::design_evaluation::notes_fixtures::prepare_notes_storage()?;
+                scope.require_owned_path(&root.join("clipboard"))?;
+                let text = "Launch checklist: review, build, release";
+                let entry = crate::clipboard_history::add_entry(
+                    text,
+                    crate::clipboard_history::ContentType::Text,
+                )?;
+                anyhow::ensure!(
+                    crate::clipboard_history::get_entry_content(&entry).as_deref() == Some(text),
+                    "owned_text_sample_unavailable"
+                );
+                crate::runtime_policy::record_completed_fixture_effect();
+            }
             if id == "main.launcher-basics" {
                 app.spawn_permission_setup_refresh(cx);
             }

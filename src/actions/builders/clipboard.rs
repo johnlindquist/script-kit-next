@@ -218,7 +218,14 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         Action::new(
             "clip:clipboard_paste",
             paste_destination_plan.title(entry),
-            Some("Copies to clipboard and pastes to the focused app".to_string()),
+            Some(
+                if entry_plan.is_image() {
+                    "Copies the image to the clipboard and pastes to the focused app"
+                } else {
+                    "Copies plain text to the clipboard, then pastes it without formatting"
+                }
+                .to_string(),
+            ),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")

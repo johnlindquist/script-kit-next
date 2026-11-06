@@ -158,8 +158,7 @@ fn render_select_search_header(
     filter_text: &str,
     placeholder: &str,
     multiple: bool,
-    selected_count: usize,
-    submission_hint: Option<&str>,
+    selection_summary: &str,
     theme: &crate::theme::Theme,
     def: crate::designs::MainMenuThemeDef,
 ) -> AnyElement {
@@ -180,10 +179,7 @@ fn render_select_search_header(
                 .line_height(px(def.typography.desc_line_height))
                 .font_weight(def.typography.desc_weight)
                 .text_color(rgba(chrome.text_hint_rgba))
-                .child(
-                    submission_hint
-                        .map_or_else(|| format!("{} selected", selected_count), str::to_string),
-                )
+                .child(selection_summary.to_owned())
                 .into_any_element(),
         );
     }
@@ -216,8 +212,7 @@ impl Render for SelectPrompt {
             &self.filter_text,
             &placeholder,
             self.multiple,
-            self.selected.len(),
-            self.submission_hint.as_deref(),
+            &self.selection_summary(),
             &self.theme,
             menu_def,
         );
@@ -453,6 +448,9 @@ impl Render for SelectPrompt {
                             this.submit(cx);
                         }
                         SelectKeyIntent::Backspace => this.handle_backspace(cx),
+                        SelectKeyIntent::Append(' ') if this.space_targets_row() => {
+                            this.toggle_selection(cx)
+                        }
                         SelectKeyIntent::Append(ch) => this.handle_char(ch, cx),
                         SelectKeyIntent::ToggleFocusedSelection => this.toggle_selection(cx),
                         SelectKeyIntent::ToggleAllFiltered => this.toggle_select_all_filtered(cx),

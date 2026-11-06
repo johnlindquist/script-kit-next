@@ -331,6 +331,21 @@ impl ScriptListApp {
                 self.choose_handoff_recipient(source.body.to_string(), cx)
             }
             "note" => self.one_window_open_note(source.body.to_string(), cx),
+            "sort-lines" | "unique-lines" => {
+                use sk_one_window::quick_lines::LineAction;
+                let action = if id == "sort-lines" {
+                    LineAction::Sort
+                } else {
+                    LineAction::Unique
+                };
+                self.one_window_open_local_answer(
+                    action.title(),
+                    action.apply(&source.body),
+                    action.hint(),
+                    sk_one_window::form::Source::Staged(source.subject.kind),
+                    cx,
+                );
+            }
             "word-count" => self.one_window_open_local_answer(
                 "Word count",
                 sk_one_window::quick_tools::word_count_label(&source.body),

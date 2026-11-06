@@ -542,6 +542,43 @@ fn real_select_filters_toggles_and_refuses_disabled_values(cx: &mut gpui::TestAp
 }
 
 #[gpui::test]
+fn typing_spaces_and_marking_rows_have_distinct_owners(cx: &mut gpui::TestAppContext) {
+    use gpui::AppContext as _;
+    let prompt = cx.new(|cx| {
+        SelectPrompt::new(
+            "rows".into(),
+            None,
+            vec![
+                choice("Blue bell", "a", None),
+                choice("Blue bird", "b", None),
+            ],
+            true,
+            cx.focus_handle(),
+            Arc::new(|_, _| {}),
+            Arc::new(theme::Theme::default()),
+        )
+    });
+    prompt.update(cx, |p, cx| {
+        assert!(p.space_targets_row());
+        p.set_input("Blue".into(), cx);
+        assert!(!p.space_targets_row());
+        p.handle_char(' ', cx);
+        assert_eq!(p.filter_text, "Blue ");
+        p.move_down(cx);
+        assert!(p.space_targets_row());
+        p.toggle_selection(cx);
+        assert_eq!(p.selected.len(), 1);
+        let (elements, _) = p.collect_elements(12);
+        assert!(elements
+            .iter()
+            .any(|e| e.text.as_deref() == Some("1 selected · Space to mark")));
+        p.handle_backspace(cx);
+        assert!(!p.space_targets_row());
+        assert_eq!(p.selected.len(), 1);
+    });
+}
+
+#[gpui::test]
 fn select_revision_tracks_text_and_selection_aba_not_no_ops(cx: &mut gpui::TestAppContext) {
     use gpui::AppContext as _;
     let prompt = cx.new(|cx| {

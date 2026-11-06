@@ -369,8 +369,8 @@ impl ScriptListApp {
         let shell = menu_def.shell;
         let count_label = format!(
             "{} function{}",
-            entries.len(),
-            if entries.len() == 1 { "" } else { "s" },
+            filtered_len,
+            if filtered_len == 1 { "" } else { "s" },
         );
         let main =
             self.render_builtin_split_main_content(list_pane.into_any_element(), preview_panel);

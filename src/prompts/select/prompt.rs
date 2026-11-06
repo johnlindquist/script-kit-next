@@ -90,6 +90,8 @@ pub struct SelectPrompt {
     pub focused_index: usize,
     /// Currently hovered index in filtered list
     pub hovered_index: Option<usize>,
+    /// After arrow navigation, Space acts on the deliberately targeted row; editing hands it back to the query.
+    pub(super) row_keys: bool,
     /// Filter text
     pub filter_text: String,
     input_revision: u64,
@@ -188,6 +190,7 @@ impl SelectPrompt {
             filtered_choices,
             filtered_for: String::new(),
             focused_index: 0,
+            row_keys: false,
             hovered_index: None,
             filter_text: String::new(),
             input_revision: 0,
@@ -206,6 +209,7 @@ impl SelectPrompt {
     /// ones too, so only the previous matches are scored again. Backspace and words using
     /// the matcher's operators (`!`, `^`, `$`, `'`, `\`) score every choice.
     fn refilter(&mut self) {
+        self.row_keys = false;
         let trimmed_filter = self.filter_text.trim();
         if trimmed_filter.is_empty() {
             self.filtered_choices = (0..self.choices.len()).collect();
@@ -266,6 +270,30 @@ impl SelectPrompt {
         cx.notify();
     }
 
+    pub(super) fn space_targets_row(&self) -> bool {
+        self.multiple && (self.filter_text.is_empty() || self.row_keys)
+    }
+    pub(super) fn selection_summary(&self) -> String {
+        if let Some(hint) = &self.submission_hint {
+            return hint.clone();
+        }
+        let toggle = if self.space_targets_row() {
+            "Space"
+        } else {
+            "⌘Space"
+        };
+        format!("{} selected · {toggle} to mark", self.selected.len())
+    }
+    fn take_row_keys(&mut self) -> bool {
+        if self.multiple && !self.filter_text.is_empty() && !self.row_keys {
+            self.row_keys = true;
+            self.advance_input_revision();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Toggle selection of currently focused item
     pub(super) fn toggle_selection(&mut self, cx: &mut Context<Self>) {
         if let Some(&choice_idx) = self.filtered_choices.get(self.focused_index) {
@@ -273,6 +301,7 @@ impl SelectPrompt {
                 return;
             }
             if toggle_choice_selection(&mut self.selected, choice_idx, self.multiple) {
+                self.row_keys = true;
                 self.advance_input_revision();
                 self.submission_hint = None;
                 cx.notify();
@@ -317,26 +346,28 @@ impl SelectPrompt {
         (self.on_submit)(self.id.clone(), None);
     }
 
-    /// Move focus up
-    pub(super) fn move_up(&mut self, cx: &mut Context<Self>) {
-        if self.focused_index > 0 {
-            self.set_focused_index(self.focused_index - 1);
+    fn move_focus_by(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let acquired = self.take_row_keys();
+        let next = self
+            .focused_index
+            .saturating_add_signed(delta)
+            .min(self.filtered_choices.len().saturating_sub(1));
+        let moved = next != self.focused_index;
+        if moved {
+            self.set_focused_index(next);
             self.hovered_index = None;
             self.list_scroll_handle
-                .scroll_to_item(self.focused_index, ScrollStrategy::Nearest);
+                .scroll_to_item(next, ScrollStrategy::Nearest);
+        }
+        if moved || acquired {
             cx.notify();
         }
     }
-
-    /// Move focus down
+    pub(super) fn move_up(&mut self, cx: &mut Context<Self>) {
+        self.move_focus_by(-1, cx);
+    }
     pub(super) fn move_down(&mut self, cx: &mut Context<Self>) {
-        if self.focused_index < self.filtered_choices.len().saturating_sub(1) {
-            self.set_focused_index(self.focused_index + 1);
-            self.hovered_index = None;
-            self.list_scroll_handle
-                .scroll_to_item(self.focused_index, ScrollStrategy::Nearest);
-            cx.notify();
-        }
+        self.move_focus_by(1, cx);
     }
 
     /// Handle character input
@@ -378,6 +409,9 @@ impl SelectPrompt {
             limit,
         );
         for element in &mut elements {
+            if self.multiple && element.element_type == crate::protocol::ElementType::List {
+                element.text = Some(self.selection_summary());
+            }
             if let Some(index) = element
                 .index
                 .and_then(|index| self.filtered_choices.get(index))

@@ -108,9 +108,23 @@ impl SubjectPage {
             self.source.subject.kind,
             SubjectKind::Selection | SubjectKind::Clipboard
         );
+        let phrase = words.join(" ");
+        if let Some(action) =
+            crate::quick_lines::LineAction::request(&phrase).filter(|_| text_subject)
+        {
+            return Some(
+                Row::new(
+                    format!("subject/{}/{}", self.id, action.key()),
+                    format!("{} · {}", action.title(), self.source.label),
+                )
+                .with_sub(action.hint())
+                .with_icon("text")
+                .with_enter_label("Preview lines"),
+            );
+        }
         if text_subject
             && matches!(
-                words.join(" ").as_str(),
+                phrase.as_str(),
                 "title case" | "title case this" | "make this title case" | "convert to title case"
             )
         {
@@ -126,7 +140,7 @@ impl SubjectPage {
         }
         if text_subject
             && matches!(
-                words.join(" ").as_str(),
+                phrase.as_str(),
                 "word count" | "count words" | "count these words" | "how many words"
             )
         {
@@ -335,6 +349,19 @@ impl OneWindow {
         }
         pages
     }
+    /// Only compare the selection and approved copy already offered in the launcher.
+    /// Never consult the OS clipboard, an ignored copy, or a hidden previous page.
+    pub fn comparison_pair(&self) -> Option<(SubjectPage, SubjectPage)> {
+        let pages = self.subject_pages();
+        let page = |kind| {
+            pages
+                .iter()
+                .find(|p| p.source.subject.kind == kind && !p.source.body.is_empty())
+                .cloned()
+        };
+        Some((page(SubjectKind::Selection)?, page(SubjectKind::Clipboard)?))
+    }
+
     pub fn subject_page(&self) -> Option<SubjectPage> {
         let pages = self.subject_pages();
         self.tabs

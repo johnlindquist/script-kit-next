@@ -107,6 +107,62 @@ fn today() -> NaiveDate {
         .0
 }
 
+/// Quote the matching body line rather than making someone open every title-only
+/// result. Map folded offsets back to characters before cutting a bounded excerpt.
+fn matching_line(body: &str, title: &str, query: &str) -> Option<String> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return None;
+    }
+    for line in body.lines().map(str::trim) {
+        if line.trim_start_matches('#').trim() == title.trim() {
+            continue;
+        }
+        let lower = line.to_lowercase();
+        let Some(hit) = lower.find(&query) else {
+            continue;
+        };
+        let mut offset = 0usize;
+        let mut before = 0usize;
+        for ch in line.chars() {
+            if offset >= hit {
+                break;
+            }
+            offset += ch.to_lowercase().map(char::len_utf8).sum::<usize>();
+            before += 1;
+        }
+        let start = before.saturating_sub(32usize);
+        let mut chars = line.chars().skip(start);
+        let mut excerpt = String::new();
+        if start > 0 {
+            excerpt.push('…');
+        }
+        excerpt.extend(chars.by_ref().take(112));
+        if chars.next().is_some() {
+            excerpt.push('…');
+        }
+        return Some(excerpt);
+    }
+    None
+}
+
+#[cfg(test)]
+mod excerpt_tests {
+    use super::matching_line;
+    #[test]
+    fn a_long_unicode_body_can_show_why_a_title_matched() {
+        let body = format!(
+            "# Agenda\n\n{}Æble REVIEW café{}",
+            "ø".repeat(120),
+            "!".repeat(120)
+        );
+        let excerpt = matching_line(&body, "Agenda", "review").unwrap();
+        assert!(excerpt.contains("Æble REVIEW café"));
+        assert!(excerpt.starts_with('…') && excerpt.ends_with('…'));
+        assert!(matching_line("# Agenda\nBody", "Agenda", "Agenda").is_none());
+    }
+}
+
 fn day_title(date: NaiveDate) -> String {
     if date == today() {
         "Today".to_string()
@@ -188,7 +244,8 @@ impl NotesList {
                     } else {
                         day.title.clone()
                     },
-                    sub: "Day page".to_string(),
+                    sub: matching_line(&day.content, &day.title, &query)
+                        .unwrap_or_else(|| "Day page".into()),
                     pinned: false,
                     changed: day.updated_at,
                     created: at,
@@ -237,7 +294,9 @@ impl NotesList {
                 };
                 found.push(Found {
                     doc: NoteDoc::Note(note.id),
-                    sub: format!("Note · changed {}", note.updated_at.format("%b %-d")),
+                    sub: matching_line(&note.content, &title, &query).unwrap_or_else(|| {
+                        format!("Note · changed {}", note.updated_at.format("%b %-d"))
+                    }),
                     title,
                     pinned: note.is_pinned,
                     changed: note.updated_at,

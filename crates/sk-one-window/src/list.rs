@@ -618,7 +618,10 @@ impl ListState {
                 let instruction = r.key.starts_with("subject/")
                     && (r.key.ends_with("/ask-words")
                         || r.key.ends_with("/title-case")
-                        || r.key.ends_with("/word-count"));
+                        || r.key.ends_with("/word-count")
+                        || (self.text.split_whitespace().count() > 1
+                            && (r.key.ends_with("/sort-lines")
+                                || r.key.ends_with("/unique-lines"))));
                 (
                     r.key.as_str(),
                     instruction || r.title.trim().eq_ignore_ascii_case(self.text.trim()),

@@ -159,6 +159,7 @@ fn declared_descriptor(id: &str) -> Option<FixtureDescriptor> {
         | "main.subject-tabs"
         | "main.launcher-basics"
         | "main.launcher-ready"
+        | "main.launcher-text-samples"
         | "main.launcher-cold"
         | "main.launcher-reading"
         | "main.launcher-watch"

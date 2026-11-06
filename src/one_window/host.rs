@@ -784,6 +784,18 @@ impl ScriptListApp {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
         }
+        if sk_one_window::quick_lines::wants_compare(text) {
+            if let Some((s, c)) = self.one_window.comparison_pair() {
+                let row = Row::new(
+                    format!("quick-tool:compare/{}/{}", s.id, c.id),
+                    "Compare selected and copied text",
+                )
+                .with_sub("Show the first differing line locally; neither text is changed")
+                .with_enter_label("Compare text");
+                results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+                rows.push(row);
+            }
+        }
         if let Some(draw) = sk_one_window::quick_tools::NumberDraw::request(text) {
             let row = draw.row();
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
@@ -1239,6 +1251,25 @@ impl ScriptListApp {
             return Ok(());
         }
         if self.run_countdown_row(&row.key, cx) {
+            return Ok(());
+        }
+        if row.key.starts_with("quick-tool:compare/") {
+            anyhow::ensure!(
+                sk_one_window::quick_lines::wants_compare(&self.filter_text),
+                "comparison_query_changed"
+            );
+            let (s, c) = self
+                .one_window
+                .comparison_pair()
+                .filter(|(s, c)| row.key == format!("quick-tool:compare/{}/{}", s.id, c.id))
+                .ok_or_else(|| anyhow::anyhow!("comparison_subjects_changed"))?;
+            self.one_window_open_local_answer(
+                "Compare text",
+                sk_one_window::quick_lines::first_difference(&s.source.body, &c.source.body),
+                "First difference between the two texts",
+                sk_one_window::form::Source::Known("selection and approved copy".into()),
+                cx,
+            );
             return Ok(());
         }
         if row.key.starts_with("quick-tool:random:") {

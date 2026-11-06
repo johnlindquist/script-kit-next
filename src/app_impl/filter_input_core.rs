@@ -86,6 +86,7 @@ impl ScriptListApp {
                 | AppView::BrowserHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::TipsView { .. }
+                | AppView::SdkReferenceView { .. }
         )
     }
 

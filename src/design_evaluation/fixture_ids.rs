@@ -6,6 +6,7 @@ pub(crate) fn main_fixture_ids() -> &'static [&'static str] {
         "main.subject-tabs",
         "main.launcher-basics",
         "main.launcher-ready",
+        "main.launcher-text-samples",
         "main.launcher-cold",
         "main.launcher-reading",
         "main.launcher-watch",

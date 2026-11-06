@@ -29,6 +29,7 @@ pub mod notice;
 pub mod past_chats;
 pub mod personal;
 pub mod personal_list;
+pub mod quick_lines;
 pub mod quick_tools;
 pub mod row;
 pub mod setup;
