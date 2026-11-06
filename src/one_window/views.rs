@@ -61,15 +61,7 @@ impl HostedView {
 
     pub(crate) fn enter(&self) -> EnterTarget {
         match self {
-            HostedView::Display(d) => EnterTarget::new(
-                "local-display:copy",
-                match (d.kind, d.value().is_some()) {
-                    (sk_one_window::display::Kind::Cue, true) => "Copy cue",
-                    (sk_one_window::display::Kind::Color, true) => "Copy hex",
-                    (sk_one_window::display::Kind::Cue, false) => "Type a cue",
-                    (sk_one_window::display::Kind::Color, false) => "Enter a hex color",
-                },
-            ),
+            HostedView::Display(d) => EnterTarget::new("local-display:copy", d.enter_label()),
             HostedView::Form(form) => form.enter(),
             HostedView::Answer(answer) => answer.enter(),
             HostedView::Notes(list) => list.enter(),
@@ -193,6 +185,8 @@ impl ScriptListApp {
     }
 
     fn one_window_hosted_key(&mut self, key: Key, cx: &mut Context<Self>) -> Vec<Event> {
+        let now = self.one_window_now(cx);
+        let mut watch_beat = None;
         let Some(view) = self.one_window_host.view.as_mut() else {
             return Vec::new();
         };
@@ -212,6 +206,13 @@ impl ScriptListApp {
                 }
                 FormKey::Unused => None,
             },
+            HostedView::Display(model)
+                if model.kind == sk_one_window::display::Kind::Beat && key == Key::Enter =>
+            {
+                let id = uuid::Uuid::new_v4().as_u128();
+                watch_beat = model.toggle_beat(id, now).map(|delay| (id, delay));
+                None
+            }
             HostedView::Display(model) if key == Key::Enter => model.value().map(|value| {
                 crate::runtime_policy::route_text_copy(
                     crate::runtime_policy::owned_evaluation(),
@@ -223,13 +224,7 @@ impl ScriptListApp {
                 )
                 .map(|receipt| Done {
                     icon: "copy".into(),
-                    title: receipt.feedback(
-                        match model.kind {
-                            sk_one_window::display::Kind::Cue => "Copied cue",
-                            sk_one_window::display::Kind::Color => "Copied hex color",
-                        }
-                        .to_string(),
-                    ),
+                    title: receipt.feedback(model.copied_label().to_string()),
                     ..Done::default()
                 })
                 .map_err(|_| "one_window_copy_failed")
@@ -256,6 +251,9 @@ impl ScriptListApp {
             | HostedView::Reading(_)
             | HostedView::Personal(_) => None,
         };
+        if let Some((id, delay)) = watch_beat {
+            self.watch_visual_beat(id, delay, cx);
+        }
         let mut events = Vec::new();
         if let Some(words) = caret_words {
             self.one_window_host.view_text = Some(words.clone());
@@ -290,6 +288,43 @@ impl ScriptListApp {
             }
         }
         events
+    }
+
+    fn watch_visual_beat(&mut self, id: u128, mut delay: u64, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(delay))
+                .await;
+            let Ok(Some(next)) = this.update(cx, |app, cx| {
+                if !matches!(app.current_view, crate::AppView::ScriptList)
+                    || app.one_window_hosted_view().is_none()
+                {
+                    return None;
+                }
+                let now = app.one_window_now(cx);
+                let Some(HostedView::Display(model)) = app.one_window_host.view.as_mut() else {
+                    return None;
+                };
+                if !model.beat.is_some_and(|b| b.id == id) {
+                    return None;
+                }
+                if !script_kit_gpui::is_main_window_visible()
+                    && crate::runtime_policy::owned_evaluation().is_none()
+                {
+                    model.beat = None;
+                    let target = app.one_window_host.view.as_ref()?.enter();
+                    app.one_window_handle(Event::ViewEnter(target), cx);
+                    return None;
+                }
+                let next = model.advance_beat(id, now)?;
+                cx.notify();
+                Some(next)
+            }) else {
+                break;
+            };
+            delay = next;
+        })
+        .detach();
     }
 
     /// What a finished form writes where it lives. A message waits in the line first; the
@@ -341,7 +376,7 @@ impl ScriptListApp {
                     sk_one_window::form::FieldState::Filled
                 };
             }
-            HostedView::Display(d) => d.text = text,
+            HostedView::Display(d) => d.set_text(text),
             HostedView::Notes(list) => list.typed(text),
             HostedView::Personal(list) => list.typed(text),
             HostedView::Reading(view) => {

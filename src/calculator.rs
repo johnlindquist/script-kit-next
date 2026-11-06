@@ -1,3 +1,4 @@
+mod dates;
 mod length;
 
 use itertools::Itertools;
@@ -21,6 +22,15 @@ pub struct CalculatorInlineResult {
 }
 
 pub fn try_build(input: &str) -> Option<CalculatorInlineResult> {
+    if input
+        .trim_start()
+        .get(..11)
+        .is_some_and(|s| s.eq_ignore_ascii_case("days until "))
+    {
+        if let Some(value) = dates::until(input, chrono::Local::now().date_naive()) {
+            return Some(value);
+        }
+    }
     if let Some(conversion) = length::try_build(input) {
         return Some(conversion);
     }

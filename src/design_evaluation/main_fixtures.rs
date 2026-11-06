@@ -189,7 +189,7 @@ pub(crate) fn mount_main_fixture(
                     window: Some(window_source(window, 60_000)),
                     copy: copy_source(
                         if samples {
-                            "Cedar\nBirch\nCedar"
+                            "Cedar\nBirch\n**Cedar**"
                         } else {
                             "Good morning"
                         },

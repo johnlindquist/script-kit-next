@@ -67,6 +67,36 @@ pub fn wants_reading(text: &str) -> bool {
     ) {
         return false;
     }
+    let local = trimmed.to_ascii_lowercase();
+    if local == "qr"
+        || local.starts_with("qr ")
+        || local == "large type"
+        || local.starts_with("large type ")
+        || local == "palette"
+        || local.starts_with("palette ")
+        || local.starts_with("days until ")
+        || local == "days until"
+        || local == "metronome"
+        || local.starts_with("metronome ")
+        || sk_one_window::quick_text::Tool::request(&local).is_some()
+        || sk_one_window::quick_lines::LineAction::request(&local).is_some()
+        || sk_one_window::quick_lines::wants_compare(&local)
+        || sk_one_window::display::Display::request(trimmed).is_some()
+        || sk_one_window::dice::Dice::request(trimmed).is_some()
+        || sk_one_window::quick_tools::NumberDraw::request(trimmed).is_some()
+        || matches!(
+            local.as_str(),
+            "reading time"
+                | "word count"
+                | "title case"
+                | "flip a coin"
+                | "speak"
+                | "read aloud"
+                | "text to speech"
+        )
+    {
+        return false;
+    }
     let head = trimmed.split_whitespace().next().unwrap_or_default();
     if head.ends_with(';') || head.contains("://") {
         return false;

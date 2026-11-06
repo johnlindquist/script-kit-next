@@ -188,6 +188,7 @@ impl DayPageView {
             last_deeplink_hover_hint: None,
             focus_handle: cx.focus_handle(),
             fragment_open_targets: Vec::new(),
+            fragment_return_hint: None,
             spine_handoff: Default::default(),
             last_autosave: None,
             last_external_poll: None,
@@ -442,6 +443,10 @@ impl DayPageView {
     }
 
     fn apply_loaded_content_to_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.apply_loaded_content_at(None,window,cx);
+    }
+
+    fn apply_loaded_content_at(&mut self, return_offset: Option<usize>, window: &mut Window, cx: &mut Context<Self>) {
         let identity = (self.session.binding().clone(), self.session.path().cloned());
         if self.loaded_document.as_ref() != Some(&identity) {
             self.document_revision = self.document_revision.saturating_add(1);
@@ -459,12 +464,13 @@ impl DayPageView {
         // Loads are not typing: pre-set the length so the Change event this
         // emits cannot read as growth and auto-swap to the main menu.
         self.last_editor_content_len = content.len();
+        let anchor=return_offset.filter(|&n|content.is_char_boundary(n));
         self.notes_editor.update(cx, |editor, cx| {
             editor.load_value_with_cursor_at_end(content, window, cx);
+            if let Some(offset)=anchor { editor.input_state().update(cx, |state,cx| state.set_selection_focused(offset,offset,window,cx)); }
         });
         self.sync_footer(window, cx);
-        self.defer_editor_bottom_scroll(window, cx);
-        self.schedule_editor_bottom_scroll_retries(cx);
+        if anchor.is_none(){self.defer_editor_bottom_scroll(window, cx);self.schedule_editor_bottom_scroll_retries(cx);}
     }
 
     fn refresh_fragment_open_targets(&mut self, content: &str) {
@@ -493,10 +499,13 @@ impl DayPageView {
             return;
         };
         let now = self.now();
+        use sha2::Digest as _;
+        let origin: [u8;32] = sha2::Sha256::digest(self.notes_editor.read(cx).content(cx).as_bytes()).into();
         if let Err(error) = self.session.bind_fragment(fragment_path, now) {
             tracing::error!(error = %error, "Failed to open fragment from day page");
             return;
         }
+        self.fragment_return_hint=Some((index,origin));
         self.apply_loaded_content_to_editor(window, cx);
         self.focus_editor(window, cx);
         cx.notify();
@@ -504,12 +513,17 @@ impl DayPageView {
 
     pub fn return_to_day_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let now = self.now();
+        let fragment=match self.session.binding(){DayPageBinding::Fragment{fragment_path,..}=>Some(fragment_path.clone()),_=>None};
         if let Err(error) = self.session.return_to_day(now) {
             tracing::error!(error = %error, "Failed to return to day page from fragment");
             return;
         }
-        self.apply_loaded_content_to_editor(window, cx);
-        self.focus_editor(window, cx);
+        use sha2::Digest as _;
+        let body=self.visible_content_of(self.session.disk_content());
+        let hint=self.fragment_return_hint.take().and_then(|(index,expected)|{let current:[u8;32]=sha2::Sha256::digest(body.as_bytes()).into();(current==expected).then_some(index)});
+        let offset=fragment.as_deref().zip(self.session.path()).and_then(|(fragment,day)| script_kit_gpui::day_page::fragment_reference_offset(&body,day,fragment,hint));
+        self.apply_loaded_content_at(offset,window,cx);
+        if offset.is_some(){self.focus_editor_preserving_state(window,cx);}else{self.focus_editor(window,cx);}
         cx.notify();
     }
 
@@ -997,13 +1011,14 @@ impl DayPageView {
         self.focus_editor_at_end(window, cx);
         self.defer_editor_bottom_scroll(window, cx);
         self.schedule_editor_bottom_scroll_retries(cx);
+        let revision=self.document_revision;let selection=self.notes_editor.read(cx).selection(cx);
         let day_page = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {
             let Some(day_page) = day_page.upgrade() else {
                 return;
             };
             day_page.update(cx, |view, cx| {
-                view.focus_editor_at_end(window, cx);
+                if view.document_revision==revision && view.notes_editor.read(cx).selection(cx)==selection {view.focus_editor_at_end(window, cx);}
             });
         });
     }
@@ -1046,24 +1061,22 @@ impl DayPageView {
     }
 
     fn defer_editor_bottom_scroll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let revision=self.document_revision;let selection=self.notes_editor.read(cx).selection(cx);
         let day_page = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {
             let Some(day_page) = day_page.upgrade() else {
                 return;
             };
             day_page.update(cx, |view, cx| {
-                view.notes_editor.update(cx, |editor, cx| {
-                    editor.scroll_to_bottom(cx);
-                });
+                if view.document_revision!=revision || view.notes_editor.read(cx).selection(cx)!=selection {return;}
+                view.notes_editor.update(cx, |editor, cx| { editor.scroll_to_bottom(cx); });
                 let day_page = cx.entity().downgrade();
                 window.defer(cx, move |_window, cx| {
                     let Some(day_page) = day_page.upgrade() else {
                         return;
                     };
                     day_page.update(cx, |view, cx| {
-                        view.notes_editor.update(cx, |editor, cx| {
-                            editor.scroll_to_bottom(cx);
-                        });
+                        if view.document_revision==revision && view.notes_editor.read(cx).selection(cx)==selection { view.notes_editor.update(cx, |editor,cx|editor.scroll_to_bottom(cx)); }
                     });
                 });
             });

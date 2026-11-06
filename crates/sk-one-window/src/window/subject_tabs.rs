@@ -109,6 +109,17 @@ impl SubjectPage {
             SubjectKind::Selection | SubjectKind::Clipboard
         );
         let phrase = words.join(" ");
+        if let Some(tool) = crate::quick_text::Tool::request(&phrase).filter(|_| text_subject) {
+            return Some(
+                Row::new(
+                    format!("subject/{}/{}", self.id, tool.key()),
+                    format!("{} · {}", tool.title(), self.source.label),
+                )
+                .with_sub(tool.detail())
+                .with_icon("type")
+                .with_enter_label("Preview result"),
+            );
+        }
         if let Some(action) =
             crate::quick_lines::LineAction::request(&phrase).filter(|_| text_subject)
         {
@@ -188,6 +199,20 @@ impl SubjectPage {
             .with_enter_label("Ask the model"),
         )
     }
+    /// A multiline source lives in its original body; the fixed-height panel has one header line.
+    pub fn panel_title(&self) -> String {
+        let title = &self.source.subject.title;
+        if title.contains(['\r', '\n']) {
+            let first = title
+                .lines()
+                .map(str::trim)
+                .find(|s| !s.is_empty())
+                .unwrap_or("Text");
+            format!("{first} …")
+        } else {
+            title.clone()
+        }
+    }
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = self.source.rows.clone();
         if let Some(at) = self
@@ -198,7 +223,7 @@ impl SubjectPage {
         }
         for (i, row) in rows.iter_mut().enumerate() {
             row.key = format!("subject/{}/{}", self.id, row.key);
-            row.head = (i == 0).then(|| self.source.subject.title.clone());
+            row.head = (i == 0).then(|| self.panel_title());
         }
         rows
     }

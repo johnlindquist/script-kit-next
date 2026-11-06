@@ -15,8 +15,8 @@ pub use document::{
 pub use render::render_fragment_back_bar;
 pub use sediment::{
     context_parts_from_day_page_markdown_links, day_page_markdown_reference_for_context_part,
-    format_provenance_hint, join_day_page_clipboard_shelf, load_fragment_provenance,
-    normalize_day_page_markdown_references, parse_day_page_segments, resolve_fragment_path,
-    split_day_page_clipboard_shelf, ClipboardShelfItem, DayPageSegment, FragmentProvenance,
-    FRAGMENT_BACK_ID,
+    format_provenance_hint, fragment_reference_offset, join_day_page_clipboard_shelf,
+    load_fragment_provenance, normalize_day_page_markdown_references, parse_day_page_segments,
+    resolve_fragment_path, split_day_page_clipboard_shelf, ClipboardShelfItem, DayPageSegment,
+    FragmentProvenance, FRAGMENT_BACK_ID,
 };

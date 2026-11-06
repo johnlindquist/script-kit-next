@@ -48,8 +48,14 @@ fn view_rows(view: &HostedView) -> Vec<ViewRow> {
         HostedView::Display(d) => vec![ViewRow {
             id: "local-display:preview".into(),
             title: d.shown(),
-            description: None,
-            icon: "type",
+            description: d
+                .palette()
+                .map(|p| p.map(|v| format!("#{v:06X}")).join(" · ")),
+            icon: match d.kind {
+                sk_one_window::display::Kind::Cue => "type",
+                sk_one_window::display::Kind::Qr => "grid",
+                _ => "palette",
+            },
             selected: false,
             word: None,
         }],

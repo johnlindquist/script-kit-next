@@ -33,6 +33,7 @@ pub(crate) mod slot_line;
 pub(crate) mod staging;
 pub(crate) mod subject_tabs;
 pub(crate) mod talk_host;
+mod text_tools;
 pub(crate) mod view_staging;
 pub(crate) mod views;
 pub(crate) mod voice_lists;

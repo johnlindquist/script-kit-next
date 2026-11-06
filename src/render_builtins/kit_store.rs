@@ -573,7 +573,7 @@ impl ScriptListApp {
     }
 
     fn kit_store_browse_row_source_hint(result: &KitStoreSearchResult) -> Option<String> {
-        Some(format!("{} · ★ {}", result.full_name, result.stars))
+        Some(format!("{} · {} {}", result.full_name, result.stars, if result.stars == 1 { "star" } else { "stars" }))
     }
 
     fn kit_store_browse_row_semantic_id(result: &KitStoreSearchResult) -> String {

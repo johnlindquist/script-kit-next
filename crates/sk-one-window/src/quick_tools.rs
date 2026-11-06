@@ -28,6 +28,13 @@ pub struct NumberDraw {
     high: i32,
 }
 impl NumberDraw {
+    pub(crate) fn die(sides: u8) -> Self {
+        debug_assert!(sides >= 2);
+        Self {
+            low: 1,
+            high: i32::from(sides),
+        }
+    }
     pub fn request(words: &str) -> Option<Self> {
         let lower = words.to_ascii_lowercase();
         let tokens: Vec<_> = lower.split_whitespace().collect();

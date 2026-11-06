@@ -708,6 +708,74 @@ pub fn resolve_fragment_path(day_page_path: &Path, relative_link: &str) -> Optio
         .then_some(path)
 }
 
+/// Return to the actual link, never to a matching title in unrelated prose. When an
+/// unanchored fragment appears twice, the source line is ambiguous: leave it unset.
+/// A preferred ordinal is supplied only when the caller verified the original day hash.
+pub fn fragment_reference_offset(
+    content: &str,
+    day: &Path,
+    fragment: &Path,
+    preferred: Option<usize>,
+) -> Option<usize> {
+    let valid = parse_day_page_segments(content)
+        .into_iter()
+        .filter_map(|s| match s {
+            DayPageSegment::FragmentRef {
+                start_line,
+                relative_link,
+                ..
+            } => Some((start_line, resolve_fragment_path(day, &relative_link)?)),
+            _ => None,
+        });
+    let mut found = None;
+    let mut count = 0;
+    for (index, (line, path)) in valid.enumerate() {
+        if path == fragment {
+            count += 1;
+            found = Some(line);
+            if preferred == Some(index) {
+                count = 1;
+                break;
+            }
+        }
+    }
+    if count != 1 {
+        return None;
+    }
+    let line = found?;
+    Some(content.split_inclusive('\n').take(line).map(str::len).sum())
+}
+
+#[cfg(test)]
+mod return_link_tests {
+    use super::*;
+    #[test]
+    fn resolves_real_link_and_refuses_ambiguous_or_stale_ordinal() {
+        let dir = Path::new("/fiction/brain");
+        let day = dir.join("days/2026-08-28.md");
+        let fragment = dir.join("fragments/hello.md");
+        let link = "09:15 [Hello](../fragments/hello.md)\n";
+        let s = format!("# Café\n\n{link}");
+        assert_eq!(
+            fragment_reference_offset(&s, &day, &fragment, None),
+            Some("# Café\n\n".len())
+        );
+        let repeated = format!("{s}\n{link}");
+        assert_eq!(
+            fragment_reference_offset(&repeated, &day, &fragment, None),
+            None
+        );
+        assert_eq!(
+            fragment_reference_offset(&repeated, &day, &fragment, Some(1)),
+            Some(s.len() + 1)
+        );
+        assert_eq!(
+            fragment_reference_offset(&repeated, &day, &fragment, Some(7)),
+            None
+        );
+    }
+}
+
 /// Load provenance metadata from a fragment markdown file.
 pub fn load_fragment_provenance(fragment_path: &Path) -> Option<FragmentProvenance> {
     if fragment_path.parent()?.file_name()?.to_str()? != "fragments" {

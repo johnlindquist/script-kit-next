@@ -51,7 +51,9 @@ pub fn parse_filter_query(input: &str) -> Option<AdvancedQuery> {
     // Bare #, tagged searches and :# filters keep their established meanings.
     if let Some((verb, literal)) = input.trim().split_once(char::is_whitespace) {
         let literal = literal.trim();
-        if (verb.eq_ignore_ascii_case("color") || verb.eq_ignore_ascii_case("colour"))
+        if (verb.eq_ignore_ascii_case("color")
+            || verb.eq_ignore_ascii_case("colour")
+            || verb.eq_ignore_ascii_case("palette"))
             && literal.starts_with('#')
             && sk_one_window::display::hex(literal).is_some()
         {

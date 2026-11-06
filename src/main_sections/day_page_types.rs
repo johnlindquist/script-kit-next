@@ -152,6 +152,8 @@ pub struct DayPageView {
     pub(crate) focus_handle: FocusHandle,
     /// Resolved fragment paths aligned with parsed fragment reference indices.
     pub(crate) fragment_open_targets: Vec<PathBuf>,
+    /// Ordinal is applicable only to the exact day text from which the link was opened.
+    pub(crate) fragment_return_hint: Option<(usize, [u8; 32])>,
     pub(crate) spine_handoff: DayPageSpineHandoffState,
     /// Last debounced autosave write (Notes-parity SAVE_DEBOUNCE_MS throttle).
     pub(crate) last_autosave: Option<std::time::Instant>,

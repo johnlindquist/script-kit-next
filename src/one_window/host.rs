@@ -784,6 +784,28 @@ impl ScriptListApp {
             results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
             rows.push(row);
         }
+        let named_helper = match text.trim().to_ascii_lowercase().as_str() {
+            "speak" | "read aloud" | "text to speech" | "speak text" => Some(
+                Row::new(
+                    "quick-tool:speech-reference",
+                    "Read text aloud · say() SDK command",
+                )
+                .with_sub(
+                    "See the local macOS text-to-speech command and its arguments; no audio plays",
+                )
+                .with_enter_label("See command"),
+            ),
+            "days until" => Some(
+                Row::new("quick-tool:date-entry", "Count days until a date")
+                    .with_sub("Choose a date, or type days until YYYY-MM-DD")
+                    .with_enter_label("Choose date"),
+            ),
+            _ => None,
+        };
+        if let Some(row) = named_helper {
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
+        }
         if sk_one_window::quick_lines::wants_compare(text) {
             if let Some((s, c)) = self.one_window.comparison_pair() {
                 let row = Row::new(
@@ -795,6 +817,11 @@ impl ScriptListApp {
                 results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
                 rows.push(row);
             }
+        }
+        if let Some(dice) = sk_one_window::dice::Dice::request(text) {
+            let row = dice.row();
+            results.insert(row.key.clone(), super::ledger_view::own_row_result(&row));
+            rows.push(row);
         }
         if let Some(draw) = sk_one_window::quick_tools::NumberDraw::request(text) {
             let row = draw.row();
@@ -1243,14 +1270,60 @@ impl ScriptListApp {
             return self.open_personal_view(&row, cx);
         }
         if let Some(id) = row.key.strip_prefix("quick-display:") {
-            let display = sk_one_window::display::Display::request(&self.filter_text)
+            let mut display = sk_one_window::display::Display::request(&self.filter_text)
                 .filter(|d| d.id() == id)
                 .ok_or_else(|| anyhow::anyhow!("display_query_changed"))?;
+            display.activate();
             let seed = display.text.clone();
             self.one_window_open_hosted(super::views::HostedView::Display(display), Some(seed), cx);
             return Ok(());
         }
         if self.run_countdown_row(&row.key, cx) {
+            return Ok(());
+        }
+        if row.key == "quick-tool:speech-reference" {
+            let entries = crate::mcp_resources::sdk_reference_entries_for_ui();
+            let selected = crate::mcp_resources::filter_sdk_reference_entries(&entries, "say")
+                .iter()
+                .position(|&index| entries[index].name == "say")
+                .ok_or_else(|| anyhow::anyhow!("speech_reference_unavailable"))?;
+            self.open_builtin_filterable_view(
+                AppView::SdkReferenceView {
+                    filter: "say".into(),
+                    selected_index: selected,
+                    entries,
+                },
+                "Search SDK functions…",
+                true,
+                cx,
+            );
+            self.filter_text = "say".into();
+            self.pending_filter_sync = true;
+            cx.notify();
+            return Ok(());
+        }
+        if row.key == "quick-tool:date-entry" {
+            let original = self.filter_text.clone();
+            let date = chrono::Local::now().date_naive() + chrono::Days::new(7);
+            let words = format!("days until {date}");
+            let handle = crate::get_main_window_handle()
+                .ok_or_else(|| anyhow::anyhow!("date_entry_window_unavailable"))?;
+            let entity = cx.entity();
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, cx| {
+                    entity.update(cx, |app, cx| {
+                        if matches!(app.current_view, AppView::ScriptList)
+                            && app.filter_text == original
+                        {
+                            let end = words.len();
+                            app.set_filter_text_and_cursor_immediate(words, end, window, cx);
+                            app.gpui_input_state.update(cx, |s, cx| {
+                                s.set_selection_focused("days until ".len(), end, window, cx)
+                            });
+                        }
+                    })
+                });
+            });
             return Ok(());
         }
         if row.key.starts_with("quick-tool:compare/") {
@@ -1268,6 +1341,19 @@ impl ScriptListApp {
                 sk_one_window::quick_lines::first_difference(&s.source.body, &c.source.body),
                 "First difference between the two texts",
                 sk_one_window::form::Source::Known("selection and approved copy".into()),
+                cx,
+            );
+            return Ok(());
+        }
+        if row.key.starts_with("quick-dice:") {
+            let dice = sk_one_window::dice::Dice::request(&self.filter_text)
+                .filter(|d| d.key() == row.key)
+                .ok_or_else(|| anyhow::anyhow!("dice_changed"))?;
+            self.one_window_open_local_answer(
+                "Dice",
+                dice.result(super::text_tools::random_word),
+                "Each face and its sum",
+                sk_one_window::form::Source::Known("dice roll".into()),
                 cx,
             );
             return Ok(());
@@ -1444,7 +1530,7 @@ impl ScriptListApp {
             "text": self.one_window.text(),
             "cursorDictation":cursor_voice,
             "localDisplay": match self.one_window_hosted_view() {
-                Some(super::views::HostedView::Display(d))=>Some(serde_json::json!({"kind":d.id(),"length":d.text.chars().count(),"hex":if d.kind==sk_one_window::display::Kind::Color{d.value()}else{None}})),_=>None,
+                Some(super::views::HostedView::Display(d))=>Some(serde_json::json!({"kind":d.id(),"length":d.text.chars().count(),"hex":if d.kind==sk_one_window::display::Kind::Color{d.value()}else{None},"qrModules":d.qr().map(|g|g.size),"bpm":d.bpm(),"beat":d.beat.map(|b|b.number),"palette":d.palette().map(|colors|colors.map(|rgb|format!("#{rgb:06X}")))})),_=>None,
             },
             "countdown": self.one_window_host.timers.active().map(|t| serde_json::json!({
                 "id": t.id, "durationSeconds": t.seconds, "remainingMs": t.due.saturating_sub(now),

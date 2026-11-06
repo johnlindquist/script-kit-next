@@ -1774,7 +1774,7 @@ impl ScriptListApp {
     /// emoji / apps / browser tabs / window switcher; `true` uses the wide
     /// full-width window for info-heavy views like clipboard history while
     /// preserving the mini window height so the shared input does not shift.
-    fn open_builtin_filterable_view(
+    pub(crate) fn open_builtin_filterable_view(
         &mut self,
         view: AppView,
         placeholder: &str,

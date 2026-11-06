@@ -168,6 +168,15 @@ impl ScriptListApp {
                         _ => None,
                     }
                 };
+                let detail = if active
+                    || !matches!(
+                        p.source.subject.kind,
+                        SubjectKind::Selection | SubjectKind::Clipboard
+                    ) {
+                    p.panel_title()
+                } else {
+                    String::new()
+                };
                 crate::components::subject_tab_bar::TabItem {
                     active,
                     hint,
@@ -179,7 +188,7 @@ impl ScriptListApp {
                     },
                     id: p.id,
                     label: p.source.label.clone(),
-                    detail: p.source.subject.title.clone(),
+                    detail,
                     icon: p.source.icon.clone(),
                 }
             })
@@ -287,6 +296,17 @@ impl ScriptListApp {
             .strip_prefix(&format!("subject/{}/", page.id))
             .ok_or_else(|| anyhow::anyhow!("That subject changed"))?;
         let source = &page.source;
+        if let Some(tool) = sk_one_window::quick_text::Tool::from_key(id) {
+            let value = super::text_tools::result(tool, &source.body);
+            self.one_window_open_local_answer(
+                tool.title(),
+                value,
+                tool.detail(),
+                sk_one_window::form::Source::Staged(source.subject.kind),
+                cx,
+            );
+            return Ok(());
+        }
         match id {
             "today" => self.open_note_in_editor_soon(
                 crate::notes::NoteTarget::Today,
